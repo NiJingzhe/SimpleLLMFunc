@@ -2,6 +2,7 @@ import json
 import time
 from typing import Generator, Optional, Dict, List, Union, Literal, Iterable, Any
 from zhipuai import ZhipuAI
+from openai import OpenAI
 from SimpleAgent.interface.llm_interface import LLM_Interface
 from SimpleAgent.interface.key_pool import APIKeyPool
 # 导入全局日志器函数
@@ -26,6 +27,7 @@ class Zhipu(LLM_Interface):
         super().__init__(api_key_pool, model_name)
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self.base_url = "https://open.bigmodel.cn/api/paas/v4/"
 
         self.model_list = [
             "glm-4-flash",
@@ -44,7 +46,7 @@ class Zhipu(LLM_Interface):
         self.model_name = model_name
 
         self.key_pool = api_key_pool
-        self.client = ZhipuAI(api_key=api_key_pool.get_least_loaded_key())
+        self.client = OpenAI(api_key=api_key_pool.get_least_loaded_key(), base_url=self.base_url)
 
     def chat(
         self,
@@ -56,7 +58,7 @@ class Zhipu(LLM_Interface):
         **kwargs,
     ) -> Dict[Any, Any]:
         key = self.key_pool.get_least_loaded_key()
-        self.client = ZhipuAI(api_key=key)
+        self.client = OpenAI(api_key=key, base_url=self.base_url)
         
         attempt = 0
         while attempt < self.max_retries:
@@ -70,7 +72,7 @@ class Zhipu(LLM_Interface):
                     trace_id=trace_id,
                 )
                 response: Dict[Any, Any] = self.client.chat.completions.create(  # type: ignore
-                    messages=messages,
+                    messages=messages,   # type: ignore
                     model=self.model_name,
                     stream=stream,
                     timeout=timeout,
@@ -94,7 +96,7 @@ class Zhipu(LLM_Interface):
                 )
 
                 key = self.key_pool.get_least_loaded_key()
-                self.client = ZhipuAI(api_key=key)
+                self.client = OpenAI(api_key=key, base_url=self.base_url)
 
                 if attempt >= self.max_retries:
                     push_error(
@@ -116,7 +118,7 @@ class Zhipu(LLM_Interface):
         **kwargs,
     ) -> Generator[Dict[Any, Any], None, None]:
         key = self.key_pool.get_least_loaded_key()
-        self.client = ZhipuAI(api_key=key)
+        self.client = OpenAI(api_key=key, base_url=self.base_url)
 
         attempt = 0
         while attempt < self.max_retries:
@@ -129,7 +131,7 @@ class Zhipu(LLM_Interface):
                     trace_id=trace_id
                 )
                 response: Generator[Dict[Any, Any], None, None] = self.client.chat.completions.create(  # type: ignore
-                    messages=messages,
+                    messages=messages,  # type: ignore
                     model=self.model_name,
                     stream=stream,
                     timeout=timeout,
@@ -156,7 +158,7 @@ class Zhipu(LLM_Interface):
                 )
 
                 key = self.key_pool.get_least_loaded_key()
-                self.client = ZhipuAI(api_key=key)
+                self.client = OpenAI(api_key=key, base_url=self.base_url)
 
                 if attempt >= self.max_retries:
                     push_error(
