@@ -18,6 +18,9 @@
 ```
 SimpleAgent/
 ├── SimpleAgent/            # 核心包
+│   ├── agent/              # Agent 相关实现
+│   │   ├── agent.py         # Agent 抽象类
+│   │   ├── schemas.py       # Agent 参数模型
 │   ├── interface/          # LLM 接口
 │   │   ├── llm_interface.py  # LLM 接口抽象类
 │   │   ├── key_pool.py       # API 密钥管理
