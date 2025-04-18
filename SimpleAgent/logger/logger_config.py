@@ -8,6 +8,7 @@ from pathlib import Path
 class LoggerConfig(BaseSettings):
 
     LOG_LEVEL: str = "DEBUG"
+    LOG_FILE: str = "agent.log"
     LOG_DIR: str = Field(
         default=str(Path(__file__).parent.parent), description="日志文件存放目录"
     )

@@ -78,6 +78,7 @@ class CustomFormatter(logging.Formatter):
         else:
             level_name = record.levelname
             
+            level_str = ""
             # 为控制台输出添加颜色
             if self.use_color:
                 level_color = self.COLORS.get(level_name, self.COLORS['RESET'])
@@ -86,14 +87,21 @@ class CustomFormatter(logging.Formatter):
                 level_str = f"{level_name:8}"
                 
             # 构建基本日志格式
-            log_msg = f"[{timestamp}] {level_str} [{record.threadName}] {record.module}:{record.lineno} - {record.getMessage()}"
-            
+            log_msg = (
+                "========================================================"
+                "\n"
+                f"[{timestamp}] {level_str}"
+                f"\n\t[{record.threadName}] {record.module}:{record.lineno}"
+                f"\n\t{record.getMessage()}"
+            )            
             # 添加trace_id和location信息（如果存在）
             if hasattr(record, 'trace_id') and getattr(record, 'trace_id', ''):
-                log_msg += f" [trace_id:{getattr(record, 'trace_id', '')}]"
+                log_msg += f"\n\t[trace_id:{getattr(record, 'trace_id', '')}]"
             if hasattr(record, 'location') and getattr(record, 'location', ''):
-                log_msg += f" [location:{getattr(record, 'location', '')}]"
-                
+                log_msg += f"\n\t[location:{getattr(record, 'location', '')}]"
+            
+            log_msg += "\n" + "========================================================"
+            
             return log_msg
 
 
@@ -145,25 +153,25 @@ class SearchableLogHandler(RotatingFileHandler):
         """发送日志记录，同时更新索引"""
         super().emit(record)
         
-        # 如果有trace_id，则更新索引
-        if hasattr(record, 'trace_id') and getattr(record, 'trace_id', ''):
-            trace_id = getattr(record, 'trace_id', '')
-            log_entry = {
-                'timestamp': record.created,
-                'file': self.baseFilename,
-                'position': self.stream.tell(),
-                'level': record.levelname,
-                'message_preview': record.getMessage()[:100]  # 存储消息预览
-            }
+        # # 如果有trace_id，则更新索引
+        # if hasattr(record, 'trace_id') and getattr(record, 'trace_id', ''):
+        #     trace_id = getattr(record, 'trace_id', '')
+        #     log_entry = {
+        #         'timestamp': record.created,
+        #         'file': self.baseFilename,
+        #         'position': self.stream.tell(),
+        #         'level': record.levelname,
+        #         'message_preview': record.getMessage()[:100]  # 存储消息预览
+        #     }
             
-            with self.trace_file_lock:
-                if trace_id not in self.trace_indices:
-                    self.trace_indices[trace_id] = []
-                self.trace_indices[trace_id].append(log_entry)
+        #     with self.trace_file_lock:
+        #         if trace_id not in self.trace_indices:
+        #             self.trace_indices[trace_id] = []
+        #         self.trace_indices[trace_id].append(log_entry)
                 
-                # 定期保存索引（每100条记录）
-                if sum(len(entries) for entries in self.trace_indices.values()) % 100 == 0:
-                    self._save_indices()
+        #         # 定期保存索引（每100条记录）
+        #         if sum(len(entries) for entries in self.trace_indices.values()) % 100 == 0:
+        #             self._save_indices()
                     
     def search_by_trace_id(self, trace_id: str) -> List[Dict[str, Any]]:
         """按trace_id搜索日志"""

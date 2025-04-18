@@ -29,7 +29,7 @@ _log_level_map = {
 # 初始化全局单例日志器
 GLOBAL_LOGGER = setup_logger(
     log_dir=_log_dir,
-    log_file="simple_agent.log",
+    log_file=logger_config.LOG_FILE,
     console_level=LogLevel.INFO,     # 控制台显示INFO及以上级别
     file_level=_log_level_map[logger_config.LOG_LEVEL],       # 文件记录DEBUG及以上级别
     use_json=True,                   # 文件中使用JSON格式便于解析
