@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "SimpleLLMGraph"
+name = "SimpleLLMFunc"
 version = "0.1.0"
 description = ""
 authors = ["Ni Jingzhe <lildinosaurni@outlook.com>"]
 readme = "README.md"
-packages = [{include = "SimpleLLMGraph", from = "."}]
+packages = [{include = "SimpleLLMFunc", from = "."}]
 
 [tool.poetry.dependencies]
 python = ">=3.10"

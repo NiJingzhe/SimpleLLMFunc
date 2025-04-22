@@ -5,9 +5,9 @@ from typing import List, Callable, TypeVar, Dict, Any, Type, get_type_hints, Opt
 import uuid
 from pydantic import BaseModel
 
-from SimpleLLMGraph.tool import Tool
-from SimpleLLMGraph.interface.llm_interface import LLM_Interface
-from SimpleLLMGraph.logger import app_log, push_warning, get_location
+from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc.interface.llm_interface import LLM_Interface
+from SimpleLLMFunc.logger import app_log, push_warning, get_location
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar('T')

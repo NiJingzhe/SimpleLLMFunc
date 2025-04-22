@@ -4,8 +4,8 @@
 from typing import Dict, List
 from pydantic import BaseModel, Field
 
-from SimpleLLMGraph.llm_decorator.llm_function_decorator import llm_function
-from SimpleLLMGraph.interface import ZhipuAI_glm_4_flash_Interface
+from SimpleLLMFunc.llm_decorator.llm_function_decorator import llm_function
+from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
 
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):

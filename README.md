@@ -1,4 +1,4 @@
-# SimpleLLMGraph
+# SimpleLLMFunc
 
 一个轻量级的LLM调用和工具集成框架，支持类型安全的LLM函数装饰器、多种模型接口和强大的日志跟踪系统。
 
@@ -14,8 +14,8 @@
 ## 项目结构
 
 ```
-SimpleLLMGraph/
-├── SimpleLLMGraph/            # 核心包
+SimpleLLMFunc/
+├── SimpleLLMFunc/            # 核心包
 │   ├── interface/             # LLM 接口
 │   │   ├── llm_interface.py   # LLM 接口抽象类
 │   │   ├── key_pool.py        # API 密钥管理
@@ -35,7 +35,7 @@ SimpleLLMGraph/
 
 ## 配置管理
 
-SimpleLLMGraph使用分层配置系统：
+SimpleLLMFunc使用分层配置系统：
 
 - 环境变量：最高优先级
 - `.env` 文件：次优先级
@@ -52,13 +52,13 @@ LOG_LEVEL=DEBUG
 
 ## LLM函数装饰器
 
-SimpleLLMGraph的核心特性是LLM函数装饰器，它允许您像使用普通函数一样使用LLM的能力：
+SimpleLLMFunc的核心特性是LLM函数装饰器，它允许您像使用普通函数一样使用LLM的能力：
 
 ```python
 from typing import List
 from pydantic import BaseModel, Field
-from SimpleLLMGraph.llm_function import llm_function
-from SimpleLLMGraph.interface import ZhipuAI_glm_4_flash_Interface
+from SimpleLLMFunc.llm_function import llm_function
+from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
 
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):
@@ -99,7 +99,7 @@ print(f"评分: {result.rating}/5")
 
 ## LLM接口
 
-SimpleLLMGraph的LLM接口设计原则：
+SimpleLLMFunc的LLM接口设计原则：
 
 - 简单、无状态的函数调用
 - 支持普通和流式两种调用模式
@@ -108,7 +108,7 @@ SimpleLLMGraph的LLM接口设计原则：
 ### 示例用法
 
 ```python
-from SimpleLLMGraph.interface import ZhipuAI_glm_4_flash_Interface
+from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
 
 # 非流式调用
 response = ZhipuAI_glm_4_flash_Interface.chat(
@@ -126,7 +126,7 @@ for chunk in ZhipuAI_glm_4_flash_Interface.chat_stream(
 
 ## 日志系统
 
-SimpleLLMGraph包含强大的日志系统，支持：
+SimpleLLMFunc包含强大的日志系统，支持：
 
 - 不同级别的日志（DEBUG, INFO, WARNING, ERROR, CRITICAL）
 - 按trace_id跟踪和搜索相关日志
@@ -137,7 +137,7 @@ SimpleLLMGraph包含强大的日志系统，支持：
 ### 日志使用示例
 
 ```python
-from SimpleLLMGraph.logger import app_log, push_error, search_logs_by_trace_id
+from SimpleLLMFunc.logger import app_log, push_error, search_logs_by_trace_id
 
 # 记录信息日志
 app_log("操作成功完成", trace_id="operation_123")
@@ -151,7 +151,7 @@ logs = search_logs_by_trace_id("operation_123")
 
 ## 工具系统
 
-SimpleLLMGraph实现了可扩展的工具系统，使LLM能够与外部环境交互：
+SimpleLLMFunc实现了可扩展的工具系统，使LLM能够与外部环境交互：
 
 ### 核心概念
 
@@ -162,8 +162,8 @@ SimpleLLMGraph实现了可扩展的工具系统，使LLM能够与外部环境交
 ### 工具定义示例
 
 ```python
-from SimpleLLMGraph.tool import Tool, ToolParameters
-from SimpleLLMGraph.tool.schemas import ParameterType
+from SimpleLLMFunc.tool import Tool, ToolParameters
+from SimpleLLMFunc.tool.schemas import ParameterType
 
 class WebSearchTool(Tool):
     def __init__(self):
@@ -217,7 +217,7 @@ def answer_with_tools(question: str) -> str:
 
 ## API密钥管理
 
-SimpleLLMGraph使用`APIKeyPool`类管理多个API密钥，实现负载均衡：
+SimpleLLMFunc使用`APIKeyPool`类管理多个API密钥，实现负载均衡：
 
 - 自动选择最少负载的API密钥
 - 单例模式确保每个提供商只有一个密钥池
@@ -228,7 +228,7 @@ SimpleLLMGraph使用`APIKeyPool`类管理多个API密钥，实现负载均衡：
 1. 克隆此仓库
 2. 创建`.env`文件并配置您的API密钥
 3. 使用Poetry安装依赖：`poetry install`
-4. 导入并使用SimpleLLMGraph的各个组件
+4. 导入并使用SimpleLLMFunc的各个组件
 
 ## 许可证
 

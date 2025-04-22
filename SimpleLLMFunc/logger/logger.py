@@ -278,7 +278,7 @@ def setup_logger(
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     
     # 创建logger
-    logger = logging.getLogger("SimpleLLMGraph")
+    logger = logging.getLogger("SimpleLLMFunc")
     logger.setLevel(logging.DEBUG)  # 设置为最低级别，让handlers决定过滤
     logger.propagate = False  # 不传播到父logger
     

@@ -1,6 +1,6 @@
-from SimpleLLMGraph.interface.zhipu import Zhipu
-from SimpleLLMGraph.config import global_settings
-from SimpleLLMGraph.interface.key_pool import APIKeyPool
+from SimpleLLMFunc.interface.zhipu import Zhipu
+from SimpleLLMFunc.config import global_settings
+from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from typing import List
 
 # 从 .env 文件读取 API KEY 列表
