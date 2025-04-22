@@ -10,7 +10,6 @@ packages = [{include = "SimpleLLMFunc", from = "."}]
 python = ">=3.10"
 openai = ">=1.72.0,<2.0.0"
 pyyaml = ">=6.0.2,<7.0.0"
-zhipuai = ">=2.1.5.20250410,<3.0.0.0"
 pydantic = ">=2.11.3,<3.0.0"
 pydantic-settings = ">=2.8.1,<3.0.0"
 httpx = {extras = ["socks"], version = "^0.28.1"}
