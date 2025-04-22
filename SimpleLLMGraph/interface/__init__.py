@@ -10,3 +10,8 @@ ZHIPUAI_API_KEY_LIST: List[str] = global_settings.ZHIPU_API_KEYS
 ZHIPUAI_API_KEY_POOL = APIKeyPool(ZHIPUAI_API_KEY_LIST, "zhipu")
 
 ZhipuAI_glm_4_flash_Interface = Zhipu(ZHIPUAI_API_KEY_POOL, "glm-4-flash")
+
+
+__all__ = [
+    "ZhipuAI_glm_4_flash_Interface",
+]

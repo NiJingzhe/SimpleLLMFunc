@@ -181,7 +181,7 @@ def _build_prompts(
 
 {chr(10).join(user_param_values)}
 
-请直接输出函数执行的结果而不是python代码, 也不要用任何markdown格式包裹结果。直接输出结果即可。
+请直接输出函数执行的结果,也不要用任何markdown格式包裹结果。直接输出结果即可。
 """
     
     return system_prompt.strip(), user_prompt.strip()

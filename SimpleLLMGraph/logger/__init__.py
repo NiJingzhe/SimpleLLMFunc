@@ -49,9 +49,5 @@ __all__ = [
     'push_info',
     'push_debug',
     'get_location',
-    'search_logs_by_trace_id',
-    'SearchableLogHandler',
-    'GLOBAL_LOGGER',
-    'LogLevel'
 ]
 
