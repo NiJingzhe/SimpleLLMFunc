@@ -8,8 +8,6 @@ from .logger import (
     push_debug,
     get_location,
     LogLevel,
-    SearchableLogHandler,
-    search_logs_by_trace_id
 )
 
 """
@@ -30,7 +28,7 @@ _log_level_map = {
 GLOBAL_LOGGER = setup_logger(
     log_dir=_log_dir,
     log_file=logger_config.LOG_FILE,
-    console_level=LogLevel.INFO,     # 控制台显示INFO及以上级别
+    console_level=_log_level_map[logger_config.LOG_LEVEL],     # 控制台显示配置文件中的级别
     file_level=_log_level_map[logger_config.LOG_LEVEL],       # 文件记录DEBUG及以上级别
     use_json=True,                   # 文件中使用JSON格式便于解析
     use_color=True,                  # 控制台使用彩色输出
@@ -39,7 +37,8 @@ GLOBAL_LOGGER = setup_logger(
 )
 
 # 记录日志系统初始化完成
-push_info("全局日志系统初始化完成")
+if logger_config.LOG_LEVEL in ["DEBUG", "INFO"]:
+    push_info("全局日志系统初始化完成")
 
 __all__ = [
     'app_log',

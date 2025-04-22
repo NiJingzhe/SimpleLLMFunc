@@ -151,3 +151,5 @@ logs/
 
 # Custom application-specific additions
 # Add any project-specific ignores below
+**/log_indices/
+**/*.log

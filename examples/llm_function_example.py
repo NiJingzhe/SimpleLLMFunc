@@ -45,7 +45,7 @@ def summarize_text(text: str, max_words: int) -> str:
         max_words: 摘要的最大字数
         
     Returns:
-        文本摘要
+        文本摘要，请务必严格遵循字数要求！
     """
     pass
 
@@ -103,7 +103,7 @@ def main():
     
     try:
         print("\n===== 文本摘要 =====")
-        summary = summarize_text(long_text, 50)
+        summary = summarize_text(long_text, 20)
         print(summary)
     except Exception as e:
         print(f"文本摘要失败: {e}")
