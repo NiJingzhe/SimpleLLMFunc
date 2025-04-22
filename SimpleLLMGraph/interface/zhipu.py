@@ -1,12 +1,12 @@
 import json
 import time
 from typing import Generator, Optional, Dict, List, Union, Literal, Iterable, Any
-from zhipuai import ZhipuAI
 from openai import OpenAI
-from SimpleAgent.interface.llm_interface import LLM_Interface
-from SimpleAgent.interface.key_pool import APIKeyPool
-# 导入全局日志器函数
-from SimpleAgent.logger import app_log, push_warning, push_error, get_location
+# 修复导入路径
+from SimpleLLMGraph.interface.llm_interface import LLM_Interface
+from SimpleLLMGraph.interface.key_pool import APIKeyPool
+# 修复全局日志器函数导入
+from SimpleLLMGraph.logger import app_log, push_warning, push_error, get_location
 
 
 class Zhipu(LLM_Interface):
@@ -178,9 +178,9 @@ if __name__ == "__main__":
 
     # 测试interface
     
-    from SimpleAgent.interface.key_pool import APIKeyPool
+    from SimpleLLMGraph.interface.key_pool import APIKeyPool
     from typing import List
-    from SimpleAgent.config import global_settings
+    from SimpleLLMGraph.config import global_settings
     import re
     
     # 修改后的正则表达式模式，保留减号

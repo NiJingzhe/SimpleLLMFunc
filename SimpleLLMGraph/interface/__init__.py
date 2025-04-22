@@ -1,6 +1,6 @@
-from SimpleAgent.interface.zhipu import Zhipu
-from SimpleAgent.config import global_settings
-from SimpleAgent.interface.key_pool import APIKeyPool
+from SimpleLLMGraph.interface.zhipu import Zhipu
+from SimpleLLMGraph.config import global_settings
+from SimpleLLMGraph.interface.key_pool import APIKeyPool
 from typing import List
 
 # 从 .env 文件读取 API KEY 列表

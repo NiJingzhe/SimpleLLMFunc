@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 import re
 
-from SimpleAgent.tool.schemas import ToolParameters, ParameterType
+from .schemas import ToolParameters, ParameterType
 
 class Tool(ABC):
     """
@@ -138,6 +138,8 @@ class Tool(ABC):
         """
         return [tool.to_openai_tool() for tool in tools]
     
+    
+# main function for test
 if __name__ == "__main__":
     # 测试工具类
     class ExampleTool(Tool):
