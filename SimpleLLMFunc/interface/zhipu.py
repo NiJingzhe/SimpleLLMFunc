@@ -6,7 +6,7 @@ from openai import OpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 # 修复全局日志器函数导入
-from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location
+from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
 
 
 class Zhipu(LLM_Interface):
@@ -50,7 +50,7 @@ class Zhipu(LLM_Interface):
 
     def chat(
         self,
-        trace_id: str,
+        trace_id: str = get_current_trace_id(),
         stream: Literal[False] = False,
         messages: Iterable[Dict[str, str]] = [{"role": "system", "content": "你是一位乐于助人的助手，可以帮助用户解决各种问题。"}],
         timeout: Optional[int] = 20,
@@ -110,7 +110,7 @@ class Zhipu(LLM_Interface):
 
     def chat_stream(
         self,
-        trace_id: str,
+        trace_id: str = get_current_trace_id(),
         stream: Literal[True] = True,
         messages: Iterable[Dict[str, str]] = [{"role": "system", "content": "你是一位乐于助人的助手，可以帮助用户解决各种问题。"}],
         timeout: Optional[int] = 10,

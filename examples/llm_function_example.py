@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from SimpleLLMFunc.llm_decorator.llm_function_decorator import llm_function
 from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
+from SimpleLLMFunc.logger.logger import app_log
+from SimpleLLMFunc.tool import tool
 
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):
@@ -32,40 +34,51 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     """
     pass  # 函数体为空，实际执行由LLM完成
 
-# 基础类型返回示例
-@llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface
-)
-def summarize_text(text: str, max_words: int) -> str:
+
+@tool(name="天气查询", description="获取指定城市的天气信息")
+def get_weather(city: str) -> Dict[str, str]:
     """
-    将文本概括为指定字数的摘要
+    获取指定城市的天气信息
     
     Args:
-        text: 需要概括的文本
-        max_words: 摘要的最大字数
+        city: 城市名称
         
     Returns:
-        文本摘要，请务必严格遵循字数要求！
+        包含温度、湿度和天气状况的字典
+    """
+    return {
+        "temperature": "32°C",
+        "humidity": "80%",
+        "condition": "Cloudy"
+    }
+
+class WeatherInfo(BaseModel):
+    city: str = Field(..., description="城市名称")
+    temperature: str = Field(..., description="当前温度")
+    humidity: str = Field(..., description="当前湿度")
+    condition: str = Field(..., description="天气状况")
+
+@llm_function(
+    llm_interface=ZhipuAI_glm_4_flash_Interface,
+    tools=[get_weather]
+)
+def weather(city: str) -> WeatherInfo:
+    """
+    获取指定城市的天气信息
+    
+    Args:
+        city: 城市名称
+        
+    Returns:
+        WeatherInfo对象，包含温度、湿度和天气状况
+    例如：{"city": "L.A.", "temperature": "25°C", "humidity": "60%", "condition": "晴天"}
     """
     pass
 
-# 字典返回示例
-@llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface
-)
-def extract_entities(text: str) -> Dict[str, List[str]]:
-    """
-    从文本中提取实体（人物、地点、组织等）
-    
-    Args:
-        text: 需要分析的文本
-        
-    Returns:
-        字典形式的实体分类列表，例如 {"people": ["张三", "李四"], "locations": ["北京", "上海"]}
-    """
-    pass
 
 def main():
+    
+    app_log("开始运行示例代码")
     # 测试产品评测分析
     product_name = "XYZ无线耳机"
     review_text = """
@@ -88,43 +101,19 @@ def main():
         print(f"总结: {result.summary}")
     except Exception as e:
         print(f"产品评测分析失败: {e}")
-    
-    # 测试文本摘要
-    long_text = """
-    人工智能(AI)是计算机科学的一个分支，致力于开发能够执行通常需要人类智能的任务的系统。
-    这些任务包括视觉感知、语音识别、决策制定和语言翻译等。AI的历史可以追溯到20世纪50年代，
-    当时计算机科学家开始探索机器是否可以"思考"。如今，AI已经融入我们日常生活的方方面面，
-    从智能手机上的虚拟助手到自动驾驶汽车，再到推荐系统和医疗诊断工具。
-    机器学习是AI的一个子领域，它使系统能够从数据中学习和改进，而无需被明确编程。
-    深度学习是机器学习的一种形式，它使用多层神经网络来分析数据的各个方面。
-    随着计算能力的增加和数据可用性的提高，AI技术在近年来取得了显著进步。
-    然而，随着AI的发展，也出现了关于隐私、安全和道德影响的担忧。
-    """
-    
+        
+    # 测试天气查询
+    city = "Hangzhou"
     try:
-        print("\n===== 文本摘要 =====")
-        summary = summarize_text(long_text, 20)
-        print(summary)
+        print("\n===== 天气查询 =====")
+        weather_info = weather(city)
+        print(f"城市: {city}")
+        print(f"温度: {weather_info.temperature}")
+        print(f"湿度: {weather_info.humidity}")
+        print(f"天气状况: {weather_info.condition}")
     except Exception as e:
-        print(f"文本摘要失败: {e}")
+        print(f"天气查询失败: {e}")
     
-    # 测试实体提取
-    entity_text = """
-    中国国家主席习近平周四在北京会见了美国总统拜登的特使克里。
-    会议在人民大会堂举行，双方讨论了气候变化问题。
-    克里表示，美国和中国作为世界上最大的两个经济体，应该共同努力应对全球气候危机。
-    同时，阿里巴巴和腾讯等中国科技公司正积极投资绿色技术。
-    """
-    
-    try:
-        print("\n===== 实体提取 =====")
-        entities = extract_entities(entity_text)
-        for entity_type, entity_list in entities.items():
-            print(f"{entity_type}:")
-            for entity in entity_list:
-                print(f"- {entity}")
-    except Exception as e:
-        print(f"实体提取失败: {e}")
         
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Generator, Union, Optional, Dict, List, Iterable, Literal, Any
 
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
+from SimpleLLMFunc.logger import get_current_trace_id
 
 class LLM_Interface(ABC):
     
@@ -13,7 +14,7 @@ class LLM_Interface(ABC):
     @abstractmethod
     def chat(
         self, 
-        trace_id: str,
+        trace_id: str = get_current_trace_id(),
         stream: Literal[False] = False,
         messages: Iterable[Dict[str, str]] = [{"role": "user", "content": ""}],
         timeout: Optional[int] = None,
@@ -25,7 +26,7 @@ class LLM_Interface(ABC):
     @abstractmethod
     def chat_stream(
         self, 
-        trace_id: str,
+        trace_id: str = get_current_trace_id(),
         stream: Literal[True] = True,
         messages: Iterable[Dict[str, str]] = [{"role": "user", "content": ""}],
         timeout: Optional[int] = None,
