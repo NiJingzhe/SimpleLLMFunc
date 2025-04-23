@@ -14,7 +14,7 @@ T = TypeVar('T')
 
 def llm_function(
     llm_interface: LLM_Interface, 
-    tools: Optional[List[Tool]] = None, 
+    tools: Optional[List[Union[Tool, Callable]]] = None, 
     system_prompt: Optional[str] = None,
     trace_id: Optional[str] = None,
 ):
@@ -23,7 +23,7 @@ def llm_function(
     
     Args:
         llm_interface: LLM接口
-        tools: 可选的工具列表，用于提供给LLM
+        tools: 可选的工具列表，可以是Tool对象或被@tool装饰的函数
         system_prompt: 可选的系统提示
         trace_id: 可选的追踪ID，用于日志
         
@@ -73,10 +73,26 @@ def llm_function(
             # 添加用户提示
             messages.append({"role": "user", "content": user_template})
             
-            # 添加工具
+            # 处理tools参数，支持Tool对象和被@tool装饰的函数
             tool_param = None
             if tools:
-                tool_param = Tool.serialize_tools(tools)
+                tool_objects = []
+                for tool in tools:
+                    if isinstance(tool, Tool):
+                        # 如果是Tool对象，直接添加
+                        tool_objects.append(tool)
+                    elif callable(tool) and hasattr(tool, '_tool'):
+                        # 如果是被@tool装饰的函数，获取其_tool属性
+                        tool_objects.append(tool._tool)
+                    else:
+                        push_warning(
+                            f"Unsupported tool type: {type(tool)}. Tool must be a Tool object or a function decorated with @tool.",
+                            location,
+                            trace_id=current_trace_id
+                        )
+                
+                if tool_objects:
+                    tool_param = Tool.serialize_tools(tool_objects)
             
             try:
                 # 调用LLM

@@ -59,7 +59,7 @@ LOG_LEVEL=DEBUG
 
 ## LLM函数装饰器
 
-SimpleLLMFunc的核心特性是LLM函数装饰器，它允许您像使用普通函数一样使用LLM的能力：
+SimpleLLMFunc的核心特性是LLM函数装饰器，它允许您只通过声明带有类型标注的函数和撰写DocString来实现一个函数。
 
 ```python
 from typing import List
@@ -76,8 +76,7 @@ class ProductReview(BaseModel):
 
 # 使用装饰器创建一个LLM函数
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
-    system_prompt="你是一个专业的产品评测专家，可以客观公正地评价各种产品。"
+    llm_interface=ZhipuAI_glm_4_flash_Interface
 )
 def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
     """
@@ -90,12 +89,33 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     Returns:
         包含评分、优缺点和总结的产品评测报告
     """
-    pass  # 函数体为空，实际执行由LLM完成
+    pass  # DocString表示了函数的行为，LLM会负责执行这个函数。
 
-# 调用函数
-result = analyze_product_review("XYZ无线耳机", "音质很好，但电池续航不佳...")
-print(f"评分: {result.rating}/5")
+# 测试产品评测分析
+product_name = "XYZ无线耳机"
+review_text = """
+我买了这款XYZ无线耳机已经使用了一个月。音质非常不错，尤其是低音部分表现出色，
+佩戴也很舒适，可以长时间使用不感到疲劳。电池续航能力也很强，充满电后可以使用约8小时。
+不过连接偶尔会有些不稳定，有时候会突然断开。另外，触控操作不够灵敏，经常需要点击多次才能响应。
+总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
+"""
+
+try:
+    print("\n===== 产品评测分析 =====")
+    result = analyze_product_review(product_name, review_text)
+    print(f"评分: {result.rating}/5")
+    print("优点:")
+    for pro in result.pros:
+        print(f"- {pro}")
+    print("缺点:")
+    for con in result.cons:
+        print(f"- {con}")
+    print(f"总结: {result.summary}")
+except Exception as e:
+    print(f"产品评测分析失败: {e}")
 ```
+
+正如这个例子展现的，只需要声明一个函数，声明返回类型，写好DocString，剩下的交给装饰器即可。
 
 ### 装饰器特性
 
@@ -106,6 +126,10 @@ print(f"评分: {result.rating}/5")
 
 ## LLM接口
 
+LLM接口的封装是为了能够分隔供应商，如果是OpenAI SDK Compatiable的模型，可以省去设置BASE URL的重复工作，同时具有更好的类型提示。
+
+同样的也能够支持某些非OpenAI SDK Compatiable的模型。
+
 SimpleLLMFunc的LLM接口设计原则：
 
 - 简单、无状态的函数调用
@@ -113,6 +137,8 @@ SimpleLLMFunc的LLM接口设计原则：
 - API密钥负载均衡
 
 ### 示例用法
+
+这里展示了接口的两种暴露接口，但实际使用过程中用户并不会接触到这样的直接调用。用户只会将接口对象作为参数传入装饰器。
 
 ```python
 from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
@@ -140,6 +166,8 @@ SimpleLLMFunc包含强大的日志系统，支持：
 - 自动记录代码位置信息
 - 彩色控制台输出
 - JSON格式文件日志，便于解析
+
+后续计划加入对每个llm function的性能监控，让开发者能够更好的追踪输入输出与响应时间，以进行Prompt调优和工作流效率优化。
 
 ### 日志使用示例
 

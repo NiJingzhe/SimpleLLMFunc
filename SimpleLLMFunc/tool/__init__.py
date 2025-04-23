@@ -1,7 +1,6 @@
-from .tool import Tool
-from .schemas import ToolParameters
+from .tool import Tool, tool
 
 __all__ = [
     "Tool",
-    "ToolParameters",
+    "tool"
 ]
