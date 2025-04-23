@@ -33,8 +33,7 @@ SimpleLLMFunc/
 │   │   ├── logger.py          # 日志核心实现
 │   │   └── logger_config.py   # 日志配置
 │   ├── tool/                  # 工具系统
-│   │   ├── tool.py            # 工具抽象基类
-│   │   └── schemas.py         # 工具参数模型
+│   │   └── tool.py            # 工具基类和工具函数装饰器定义
 │   └── config.py              # 全局配置
 └── examples/                  # 示例代码
     └── llm_function_example.py # LLM函数示例
