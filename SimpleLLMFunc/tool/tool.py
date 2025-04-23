@@ -3,7 +3,6 @@ from typing import Any, Dict, List, Optional, Union, Callable, get_type_hints, T
 import re
 import inspect
 import json
-from functools import wraps
 from pydantic import BaseModel
 
 class Parameter:
@@ -121,6 +120,7 @@ class Tool(ABC):
                 
         return param_descriptions
 
+    @abstractmethod
     def run(self, *args, **kwargs):
         """
         运行工具。如果提供了函数，则调用该函数；否则调用子类实现的run方法。
