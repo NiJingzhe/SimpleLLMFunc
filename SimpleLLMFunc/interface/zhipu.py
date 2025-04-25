@@ -92,7 +92,6 @@ class Zhipu(LLM_Interface):
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",
                     location,
-                    trace_id=trace_id
                 )
 
                 key = self.key_pool.get_least_loaded_key()

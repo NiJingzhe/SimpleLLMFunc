@@ -229,7 +229,7 @@ class IndexedRotatingFileHandler(RotatingFileHandler):
                         "file": self.baseFilename,
                         "position": self.stream.tell() if self.stream else 0,
                         "level": record.levelname,
-                        "message_preview": record.getMessage()[:100]
+                        "message": record.getMessage()
                     }
                     
                     # 更新索引

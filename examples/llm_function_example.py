@@ -19,7 +19,6 @@ class ProductReview(BaseModel):
 # 使用装饰器创建一个LLM函数
 @llm_function(
     llm_interface=ZhipuAI_glm_4_flash_Interface,
-    system_prompt="你是一个专业的产品评测专家，可以客观公正地评价各种产品。"
 )
 def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
     """
@@ -113,7 +112,7 @@ def main():
         print(f"天气状况: {weather_info.condition}")
     except Exception as e:
         print(f"天气查询失败: {e}")
-    
+        
         
 
 if __name__ == "__main__":
