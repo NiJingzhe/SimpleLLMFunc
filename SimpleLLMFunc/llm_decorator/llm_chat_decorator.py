@@ -210,8 +210,8 @@ def llm_chat(
                             # 如果是被@tool装饰的函数，获取其_tool属性
                             tool_obj = tool._tool
                             tool_objects.append(tool_obj)
-                            # 添加到工具映射（使用原始函数）
-                            tool_map[tool_obj.name] = tool
+                            # 添加到工具映射（使用run方法以保持一致性）
+                            tool_map[tool_obj.name] = tool_obj.run
                         else:
                             push_warning(
                                 f"LLM Chat '{func.__name__}':"
