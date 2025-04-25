@@ -514,16 +514,20 @@ def app_log(message: str, trace_id: str = "", location: Optional[str] = None, **
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         **kwargs: 额外的键值对，将作为字段添加到日志中
     """
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
@@ -537,16 +541,20 @@ def push_debug(message: str, trace_id: str = "", location: Optional[str] = None,
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         **kwargs: 额外的键值对，将作为字段添加到日志中
     """
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
@@ -560,16 +568,20 @@ def push_info(message: str, trace_id: str = "", location: Optional[str] = None, 
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         **kwargs: 额外的键值对，将作为字段添加到日志中
     """
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
@@ -583,16 +595,20 @@ def push_warning(message: str, trace_id: str = "", location: Optional[str] = Non
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         **kwargs: 额外的键值对，将作为字段添加到日志中
     """
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
@@ -606,7 +622,7 @@ def push_error(message: str, trace_id: str = "", location: Optional[str] = None,
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         exc_info: 是否包含异常信息
         **kwargs: 额外的键值对，将作为字段添加到日志中
@@ -614,9 +630,13 @@ def push_error(message: str, trace_id: str = "", location: Optional[str] = None,
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
@@ -630,7 +650,7 @@ def push_critical(message: str, trace_id: str = "", location: Optional[str] = No
     
     Args:
         message: 日志消息
-        trace_id: 跟踪ID，用于关联相关日志。如果为空且上下文中有trace_id，则使用上下文中的trace_id
+        trace_id: 跟踪ID，用于关联相关日志。如果为空则使用上下文中的trace_id，如果上下文中也有trace_id，则拼接为"上下文trace_id_传递的trace_id"
         location: 代码位置，如不提供则自动获取
         exc_info: 是否包含异常信息，默认为True
         **kwargs: 额外的键值对，将作为字段添加到日志中
@@ -638,9 +658,13 @@ def push_critical(message: str, trace_id: str = "", location: Optional[str] = No
     logger = get_logger()
     location = location or get_location()
     
-    # 如果未提供trace_id，使用上下文中的trace_id（如果有）
+    # 获取上下文中的trace_id
     context_trace_id = get_current_trace_id()
-    if not trace_id and context_trace_id:
+    
+    # 处理trace_id：如果同时有上下文trace_id和显式传递的trace_id，则通过下划线连接它们
+    if context_trace_id and trace_id:
+        trace_id = f"{context_trace_id}_{trace_id}"
+    elif not trace_id and context_trace_id:
         trace_id = context_trace_id
     
     # 合并上下文和额外参数
