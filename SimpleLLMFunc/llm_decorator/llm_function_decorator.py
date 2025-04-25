@@ -1,5 +1,6 @@
 import inspect
 import json
+from linecache import getline
 from typing import (
     List,
     Callable,
@@ -25,7 +26,7 @@ from SimpleLLMFunc.logger import (
 
 # 从utils模块导入工具函数
 from SimpleLLMFunc.llm_decorator.utils import (
-    execute_with_tools,
+    execute_llm,
     process_response,
     get_detailed_type_description,
 )
@@ -37,11 +38,14 @@ T = TypeVar("T")
 def llm_function(
     llm_interface: LLM_Interface,
     tools: Optional[List[Union[Tool, Callable]]] = None,
-    trace_id: Optional[str] = None,
     max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
 ):
     """
-    LLM函数装饰器，将函数的执行委托给LLM
+    LLM函数装饰器，将函数的执行委托给LLM。
+    你只需要定义函数的参数和返回类型，然后在DocString里对函数的执行策略进行说明即可。
+    对DocString没有任何的格式要求。
+
+    推荐使用语义化的函数名称和参数名称，避免使用模糊的描述。
 
     Args:
         llm_interface: LLM接口
@@ -68,23 +72,19 @@ def llm_function(
 
             context_current_trace_id = get_current_trace_id()
 
-            # 使用优先级: 1.参数传入的trace_id 2.上下文中的trace_id 3.自动生成的trace_id
+            # 当前 trace id 的构建逻辑：
+            # 为了确保能够从上下文继承语义，同时有保证每次function调用能够被区分
+            # 我们会对上下文中的trace id进行拼接
+            # function name _ uuid4 _ context_trace_id(if have) or "" (if not have)
             current_trace_id = f"{func.__name__}_{uuid.uuid4()}" + (
-                f"_{trace_id}"
-                if trace_id
-                else (
-                    f"_{context_current_trace_id}"
-                    if context_current_trace_id
-                    else f"_{uuid.uuid4()}"
-                )
+                f"_{context_current_trace_id}" if context_current_trace_id else ""
             )
-            location = get_location()
 
             # 绑定参数到函数签名
             bound_args = signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
 
-            with log_context(trace_id=current_trace_id):
+            with log_context(trace_id=current_trace_id, function_name=func.__name__):
 
                 # 构建system prompt和user prompt
                 system_template, user_template = _build_prompts(
@@ -94,9 +94,11 @@ def llm_function(
                     type_hints,
                 )
 
-                # 修改：使用ensure_ascii=False来正确显示中文字符
                 app_log(
-                    f"LLM Function '{func.__name__}' called with arguments: {json.dumps(bound_args.arguments, default=str, ensure_ascii=False)}"
+                    f"LLM Function '{func.__name__}'"
+                    " called with arguments:"
+                    f"\n{json.dumps(bound_args.arguments, default=str, ensure_ascii=False, indent=4)}",
+                    location=get_location(),
                     # 不需要显式传递trace_id，因为在log_context上下文中
                 )
 
@@ -127,46 +129,36 @@ def llm_function(
                             tool_objects.append(tool_obj)
                             # 添加到工具映射（使用原始函数）
                             tool_map[tool_obj.name] = tool
-                        elif callable(tool) and hasattr(tool, "tool"):
-                            # 兼容某些工具可能使用.tool属性而不是_tool
-                            tool_obj = tool.tool
-                            tool_objects.append(tool_obj)
-                            # 添加到工具映射
-                            tool_map[tool_obj.name] = tool
                         else:
                             push_warning(
-                                f"Unsupported tool type: {type(tool)}. Tool must be a Tool object or a function decorated with @tool.",
-                                location,
+                                f"LLM Function '{func.__name__}':"
+                                f" Unsupported tool type: {type(tool)}."
+                                " Tool must be a Tool object or a function decorated with @tool.",
+                                location=get_location(),
                                 # 不需要显式传递trace_id
                             )
-
+                    
+                    tool_param = []
                     if tool_objects:
                         tool_param = Tool.serialize_tools(tool_objects)
 
                 try:
-                    # 简化的工具调用逻辑
-                    if tool_param:
-                        # 有工具参数，进入工具调用流程
-                        final_response = execute_with_tools(
-                            llm_interface=llm_interface,
-                            messages=messages,
-                            tools=tool_param,
-                            tool_map=tool_map,
-                            max_tool_calls=max_tool_calls,
-                            func_name=func.__name__,
-                        )
-                    else:
-                        # 无工具参数，直接调用LLM
-                        final_response = llm_interface.chat(
-                            messages=messages,
-                            trace_id=current_trace_id,
-                        )
+                    final_response = execute_llm(
+                        llm_interface=llm_interface,
+                        messages=messages,
+                        tools=tool_param,
+                        tool_map=tool_map,
+                        max_tool_calls=max_tool_calls,
+                    )
 
-                        # 记录响应
-                        app_log(
-                            f"LLM Function '{func.__name__}' received response: {json.dumps(final_response, default=str, ensure_ascii=False)}"
-                            # 不需要显式传递trace_id
-                        )
+                    # 记录响应
+                    app_log(
+                        f"LLM Function '{func.__name__}'"
+                        f" received response: "
+                        f"\n{json.dumps(final_response, default=str, ensure_ascii=False, indent=4)}",
+                        location=get_location(),
+                        # 不需要显式传递trace_id
+                    )
 
                     # 处理最终响应
                     result = process_response(final_response, return_type)
@@ -175,7 +167,7 @@ def llm_function(
                 except Exception as e:
                     push_warning(
                         f"LLM Function '{func.__name__}' encountered an error: {str(e)}",
-                        location,
+                        location=get_location(),
                         # 不需要显式传递trace_id
                     )
                     raise
@@ -194,9 +186,9 @@ def llm_function(
 LLM_FUNCTION_SYSTEM_PROMPT = (
     "作为函数执行者，你的任务是按照以下的函数说明，在给定的输入下给出这个函数的输出结果。\n"
     "- 函数名称: {function_name}\n"
-    "- 函数描述: {function_description}\n"
     "- 参数类型:\n"
     "\t{parameters_description}\n"
+    "- 函数功能或行为描述: {function_description}\n"
     "请根据用户提供的参数值执行此函数并返回结果。返回格式必须符合指定的返回类型。"
     "如果返回类型是Pydantic模型，请以JSON格式返回符合模型规范的数据。\n"
     "期望返回类型: {return_type_description}\n"
@@ -207,7 +199,7 @@ LLM_FUNCTION_SYSTEM_PROMPT = (
 LLM_FUNCTION_USER_PROMPT = (
     "请使用以下参数值执行函数 {function_name}:\n"
     "\t{parameters}\n"
-    "请直接输出函数执行的结果,也不要用任何markdown格式包裹结果。直接输出结果即可。"
+    "不要用任何markdown格式或者代码包裹结果。请直接输出函数执行的结果,"
 )
 
 
@@ -236,8 +228,11 @@ def _build_prompts(
     # 构建参数类型描述（用于system prompt）
     param_type_descriptions = []
     for param_name, param_type in param_type_hints.items():
+        
+        # 所以一定要做好类型标注，要不然就会变成未知类型。
         type_str = str(param_type) if param_type else "未知类型"
-        param_type_descriptions.append(f"- {param_name} ({type_str})")
+        # 只构建了参数的类型描述，没有构建参数目的描述，所以请在DocString里写清楚参数的语义
+        param_type_descriptions.append(f"- {param_name} 类型为: {type_str}")
 
     # 构建返回类型描述
     return_type = type_hints.get("return", None)

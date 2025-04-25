@@ -3,6 +3,7 @@ from SimpleLLMFunc import ZhipuAI_glm_4_flash_Interface
 from SimpleLLMFunc import tool
 import os
 import sys
+from typing import List, Dict
 
 @tool(
     name="calculator", description="A calculator that can perform basic arithmetic operations."
@@ -35,7 +36,7 @@ def get_current_time_and_date() -> str:
 @llm_function(
     llm_interface=ZhipuAI_glm_4_flash_Interface
 )
-def auto_merge(prev_content: str, content_need_merge: str) -> str:
+def auto_merge(prev_content: str, content_need_merge: str) -> str: # type: ignore
     """自动合并函数
     
     你需要将 content_need_merge 代表的内容和 prev_content 进行智能合并，并返回合并后的新结果。
@@ -273,9 +274,8 @@ def execute_command(command: str) -> str:
 @llm_chat(
     llm_interface=ZhipuAI_glm_4_flash_Interface,
     toolkit=[calc, get_current_time_and_date, file_operator, execute_command],
-    max_memory_length=20
 )
-def chat_bot_1(query: str) -> str:
+def chat_bot_1(history: List[Dict[str, str]], query: str) -> str: # type: ignore
     """
     你是Cortana，是一位具有丰富经验的程序员，擅长于使用Python代码实现各种功能，推荐使用file_operator工具来帮助你撰写代码。
     推荐你和GLaDos一起合作，他是你的上司。
@@ -296,9 +296,8 @@ def chat_bot_1(query: str) -> str:
 @llm_chat(
     llm_interface=ZhipuAI_glm_4_flash_Interface,
     toolkit=[calc, get_current_time_and_date, file_operator, execute_command],
-    max_memory_length=20
 )
-def chat_bot_2(query: str) -> str:
+def chat_bot_2(history: List[Dict[str, str]], query: str) -> str:  # type: ignore
     """
     你是GLaDos，一位擅长于进行总体规划的游戏设计师，推荐你和Cortana一起合作，她是你的下属。同时推荐你使用file_operator工具记录你的设计和想法
     Cortana是具有丰富经验的程序员。你可以命令她实现代码，写完后一定要读取检查一下。
@@ -315,6 +314,10 @@ def chat_bot_2(query: str) -> str:
 
 
 if __name__ == "__main__":
+    # 创建空的历史记录列表
+    history_cb1 = []
+    history_cb2 = []
+    
     # 获取用户输入作为初始化对话的内容
     user_input = input("请输入您的消息以开始对话: ")
     
@@ -324,31 +327,46 @@ if __name__ == "__main__":
     print("=========================================="*3)
     print(f"用户: {initial_message}")
 
+    # 初始消息添加到历史中
+    history_cb1.append({"role": "user", "content": initial_message})
     
-    message_from_cb1 = chat_bot_1(initial_message)
+    # 调用chat_bot_1，获取返回的内容和更新的历史
+    response_cb1, history_cb1 = chat_bot_1(history_cb1, initial_message)
     # 只截取"回答："后面的内容
-    message_from_cb1 = message_from_cb1.split("回答：")[-1].strip()
+    message_from_cb1 = response_cb1.split("回答：")[-1].strip()
     print("=========================================="*3)
     print(f"GLaDos: {message_from_cb1}")
     
-    message_from_cb2 = chat_bot_2(message_from_cb1)
+    # 将GLaDos的回复添加到另一个聊天机器人的历史中
+    history_cb2.append({"role": "user", "content": message_from_cb1})
+    
+    # 调用chat_bot_2，获取返回的内容和更新的历史
+    response_cb2, history_cb2 = chat_bot_2(history_cb2, message_from_cb1)
     # 只截取"回答："后面的内容
-    message_from_cb2 = message_from_cb2.split("回答：")[-1].strip()
+    message_from_cb2 = response_cb2.split("回答：")[-1].strip()
     print("=========================================="*3)
     print(f"小娜: {message_from_cb2}")
     
     # 简单的双Agent循环
     try:
         while True:
-            message_from_cb1 = chat_bot_1(message_from_cb2)
+            # 将小娜的回复添加到GLaDos的历史中
+            history_cb1.append({"role": "user", "content": message_from_cb2})
+            
+            # 调用chat_bot_1，获取返回的内容和更新的历史
+            response_cb1, history_cb1 = chat_bot_1(history_cb1, message_from_cb2)
             # 只截取"回答："后面的内容
-            message_from_cb1 = message_from_cb1.split("回答：")[-1].strip()
+            message_from_cb1 = response_cb1.split("回答：")[-1].strip()
             print("=========================================="*3)
             print(f"GLaDos: {message_from_cb1}")
             
-            message_from_cb2 = chat_bot_2(message_from_cb1)
+            # 将GLaDos的回复添加到小娜的历史中
+            history_cb2.append({"role": "user", "content": message_from_cb1})
+            
+            # 调用chat_bot_2，获取返回的内容和更新的历史
+            response_cb2, history_cb2 = chat_bot_2(history_cb2, message_from_cb1)
             # 只截取"回答："后面的内容
-            message_from_cb2 = message_from_cb2.split("回答：")[-1].strip()
+            message_from_cb2 = response_cb2.split("回答：")[-1].strip()
             print("=========================================="*3)
             print(f"小娜: {message_from_cb2}")
     except KeyboardInterrupt:
