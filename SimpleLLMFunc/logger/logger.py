@@ -8,12 +8,13 @@ import inspect
 import traceback
 from enum import Enum, auto
 from typing import Dict, Optional, Any, List, Union, Callable, Type, TypeVar, cast, ContextManager
-from datetime import datetime
+from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 import threading
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Generator
+from datetime import datetime, timezone
 
 
 class LogLevel(Enum):
@@ -64,7 +65,7 @@ class JsonFormatter(logging.Formatter):
         # 添加异常信息（如果有）
         if record.exc_info:
             log_data["exception"] = {
-                "type": record.exc_info[0].__name__,
+                "type": record.exc_info[0].__name__,  # type: ignore
                 "message": str(record.exc_info[1]),
                 "traceback": self.formatException(record.exc_info)
             }
@@ -225,10 +226,9 @@ class IndexedRotatingFileHandler(RotatingFileHandler):
                 try:
                     # 创建索引条目
                     log_entry = {
-                        "timestamp": record.created,
-                        "file": self.baseFilename,
-                        "position": self.stream.tell() if self.stream else 0,
+                        "timestamp": convert_float_to_datetime_with_tz(record.created).isoformat(),
                         "level": record.levelname,
+                        "location": getattr(record, "location", "") if hasattr(record, "location") else "",
                         "message": record.getMessage()
                     }
                     
@@ -320,6 +320,19 @@ _context_lock = threading.RLock()
 DEFAULT_TRACE_ID = ""
 
 
+def convert_float_to_datetime_with_tz(time_float: float, tz = timezone(timedelta(hours=8))) -> datetime:
+    """将浮点时间戳转换为带时区的datetime对象
+
+    Args:
+        time_float (float): 浮点时间戳
+        tz (TzInfo, optional): 时区信息. Defaults to timezone(timedelta(hours=8)).
+
+    Returns:
+        datetime: 转换完成后的datetime对象
+    """
+    return datetime.fromtimestamp(time_float, tz=tz)
+
+
 def get_location(depth: int = 2) -> str:
     """获取调用者的代码位置信息
     
@@ -380,6 +393,18 @@ def get_current_trace_id() -> str:
     with _context_lock:
         return _log_context.get("trace_id", DEFAULT_TRACE_ID)
 
+def get_current_context_attribute(key: str) -> Any:
+    
+    """获取当前上下文中的指定属性值
+    
+    Args:
+        key: 属性名称
+        
+    Returns:
+        属性值，如果不存在则返回None
+    """
+    with _context_lock:
+        return _log_context.get(key, None)
 
 def setup_logger(
     log_dir: str = "logs",

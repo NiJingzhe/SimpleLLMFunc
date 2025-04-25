@@ -14,7 +14,8 @@ from .logger import (
     JsonFormatter,
     ConsoleFormatter,
     IndexedRotatingFileHandler,
-    get_current_trace_id
+    get_current_trace_id,
+    get_current_context_attribute
 )
 
 """
@@ -75,5 +76,6 @@ __all__ = [
     'ConsoleFormatter',
     'IndexedRotatingFileHandler',
     'get_current_trace_id',
+    'get_current_context_attribute',
 ]
 
