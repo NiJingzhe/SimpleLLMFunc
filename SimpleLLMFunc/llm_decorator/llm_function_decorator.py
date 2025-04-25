@@ -190,6 +190,27 @@ def llm_function(
     return decorator
 
 
+# 定义系统提示模板
+LLM_FUNCTION_SYSTEM_PROMPT = (
+    "作为函数执行者，你的任务是按照以下的函数说明，在给定的输入下给出这个函数的输出结果。\n"
+    "- 函数名称: {function_name}\n"
+    "- 函数描述: {function_description}\n"
+    "- 参数类型:\n"
+    "\t{parameters_description}\n"
+    "请根据用户提供的参数值执行此函数并返回结果。返回格式必须符合指定的返回类型。"
+    "如果返回类型是Pydantic模型，请以JSON格式返回符合模型规范的数据。\n"
+    "期望返回类型: {return_type_description}\n"
+    "如果提供了工具调用，可以考虑使用工具来辅助完成任务。"
+)
+
+# 定义用户提示模板
+LLM_FUNCTION_USER_PROMPT = (
+    "请使用以下参数值执行函数 {function_name}:\n"
+    "\t{parameters}\n"
+    "请直接输出函数执行的结果,也不要用任何markdown格式包裹结果。直接输出结果即可。"
+)
+
+
 def _build_prompts(
     func_name: str,
     docstring: str,
@@ -223,37 +244,21 @@ def _build_prompts(
     return_type_description = get_detailed_type_description(return_type)
 
     # 构建system prompt
-    system_prompt = f"""
-你是一个函数执行助手，你的任务是执行以下函数:
-
-函数: {func_name}
-
-描述:
-{docstring}
-
-参数类型:
-{chr(10).join(param_type_descriptions)}
-
-请根据用户提供的参数值执行此函数并返回结果。返回格式必须符合指定的返回类型。
-如果返回类型是Pydantic模型，请以JSON格式返回符合模型规范的数据。
-
-期望返回类型: {return_type_description}
-
-如果提供了工具调用，可以考虑使用工具来辅助完成任务。
-
-"""
+    system_prompt = LLM_FUNCTION_SYSTEM_PROMPT.format(
+        function_name=func_name,
+        function_description=docstring,
+        parameters_description="\n\t".join(param_type_descriptions),
+        return_type_description=return_type_description,
+    )
 
     # 构建user prompt（只包含参数值）
     user_param_values = []
     for param_name, param_value in arguments.items():
         user_param_values.append(f"- {param_name}: {param_value}")
 
-    user_prompt = f"""
-请使用以下参数值执行函数 {func_name}:
-
-{chr(10).join(user_param_values)}
-
-请直接输出函数执行的结果,也不要用任何markdown格式包裹结果。直接输出结果即可。
-"""
+    user_prompt = LLM_FUNCTION_USER_PROMPT.format(
+        function_name=func_name,
+        parameters="\n\t".join(user_param_values),
+    )
 
     return system_prompt.strip(), user_prompt.strip()
