@@ -41,7 +41,7 @@ class Zhipu(LLM_Interface):
         if model_name not in self.model_list:
             location = get_location()
             push_warning(
-                f"model_name should be one of {self.model_list}", location, trace_id=""
+                f"model_name should be one of {self.model_list}", location=get_location()
             )
         self.model_name = model_name
 
@@ -69,7 +69,7 @@ class Zhipu(LLM_Interface):
                 #data = data[: min(512, len(data))]
                 app_log(
                     f"Zhipu::chat: {self.model_name} request with API key: {key}, and message: {data}",
-                    trace_id=trace_id,
+                    location=get_location()
                 )
                 response: Dict[Any, Any] = self.client.chat.completions.create(  # type: ignore
                     messages=messages,   # type: ignore
@@ -91,8 +91,7 @@ class Zhipu(LLM_Interface):
                 #data = data[: min(512, len(data))]
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",
-                    location,
-                    trace_id=trace_id
+                    location=get_location(),
                 )
 
                 key = self.key_pool.get_least_loaded_key()
@@ -101,8 +100,7 @@ class Zhipu(LLM_Interface):
                 if attempt >= self.max_retries:
                     push_error(
                         f"Max retries reached. {self.model_name} Failed to get a response for {data}",
-                        location,
-                        trace_id=trace_id
+                        location=location,
                     )
                     raise e  # 达到最大重试次数后抛出异常
                 time.sleep(self.retry_delay)  # 重试前等待一段时间
@@ -128,7 +126,7 @@ class Zhipu(LLM_Interface):
                 #data = data[: min(512, len(data))]
                 app_log(
                     f"Zhipu::chat_stream: {self.model_name} request with API key: {key}, and message: {data}",
-                    trace_id=trace_id
+                    location=get_location()
                 )
                 response: Generator[Dict[Any, Any], None, None] = self.client.chat.completions.create(  # type: ignore
                     messages=messages,  # type: ignore
@@ -153,8 +151,7 @@ class Zhipu(LLM_Interface):
                 #data = data[: min(512, len(data))]
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",
-                    location,
-                    trace_id=trace_id
+                    location=get_location()
                 )
 
                 key = self.key_pool.get_least_loaded_key()
@@ -163,8 +160,7 @@ class Zhipu(LLM_Interface):
                 if attempt >= self.max_retries:
                     push_error(
                         f"Max retries reached. {self.model_name} Failed to get a response for {data}",
-                        location,
-                        trace_id=trace_id
+                        location=get_location()
                     )
                     raise e
                 time.sleep(self.retry_delay)
