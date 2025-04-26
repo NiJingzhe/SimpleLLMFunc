@@ -8,20 +8,17 @@ from SimpleLLMFunc.interface.key_pool import APIKeyPool
 # 修复全局日志器函数导入
 from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
 
-# TODO:
-# 计划后续迁移到ZhipuAI自己的SDK上以获得更好的支持
+VOLCENGINE_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 
-class Zhipu(LLM_Interface):
+class VolcEngine(LLM_Interface):
+
     def __init__(
         self,
         api_key_pool: APIKeyPool,
+        # TODO:
+        # 目前只做针对DSV3的支持，用于测试，后面慢慢补，然后准备迁移到VolcEngine自己的SDK上
         model_name: Literal[
-            "glm-4-flash",
-            "glm-4-air",
-            "glm-4-airx",
-            "glm-4-long",
-            "glm-4-plus",
-            "glm-4-0520",
+            "deepseek-v3-250324"
         ],
         max_retries: int = 5,  # 新增最大重试次数参数
         retry_delay: float = 1.0,  # 新增重试延迟时间
@@ -29,15 +26,10 @@ class Zhipu(LLM_Interface):
         super().__init__(api_key_pool, model_name)
         self.max_retries = max_retries
         self.retry_delay = retry_delay
-        self.base_url = "https://open.bigmodel.cn/api/paas/v4/"
+        self.base_url = VOLCENGINE_BASE_URL
 
         self.model_list = [
-            "glm-4-flash",
-            "glm-4-air",
-            "glm-4-airx",
-            "glm-4-long",
-            "glm-4-plus",
-            "glm-4-0520",
+            "deepseek-v3-250324",
         ]
 
         if model_name not in self.model_list:
@@ -55,22 +47,22 @@ class Zhipu(LLM_Interface):
         trace_id: str = get_current_trace_id(),
         stream: Literal[False] = False,
         messages: Iterable[Dict[str, str]] = [{"role": "system", "content": "你是一位乐于助人的助手，可以帮助用户解决各种问题。"}],
-        timeout: Optional[int] = 20,
+        timeout: Optional[int] = 120,
         *args,
         **kwargs,
     ) -> Dict[Any, Any]:
         key = self.key_pool.get_least_loaded_key()
         self.client = OpenAI(api_key=key, base_url=self.base_url)
-        
+
         attempt = 0
         while attempt < self.max_retries:
             try:
 
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                #data = data[: min(512, len(data))]
+                # data = data[: min(512, len(data))]
                 app_log(
-                    f"Zhipu::chat: {self.model_name} request with API key: {key}, and message: {data}",
+                    f"VolcEngine::chat: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location()
                 )
                 response: Dict[Any, Any] = self.client.chat.completions.create(  # type: ignore
@@ -90,7 +82,7 @@ class Zhipu(LLM_Interface):
                 attempt += 1
                 location = get_location()
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                #data = data[: min(512, len(data))]
+                # data = data[: min(512, len(data))]
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",
                     location=get_location(),
@@ -113,7 +105,7 @@ class Zhipu(LLM_Interface):
         trace_id: str = get_current_trace_id(),
         stream: Literal[True] = True,
         messages: Iterable[Dict[str, str]] = [{"role": "system", "content": "你是一位乐于助人的助手，可以帮助用户解决各种问题。"}],
-        timeout: Optional[int] = 10,
+        timeout: Optional[int] = 50,
         *args,
         **kwargs,
     ) -> Generator[Dict[Any, Any], None, None]:
@@ -125,9 +117,9 @@ class Zhipu(LLM_Interface):
             try:
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                #data = data[: min(512, len(data))]
+                # data = data[: min(512, len(data))]
                 app_log(
-                    f"Zhipu::chat_stream: {self.model_name} request with API key: {key}, and message: {data}",
+                    f"VolcEngine::chat_stream: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location()
                 )
                 response: Generator[Dict[Any, Any], None, None] = self.client.chat.completions.create(  # type: ignore
@@ -148,9 +140,8 @@ class Zhipu(LLM_Interface):
 
                 self.key_pool.decrement_task_count(key)
                 attempt += 1
-                location = get_location()
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                #data = data[: min(512, len(data))]
+                # data = data[: min(512, len(data))]
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",
                     location=get_location()
@@ -166,7 +157,7 @@ class Zhipu(LLM_Interface):
                     )
                     raise e
                 time.sleep(self.retry_delay)
-        
+
         # 下面是一个空生成器，用于满足类型检查，实际上永远不会执行到这里
         if False:
             yield {}
@@ -184,30 +175,27 @@ if __name__ == "__main__":
     # 修改后的正则表达式模式，保留减号
     pattern = re.compile(r'[\s\n]+')
     
-    # 去除多余字符的函数
-    def clean_api_keys(api_key_list: List[str]) -> List[str]:
-        return [pattern.sub('', key.strip()) for key in api_key_list]
-    
     # 直接使用 global_config 中的 API KEY 列表，不需要 split
     app_log(
-        f"ZHIPUAI_API_KEY_LIST: {global_settings.ZHIPU_API_KEYS}",
+        f"VOLCENGINE_API_KEY_LIST: {global_settings.VOLCENGINE_API_KEYS}",
         trace_id="test_trace_id"
     )
     
-    ZHIPUAI_API_KEY_POOL = APIKeyPool(global_settings.ZHIPU_API_KEYS, "zhipu")
+    VOLCENGINE_API_KEY_POOL = APIKeyPool(global_settings.VOLCENGINE_API_KEYS, "volcengine")
     
-    ZhipuAI_glm_4_flash_Interface = Zhipu(ZHIPUAI_API_KEY_POOL, "glm-4-flash")
+    VolcEngine_deepseek_v3_Interface = VolcEngine(VOLCENGINE_API_KEY_POOL, "deepseek-v3-250324")
     
     # 测试 chat 方法
     trace_id = "test_trace_id"
     messages = [{"role": "user", "content": "你好"}]
-    response = ZhipuAI_glm_4_flash_Interface.chat(trace_id, messages=messages)
+    response = VolcEngine_deepseek_v3_Interface.chat(trace_id, messages=messages)
     print("Chat response:", response)
     
     # 测试 chat_stream 方法
     trace_id = "test_trace_id"
     messages = [{"role": "user", "content": "你好"}]
-    response = ZhipuAI_glm_4_flash_Interface.chat_stream(trace_id, messages=messages)
+    response = VolcEngine_deepseek_v3_Interface.chat_stream(trace_id, messages=messages)
     print("Chat stream response:")
     for chunk in response:
         print(chunk)
+
