@@ -19,8 +19,24 @@ def calc(expression: str) -> float:
         计算结果
     """
 
-    allowed_names = {"__builtins__": None}
-    return float(eval(expression, allowed_names))
+    import math
+
+    allowed_names = {
+        "__builtins__": None,
+        "abs": abs,
+        "round": round,
+        "ceil": math.ceil,
+        "floor": math.floor,
+        "sqrt": math.sqrt,
+        "pow": math.pow,
+        "log": math.log,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "pi": math.pi,
+        "e": math.e,
+    }
+    return float(eval(expression, {"__builtins__": None}, allowed_names))
 
 
 @tool(name="get_current_time_and_date", description="获取当前时间和日期")
