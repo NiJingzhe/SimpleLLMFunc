@@ -31,6 +31,8 @@ from SimpleLLMFunc.llm_decorator.utils import (
     get_detailed_type_description,
 )
 
+from SimpleLLMFunc.utils import get_last_item_of_generator
+
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
 
@@ -143,14 +145,16 @@ def llm_function(
                         tool_param = Tool.serialize_tools(tool_objects)
 
                 try:
-                    final_response = execute_llm(
-                        llm_interface=llm_interface,
-                        messages=messages,
-                        tools=tool_param,
-                        tool_map=tool_map,
-                        max_tool_calls=max_tool_calls,
+                    final_response = get_last_item_of_generator( 
+                        execute_llm(
+                            llm_interface=llm_interface,
+                            messages=messages,
+                            tools=tool_param,
+                            tool_map=tool_map,
+                            max_tool_calls=max_tool_calls,
+                        )
                     )
-
+                    
                     # 记录响应
                     app_log(
                         f"LLM Function '{func.__name__}'"
