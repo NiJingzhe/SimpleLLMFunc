@@ -2,6 +2,7 @@ import inspect
 import json
 from typing import (
     Concatenate,
+    Generator,
     List,
     Callable,
     TypeVar,
@@ -36,7 +37,6 @@ from SimpleLLMFunc.llm_decorator.utils import (
 T = TypeVar("T")
 
 
-
 def llm_chat(
     llm_interface: LLM_Interface,
     toolkit: Optional[List[Union[Tool, Callable]]] = None,
@@ -56,6 +56,14 @@ def llm_chat(
     如果不存在历史记录参数，那么我们会只使用一个system prompt和user prompt来请求LLM
 
     如果历史记录参数存在，但是其中有不正确格式的item，那么这个item会被忽略
+    
+    被该装饰器装饰的函数必须被标注这样的返回值:
+
+        - 无标注
+        
+        - Generator[Tuple[str, List[Dict[str, str]]], None, None]  
+        
+    但是装饰器返回的结果一定具有 Generator[Tuple[str, List[Dict[str, str]]], None, None] 的返回类型
 
     Args:
         llm_interface: LLM接口
@@ -66,15 +74,14 @@ def llm_chat(
         装饰后的函数, 装饰器会给函数加上一个返回值，这个返回值是对话历史记录。
     """
 
-    def decorator(
-        func: Callable[Concatenate[List[Dict[str, str]], ...], T],
-    ) -> Callable[Concatenate[List[Dict[str, str]], ...], Tuple[T, List[Dict[str, str]]]]:
+    def decorator(  
+        func: Callable[Concatenate[List[Dict[str, str]], ...], Generator[Tuple[str, List[Dict[str, str]]], None, None] | None],
+    ) -> Callable[
+        Concatenate[List[Dict[str, str]], ...],
+        Generator[Tuple[str, List[Dict[str, str]]], None, None],
+    ]:
         # 获取函数的签名
         signature = inspect.signature(func)
-        # 获取函数的类型提示
-        type_hints = get_type_hints(func)
-        # 获取返回类型
-        return_type = type_hints.get("return")
         # 获取函数的文档字符串
         docstring = func.__doc__ or ""
 
@@ -139,7 +146,10 @@ def llm_chat(
                     # 获取对应的值
                     custom_history = bound_args.arguments[history_param_name]
 
-                    if not (isinstance(custom_history, list) and all(isinstance(item, dict) for item in custom_history)):
+                    if not (
+                        isinstance(custom_history, list)
+                        and all(isinstance(item, dict) for item in custom_history)
+                    ):
                         push_warning(
                             f"LLM Chat '{func.__name__}' history parameter should be a List[Dict[str, str]]."
                             " No history will be passed to llm.",
@@ -155,9 +165,6 @@ def llm_chat(
                 nonlocal docstring
                 # 添加系统消息
                 if docstring != "":
-                    docstring += (
-                        "\n\n此后输出时，请先输出你的思考，然后再输出最终的结果。"
-                    )
                     current_messages.append({"role": "system", "content": docstring})
 
                 # 使用自定义历史或者函数的专属历史
@@ -165,7 +172,7 @@ def llm_chat(
                 if custom_history is not None:
                     # 使用用户提供的历史
                     formatted_history = []
-                    for msg in custom_history:
+                    for msg in custom_history[1:]:
                         if isinstance(msg, dict) and "role" in msg and "content" in msg:
                             formatted_history.append(msg)
                         elif isinstance(msg, tuple) and len(msg) == 2:
@@ -184,7 +191,7 @@ def llm_chat(
 
                 # 添加当前用户消息
                 if user_message:
-                    user_msg = {"role": "user", "content": user_message}
+                    user_msg = {"role": "user", "content": user_message + "\n\n务必思考是否要使用工具"}
                     current_messages.append(user_msg)
 
                 # 记录当前消息
@@ -225,31 +232,35 @@ def llm_chat(
 
                 try:
                     # 调用LLM
-                    response = execute_llm(
+                    response_flow = execute_llm(
                         llm_interface=llm_interface,
                         messages=current_messages,
                         tools=tool_param,
                         tool_map=tool_map,
                         max_tool_calls=max_tool_calls,
                     )
-                    # 记录响应
-                    app_log(
-                        f"LLM Chat '{func.__name__}' got response:"
-                        f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=4)}",
-                        location=get_location(),
-                    )
 
-                    # 提取响应内容
-                    content = process_response(response, return_type)
+                    # 处理一次调用可能会产生的一系列response(因为ToolCall迭代)
+                    for response in response_flow:
 
-                    # 在有正确历史参数传入的时候
-                    if len(formatted_history) != 0:
-                        # 将响应内容添加到历史记录中
-                        current_messages.append(
-                            {"role": "assistant", "content": content}
+                        # 记录响应
+                        app_log(
+                            f"LLM Chat '{func.__name__}' got response:"
+                            f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=4)}",
+                            location=get_location(),
                         )
 
-                    return content, current_messages
+                        # 提取响应内容
+                        content = process_response(response, str)
+
+                        # 在有正确历史参数传入的时候
+                        if len(formatted_history) != 0:
+                            # 将响应内容添加到历史记录中
+                            current_messages.append(
+                                {"role": "assistant", "content": content}
+                            )
+
+                        yield content, [item for item in current_messages if item["content"] != ""]
 
                 except Exception as e:
                     # 修复：在log_context环境中不再传递trace_id参数

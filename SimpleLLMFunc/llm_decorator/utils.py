@@ -8,7 +8,7 @@
 """
 
 import json
-from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable
+from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable, Generator
 from pydantic import BaseModel
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
@@ -31,7 +31,7 @@ def execute_llm(
     tools: List[Dict[str, Any]] | None,
     tool_map: Dict[str, Callable],
     max_tool_calls: int,
-) -> Any:
+) -> Generator[Any, None, None]:
     """
     执行LLM调用，会自动处理Tool Use，最终返回一个包含返回文本的LLM Response
 
@@ -41,7 +41,6 @@ def execute_llm(
         tools: 序列化后的工具信息，会被直接传递给LLM Interface
         tool_map: 工具名称到实际实现工具功能函数的映射
         max_tool_calls: 最大工具调用次数
-        func_name: 函数名称（用于日志）
 
     Returns:
         最终的LLM响应
@@ -63,6 +62,7 @@ def execute_llm(
     )
 
     # initial response 可能是一个Tool Use Response
+    yield initial_response
 
     app_log(
         f"LLM Function '{func_name}' received initial response: {json.dumps(initial_response, default=str, ensure_ascii=False)}",
@@ -75,7 +75,7 @@ def execute_llm(
     # 如果没有工具调用，直接返回初始响应
     if not tool_calls:
         push_debug(f"No tool calls found in the response, returning directly", location=get_location())
-        return initial_response  #  <--------------------------------------------------------------------------- 第一个返回分支
+        return 
 
     # 有工具调用，进入工具调用循环
     app_log(
@@ -100,6 +100,8 @@ def execute_llm(
             messages=current_messages,
             tools=tools,
         )
+        
+        yield response
 
         app_log(
             (
@@ -116,8 +118,8 @@ def execute_llm(
         if not tool_calls:
             # 没有更多工具调用，返回最终响应
             push_debug(f"LLM Function '{func_name}': No more tool calls, returning final response", location=get_location())
-            return response  #  <------------------------------------------------------------------------------ 第二个返回分支
-
+            return 
+        
         # 处理新的工具调用
         app_log(f"LLM Function '{func_name}' Found {len(tool_calls)} additional tool calls to execute", location=get_location())
 
@@ -144,11 +146,11 @@ def execute_llm(
         location=get_location()
     )
 
-    return final_response  #    #  <--------------------------------------------------------------------------- 第三个返回分支
+    yield final_response  #    #  <--------------------------------------------------------------------------- 第三个返回分支
 
 
 
-def process_response(response: Dict[Any, Any], return_type: Optional[Type[T]]) -> T:
+def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
     """
     处理LLM的响应，将其转换为指定的返回类型
 
@@ -166,18 +168,6 @@ def process_response(response: Dict[Any, Any], return_type: Optional[Type[T]]) -
     
     # 从response中提取内容
     content = ""
-
-    # 检查是否有工具调用但没有被处理
-    # 因为我们一定会先执行 execute_with_tools
-    # 这几乎可以保证返回的内容中不包含工具调用响应
-    # 除非超过Tool Use的最大轮次但是依然在使用工具
-    
-    # 但是如果你单独执行了这个函数，那么这个检查就非常有必要了
-    tool_calls = _extract_tool_calls(response)
-    if tool_calls:
-        push_warning(
-            f"LLM Function '{func_name}' Warning: Response contains unprocessed tool calls. Consider setting auto_tool_execution=True."
-        )
 
     # 从API Response中提取文本内容
     try:

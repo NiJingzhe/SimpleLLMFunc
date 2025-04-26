@@ -3,7 +3,124 @@ from SimpleLLMFunc import VolcEngine_deepseek_v3_Interface
 from SimpleLLMFunc import tool
 import os
 import sys
-from typing import List, Dict
+import json
+import argparse
+from datetime import datetime
+from typing import List, Dict, Optional
+
+from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
+
+# 历史记录管理相关函数
+def save_history(history: List[Dict[str, str]], session_id: str) -> str:
+    """保存对话历史到文件
+    
+    Args:
+        history: 对话历史记录
+        session_id: 会话ID，用于唯一标识一个对话会话
+        
+    Returns:
+        保存的文件路径
+    """
+    # 创建历史记录目录
+    history_dir = os.path.join(os.getcwd(), "chat_history")
+    os.makedirs(history_dir, exist_ok=True)
+    
+    # 格式化文件名，包含会话ID和时间戳
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{session_id}_{timestamp}.json"
+    filepath = os.path.join(history_dir, filename)
+    
+    # 将历史记录保存为JSON文件
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump({
+            "session_id": session_id,
+            "timestamp": timestamp,
+            "history": history
+        }, f, ensure_ascii=False, indent=2)
+    
+    print(f"历史记录已保存到: {filepath}")
+    return filepath
+
+def load_history(session_id: Optional[str] = None, filepath: Optional[str] = None) -> List[Dict[str, str]]:
+    """加载对话历史
+    
+    Args:
+        session_id: 会话ID，如果提供，将加载最新的对应会话ID的历史记录
+        filepath: 具体的历史记录文件路径，如果提供，将直接加载该文件
+        
+    Returns:
+        加载的历史记录，如果没有找到匹配的记录则返回空列表
+    """
+    history_dir = os.path.join(os.getcwd(), "chat_history")
+    
+    # 如果历史记录目录不存在，返回空列表
+    if not os.path.exists(history_dir):
+        return []
+    
+    # 如果提供了具体文件路径，直接加载
+    if filepath and os.path.exists(filepath):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("history", [])
+        except Exception as e:
+            print(f"加载历史记录文件失败: {e}")
+            return []
+    
+    # 如果提供了会话ID，查找最新的匹配记录
+    if session_id:
+        # 列出所有匹配会话ID的文件
+        matching_files = [f for f in os.listdir(history_dir) 
+                         if f.startswith(session_id) and f.endswith(".json")]
+        
+        if not matching_files:
+            return []
+        
+        # 按文件名排序，获取最新的记录
+        latest_file = sorted(matching_files)[-1]
+        filepath = os.path.join(history_dir, latest_file)
+        
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                print(f"已加载历史记录: {filepath}")
+                return data.get("history", [])
+        except Exception as e:
+            print(f"加载历史记录文件失败: {e}")
+            return []
+    
+    return []
+
+def list_sessions() -> List[str]:
+    """列出所有可用的会话ID
+    
+    Returns:
+        会话ID列表
+    """
+    history_dir = os.path.join(os.getcwd(), "chat_history")
+    
+    if not os.path.exists(history_dir):
+        return []
+    
+    # 从文件名中提取会话ID
+    session_ids = set()
+    for filename in os.listdir(history_dir):
+        if filename.endswith(".json"):
+            # 会话ID是文件名的第一部分，以_分隔
+            parts = filename.split("_")
+            if len(parts) >= 1:
+                session_ids.add(parts[0])
+    
+    return sorted(list(session_ids))
+
+def generate_session_id() -> str:
+    """生成一个新的会话ID
+    
+    Returns:
+        生成的会话ID
+    """
+    import uuid
+    return str(uuid.uuid4())[:8]  # 使用UUID的前8位作为会话ID
 
 
 @tool(
@@ -56,13 +173,13 @@ def get_current_time_and_date() -> str:
 def auto_merge(prev_content: str, content_need_merge: str) -> str:  # type: ignore
     """自动合并函数
 
-    你需要将 content_need_merge 代表的内容和 prev_content 进行智能合并，并返回合并后的新结果。
+    你需要将 content_need_merge 代表的内容和 prev_content 进行智能合并或者覆盖，并返回合并或者覆盖后的新结果。
 
     Args:
         prev_content: 旧的内容
-        content_need_merge: 需要和旧内容和并的新的内容，可能包含关于如何正确合并的信息
+        content_need_merge: 需要和旧内容和并的新的内容，可能包含关于如何正确合并的信息， 如果没有提供信息那么很可能是覆盖
     Returns:
-        合并后的内容
+        合并或覆盖后的内容
     """
     pass
 
@@ -73,7 +190,7 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
 
     Args:
         file_path: 文件路径，请直接给出一个相对路径，不要以 /, ./, ../等开头
-        operation: 操作类型，例如：read(读取文件), write(写入文件), delete（删除文件）, auto_merge（自动合并内容）, mkdir（创建目录）, tree（列出目录树）, ls（列出当前目录内容）
+        operation: 操作类型，可选值有[read(读取文件), write(写入文件), delete（删除文件）, auto_merge（自动合并内容）, mkdir（创建目录）, tree（列出目录树）, ls（列出当前目录内容）]
         content: 写入内容，不要在写入内容中包含任何markdown包裹（仅在操作为write或auto_merge时使用）, auto_merge时请提供关于merge行为的更多信息在content中。
     Returns:
         操作结果
@@ -103,18 +220,20 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         file_path = file_path.rstrip("/")
 
     # 在sandbox下创建文件
-    sandbox_path = os.path.join(os.getcwd(), "sandbox")
+    sandbox_path = os.getcwd()
     # 确保sandbox目录存在
     os.makedirs(sandbox_path, exist_ok=True)
 
     full_path = os.path.join(sandbox_path, file_path)
+
+    print(">" * 50, "\n", f"SYSTEM: 计划操作文件: {full_path} \n", "<" * 50)
 
     # 创建目录操作
     if operation == "mkdir":
         try:
             # 确保是一个有效的目录路径
             if os.path.isfile(full_path):
-                return f"错误: 无法创建目录 '{file_path}'，因为同名文件已存在"
+                return f"错误: 无法创建目录 '{full_path}'，因为同名文件已存在"
 
             os.makedirs(full_path, exist_ok=True)
             return f"创建目录成功: '{file_path}'"
@@ -184,16 +303,16 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 检查路径是否是目录
             if os.path.isdir(full_path):
-                return f"你尝试读取文件但是遇到了错误: '{file_path}' 是一个目录，无法进行读取操作"
+                return f"你尝试读取文件但是遇到了错误: '{full_path}' 是一个目录，无法进行读取操作"
 
             # 检查文件是否存在
             if not os.path.exists(full_path):
-                return f"你尝试读取文件但是遇到了错误: 文件 '{file_path}' 不存在"
+                return f"你尝试读取文件但是遇到了错误: 文件 '{full_path}' 不存在"
 
             with open(full_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                print(">" * 50, "\n", f"SYSTEM: 文件: {file_path} 被读取\n", "<" * 50)
-                return f"你尝试读取文件{file_path}，以下是内容:\n {content}"
+                print(">" * 50, "\n", f"SYSTEM: 文件: {full_path} 被读取\n", "<" * 50)
+                return f"你尝试读取文件{full_path}，以下是内容:\n {content}"
         except Exception as e:
             return f"你尝试读取文件但是读取文件失败: {str(e)}"
 
@@ -201,21 +320,21 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
     elif operation == "delete":
         try:
             if not os.path.exists(full_path):
-                return f"错误: 文件或目录 '{file_path}' 不存在"
+                return f"错误: 文件或目录 '{full_path}' 不存在"
 
             if os.path.isdir(full_path):
                 shutil.rmtree(full_path)
                 print(
                     ">" * 50,
                     "\n",
-                    f"SYSTEM: 目录: {file_path} 及其内容被删除\n",
+                    f"SYSTEM: 目录: {full_path} 及其内容被删除\n",
                     "<" * 50,
                 )
-                return f"删除成功: 目录 '{file_path}' 及其内容已被删除"
+                return f"删除成功: 目录 '{full_path}' 及其内容已被删除"
             else:
                 os.remove(full_path)
-                print(">" * 50, "\n", f"SYSTEM: 文件: {file_path} 被删除\n", "<" * 50)
-                return f"删除成功: 文件 '{file_path}' 已被删除"
+                print(">" * 50, "\n", f"SYSTEM: 文件: {full_path} 被删除\n", "<" * 50)
+                return f"删除成功: 文件 '{full_path}' 已被删除"
         except Exception as e:
             return f"删除操作失败: {str(e)}"
 
@@ -224,7 +343,7 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 检查路径是否是目录
             if os.path.isdir(full_path):
-                return f"错误: '{file_path}' 是一个目录，无法进行写入操作。请使用不同的文件名或先删除同名目录。"
+                return f"错误: '{full_path}' 是一个目录，无法进行写入操作。请使用不同的文件名或先删除同名目录。"
 
             # 确保父目录存在
             parent_dir = os.path.dirname(full_path)
@@ -241,10 +360,10 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
                 print(
                     ">" * 50,
                     "\n",
-                    f"SYSTEM: 文件: {file_path} 被创建并写入\n",
+                    f"SYSTEM: 文件: {full_path} 被创建并写入\n",
                     "<" * 50,
                 )
-                return f"写入成功: 文件 '{file_path}' 已创建并写入内容，可以使用read操作查看内容"
+                return f"写入成功: 文件 '{full_path}' 已创建并写入内容，可以使用read操作查看内容"
             else:
                 # 文件已存在，执行合并
                 with open(full_path, "r", encoding="utf-8") as f:
@@ -256,9 +375,9 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
                     f.write(merged_content)
 
                 print(
-                    ">" * 50, "\n", f"SYSTEM: 文件: {file_path} 内容被合并\n", "<" * 50
+                    ">" * 50, "\n", f"SYSTEM: 文件: {full_path} 内容被合并\n", "<" * 50
                 )
-                return f"写入并合并成功: 文件 '{file_path}' 的内容已更新，可以使用read操作查看内容并检查合并是否正确"
+                return f"写入并合并成功: 文件 '{full_path}' 的内容已更新，可以使用read操作查看内容并检查合并是否正确"
         except Exception as e:
             return f"写入文件失败: {str(e)}"
 
@@ -267,11 +386,11 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 检查路径是否是目录
             if os.path.isdir(full_path):
-                return f"错误: '{file_path}' 是一个目录，无法进行合并操作"
+                return f"错误: '{full_path}' 是一个目录，无法进行合并操作"
 
             # 检查文件是否存在
             if not os.path.exists(full_path):
-                return f"错误: 文件 '{file_path}' 不存在，无法进行合并操作"
+                return f"错误: 文件 '{full_path}' 不存在，无法进行合并操作"
 
             with open(full_path, "r", encoding="utf-8") as f:
                 prev_content = f.read()
@@ -281,8 +400,8 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
             with open(full_path, "w", encoding="utf-8") as f:
                 f.write(merged_content)
 
-            print(">" * 50, "\n", f"SYSTEM: 文件: {file_path} 内容被合并\n", "<" * 50)
-            return f"合并成功: 文件 '{file_path}' 的内容已更新，可以使用read操作查看内容并检查合并是否正确"
+            print(">" * 50, "\n", f"SYSTEM: 文件: {full_path} 内容被合并\n", "<" * 50)
+            return f"合并成功: 文件 '{full_path}' 的内容已更新，可以使用read操作查看内容并检查合并是否正确"
         except Exception as e:
             return f"合并文件失败: {str(e)}"
 
@@ -295,7 +414,7 @@ def execute_command(command: str) -> str:
     """执行系统命令
 
     Args:
-        command: 系统命令，例如：ls -l
+        command: 系统命令，推荐执行的命令有 python <script path>
     Returns:
         命令输出
     """
@@ -304,7 +423,7 @@ def execute_command(command: str) -> str:
 
     try:
         print(">" * 50, "\n", f"SYSTEM: 执行命令: {command}\n", "<" * 50)
-        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=35)
         print(
             ">" * 50,
             "\n",
@@ -312,125 +431,179 @@ def execute_command(command: str) -> str:
             "<" * 50,
         )
         return (
-            result.stdout.strip() if result.returncode == 0 else result.stderr.strip()
+            result.stdout.strip() if result.returncode == 0 else result.stderr.strip() + "超时可能是程序等待input导致的，请使用测试代码来进行测试。"
         )
     except Exception as e:
         return f"执行命令失败: {str(e)}"
 
 
-@llm_chat(
-    llm_interface=VolcEngine_deepseek_v3_Interface,
-    toolkit=[calc, get_current_time_and_date, file_operator, execute_command],
-)
-def chat_bot_1(history: List[Dict[str, str]], query: str) -> str:  # type: ignore
-    """
-    你是Cortana，是一位具有丰富经验的程序员，擅长于使用Python代码实现各种功能，推荐使用file_operator工具来帮助你撰写代码。
-    推荐你和GLaDos一起合作，他是你的上司。
-    GLaDos是擅长于进行总体规划的游戏设计师。
-    你务必听从GLaDos给你的任务。
+import os
 
-    - calculator: 计算器
-
-    - get_current_time_and_date: 获取当前时间和日期
-
-    - file_operator: 文件操作工具，不要只说操作文件，要实际上调用工具
-
-    - execute_command: 执行系统命令
-    """
-    pass
 
 
 @llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
     toolkit=[calc, get_current_time_and_date, file_operator, execute_command],
+    max_tool_calls=500,
 )
-def chat_bot_2(history: List[Dict[str, str]], query: str) -> str:  # type: ignore
+def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     """
-    你是GLaDos，一位擅长于进行总体规划的游戏设计师，推荐你和Cortana一起合作，她是你的下属。同时推荐你使用file_operator工具记录你的设计和想法
-    Cortana是具有丰富经验的程序员。你可以命令她实现代码，写完后一定要读取检查一下。
+    你是GLaDos，一为全能开发者。
 
-    - calculator: 计算器
+    由于你不能和控制台交互，所有的测试都需要首先使用unittest编写专门的测试脚本，并通过mock输入的方法来绕开控制台输入。
 
-    - get_current_time_and_date: 获取当前时间和日期
 
-    - file_operator: 文件操作工具，不要只说操作文件，要实际上调用工具
+    首先需要分析用户的需求，然后使用tree查看当前的工作环境，然后
+    建议遵循以下过程：
+        1. 使用file_operator工具创建TODO.md文档，用checkbox的形式将用户需求拆解成多个详细描述的小任务，并记录。
+            任务拆分务必拆分到最细致的粒度，推荐任何任务都拆分到10个子任务以上。
+        2. 使用file_operator工具读取TODO.md文档，检查任务列表
+        3. 逐步执行计划
+        4. 撰写每个部分的代码和测试代码
+        5. 根据结果反思执行效果，并继续下一步或者作出弥补
+        6. 使用file_operator工具更新TODO.md文档
+    
+    直到你认为任务已经完成，输出"<<任务完成>>"字样
+        
+    你可以灵活使用以下工具:
+        - calculator: 计算器
 
-    - execute_command: 执行系统命令
+        - get_current_time_and_date: 获取当前时间和日期
+
+        - file_operator: 文件操作工具，不要只说操作文件，要实际上调用工具。
+
+        - execute_command: 执行系统命令, 每次执行指令建议都先执行pwd和tree检查目录情况
     """
     pass
+
 
 
 if __name__ == "__main__":
-    # 创建空的历史记录列表
-    history_cb1 = []
-    history_cb2 = []
-
+    # 添加命令行参数解析
+    parser = argparse.ArgumentParser(description="GLaDos对话系统，支持历史记录持久化")
+    parser.add_argument("--session", "-s", help="指定会话ID，用于加载或创建一个持久化会话")
+    parser.add_argument("--list-sessions", "-l", action="store_true", help="列出所有可用的会话ID")
+    parser.add_argument("--new", "-n", action="store_true", help="创建一个新的会话")
+    parser.add_argument("--file", "-f", help="直接指定历史记录文件路径进行加载")
+    parser.add_argument("--auto-save", "-a", action="store_true", help="自动保存每轮对话的历史记录")
+    args = parser.parse_args()
+    
+    # 如果要列出所有会话
+    if args.list_sessions:
+        sessions = list_sessions()
+        if sessions:
+            print("可用的会话ID:")
+            for session_id in sessions:
+                print(f"  - {session_id}")
+        else:
+            print("没有找到可用的会话")
+        sys.exit(0)
+    
+    # 确定会话ID
+    session_id = None
+    if args.new:
+        # 创建新会话
+        session_id = generate_session_id()
+        print(f"已创建新会话，ID: {session_id}")
+    elif args.session:
+        # 使用指定的会话ID
+        session_id = args.session
+        print(f"使用会话ID: {session_id}")
+    
+    # 加载历史记录
+    history_GLaDos = []
+    if args.file:
+        # 从指定文件加载
+        history_GLaDos = load_history(filepath=args.file)
+        if not history_GLaDos:
+            print(f"从文件加载历史记录失败: {args.file}")
+            if not args.new and not args.session:
+                print("将使用空的历史记录开始新会话")
+    elif session_id:
+        # 从会话ID加载
+        history_GLaDos = load_history(session_id=session_id)
+        if not history_GLaDos and not args.new:
+            print(f"没有找到会话ID对应的历史记录: {session_id}")
+            print("将使用空的历史记录开始新会话")
+    
     # 获取用户输入作为初始化对话的内容
     user_input = input("请输入您的消息以开始对话: ")
 
     # 使用用户输入初始化对话，由GLaDos先发起
     initial_message = (
         f"用户说: {user_input}"
-        if user_input.strip()
-        else "你要和Cortana一起合作，制作一款在终端中运行的文字RPG游戏."
     )
 
     print("==========================================" * 3)
     print(f"用户: {initial_message}")
-
-    # 初始消息添加到历史中
-    history_cb1.append({"role": "user", "content": initial_message})
-
-    # 调用chat_bot_1，获取返回的内容和更新的历史
-    response_cb1, history_cb1 = chat_bot_1(history_cb1, initial_message)
-    # 只截取"回答："后面的内容
-    message_from_cb1 = response_cb1.split("回答：")[-1].strip()
     print("==========================================" * 3)
-    print(f"GLaDos: {message_from_cb1}")
+    
+    # 如果历史记录为空，需要手动添加第一条用户消息
+    if not history_GLaDos:
+        history_GLaDos.append({"role": "user", "content": "用户说: " + initial_message})
 
-    # 将GLaDos的回复添加到另一个聊天机器人的历史中
-    history_cb2.append({"role": "user", "content": message_from_cb1})
-
-    # 调用chat_bot_2，获取返回的内容和更新的历史
-    response_cb2, history_cb2 = chat_bot_2(history_cb2, message_from_cb1)
-    # 只截取"回答："后面的内容
-    message_from_cb2 = response_cb2.split("回答：")[-1].strip()
+    # 调用GLaDos获取响应生成器
     print("==========================================" * 3)
-    print(f"小娜: {message_from_cb2}")
-
-    # 简单的双Agent循环
+    print("GLaDos思考中...")
+    glados_gen = GLaDos(history_GLaDos, "用户说: " + initial_message)
+    # 遍历生成器获取所有中间结果
+    for response_GLaDos, history_GLaDos in glados_gen:
+        # 显示每一步的输出
+        print(f"{response_GLaDos}")
+        print("-----------------------------------------")
+    print("==========================================" * 3)
+    
+    # 自动保存历史记录
+    if args.auto_save and session_id:
+        save_history(history_GLaDos, session_id)
+    
+    # 主对话循环
     try:
         while True:
-            # 将小娜的回复添加到GLaDos的历史中
-            history_cb1.append({"role": "user", "content": message_from_cb2})
-
-            # 调用chat_bot_1，获取返回的内容和更新的历史
-            response_cb1, history_cb1 = chat_bot_1(history_cb1, message_from_cb2)
-            # 只截取"回答："后面的内容
-            message_from_cb1 = response_cb1.split("回答：")[-1].strip()
+            # 获取用户输入
+            user_input = input("您: ")
+            
+            # 检查是否是退出命令
+            if user_input.lower() in ["exit", "quit", "q", "退出"]:
+                if session_id:
+                    # 退出前保存历史记录
+                    save_history(history_GLaDos, session_id)
+                    print(f"已保存会话历史，会话ID: {session_id}")
+                print("再见！")
+                break
+                
+            # 检查是否是保存命令
+            if user_input.lower() in ["save", "保存"]:
+                if not session_id:
+                    session_id = generate_session_id()
+                    print(f"创建新会话ID: {session_id}")
+                save_history(history_GLaDos, session_id)
+                continue
+            
+            # 添加用户消息
+            user_message = f"用户说: {user_input}"
             print("==========================================" * 3)
-            print(f"GLaDos: {message_from_cb1}")
-
-            # 将GLaDos的回复添加到小娜的历史中
-            history_cb2.append({"role": "user", "content": message_from_cb1})
-
-            # 调用chat_bot_2，获取返回的内容和更新的历史
-            response_cb2, history_cb2 = chat_bot_2(history_cb2, message_from_cb1)
-            # 只截取"回答："后面的内容
-            message_from_cb2 = response_cb2.split("回答：")[-1].strip()
+            print(f"用户: {user_message}")
             print("==========================================" * 3)
-            print(f"小娜: {message_from_cb2}")
             
-            # 检查历史记录长度，长度超过20则去掉最老的一条非system信息
-            if len(history_cb1) > 20:
-                history_cb1 = [
-                    msg for msg in history_cb1 if msg["role"] == "system"
-                ] + history_cb1[-20:]
+            # 调用GLaDos获取响应
+            print("GLaDos思考中...")
+            print("==========================================" * 3)
+            glados_gen = GLaDos(history_GLaDos, user_message)
+            # 遍历生成器获取所有中间结果
+            for response_GLaDos, history_GLaDos in glados_gen:
+                print(f"{response_GLaDos}")
+                print("-----------------------------------------")
+            print("==========================================" * 3)
             
-            if len(history_cb2) > 20:
-                history_cb2 = [
-                    msg for msg in history_cb2 if msg["role"] == "system"
-                ] + history_cb2[-20:]    
-            
+            # 自动保存历史记录
+            if args.auto_save and session_id:
+                save_history(history_GLaDos, session_id)
+                
     except KeyboardInterrupt:
         print("\n检测到键盘中断，程序已退出")
+        if session_id:
+            # 中断前保存历史记录
+            save_history(history_GLaDos, session_id)
+            print(f"已保存会话历史，会话ID: {session_id}")
+
