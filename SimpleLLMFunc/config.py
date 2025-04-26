@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     )
     
     ZHIPU_API_KEYS: Annotated[List[str], ForceDecode] = []
+    VOLCENGINE_API_KEYS: Annotated[List[str], ForceDecode] = []
 
 @lru_cache
 def get_settings() -> Settings:
