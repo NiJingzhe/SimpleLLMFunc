@@ -1,11 +1,17 @@
 # SimpleLLMFunc
 
-![SimpleLLMFunc](img/repocover.png)
+![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover.png?raw=true)
+
+
+
+![Github Stars](https://img.shields.io/github/stars/NiJingzhe/SimpleLLMFunc.svg?style=social)
+![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
 一个轻量级的LLM调用和工具集成框架，支持类型安全的LLM函数装饰器、多种模型接口和强大的日志跟踪系统。
 
@@ -233,7 +239,7 @@ Output:
 
 - #### llm chat
 
-同样的我们也支持创建**对话类函数**，以下是一个简单的对话函数的例子：[Simple Manus](./examples/simple_manus.py)。
+同样的我们也支持创建**对话类函数**，以下是一个简单的对话函数的例子：[Simple Manus](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/simple_manus.py)。
 
 这个例子实现了一些工具和一个对话函数，能够实现代码专精的Manus类似物
 
@@ -427,11 +433,29 @@ SimpleLLMFunc使用`APIKeyPool`类通过小根堆管理多个API密钥，实现�
 
 ## 安装和使用
 
+### 1. 源码安装
 1. 克隆此仓库
 2. 根据`env_template`创建`.env`文件并配置您的API密钥
 3. 使用Poetry安装依赖：`poetry install`
 4. 导入并使用`SimpleLLMFunc`的各个组件
 
+### 2. PyPI安装
+
+```bash
+pip install SimpleLLMFunc
+```
+
+## Star History
+
+<a href="https://www.star-history.com/#NiJingzhe/SimpleLLMFunc&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=NiJingzhe/SimpleLLMFunc&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=NiJingzhe/SimpleLLMFunc&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=NiJingzhe/SimpleLLMFunc&type=Date" />
+ </picture>
+</a>
+
 ## 许可证
 
 MIT
+
