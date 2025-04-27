@@ -153,3 +153,5 @@ logs/
 # Add any project-specific ignores below
 **/log_indices/
 **/*.log
+
+sandbox/
