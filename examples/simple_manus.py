@@ -458,7 +458,7 @@ def execute_command(command: str) -> str:
         return f"执行命令失败: {str(e)}"
 
 
-@tool(name="interactive_terminal", description="运行一个交互式终端应用，支持实时读取输出和发送输入")
+@tool(name="interactive_terminal", description="运行一个交互式终端应用，支持使用预订的输入列表来进行交互")
 def interactive_terminal(
     command: str, 
     inputs: List[str] = [], 
@@ -592,7 +592,7 @@ def interactive_terminal(
         return error_message
 
 
-@tool(name="interactive_dialogue", description="与交互式终端应用进行多轮对话")
+@tool(name="interactive_dialogue", description="与交互式终端应用进行多轮对话，更加灵活的交互")
 def interactive_dialogue(
     command: str, 
     dialogue: List[str], 
