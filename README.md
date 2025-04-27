@@ -233,7 +233,7 @@ Output:
 
 - #### llm chat
 
-同样的我们也支持创建**对话类函数**，以下是一个简单的对话函数的例子：[Chat Example](./examples/llm_chat_example.py)。
+同样的我们也支持创建**对话类函数**，以下是一个简单的对话函数的例子：[Simple Manus](./examples/simple_manus.py)。
 
 这个例子实现了一些工具和一个对话函数，能够实现代码专精的Manus类似物
 
