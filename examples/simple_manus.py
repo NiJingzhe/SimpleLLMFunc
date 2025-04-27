@@ -1,3 +1,4 @@
+from multiprocessing import ProcessError
 from SimpleLLMFunc import llm_chat, llm_function
 from SimpleLLMFunc import VolcEngine_deepseek_v3_Interface
 from SimpleLLMFunc import tool
@@ -6,57 +7,62 @@ import sys
 import json
 import argparse
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any, Callable, Union
 
 from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
+
 
 # 历史记录管理相关函数
 def save_history(history: List[Dict[str, str]], session_id: str) -> str:
     """保存对话历史到文件
-    
+
     Args:
         history: 对话历史记录
         session_id: 会话ID，用于唯一标识一个对话会话
-        
+
     Returns:
         保存的文件路径
     """
     # 创建历史记录目录
     history_dir = os.path.join(os.getcwd(), "chat_history")
     os.makedirs(history_dir, exist_ok=True)
-    
+
     # 格式化文件名，包含会话ID和时间戳
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{session_id}_{timestamp}.json"
     filepath = os.path.join(history_dir, filename)
-    
+
     # 将历史记录保存为JSON文件
     with open(filepath, "w", encoding="utf-8") as f:
-        json.dump({
-            "session_id": session_id,
-            "timestamp": timestamp,
-            "history": history
-        }, f, ensure_ascii=False, indent=2)
-    
+        json.dump(
+            {"session_id": session_id, "timestamp": timestamp, "history": history},
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
     print(f"历史记录已保存到: {filepath}")
     return filepath
 
-def load_history(session_id: Optional[str] = None, filepath: Optional[str] = None) -> List[Dict[str, str]]:
+
+def load_history(
+    session_id: Optional[str] = None, filepath: Optional[str] = None
+) -> List[Dict[str, str]]:
     """加载对话历史
-    
+
     Args:
         session_id: 会话ID，如果提供，将加载最新的对应会话ID的历史记录
         filepath: 具体的历史记录文件路径，如果提供，将直接加载该文件
-        
+
     Returns:
         加载的历史记录，如果没有找到匹配的记录则返回空列表
     """
     history_dir = os.path.join(os.getcwd(), "chat_history")
-    
+
     # 如果历史记录目录不存在，返回空列表
     if not os.path.exists(history_dir):
         return []
-    
+
     # 如果提供了具体文件路径，直接加载
     if filepath and os.path.exists(filepath):
         try:
@@ -66,20 +72,23 @@ def load_history(session_id: Optional[str] = None, filepath: Optional[str] = Non
         except Exception as e:
             print(f"加载历史记录文件失败: {e}")
             return []
-    
+
     # 如果提供了会话ID，查找最新的匹配记录
     if session_id:
         # 列出所有匹配会话ID的文件
-        matching_files = [f for f in os.listdir(history_dir) 
-                         if f.startswith(session_id) and f.endswith(".json")]
-        
+        matching_files = [
+            f
+            for f in os.listdir(history_dir)
+            if f.startswith(session_id) and f.endswith(".json")
+        ]
+
         if not matching_files:
             return []
-        
+
         # 按文件名排序，获取最新的记录
         latest_file = sorted(matching_files)[-1]
         filepath = os.path.join(history_dir, latest_file)
-        
+
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -88,20 +97,21 @@ def load_history(session_id: Optional[str] = None, filepath: Optional[str] = Non
         except Exception as e:
             print(f"加载历史记录文件失败: {e}")
             return []
-    
+
     return []
+
 
 def list_sessions() -> List[str]:
     """列出所有可用的会话ID
-    
+
     Returns:
         会话ID列表
     """
     history_dir = os.path.join(os.getcwd(), "chat_history")
-    
+
     if not os.path.exists(history_dir):
         return []
-    
+
     # 从文件名中提取会话ID
     session_ids = set()
     for filename in os.listdir(history_dir):
@@ -110,22 +120,26 @@ def list_sessions() -> List[str]:
             parts = filename.split("_")
             if len(parts) >= 1:
                 session_ids.add(parts[0])
-    
+
     return sorted(list(session_ids))
+
 
 def generate_session_id() -> str:
     """生成一个新的会话ID
-    
+
     Returns:
         生成的会话ID
     """
     import uuid
+
     return str(uuid.uuid4())[:8]  # 使用UUID的前8位作为会话ID
 
 
 @tool(
     name="calculator",
-    description="A calculator that can perform basic arithmetic operations.",
+    description="A calculator that can perform arithmetic calculations."
+                " Support simple functions like ceil, floor, sqrt, sin, cos, tan, pow, log,"
+                " and some constant like pi and e",
 )
 def calc(expression: str) -> float:
     """计算器
@@ -233,12 +247,12 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 确保是一个有效的目录路径
             if os.path.isfile(full_path):
-                return f"错误: 无法创建目录 '{full_path}'，因为同名文件已存在"
+                return f"错误: 无法创建目录 '{full_path}'，因为同名文件已存在，你可以使用ls来查看目录情况"
 
             os.makedirs(full_path, exist_ok=True)
             return f"创建目录成功: '{file_path}'"
         except Exception as e:
-            return f"创建目录失败: {str(e)}"
+            return f"创建目录失败: {str(e)}，你可以使用ls来查看目录情况"
 
     # 列出目录内容操作
     if operation == "ls":
@@ -249,7 +263,7 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
             )
 
             if not os.path.exists(dir_path):
-                return f"错误: 目录 '{os.path.relpath(dir_path, sandbox_path)}' 不存在"
+                return f"错误: 目录 '{os.path.relpath(dir_path, sandbox_path)}' 不存在，你可以使用ls来查看目录情况"
 
             # 列出目录内容
             items = os.listdir(dir_path)
@@ -267,7 +281,7 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
                 + "\n".join(result)
             )
         except Exception as e:
-            return f"列出目录内容失败: {str(e)}"
+            return f"列出目录内容失败: {str(e)}，你可以使用ls来查看目录情况"
 
     # 生成目录树操作
     if operation == "tree":
@@ -278,7 +292,7 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
             )
 
             if not os.path.exists(dir_path):
-                return f"错误: 目录 '{os.path.relpath(dir_path, sandbox_path)}' 不存在"
+                return f"错误: 目录 '{os.path.relpath(dir_path, sandbox_path)}' 不存在，你可以使用ls来查看目录情况"
 
             # 返回递归展开的目录树
             def list_files(startpath):
@@ -303,18 +317,20 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 检查路径是否是目录
             if os.path.isdir(full_path):
-                return f"你尝试读取文件但是遇到了错误: '{full_path}' 是一个目录，无法进行读取操作"
+                return f"你尝试读取文件但是遇到了错误: '{full_path}' 是一个目录，无法进行读取操作，你可以使用ls来查看目录情况"
 
             # 检查文件是否存在
             if not os.path.exists(full_path):
-                return f"你尝试读取文件但是遇到了错误: 文件 '{full_path}' 不存在"
+                return f"你尝试读取文件但是遇到了错误: 文件 '{full_path}' 不存在，你可以使用ls来查看目录情况"
 
             with open(full_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 print(">" * 50, "\n", f"SYSTEM: 文件: {full_path} 被读取\n", "<" * 50)
                 return f"你尝试读取文件{full_path}，以下是内容:\n {content}"
         except Exception as e:
-            return f"你尝试读取文件但是读取文件失败: {str(e)}"
+            return (
+                f"你尝试读取文件但是读取文件失败: {str(e)}，你可以使用ls来查看目录情况"
+            )
 
     # 删除文件或目录操作
     elif operation == "delete":
@@ -386,11 +402,11 @@ def file_operator(file_path: str, operation: str, content: str = "") -> str:
         try:
             # 检查路径是否是目录
             if os.path.isdir(full_path):
-                return f"错误: '{full_path}' 是一个目录，无法进行合并操作"
+                return f"错误: '{full_path}' 是一个目录，无法进行合并操作，你可以使用ls来检查目录情况"
 
             # 检查文件是否存在
             if not os.path.exists(full_path):
-                return f"错误: 文件 '{full_path}' 不存在，无法进行合并操作"
+                return f"错误: 文件 '{full_path}' 不存在，无法进行合并操作，你可以使用ls来检查目录情况"
 
             with open(full_path, "r", encoding="utf-8") as f:
                 prev_content = f.read()
@@ -423,7 +439,9 @@ def execute_command(command: str) -> str:
 
     try:
         print(">" * 50, "\n", f"SYSTEM: 执行命令: {command}\n", "<" * 50)
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=35)
+        result = subprocess.run(
+            command, shell=True, capture_output=True, text=True, timeout=35
+        )
         print(
             ">" * 50,
             "\n",
@@ -431,63 +449,368 @@ def execute_command(command: str) -> str:
             "<" * 50,
         )
         return (
-            result.stdout.strip() if result.returncode == 0 else result.stderr.strip() + "超时可能是程序等待input导致的，请使用测试代码来进行测试。"
+            result.stdout.strip()
+            if result.returncode == 0
+            else result.stderr.strip()
+            + "\n\n超时可能是程序等待input导致的，请使用测试代码来进行测试。"
         )
     except Exception as e:
         return f"执行命令失败: {str(e)}"
 
 
-import os
+@tool(name="interactive_terminal", description="运行一个交互式终端应用，支持实时读取输出和发送输入")
+def interactive_terminal(
+    command: str, 
+    inputs: List[str] = [], 
+    timeout_seconds: int = 60, 
+    read_interval: float = 0.1
+) -> str:
+    """运行一个交互式终端应用，可以实时读取输出并提供输入
+    
+    这个工具能够启动一个终端进程，并允许你多次与之交互。
+    它将在指定的超时时间内运行，或者在程序自然结束时终止。
+    
+    Args:
+        command: 要执行的命令，例如 python script.py
+        inputs: 要发送给程序的输入列表，按顺序发送
+        timeout_seconds: 最大运行时间（秒），默认60秒
+        read_interval: 读取输出的时间间隔（秒），默认0.1秒
+        
+    Returns:
+        程序的完整输出记录，包括所有交互过程
+    """
+    import subprocess
+    import time
+    import select
+    import os
+    import signal
+    
+    print(">" * 50, "\n", f"SYSTEM: 启动交互式命令: {command}\n", "<" * 50)
+    
+    # 创建一个记录完整交互的列表
+    interaction_log: List[str] = []
+    
+    try:
+        # 使用popen创建可交互的进程
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,  # 行缓冲
+            universal_newlines=True
+        )
+        
+        # 设置非阻塞模式
+        if process.stdout:        
+            os.set_blocking(process.stdout.fileno(), False)
+        if process.stderr:
+            os.set_blocking(process.stderr.fileno(), False)
+        
+        start_time = time.time()
+        input_index = 0
+        last_output = ""
+        
+        # 主交互循环
+        while process.poll() is None:
+            # 检查是否超时
+            if time.time() - start_time > timeout_seconds:
+                interaction_log.append("\n[SYSTEM] 进程超时，强制终止")
+                process.kill()
+                break
+            
+            # 读取输出
+            readable, _, _ = select.select([process.stdout, process.stderr], [], [], read_interval)
+            
+            output = ""
+            if process.stdout in readable and process.stdout:
+                chunk = process.stdout.read()
+                if chunk:
+                    output += chunk
+            
+            if process.stderr in readable and process.stderr:
+                chunk = process.stderr.read()
+                if chunk:
+                    output += "[ERROR] " + chunk
+            
+            # 如果有新输出，记录并检查是否需要输入
+            if output:
+                last_output = output
+                interaction_log.append(f"[OUTPUT] {output}")
+                print(f"[程序输出] {output}")
+                
+                # 检查是否有待发送的输入
+                if input_index < len(inputs):
+                    user_input = inputs[input_index]
+                    input_index += 1
+                    
+                    # 给程序一点时间处理输出
+                    time.sleep(0.5)
+                    
+                    # 发送输入给程序
+                    if process.stdin:
+                        process.stdin.write(user_input + "\n")
+                        process.stdin.flush()
+                    
+                    interaction_log.append(f"[INPUT] {user_input}")
+                    print(f"[发送输入] {user_input}")
+            
+            # 短暂睡眠，减少CPU使用
+            time.sleep(read_interval)
+        
+        # 进程结束后，读取剩余的输出
+        if process.stdout:
+            remaining_output = process.stdout.read()
+        if remaining_output:
+            interaction_log.append(f"[OUTPUT] {remaining_output}")
+            print(f"[程序输出] {remaining_output}")
+        
+        if process.stderr:
+            remaining_error = process.stderr.read()
+        if remaining_error:
+            interaction_log.append(f"[ERROR] {remaining_error}")
+            print(f"[程序错误] {remaining_error}")
+        
+        # 获取返回码
+        return_code = process.wait()
+        interaction_log.append(f"[SYSTEM] 进程结束，返回码: {return_code}")
+        
+        # 如果进程异常终止，记录最后输出
+        if return_code != 0:
+            interaction_log.append(f"[SYSTEM] 进程异常终止，最后输出: {last_output}")
+        
+        print(">" * 50, "\n", f"SYSTEM: 交互式命令执行完成\n", "<" * 50)
+        
+        # 返回完整交互记录
+        return "\n".join(interaction_log)
+    
+    except Exception as e:
+        error_message = f"执行交互式命令失败: {str(e)}"
+        print(">" * 50, "\n", f"SYSTEM: {error_message}\n", "<" * 50)
+        return error_message
 
+
+@tool(name="interactive_dialogue", description="与交互式终端应用进行多轮对话")
+def interactive_dialogue(
+    command: str, 
+    dialogue: List[str], 
+    timeout_seconds: int = 120,
+    wait_for_output: bool = True
+) -> str:
+    """与交互式终端应用进行多轮对话
+    
+    这个工具能够启动一个终端进程，并允许你按照预定义的对话模式与之交互。
+    它将监听程序输出，然后在合适的时机发送下一个输入，模拟真实的交互式对话。
+    
+    Args:
+        command: 要执行的命令，例如 python script.py
+        dialogue: 要发送给程序的输入列表，按顺序在程序有输出后发送
+        timeout_seconds: 最大运行时间（秒），默认120秒
+        wait_for_output: 是否在发送下一个输入前等待程序输出，默认为True
+        
+    Returns:
+        程序的完整对话记录，包括所有交互过程
+    """
+    import subprocess
+    import time
+    import queue
+    import threading
+    
+    print(">" * 50, "\n", f"SYSTEM: 启动对话式命令: {command}\n", "<" * 50)
+    
+    # 创建队列存储输出
+    output_queue: queue.Queue = queue.Queue()
+    
+    # 创建完整对话记录
+    dialogue_log: List[str] = []
+    
+    # 线程函数：持续读取程序输出
+    def reader_thread(proc: subprocess.Popen, q: queue.Queue) -> None:
+        while proc.poll() is None:
+            # 检查stdout
+            if proc.stdout:
+                line = proc.stdout.readline()
+                if line:
+                    q.put(("STDOUT", line.strip()))
+            
+            # 检查stderr
+            if proc.stderr:
+                line = proc.stderr.readline()
+                if line:
+                    q.put(("STDERR", line.strip()))
+            
+            # 短暂休眠避免CPU过载
+            time.sleep(0.05)
+        
+        # 进程结束后，读取剩余输出
+        if proc.stdout:
+            for line in proc.stdout:
+                q.put(("STDOUT", line.strip()))
+        if proc.stderr:
+            for line in proc.stderr:
+                q.put(("STDERR", line.strip()))
+        
+        # 标记进程已结束
+        q.put(("END", f"Process ended with return code {proc.returncode}"))
+    
+    try:
+        # 启动进程
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,  # 行缓冲
+            universal_newlines=True
+        )
+        
+        # 启动读取线程
+        read_thread = threading.Thread(target=reader_thread, args=(process, output_queue))
+        read_thread.daemon = True
+        read_thread.start()
+        
+        # 开始对话
+        start_time = time.time()
+        dialogue_index = 0
+        accumulated_output: List[str] = []
+        
+        while True:
+            # 检查是否超时
+            if time.time() - start_time > timeout_seconds:
+                dialogue_log.append("[SYSTEM] 对话超时，强制终止")
+                process.kill()
+                break
+            
+            # 检查进程是否已结束
+            if process.poll() is not None and output_queue.empty():
+                dialogue_log.append(f"[SYSTEM] 进程已结束，返回码: {process.returncode}")
+                break
+            
+            # 检查是否有新输出
+            try:
+                output_type, output = output_queue.get(timeout=0.5)
+                
+                if output_type == "END":
+                    dialogue_log.append(f"[SYSTEM] {output}")
+                    break
+                
+                # 记录输出
+                output_prefix = "[ERROR] " if output_type == "STDERR" else "[程序] "
+                dialogue_log.append(f"{output_prefix}{output}")
+                accumulated_output.append(output)
+                
+                print(f"{output_prefix}{output}")
+                
+                # 如果等待输出并且有输出内容，或者不等待输出，则准备发送下一个输入
+                if (wait_for_output and accumulated_output) or not wait_for_output:
+                    # 检查是否有待发送的对话
+                    if dialogue_index < len(dialogue):
+                        user_input = dialogue[dialogue_index]
+                        dialogue_index += 1
+                        
+                        # 给程序一点时间处理当前输出
+                        time.sleep(0.5)
+                        
+                        # 发送输入
+                        if process.stdin:
+                            process.stdin.write(user_input + "\n")
+                            process.stdin.flush()
+                        
+                        dialogue_log.append(f"[用户] {user_input}")
+                        print(f"[发送] {user_input}")
+                        
+                        # 清空累积的输出，为下一轮对话准备
+                        accumulated_output = []
+            
+            except queue.Empty:
+                # 如果没有更多输出，但所有对话已发送完毕，可以提前结束
+                if dialogue_index >= len(dialogue) and process.poll() is not None:
+                    break
+                continue
+        
+        # 等待读取线程结束
+        if read_thread.is_alive():
+            read_thread.join(timeout=2.0)
+        
+        # 确保进程已终止
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=2.0)
+        
+        print(">" * 50, "\n", f"SYSTEM: 对话式命令执行完成\n", "<" * 50)
+        
+        # 返回完整对话记录
+        return "\n".join(dialogue_log)
+    
+    except Exception as e:
+        error_message = f"执行对话式命令失败: {str(e)}"
+        print(">" * 50, "\n", f"SYSTEM: {error_message}\n", "<" * 50)
+        return error_message
+
+
+import os
 
 
 @llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
-    toolkit=[calc, get_current_time_and_date, file_operator, execute_command],
+    toolkit=[calc, get_current_time_and_date, file_operator, execute_command, interactive_terminal, interactive_dialogue],
     max_tool_calls=500,
 )
 def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     """
-    你是GLaDos，一为全能开发者。
+    你是GLaDos，一为全能AI助手。
 
     由于你不能和控制台交互，所有的测试都需要首先使用unittest编写专门的测试脚本，并通过mock输入的方法来绕开控制台输入。
 
 
-    首先需要分析用户的需求，然后使用tree查看当前的工作环境，然后
+    首先需要分析用户的需求，然后使用execute_command工具查看当前的工作环境，然后
     建议遵循以下过程：
         1. 使用file_operator工具创建TODO.md文档，用checkbox的形式将用户需求拆解成多个详细描述的小任务，并记录。
             任务拆分务必拆分到最细致的粒度，推荐任何任务都拆分到10个子任务以上。
         2. 使用file_operator工具读取TODO.md文档，检查任务列表
         3. 逐步执行计划
-        4. 撰写每个部分的代码和测试代码
+        4. 撰写每个部分的代码和测试代码（如果是代码任务）
         5. 根据结果反思执行效果，并继续下一步或者作出弥补
         6. 使用file_operator工具更新TODO.md文档
-    
+
     直到你认为任务已经完成，输出"<<任务完成>>"字样
-        
+
     你可以灵活使用以下工具:
-        - calculator: 计算器
+        - calculator: 计算器, 本质是用python评估一段表达式的值，所以表达式可以具有一些常见数学函数
 
         - get_current_time_and_date: 获取当前时间和日期
 
-        - file_operator: 文件操作工具，不要只说操作文件，要实际上调用工具。
+        - file_operator: 文件操作工具，支持文件的读取，写入，智能更新，创建文件夹，ls等等功能
 
-        - execute_command: 执行系统命令, 每次执行指令建议都先执行pwd和tree检查目录情况
+        - execute_command: 传入一个命令字符串，会帮你创建一个子进程执行，并告诉你执行结果。但是你无法和stdin交互
+
+        - interactive_terminal: 运行一个交互式终端应用，支持实时读取输出和发送输入
+
+        - interactive_dialogue: 与交互式终端应用进行多轮对话
     """
     pass
-
 
 
 if __name__ == "__main__":
     # 添加命令行参数解析
     parser = argparse.ArgumentParser(description="GLaDos对话系统，支持历史记录持久化")
-    parser.add_argument("--session", "-s", help="指定会话ID，用于加载或创建一个持久化会话")
-    parser.add_argument("--list-sessions", "-l", action="store_true", help="列出所有可用的会话ID")
+    parser.add_argument(
+        "--session", "-s", help="指定会话ID，用于加载或创建一个持久化会话"
+    )
+    parser.add_argument(
+        "--list-sessions", "-l", action="store_true", help="列出所有可用的会话ID"
+    )
     parser.add_argument("--new", "-n", action="store_true", help="创建一个新的会话")
     parser.add_argument("--file", "-f", help="直接指定历史记录文件路径进行加载")
-    parser.add_argument("--auto-save", "-a", action="store_true", help="自动保存每轮对话的历史记录")
+    parser.add_argument(
+        "--auto-save", "-a", action="store_true", help="自动保存每轮对话的历史记录"
+    )
     args = parser.parse_args()
-    
+
     # 如果要列出所有会话
     if args.list_sessions:
         sessions = list_sessions()
@@ -498,7 +821,7 @@ if __name__ == "__main__":
         else:
             print("没有找到可用的会话")
         sys.exit(0)
-    
+
     # 确定会话ID
     session_id = None
     if args.new:
@@ -509,7 +832,7 @@ if __name__ == "__main__":
         # 使用指定的会话ID
         session_id = args.session
         print(f"使用会话ID: {session_id}")
-    
+
     # 加载历史记录
     history_GLaDos = []
     if args.file:
@@ -525,22 +848,12 @@ if __name__ == "__main__":
         if not history_GLaDos and not args.new:
             print(f"没有找到会话ID对应的历史记录: {session_id}")
             print("将使用空的历史记录开始新会话")
-    
+
     # 获取用户输入作为初始化对话的内容
     user_input = input("请输入您的消息以开始对话: ")
 
     # 使用用户输入初始化对话，由GLaDos先发起
-    initial_message = (
-        f"用户说: {user_input}"
-    )
-
-    print("==========================================" * 3)
-    print(f"用户: {initial_message}")
-    print("==========================================" * 3)
-    
-    # 如果历史记录为空，需要手动添加第一条用户消息
-    if not history_GLaDos:
-        history_GLaDos.append({"role": "user", "content": "用户说: " + initial_message})
+    initial_message = f"用户说: {user_input}"
 
     # 调用GLaDos获取响应生成器
     print("==========================================" * 3)
@@ -552,17 +865,17 @@ if __name__ == "__main__":
         print(f"{response_GLaDos}")
         print("-----------------------------------------")
     print("==========================================" * 3)
-    
+
     # 自动保存历史记录
     if args.auto_save and session_id:
         save_history(history_GLaDos, session_id)
-    
+
     # 主对话循环
     try:
         while True:
             # 获取用户输入
             user_input = input("您: ")
-            
+
             # 检查是否是退出命令
             if user_input.lower() in ["exit", "quit", "q", "退出"]:
                 if session_id:
@@ -571,7 +884,7 @@ if __name__ == "__main__":
                     print(f"已保存会话历史，会话ID: {session_id}")
                 print("再见！")
                 break
-                
+
             # 检查是否是保存命令
             if user_input.lower() in ["save", "保存"]:
                 if not session_id:
@@ -579,13 +892,10 @@ if __name__ == "__main__":
                     print(f"创建新会话ID: {session_id}")
                 save_history(history_GLaDos, session_id)
                 continue
-            
+
             # 添加用户消息
             user_message = f"用户说: {user_input}"
-            print("==========================================" * 3)
-            print(f"用户: {user_message}")
-            print("==========================================" * 3)
-            
+
             # 调用GLaDos获取响应
             print("GLaDos思考中...")
             print("==========================================" * 3)
@@ -595,15 +905,17 @@ if __name__ == "__main__":
                 print(f"{response_GLaDos}")
                 print("-----------------------------------------")
             print("==========================================" * 3)
-            
+
+            if len(history_GLaDos) > 20:
+                history_GLaDos = [history_GLaDos[0]] + history_GLaDos[-10:]
+
             # 自动保存历史记录
             if args.auto_save and session_id:
                 save_history(history_GLaDos, session_id)
-                
+
     except KeyboardInterrupt:
         print("\n检测到键盘中断，程序已退出")
         if session_id:
             # 中断前保存历史记录
             save_history(history_GLaDos, session_id)
             print(f"已保存会话历史，会话ID: {session_id}")
-
