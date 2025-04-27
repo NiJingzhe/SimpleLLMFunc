@@ -137,7 +137,7 @@ def generate_session_id() -> str:
 
 @tool(
     name="calculator",
-    description="A calculator that can perform arithmic calculations."
+    description="A calculator that can perform arithmetic calculations."
                 " Support simple functions like ceil, floor, sqrt, sin, cos, tan, pow, log,"
                 " and some constant like pi and e",
 )
