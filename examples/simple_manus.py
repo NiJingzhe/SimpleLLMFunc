@@ -760,7 +760,7 @@ import os
     toolkit=[calc, get_current_time_and_date, file_operator, execute_command, interactive_terminal, interactive_dialogue],
     max_tool_calls=500,
 )
-def GLaDos(history: List[Dict[str, str]], query: str) -> None:  # type: ignore
+def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     """
     你是GLaDos，一为全能AI助手。
 
