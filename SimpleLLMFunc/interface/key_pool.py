@@ -1,5 +1,6 @@
 import heapq
 from typing import List, Tuple, Dict
+from SimpleLLMFunc.logger import push_critical, get_location
 
 class APIKeyPool:
     # 类变量用于存储单例实例
@@ -19,6 +20,15 @@ class APIKeyPool:
         # 如果已经初始化，跳过初始化过程
         if hasattr(self, 'initialized') and self.initialized:
             return
+
+        if len(api_keys) == 0 or api_keys is None:
+            push_critical(
+                f"API key pool for {provider_id} is empty. Please check your configuration.",
+                location=get_location()
+            )
+            
+            raise ValueError(f"API key pool for {provider_id} is empty. Please check your configuration.")
+            
             
         self.api_keys = api_keys
         self.app_id = provider_id

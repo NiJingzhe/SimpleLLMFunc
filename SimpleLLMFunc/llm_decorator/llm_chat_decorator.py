@@ -166,7 +166,7 @@ def llm_chat(
                     current_messages.append({"role": "system", "content": docstring})
 
                 # 使用自定义历史或者函数的专属历史
-                formatted_history = []
+                formatted_history = None
                 if custom_history is not None:
                     # 使用用户提供的历史
                     formatted_history = []
@@ -181,11 +181,10 @@ def llm_chat(
                                 f"LLM Chat '{func.__name__}' Skip history item with incorrect format: {msg}",
                                 location=get_location(),
                             )
-                else:
-                    # 那就当作没有历史记录了
-                    formatted_history = []
+                
+                if formatted_history is not None:
+                    current_messages.extend(formatted_history)
 
-                current_messages.extend(formatted_history)
 
                 # 添加当前用户消息
                 if user_message:
@@ -252,7 +251,7 @@ def llm_chat(
                         content = process_response(response, str)
 
                         # 在有正确历史参数传入的时候
-                        if len(formatted_history) != 0:
+                        if formatted_history is not None:
                             # 将响应内容添加到历史记录中
                             current_messages.append(
                                 {"role": "assistant", "content": content}
