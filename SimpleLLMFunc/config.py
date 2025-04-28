@@ -1,9 +1,6 @@
 from functools import lru_cache
-from json import load
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, ForceDecode, SettingsConfigDict
 from typing import Annotated, List
-from dotenv import load_dotenv
 
 
 class Settings(BaseSettings):
@@ -13,8 +10,11 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
-    
+   
+    ENABLE_ZHIPU: bool = False 
     ZHIPU_API_KEYS: Annotated[List[str], ForceDecode] = []
+    
+    ENABLE_VOLCENGINE: bool = False
     VOLCENGINE_API_KEYS: Annotated[List[str], ForceDecode] = []
 
 @lru_cache
@@ -22,3 +22,7 @@ def get_settings() -> Settings:
     return Settings()
 
 global_settings = get_settings()
+
+__all__ = [
+    "global_settings",
+]

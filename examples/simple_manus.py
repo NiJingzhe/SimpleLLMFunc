@@ -1,7 +1,8 @@
 from multiprocessing import ProcessError
 from SimpleLLMFunc import llm_chat, llm_function
-from SimpleLLMFunc import VolcEngine_deepseek_v3_Interface
 from SimpleLLMFunc import tool
+from SimpleLLMFunc import APIKeyPool, VolcEngine
+from SimpleLLMFunc.config import global_settings
 import os
 import sys
 import json
@@ -9,7 +10,17 @@ import argparse
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union
 
-from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
+
+volc_api_key_pool = APIKeyPool(
+    global_settings.VOLCENGINE_API_KEYS, 
+    provider_id="volcengine"
+)
+
+VolcEngine_deepseek_v3_Interface = VolcEngine(
+    api_key_pool=volc_api_key_pool,
+    model_name='deepseek-v3-250324'
+)
+
 
 
 # 历史记录管理相关函数
@@ -592,172 +603,12 @@ def interactive_terminal(
         return error_message
 
 
-@tool(name="interactive_dialogue", description="与交互式终端应用进行多轮对话，更加灵活的交互")
-def interactive_dialogue(
-    command: str, 
-    dialogue: List[str], 
-    timeout_seconds: int = 120,
-    wait_for_output: bool = True
-) -> str:
-    """与交互式终端应用进行多轮对话
-    
-    这个工具能够启动一个终端进程，并允许你按照预定义的对话模式与之交互。
-    它将监听程序输出，然后在合适的时机发送下一个输入，模拟真实的交互式对话。
-    
-    Args:
-        command: 要执行的命令，例如 python script.py
-        dialogue: 要发送给程序的输入列表，按顺序在程序有输出后发送
-        timeout_seconds: 最大运行时间（秒），默认120秒
-        wait_for_output: 是否在发送下一个输入前等待程序输出，默认为True
-        
-    Returns:
-        程序的完整对话记录，包括所有交互过程
-    """
-    import subprocess
-    import time
-    import queue
-    import threading
-    
-    print(">" * 50, "\n", f"SYSTEM: 启动对话式命令: {command}\n", "<" * 50)
-    
-    # 创建队列存储输出
-    output_queue: queue.Queue = queue.Queue()
-    
-    # 创建完整对话记录
-    dialogue_log: List[str] = []
-    
-    # 线程函数：持续读取程序输出
-    def reader_thread(proc: subprocess.Popen, q: queue.Queue) -> None:
-        while proc.poll() is None:
-            # 检查stdout
-            if proc.stdout:
-                line = proc.stdout.readline()
-                if line:
-                    q.put(("STDOUT", line.strip()))
-            
-            # 检查stderr
-            if proc.stderr:
-                line = proc.stderr.readline()
-                if line:
-                    q.put(("STDERR", line.strip()))
-            
-            # 短暂休眠避免CPU过载
-            time.sleep(0.05)
-        
-        # 进程结束后，读取剩余输出
-        if proc.stdout:
-            for line in proc.stdout:
-                q.put(("STDOUT", line.strip()))
-        if proc.stderr:
-            for line in proc.stderr:
-                q.put(("STDERR", line.strip()))
-        
-        # 标记进程已结束
-        q.put(("END", f"Process ended with return code {proc.returncode}"))
-    
-    try:
-        # 启动进程
-        process = subprocess.Popen(
-            command,
-            shell=True,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,  # 行缓冲
-            universal_newlines=True
-        )
-        
-        # 启动读取线程
-        read_thread = threading.Thread(target=reader_thread, args=(process, output_queue))
-        read_thread.daemon = True
-        read_thread.start()
-        
-        # 开始对话
-        start_time = time.time()
-        dialogue_index = 0
-        accumulated_output: List[str] = []
-        
-        while True:
-            # 检查是否超时
-            if time.time() - start_time > timeout_seconds:
-                dialogue_log.append("[SYSTEM] 对话超时，强制终止")
-                process.kill()
-                break
-            
-            # 检查进程是否已结束
-            if process.poll() is not None and output_queue.empty():
-                dialogue_log.append(f"[SYSTEM] 进程已结束，返回码: {process.returncode}")
-                break
-            
-            # 检查是否有新输出
-            try:
-                output_type, output = output_queue.get(timeout=0.5)
-                
-                if output_type == "END":
-                    dialogue_log.append(f"[SYSTEM] {output}")
-                    break
-                
-                # 记录输出
-                output_prefix = "[ERROR] " if output_type == "STDERR" else "[程序] "
-                dialogue_log.append(f"{output_prefix}{output}")
-                accumulated_output.append(output)
-                
-                print(f"{output_prefix}{output}")
-                
-                # 如果等待输出并且有输出内容，或者不等待输出，则准备发送下一个输入
-                if (wait_for_output and accumulated_output) or not wait_for_output:
-                    # 检查是否有待发送的对话
-                    if dialogue_index < len(dialogue):
-                        user_input = dialogue[dialogue_index]
-                        dialogue_index += 1
-                        
-                        # 给程序一点时间处理当前输出
-                        time.sleep(0.5)
-                        
-                        # 发送输入
-                        if process.stdin:
-                            process.stdin.write(user_input + "\n")
-                            process.stdin.flush()
-                        
-                        dialogue_log.append(f"[用户] {user_input}")
-                        print(f"[发送] {user_input}")
-                        
-                        # 清空累积的输出，为下一轮对话准备
-                        accumulated_output = []
-            
-            except queue.Empty:
-                # 如果没有更多输出，但所有对话已发送完毕，可以提前结束
-                if dialogue_index >= len(dialogue) and process.poll() is not None:
-                    break
-                continue
-        
-        # 等待读取线程结束
-        if read_thread.is_alive():
-            read_thread.join(timeout=2.0)
-        
-        # 确保进程已终止
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=2.0)
-        
-        print(">" * 50, "\n", f"SYSTEM: 对话式命令执行完成\n", "<" * 50)
-        
-        # 返回完整对话记录
-        return "\n".join(dialogue_log)
-    
-    except Exception as e:
-        error_message = f"执行对话式命令失败: {str(e)}"
-        print(">" * 50, "\n", f"SYSTEM: {error_message}\n", "<" * 50)
-        return error_message
-
-
 import os
 
 
 @llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
-    toolkit=[calc, get_current_time_and_date, file_operator, execute_command, interactive_terminal, interactive_dialogue],
+    toolkit=[calc, get_current_time_and_date, file_operator, execute_command, interactive_terminal],
     max_tool_calls=500,
 )
 def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
@@ -789,8 +640,6 @@ def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
         - execute_command: 传入一个命令字符串，会帮你创建一个子进程执行，并告诉你执行结果。但是你无法和stdin交互
 
         - interactive_terminal: 运行一个交互式终端应用，支持实时读取输出和发送输入
-
-        - interactive_dialogue: 与交互式终端应用进行多轮对话
     """
     pass
 
