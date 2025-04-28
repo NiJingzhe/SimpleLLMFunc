@@ -22,3 +22,7 @@ def get_settings() -> Settings:
     return Settings()
 
 global_settings = get_settings()
+
+__all__ = [
+    "global_settings",
+]
