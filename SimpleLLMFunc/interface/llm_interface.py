@@ -7,7 +7,7 @@ from SimpleLLMFunc.logger import get_current_trace_id
 class LLM_Interface(ABC):
     
     @abstractmethod
-    def __init__(self, api_key_pool: APIKeyPool, model_name: str):
+    def __init__(self, api_key_pool: APIKeyPool, model_name: str, base_url: Optional[str] = None):
         self.input_token_count = 0
         self.output_token_count = 0
     

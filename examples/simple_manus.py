@@ -12,15 +12,12 @@ from typing import List, Dict, Optional, Any, Callable, Union
 
 
 volc_api_key_pool = APIKeyPool(
-    global_settings.VOLCENGINE_API_KEYS, 
-    provider_id="volcengine"
+    global_settings.VOLCENGINE_API_KEYS, provider_id="volcengine"
 )
 
 VolcEngine_deepseek_v3_Interface = VolcEngine(
-    api_key_pool=volc_api_key_pool,
-    model_name='deepseek-v3-250324'
+    api_key_pool=volc_api_key_pool, model_name="deepseek-v3-250324"
 )
-
 
 
 # 历史记录管理相关函数
@@ -149,8 +146,8 @@ def generate_session_id() -> str:
 @tool(
     name="calculator",
     description="A calculator that can perform arithmetic calculations."
-                " Support simple functions like ceil, floor, sqrt, sin, cos, tan, pow, log,"
-                " and some constant like pi and e",
+    " Support simple functions like ceil, floor, sqrt, sin, cos, tan, pow, log,"
+    " and some constant like pi and e",
 )
 def calc(expression: str) -> float:
     """计算器
@@ -469,24 +466,27 @@ def execute_command(command: str) -> str:
         return f"执行命令失败: {str(e)}"
 
 
-@tool(name="interactive_terminal", description="运行一个交互式终端应用，支持使用预订的输入列表来进行交互")
+@tool(
+    name="interactive_terminal",
+    description="运行一个交互式终端应用，支持使用预订的输入列表来进行交互",
+)
 def interactive_terminal(
-    command: str, 
-    inputs: List[str] = [], 
-    timeout_seconds: int = 60, 
-    read_interval: float = 0.1
+    command: str,
+    inputs: List[str] = [],
+    timeout_seconds: int = 60,
+    read_interval: float = 0.1,
 ) -> str:
     """运行一个交互式终端应用，可以实时读取输出并提供输入
-    
+
     这个工具能够启动一个终端进程，并允许你多次与之交互。
     它将在指定的超时时间内运行，或者在程序自然结束时终止。
-    
+
     Args:
         command: 要执行的命令，例如 python script.py
         inputs: 要发送给程序的输入列表，按顺序发送
         timeout_seconds: 最大运行时间（秒），默认60秒
         read_interval: 读取输出的时间间隔（秒），默认0.1秒
-        
+
     Returns:
         程序的完整输出记录，包括所有交互过程
     """
@@ -495,12 +495,12 @@ def interactive_terminal(
     import select
     import os
     import signal
-    
+
     print(">" * 50, "\n", f"SYSTEM: 启动交互式命令: {command}\n", "<" * 50)
-    
+
     # 创建一个记录完整交互的列表
     interaction_log: List[str] = []
-    
+
     try:
         # 使用popen创建可交互的进程
         process = subprocess.Popen(
@@ -511,19 +511,19 @@ def interactive_terminal(
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,  # 行缓冲
-            universal_newlines=True
+            universal_newlines=True,
         )
-        
+
         # 设置非阻塞模式
-        if process.stdout:        
+        if process.stdout:
             os.set_blocking(process.stdout.fileno(), False)
         if process.stderr:
             os.set_blocking(process.stderr.fileno(), False)
-        
+
         start_time = time.time()
         input_index = 0
         last_output = ""
-        
+
         # 主交互循环
         while process.poll() is None:
             # 检查是否超时
@@ -531,72 +531,74 @@ def interactive_terminal(
                 interaction_log.append("\n[SYSTEM] 进程超时，强制终止")
                 process.kill()
                 break
-            
+
             # 读取输出
-            readable, _, _ = select.select([process.stdout, process.stderr], [], [], read_interval)
-            
+            readable, _, _ = select.select(
+                [process.stdout, process.stderr], [], [], read_interval
+            )
+
             output = ""
             if process.stdout in readable and process.stdout:
                 chunk = process.stdout.read()
                 if chunk:
                     output += chunk
-            
+
             if process.stderr in readable and process.stderr:
                 chunk = process.stderr.read()
                 if chunk:
                     output += "[ERROR] " + chunk
-            
+
             # 如果有新输出，记录并检查是否需要输入
             if output:
                 last_output = output
                 interaction_log.append(f"[OUTPUT] {output}")
                 print(f"[程序输出] {output}")
-                
+
                 # 检查是否有待发送的输入
                 if input_index < len(inputs):
                     user_input = inputs[input_index]
                     input_index += 1
-                    
+
                     # 给程序一点时间处理输出
                     time.sleep(0.5)
-                    
+
                     # 发送输入给程序
                     if process.stdin:
                         process.stdin.write(user_input + "\n")
                         process.stdin.flush()
-                    
+
                     interaction_log.append(f"[INPUT] {user_input}")
                     print(f"[发送输入] {user_input}")
-            
+
             # 短暂睡眠，减少CPU使用
             time.sleep(read_interval)
-        
+
         # 进程结束后，读取剩余的输出
         if process.stdout:
             remaining_output = process.stdout.read()
         if remaining_output:
             interaction_log.append(f"[OUTPUT] {remaining_output}")
             print(f"[程序输出] {remaining_output}")
-        
+
         if process.stderr:
             remaining_error = process.stderr.read()
         if remaining_error:
             interaction_log.append(f"[ERROR] {remaining_error}")
             print(f"[程序错误] {remaining_error}")
-        
+
         # 获取返回码
         return_code = process.wait()
         interaction_log.append(f"[SYSTEM] 进程结束，返回码: {return_code}")
-        
+
         # 如果进程异常终止，记录最后输出
         if return_code != 0:
             interaction_log.append(f"[SYSTEM] 进程异常终止，最后输出: {last_output}")
-        
+
         print(">" * 50, "\n", f"SYSTEM: 交互式命令执行完成\n", "<" * 50)
-        
+
         # 返回完整交互记录
         return "\n".join(interaction_log)
-    
+
     except Exception as e:
         error_message = f"执行交互式命令失败: {str(e)}"
         print(">" * 50, "\n", f"SYSTEM: {error_message}\n", "<" * 50)
@@ -608,7 +610,13 @@ import os
 
 @llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
-    toolkit=[calc, get_current_time_and_date, file_operator, execute_command, interactive_terminal],
+    toolkit=[
+        calc,
+        get_current_time_and_date,
+        file_operator,
+        execute_command,
+        interactive_terminal,
+    ],
     max_tool_calls=500,
 )
 def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
@@ -630,16 +638,6 @@ def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
 
     直到你认为任务已经完成，输出"<<任务完成>>"字样
 
-    你可以灵活使用以下工具:
-        - calculator: 计算器, 本质是用python评估一段表达式的值，所以表达式可以具有一些常见数学函数
-
-        - get_current_time_and_date: 获取当前时间和日期
-
-        - file_operator: 文件操作工具，支持文件的读取，写入，智能更新，创建文件夹，ls等等功能
-
-        - execute_command: 传入一个命令字符串，会帮你创建一个子进程执行，并告诉你执行结果。但是你无法和stdin交互
-
-        - interactive_terminal: 运行一个交互式终端应用，支持实时读取输出和发送输入
     """
     pass
 
@@ -755,8 +753,13 @@ if __name__ == "__main__":
                 print("-----------------------------------------")
             print("==========================================" * 3)
 
-            if len(history_GLaDos) > 20:
-                history_GLaDos = [history_GLaDos[0]] + history_GLaDos[-10:]
+            if len(history_GLaDos) > 10:
+                history_GLaDos = (
+                    [history_GLaDos[0]]
+                    + history_GLaDos[-5:-2]
+                    + [history_GLaDos[0]]
+                    + history_GLaDos[-2:]
+                )
 
             # 自动保存历史记录
             if args.auto_save and session_id:

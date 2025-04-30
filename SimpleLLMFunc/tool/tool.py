@@ -251,18 +251,23 @@ T = TypeVar('T')
 
 def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """
-    工具装饰器，用于将函数转换为Tool对象
+    工具装饰器，用于将函数转换为Tool对象。
+    
+    请务必好好写tool函数的DocString，因为这会被作为工具描述信息的一部分。
+    
+    工具的描述信息是: `description + "\\n" + docstring`
     
     Args:
         name: 工具名称
-        description: 工具描述
+        description: 工具描述，可以简短一些，更详细的内容可以在docstring中给出
         
     Returns:
         装饰器函数
     """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        docstring = func.__doc__ or ""
         # 创建工具对象
-        tool_obj = Tool(name=name, description=description, func=func)
+        tool_obj = Tool(name=name, description=description + f"\n{docstring}", func=func)
         
         # 保留原始函数的功能，同时附加工具对象
         func._tool = tool_obj
