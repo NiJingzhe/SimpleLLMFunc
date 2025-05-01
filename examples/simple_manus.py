@@ -618,6 +618,7 @@ import os
         interactive_terminal,
     ],
     max_tool_calls=500,
+    timeout=600
 )
 def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     """
@@ -755,10 +756,7 @@ if __name__ == "__main__":
 
             if len(history_GLaDos) > 10:
                 history_GLaDos = (
-                    [history_GLaDos[0]]
-                    + history_GLaDos[-5:-2]
-                    + [history_GLaDos[0]]
-                    + history_GLaDos[-2:]
+                    [history_GLaDos[0]] + history_GLaDos[-9:]
                 )
 
             # 自动保存历史记录

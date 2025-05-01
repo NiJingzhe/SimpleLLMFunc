@@ -265,9 +265,8 @@ def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[.
         装饰器函数
     """
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        docstring = func.__doc__ or ""
         # 创建工具对象
-        tool_obj = Tool(name=name, description=description + f"\n{docstring}", func=func)
+        tool_obj = Tool(name=name, description=description, func=func)
         
         # 保留原始函数的功能，同时附加工具对象
         func._tool = tool_obj

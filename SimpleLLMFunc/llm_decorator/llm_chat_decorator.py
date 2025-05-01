@@ -38,7 +38,6 @@ def llm_chat(
     llm_interface: LLM_Interface,
     toolkit: Optional[List[Union[Tool, Callable]]] = None,
     max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
-    round_to_emphasize: Optional[int] = None,
     **llm_kwargs,  # 额外的关键字参数，将直接传递给LLM接口
 ):
     """
@@ -74,7 +73,6 @@ def llm_chat(
         llm_interface: LLM接口实例，用于与大语言模型通信
         toolkit: 可选的工具列表，可以是 Tool 对象或被 @tool 装饰的函数, tool的信息会被解析并被加入到系统提示中
         max_tool_calls: 最大工具调用次数，防止无限循环，默认为 5
-        round_to_emphasize: 可选，指定当历史消息达到多少轮对话时，添加工具使用提示到最后一条用户消息中
         **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口调用（如temperature、top_p等）
 
     Returns:
@@ -219,7 +217,7 @@ def llm_chat(
                     current_messages.append(
                         {
                             "role": "system",
-                            "content": f"{docstring} \n<TOOL_INFO>\n{str(tool_param_for_api)}</TOOL_INFO>",
+                            "content": f"{docstring} \n\n你需要灵活的使用以下工具：\n\t{"\n\t".join([f"- {tool.name}: {tool.description}" for tool in tool_objects])}",
                         }
                     )
 
@@ -247,13 +245,8 @@ def llm_chat(
                 if user_message:
                     user_msg = {
                         "role": "user",
-                        "content": user_message + "\n\n务必思考是否要使用工具",
+                        "content": user_message,
                     }
-                    
-                    if round_to_emphasize is not None and formatted_history is not None:
-                        # 如果历史记录长度超过 round_to_emphasize，则添加工具使用信息
-                        if len(formatted_history) > round_to_emphasize:
-                            user_msg["content"] += f"\n\n<TOOL_USE_INFO>{tool_param_for_api}</TOOL_USE_INFO>"
                     
                     current_messages.append(user_msg)
 
@@ -276,6 +269,7 @@ def llm_chat(
                     )
 
                     # 处理一次调用可能会产生的一系列response(因为ToolCall迭代)
+                    complete_content = ""
                     for response in response_flow:
 
                         # 记录响应
@@ -288,23 +282,15 @@ def llm_chat(
                         # 提取响应内容
                         content = process_response(response, str)
 
-                        # 在有正确历史参数传入的时候
-                        if formatted_history is not None:
-                            # 将响应内容添加到历史记录中
-                            current_messages.append(
-                                {"role": "assistant", "content": content}
-                            )
+                        complete_content += content
+                        
+                        yield content, current_messages
 
-                        # 过滤返回给用户的历史记录，不包含工具调用信息和结果
-                        filtered_messages = []
-                        for msg in current_messages:
-                            # 只保留用户消息、助手消息和系统消息，排除工具调用和工具响应
-                            if msg.get("role") in ["user", "assistant", "system"]:
-                                # 确保消息内容不为空
-                                if msg.get("content", "").strip() != "":
-                                    filtered_messages.append(msg)
-
-                        yield content, filtered_messages
+                    current_messages.append(
+                        {"role": "assistant", "content": complete_content}
+                    )
+                    
+                    yield "", current_messages
 
                 except Exception as e:
                     # 修复：在log_context环境中不再传递trace_id参数
