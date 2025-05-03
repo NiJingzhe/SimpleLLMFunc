@@ -33,7 +33,7 @@ class OpenAICompatible(LLM_Interface):
             retry_delay: 重试间隔时间（秒）
             allowed_models: 允许使用的模型列表，如果为None则不检查
         """
-        super().__init__(api_key_pool, model_name, base_url)
+        super().__init__(api_key_pool, model_name)
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
