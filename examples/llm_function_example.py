@@ -70,7 +70,7 @@ class WeatherInfo(BaseModel):
     recommendation: str = Field(..., description="推荐的活动")
 
 
-@llm_function(llm_interface=ZhipuAI_glm_4_flash_Interface, tools=[get_weather])
+@llm_function(llm_interface=ZhipuAI_glm_4_flash_Interface, toolkit=[get_weather])
 def get_daily_recommendation(city: str) -> WeatherInfo:  # type: ignore
     """
     通过get_weather工具获取天气信息，并给出推荐的活动

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SimpleLLMFunc"
-version = "0.1.3"
+version = "0.1.4"
 description = "一个轻量级的LLM/Agent应用开发框架，提供装饰器实现将函数DocString作为Prompt而无需函数体具体实现但能够享受函数定义和类型标注带来效率提升的开发体验。以最Code的方式，用最少的代码将LLM能力集成到任意Python项目中。"
 authors = ["Ni Jingzhe <nijingzhe@zjue.edu.cn>"]
 readme = "README.md"

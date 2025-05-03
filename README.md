@@ -13,6 +13,20 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
+## 0.1.4版本新增功能亮点
+
+SimpleLLMFunc近期新增了两个重要功能：
+
+1. **OpenAICompatible通用接口** - 简化了不同LLM供应商的接入，无需为每个供应商创建专门的实现
+2. **装饰器自定义参数** 
+
+优化内容：
+1. 优化了LLM Chat中对于历史记录的管理策略。针对一个包含多伦ToolCall的response，我们会将每一次伴随tool call的response content进行记录，最终会将多轮tool call的response content和最终的response content进行拼接，形成最终的response content。
+
+
+-----
+
+
 一个轻量级的LLM调用和工具集成框架，支持类型安全的LLM函数装饰器、多种模型接口和强大的日志跟踪系统。
 
 做过LLM开发的同志们或许都经历过这样的困境：
@@ -33,6 +47,7 @@
 
 Prompt会以DocString的形式存在，一方面强制你撰写良好的函数功能说明，让其他协作者对于函数功能一目了然，另一方面这就好像是用自然语言写了一段代码，功能描述就这样出现在了最合适的位置上，再也不用为了看一个函数的功能而到处跳转找到Prompt变量了。
 
+-----
 
 ## 特性
 

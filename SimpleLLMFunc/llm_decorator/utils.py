@@ -1,10 +1,12 @@
 """
-这里定义了每种LLM装饰器都会需要用到的通用函数
+LLM 装饰器通用工具函数模块
 
-1. excute_with_tools: 执行LLM调用并处理工具调用
-2. get_detailed_type_description: 获取类型的详细描述，特别是对Pydantic模型进行更详细的展开
-3. process_response: 处理LLM的响应，将其转换为指定的返回类型
+本模块提供了 LLM 装饰器所需的核心功能，包括：
+1. LLM 执行与工具调用 - 处理与 LLM 的交互和工具调用逻辑
+2. 响应处理 - 将 LLM 响应转换为所需的返回类型
+3. 类型描述 - 获取类型的详细描述，特别是对 Pydantic 模型进行展开
 
+这些功能被设计为相互独立的组件，每个组件负责特定的职责。
 """
 
 import json
@@ -23,7 +25,7 @@ from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_locat
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
 
-# ======================================= 以下函数会被导出使用 =============================================
+# ======================= 数据流相关函数 =======================
 
 def execute_llm(
     llm_interface: LLM_Interface,
@@ -31,61 +33,76 @@ def execute_llm(
     tools: List[Dict[str, Any]] | None,
     tool_map: Dict[str, Callable],
     max_tool_calls: int,
+    **llm_kwargs,  # 添加llm_kwargs参数接收额外的LLM配置
 ) -> Generator[Any, None, None]:
     """
-    执行LLM调用，会自动处理Tool Use，最终返回一个包含返回文本的LLM Response
+    执行 LLM 调用并处理工具调用流程
+    
+    数据流程:
+    1. 以初始消息列表调用 LLM
+    2. 检查响应中是否包含工具调用
+    3. 如有工具调用，执行工具并将结果添加到消息列表
+    4. 使用更新后的消息列表再次调用 LLM
+    5. 重复步骤 2-4 直到没有更多工具调用或达到最大调用次数
+    6. 返回最终响应
 
     Args:
-        llm_interface: LLM接口
-        messages: 消息历史, 会被直接传递给LLM Interface
-        tools: 序列化后的工具信息，会被直接传递给LLM Interface
-        tool_map: 工具名称到实际实现工具功能函数的映射
-        max_tool_calls: 最大工具调用次数
+        llm_interface: LLM 接口
+        messages: 初始消息历史，将直接传递给 LLM API
+        tools: 序列化后的工具信息，将传递给 LLM API
+        tool_map: 工具名称到实际实现函数的映射
+        max_tool_calls: 最大工具调用次数，防止无限循环
+        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口
 
     Returns:
-        最终的LLM响应
+        生成器，产生 LLM 响应，最后一个响应是最终结果
     """
-
-    func_name = get_current_context_attribute("function_name")
+    func_name = get_current_context_attribute("function_name") or "Unknown Function"
     
-    if func_name is None:
-        func_name = "Unknow Function"
+    # 创建消息历史副本，避免修改原始消息列表
+    current_messages = list(messages)
     
+    # 记录调用次数
     call_count = 0
-    # copy 是为了不影响传入的message，主要是为了避免加入很多Tool Use迭代的消息。
-    current_messages = messages.copy()
 
-    # 发送LLM请求，首次
+    # 第一次调用 LLM，获取初始响应
+    app_log(
+        f"LLM 函数 '{func_name}' 发起初始请求，消息数: {len(current_messages)}",
+        location=get_location()
+    )
+    
     initial_response = llm_interface.chat(
         messages=current_messages,
         tools=tools,
+        **llm_kwargs,  # 传递额外的关键字参数
     )
 
-    # initial response 可能是一个Tool Use Response
+    # 产生初始响应
     yield initial_response
 
     app_log(
-        f"LLM Function '{func_name}' received initial response: {json.dumps(initial_response, default=str, ensure_ascii=False)}",
+        f"LLM 函数 '{func_name}' 收到初始响应",
         location=get_location()
     )
 
     # 提取初始响应中的工具调用
     tool_calls = _extract_tool_calls(initial_response)
 
-    # 如果没有工具调用，直接返回初始响应
+    # 如果没有工具调用，直接返回
     if not tool_calls:
-        push_debug(f"No tool calls found in the response, returning directly", location=get_location())
+        push_debug(f"未发现工具调用，直接返回结果", location=get_location())
         return 
 
-    # 有工具调用，进入工具调用循环
+    # === 工具调用循环 ===
     app_log(
-        f"LLM Function '{func_name}' Found {len(tool_calls)} tool calls, executing..."
+        f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用，开始执行工具",
+        location=get_location()
     )
 
     # 记录首次调用
     call_count += 1
 
-    # 处理初始工具调用，执行工具并将执行结果添加到message副本中
+    # 处理初始工具调用，执行工具并将结果添加到消息历史
     current_messages = _process_tool_calls(
         tool_calls=tool_calls,
         response=initial_response,
@@ -95,33 +112,31 @@ def execute_llm(
 
     # 继续处理可能的后续工具调用
     while call_count < max_tool_calls:
-        # 将包含工具调用结果的消息发送给LLM
+        app_log(
+            f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count+1}/{max_tool_calls} 次调用",
+            location=get_location()
+        )
+        
+        # 使用更新后的消息历史再次调用 LLM
         response = llm_interface.chat(
             messages=current_messages,
             tools=tools,
+            **llm_kwargs,  # 传递额外的关键字参数
         )
         
+        # 产生当前响应
         yield response
-
-        app_log(
-            (
-                f"LLM Function: '{func_name}': LLM tool calling loop:"
-                f" received response (call {call_count+1}/{max_tool_calls}):"
-                f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=4)}"
-            ),
-            location=get_location()
-        )
 
         # 检查是否有更多工具调用
         tool_calls = _extract_tool_calls(response)
 
         if not tool_calls:
             # 没有更多工具调用，返回最终响应
-            push_debug(f"LLM Function '{func_name}': No more tool calls, returning final response", location=get_location())
+            push_debug(f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应", location=get_location())
             return 
         
         # 处理新的工具调用
-        app_log(f"LLM Function '{func_name}' Found {len(tool_calls)} additional tool calls to execute", location=get_location())
+        app_log(f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个新的工具调用", location=get_location())
 
         # 处理工具调用并更新消息历史
         current_messages = _process_tool_calls(
@@ -134,213 +149,92 @@ def execute_llm(
         # 增加调用计数
         call_count += 1
 
-    # 如果达到最大调用次数但仍未返回，获取最终结果
-    final_response = llm_interface.chat(messages=current_messages)
-
+    # 如果达到最大调用次数但仍未完成所有工具调用
     app_log(
-        (
-            f"LLM Function '{func_name}' Reached maximum tool calls ({max_tool_calls})."
-            f" Getting final response:"
-            f"\n{json.dumps(final_response, default=str, ensure_ascii=False, indent=4)}"
-        ),
+        f"LLM 函数 '{func_name}' 达到最大工具调用次数 ({max_tool_calls})，强制结束并获取最终响应",
         location=get_location()
     )
-
-    yield final_response  #    #  <--------------------------------------------------------------------------- 第三个返回分支
-
+    
+    # 最后一次调用 LLM 获取最终结果
+    final_response = llm_interface.chat(
+        messages=current_messages,
+        **llm_kwargs,  # 传递额外的关键字参数
+    )
+    
+    # 产生最终响应
+    yield final_response
 
 
 def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
     """
-    处理LLM的响应，将其转换为指定的返回类型
-
+    处理 LLM 的响应，将其转换为指定的返回类型
+    
+    数据流程:
+    1. 从 LLM 响应中提取纯文本内容
+    2. 根据指定的返回类型进行相应转换:
+       - 基本类型 (str, int, float, bool): 直接转换
+       - 字典类型: 解析 JSON
+       - Pydantic 模型: 使用 model_validate_json 解析
+    
     Args:
-        response: LLM的响应
+        response: LLM 的原始响应对象
         return_type: 期望的返回类型
 
     Returns:
-        转换后的结果
+        转换后的结果，类型为 T
     """
-    func_name = get_current_context_attribute("function_name")
+    func_name = get_current_context_attribute("function_name") or "Unknown Function"
     
-    if func_name is None:
-        func_name = "Unknown Function"
+    # 步骤 1: 从 API 响应中提取文本内容
+    content = _extract_content_from_response(response, func_name)
     
-    # 从response中提取内容
-    content = ""
-
-    # 从API Response中提取文本内容
-    try:
-        if hasattr(response, "choices") and len(response.choices) > 0: # type: ignore
-            message = response.choices[0].message  # type: ignore
-            content = message.content if message and hasattr(message, "content") else ""
-        # 处理其他情况
-        else:
-            push_warning(
-                f"LLM Function '{func_name}': Unknown response format: {type(response)},"
-                " response would be directly converted into string", 
-                location=get_location()
-            )
-            # 尝试转换为字符串
-            content = str(response)
-    except Exception as e:
-        push_error(f"提取响应内容时出错: {str(e)}")
-        # 尝试将整个响应转换为字符串
-        content = str(response)
-
-    push_debug(f"LLM Function '{func_name}' Extracted Content:\n{content}")
-
-    # 如果内容为None，转换为空字符串
+    # 步骤 2: 根据返回类型进行适当的转换
+    # 如果内容为 None，转换为空字符串
     if content is None:
         content = ""
 
-    # 如果没有返回类型或返回类型是str，直接返回内容
+    # 如果没有返回类型或返回类型是 str，直接返回内容
     if return_type is None or return_type == str:
         return cast(T, content)
 
     # 如果返回类型是基本类型，尝试转换
     if return_type in (int, float, bool):
-        try:
-            if return_type == int:
-                return cast(T, int(content.strip()))
-            elif return_type == float:
-                return cast(T, float(content.strip()))
-            elif return_type == bool:
-                return cast(T, content.strip().lower() in ("true", "yes", "1"))
-        except (ValueError, TypeError):
-            raise ValueError(
-                f"无法将LLM响应 '{content}' 转换为 {return_type.__name__} 类型"
-            )
+        return _convert_to_primitive_type(content, return_type)
 
-    # 如果返回类型是字典，尝试解析JSON
+    # 如果返回类型是字典，尝试解析 JSON
     if return_type == dict or getattr(return_type, "__origin__", None) is dict:
-        try:
-            # 尝试从内容中提取JSON
-            # 首先尝试直接解析
-            try:
-                result = json.loads(content)
-                return cast(T, result)
-            except json.JSONDecodeError:
-                # 如果直接解析失败，尝试查找内容中的JSON部分
-                import re
+        return _convert_to_dict(content, func_name)  # type: ignore
 
-                json_pattern = r"```json\s*([\s\S]*?)\s*```"
-                match = re.search(json_pattern, content)
-                if match:
-                    json_str = match.group(1)
-                    result = json.loads(json_str)
-                    return cast(T, result)
-                else:
-                    # 如果没有找到JSON块，再次尝试直接解析
-                    # 这次做一些清理
-                    cleaned_content = content.strip()
-                    # 移除可能的 markdown 标记
-                    if cleaned_content.startswith("```") and cleaned_content.endswith(
-                        "```"
-                    ):
-                        cleaned_content = cleaned_content[3:-3].strip()
-                    result = json.loads(cleaned_content)
-                    return cast(T, result)
-        except json.JSONDecodeError:
-            raise ValueError(f"无法将LLM响应解析为有效的JSON: {content}")
-
-    # 如果返回类型是Pydantic模型，使用model_validate_json解析
+    # 如果返回类型是 Pydantic 模型，使用 model_validate_json 解析
     if return_type and hasattr(return_type, "model_validate_json"):
-        try:
-            # 处理可能的JSON字符串转义问题
-            # 首先尝试直接解析内容
-            try:
-                # 关键修改：首先尝试解析为Python对象，然后再转换为JSON字符串
-                # 这样可以处理内容中的转义字符问题
-                if content.strip():
-                    # 尝试先解析内容中的JSON，然后再转换为标准JSON字符串
-                    try:
-                        # 这里处理内容可能是字符串形式的JSON对象
-                        parsed_content = json.loads(content)
-                        # 将解析后的对象重新转换为标准JSON字符串
-                        clean_json_str = json.dumps(parsed_content)
-                        return return_type.model_validate_json(clean_json_str)  # type: ignore
-                    except json.JSONDecodeError:
-                        # 如果直接解析失败，尝试查找内容中的JSON部分
-                        import re
-
-                        json_pattern = r"```json\s*([\s\S]*?)\s*```"
-                        match = re.search(json_pattern, content)
-                        if match:
-                            json_str = match.group(1)
-                            # 确保这是有效的JSON
-                            parsed_json = json.loads(json_str)
-                            clean_json_str = json.dumps(parsed_json)
-                            return return_type.model_validate_json(clean_json_str)  # type: ignore
-                        else:
-                            # 如果没有找到JSON块，尝试使用原始内容
-                            return return_type.model_validate_json(content)  # type: ignore
-                else:
-                    raise ValueError("收到空响应")
-            except Exception as e:
-                push_error(f"解析错误详情: {str(e)}, 内容: {content}")
-                raise ValueError(f"无法解析JSON: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"无法将LLM响应解析为Pydantic模型: {str(e)}")
+        return _convert_to_pydantic_model(content, return_type, func_name)
 
     # 最后尝试直接转换
     try:
         return cast(T, content)
     except (ValueError, TypeError):
-        raise ValueError(f"无法将LLM响应转换为所需类型: {content}")
-
+        raise ValueError(f"无法将 LLM 响应转换为所需类型: {content}")
 
 
 def get_detailed_type_description(type_hint: Any) -> str:
     """
-    获取类型的详细描述，特别是对Pydantic模型进行更详细的展开
+    获取类型的详细描述，特别是对 Pydantic 模型进行更详细的展开
     
-    可以考虑用来获得类型注解的详细信息，拼接在prompt中
+    这个函数用于生成类型的人类可读描述，以便在提示中使用。
+    对于 Pydantic 模型，会展开其字段结构；对于容器类型，会递归描述其元素类型。
 
     Args:
-        type_hint: 类型提示
+        type_hint: 类型提示对象
 
     Returns:
-        类型的详细描述
+        类型的详细描述字符串
     """
     if type_hint is None:
         return "未知类型"
 
-    # 检查是否为Pydantic模型类
+    # 检查是否为 Pydantic 模型类
     if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
-        model_name = type_hint.__name__
-        schema = type_hint.model_json_schema()
-
-        # 提取属性信息
-        properties = schema.get("properties", {})
-        required = schema.get("required", [])
-
-        fields_desc = []
-        for field_name, field_info in properties.items():
-            field_type = field_info.get("type", "unknown")
-            field_desc = field_info.get("description", "")
-            is_required = field_name in required
-
-            req_marker = "必填" if is_required else "可选"
-
-            # 如果字段有额外属性，如最小/最大值等，也可以添加
-            extra_info = ""
-            if "minimum" in field_info:
-                extra_info += f", 最小值: {field_info['minimum']}"
-            if "maximum" in field_info:
-                extra_info += f", 最大值: {field_info['maximum']}"
-            if "default" in field_info:
-                extra_info += f", 默认值: {field_info['default']}"
-
-            fields_desc.append(
-                f"  - {field_name} ({field_type}, {req_marker}): {field_desc}{extra_info}"
-            )
-
-        # 构建Pydantic模型的描述
-        model_desc = f"{model_name} (Pydantic模型) 包含以下字段:\n" + "\n".join(
-            fields_desc
-        )
-        return model_desc
+        return _describe_pydantic_model(type_hint)
 
     # 检查是否为列表或字典类型
     origin = getattr(type_hint, "__origin__", None)
@@ -362,10 +256,135 @@ def get_detailed_type_description(type_hint: Any) -> str:
     # 对于其他类型，简单返回字符串表示
     return str(type_hint)
 
-# ======================================= 以上函数会被导出使用 =============================================
+
+# ======================= 内部辅助函数 =======================
+
+def _extract_content_from_response(response: Any, func_name: str) -> str:
+    """从 LLM 响应中提取文本内容"""
+    try:
+        if hasattr(response, "choices") and len(response.choices) > 0:
+            message = response.choices[0].message
+            content = message.content if message and hasattr(message, "content") else ""
+        else:
+            push_warning(
+                f"LLM 函数 '{func_name}': 未知响应格式: {type(response)}，将直接转换为字符串", 
+                location=get_location()
+            )
+            content = str(response)
+    except Exception as e:
+        push_error(f"提取响应内容时出错: {str(e)}")
+        content = str(response)
+
+    push_debug(f"LLM 函数 '{func_name}' 提取的内容:\n{content}")
+    return content
 
 
-# ======================================= 以下函数是内部工具函数 =============================================
+def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
+    """将文本内容转换为基本类型 (int, float, bool)"""
+    try:
+        if return_type == int:
+            return int(content.strip())
+        elif return_type == float:
+            return float(content.strip())
+        elif return_type == bool:
+            return content.strip().lower() in ("true", "yes", "1")
+    except (ValueError, TypeError):
+        raise ValueError(f"无法将 LLM 响应 '{content}' 转换为 {return_type.__name__} 类型")
+
+
+def _convert_to_dict(content: str, func_name: str) -> Dict:
+    """将文本内容转换为字典 (解析 JSON)"""
+    try:
+        # 首先尝试直接解析
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            # 尝试查找内容中的 JSON 部分
+            import re
+
+            json_pattern = r"```json\s*([\s\S]*?)\s*```"
+            match = re.search(json_pattern, content)
+            if match:
+                json_str = match.group(1)
+                return json.loads(json_str)
+            else:
+                # 尝试清理后再解析
+                cleaned_content = content.strip()
+                # 移除可能的 markdown 标记
+                if cleaned_content.startswith("```") and cleaned_content.endswith("```"):
+                    cleaned_content = cleaned_content[3:-3].strip()
+                return json.loads(cleaned_content)
+    except json.JSONDecodeError:
+        raise ValueError(f"无法将 LLM 响应解析为有效的 JSON: {content}")
+
+
+def _convert_to_pydantic_model(content: str, model_class: Type, func_name: str) -> Any:
+    """将文本内容转换为 Pydantic 模型"""
+    try:
+        if content.strip():
+            try:
+                # 先解析内容中的 JSON，然后再转换为标准 JSON 字符串
+                parsed_content = json.loads(content)
+                clean_json_str = json.dumps(parsed_content)
+                return model_class.model_validate_json(clean_json_str)
+            except json.JSONDecodeError:
+                # 尝试查找内容中的 JSON 部分
+                import re
+
+                json_pattern = r"```json\s*([\s\S]*?)\s*```"
+                match = re.search(json_pattern, content)
+                if match:
+                    json_str = match.group(1)
+                    parsed_json = json.loads(json_str)
+                    clean_json_str = json.dumps(parsed_json)
+                    return model_class.model_validate_json(clean_json_str)
+                else:
+                    # 尝试使用原始内容
+                    return model_class.model_validate_json(content)
+        else:
+            raise ValueError("收到空响应")
+    except Exception as e:
+        push_error(f"解析错误详情: {str(e)}, 内容: {content}")
+        raise ValueError(f"无法解析为 Pydantic 模型: {str(e)}")
+
+
+def _describe_pydantic_model(model_class: Type[BaseModel]) -> str:
+    """生成 Pydantic 模型的详细描述"""
+    model_name = model_class.__name__
+    schema = model_class.model_json_schema()
+
+    # 提取属性信息
+    properties = schema.get("properties", {})
+    required = schema.get("required", [])
+
+    fields_desc = []
+    for field_name, field_info in properties.items():
+        field_type = field_info.get("type", "unknown")
+        field_desc = field_info.get("description", "")
+        is_required = field_name in required
+
+        req_marker = "必填" if is_required else "可选"
+
+        # 添加额外属性信息
+        extra_info = ""
+        if "minimum" in field_info:
+            extra_info += f", 最小值: {field_info['minimum']}"
+        if "maximum" in field_info:
+            extra_info += f", 最大值: {field_info['maximum']}"
+        if "default" in field_info:
+            extra_info += f", 默认值: {field_info['default']}"
+
+        fields_desc.append(
+            f"  - {field_name} ({field_type}, {req_marker}): {field_desc}{extra_info}"
+        )
+
+    # 构建 Pydantic 模型的描述
+    model_desc = f"{model_name} (Pydantic模型) 包含以下字段:\n" + "\n".join(
+        fields_desc
+    )
+    return model_desc
+
+
 def _process_tool_calls(
     tool_calls: List[Dict[str, Any]],
     response: Any,
@@ -374,22 +393,27 @@ def _process_tool_calls(
 ) -> List[Dict[str, Any]]:
     """
     处理工具调用并返回更新后的消息历史
-
+    
+    工作流程:
+    1. 为每个工具调用创建一个助手消息
+    2. 对每个工具调用:
+       a. 提取工具名称和参数
+       b. 检查工具是否存在
+       c. 执行工具并获取结果
+       d. 创建工具响应消息并添加到消息历史
+    
     Args:
         tool_calls: 工具调用列表
-        response: LLM响应
+        response: LLM 响应
         messages: 当前消息历史
         tool_map: 工具名称到函数的映射
-
+        
     Returns:
         更新后的消息历史
     """
-    current_messages = messages.copy()
-
-    # 创建助手消息，包含工具调用
-    assistant_message = _create_assistant_message(response)
-    current_messages.append(assistant_message)
-
+    # 创建消息历史副本
+    current_messages = list(messages)
+    
     # 处理每个工具调用
     for tool_call in tool_calls:
         tool_call_id = tool_call.get("id")
@@ -399,12 +423,12 @@ def _process_tool_calls(
 
         # 检查工具是否存在
         if tool_name not in tool_map:
-            push_error(f"Tool '{tool_name}' not found in available tools")
+            push_error(f"工具 '{tool_name}' 不在可用工具列表中")
             # 创建工具调用出错的响应
             tool_error_message = {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps({"error": f"Tool '{tool_name}' not found"}),
+                "content": json.dumps({"error": f"找不到工具 '{tool_name}'"}),
             }
             current_messages.append(tool_error_message)
             continue
@@ -414,7 +438,7 @@ def _process_tool_calls(
             arguments = json.loads(arguments_str)
 
             # 执行工具
-            app_log(f"Executing tool '{tool_name}' with arguments: {arguments_str}")
+            app_log(f"执行工具 '{tool_name}' 参数: {arguments_str}")
             tool_func = tool_map[tool_name]
             tool_result = tool_func(**arguments)
 
@@ -427,11 +451,11 @@ def _process_tool_calls(
             }
             current_messages.append(tool_message)
 
-            app_log(f"Tool '{tool_name}' execution completed: {tool_result_str}")
+            app_log(f"工具 '{tool_name}' 执行完成: {tool_result_str}")
 
         except Exception as e:
             # 处理工具执行错误
-            error_message = f"Error executing tool '{tool_name}' with arguments {arguments_str} : {str(e)}"
+            error_message = f"执行工具 '{tool_name}' 出错，参数 {arguments_str}: {str(e)}"
             push_error(error_message)
 
             # 创建工具错误响应消息
@@ -447,18 +471,22 @@ def _process_tool_calls(
 
 def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
     """
-    从LLM响应中提取工具调用
-
+    从 LLM 响应中提取工具调用
+    
+    支持两种格式:
+    1. 对象格式 (response.choices[0].message.tool_calls)
+    2. 字典格式 (response["choices"][0]["message"]["tool_calls"])
+    
     Args:
-        response: LLM响应
-
+        response: LLM 响应
+        
     Returns:
         工具调用列表
     """
     tool_calls = []
 
     try:
-        # 检查是否有tool_calls属性（OpenAI API格式）
+        # 检查对象格式 (OpenAI API 格式)
         if hasattr(response, "choices") and len(response.choices) > 0:
             message = response.choices[0].message
             if hasattr(message, "tool_calls") and message.tool_calls:
@@ -473,7 +501,7 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                             },
                         }
                     )
-        # 尝试从字典格式中提取
+        # 检查字典格式
         elif isinstance(response, dict) and "choices" in response:
             choices = response["choices"]
             if choices and "message" in choices[0]:
@@ -481,76 +509,12 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                 if "tool_calls" in message and message["tool_calls"]:
                     tool_calls = message["tool_calls"]
     except Exception as e:
-        push_error(f"Error extracting tool calls: {str(e)}")
+        push_error(f"提取工具调用时出错: {str(e)}")
 
     return tool_calls
 
 
-def _create_assistant_message(response: Any) -> Dict[str, Any]:
-    """
-    从LLM响应创建助手消息
-
-    Args:
-        response: LLM响应
-
-    Returns:
-        助手消息字典
-    """
-    message: Dict[str, Any] = {"role": "assistant"}
-
-    try:
-        # 处理对象格式响应
-        if hasattr(response, "choices") and len(response.choices) > 0:
-            assistant_message = response.choices[0].message
-
-            # 复制content（如果有）
-            if hasattr(assistant_message, "content") and assistant_message.content:
-                message["content"] = assistant_message.content
-            else:
-                message["content"] = ""
-
-            # 复制tool_calls（如果有）
-            if (
-                hasattr(assistant_message, "tool_calls")
-                and assistant_message.tool_calls
-            ):
-                message["tool_calls"] = [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in assistant_message.tool_calls
-                ]
-
-        # 处理字典格式响应
-        elif isinstance(response, dict) and "choices" in response:
-            choices = response["choices"]
-            if choices and "message" in choices[0]:
-                assistant_message = choices[0]["message"]
-
-                # 复制所有字段
-                for key, value in assistant_message.items():
-                    message[key] = value
-
-    except Exception as e:
-        push_error(
-            f"Error creating assistant message: {str(e)}",
-            trace_id="message_creation_error",
-        )
-        # 确保至少有content字段
-        if "content" not in message:
-            message["content"] = ""
-
-    return message
-
-
-
-
-
+# 导出公共函数
 __all__ = [
     "execute_llm",
     "get_detailed_type_description",
