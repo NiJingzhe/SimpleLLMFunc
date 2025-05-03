@@ -127,7 +127,7 @@ def llm_chat(
             with log_context(trace_id=current_trace_id, function_name=func_name):
 
                 # 处理tools参数
-                tool_param_for_api = None
+                tool_param_for_api = None  # 序列化后的工具参数，用于传递给API
                 tool_map = {}  # 工具名称到函数的映射
 
                 if toolkit:
@@ -221,7 +221,6 @@ def llm_chat(
                         }
                     )
 
-                # 使用自定义历史或者函数的专属历史
                 formatted_history = None
                 if custom_history is not None:
                     # 使用用户提供的历史
@@ -229,9 +228,6 @@ def llm_chat(
                     for msg in custom_history[1:]:
                         if isinstance(msg, dict) and "role" in msg and "content" in msg:
                             formatted_history.append(msg)
-                        elif isinstance(msg, tuple) and len(msg) == 2:
-                            role, content = msg
-                            formatted_history.append({"role": role, "content": content})
                         else:
                             app_log(
                                 f"LLM Chat '{func.__name__}' Skip history item with incorrect format: {msg}",

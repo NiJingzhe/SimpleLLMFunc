@@ -1,5 +1,16 @@
 # SimpleLLMFunc 使用教程
 
+## 0.1.4版本新增功能亮点
+
+SimpleLLMFunc近期新增了两个重要功能：
+
+1. **OpenAICompatible通用接口** - 简化了不同LLM供应商的接入，无需为每个供应商创建专门的实现
+2. **装饰器自定义参数** 
+
+优化内容：
+1. 优化了LLM Chat中对于历史记录的管理策略。针对一个包含多伦ToolCall的response，我们会将每一次伴随tool call的response content进行记录，最终会将多轮tool call的response content和最终的response content进行拼接，形成最终的response content。
+
+
 ## 框架设计理念
 
 SimpleLLMFunc 是一个轻量级的LLM调用和工具集成框架，其核心设计理念是：
@@ -15,23 +26,15 @@ SimpleLLMFunc 是一个轻量级的LLM调用和工具集成框架，其核心设
 SimpleLLMFunc 提供了两种核心装饰器：
 
 1. **@llm_function** - 用于创建"无状态"LLM函数，每次调用相互独立
-2. **@llm_chat** - 用于创建"有状态"对话函数，维护对话历史
+2. **@llm_chat** - 用于创建"有状态"对话函数，自动维护对话历史
 
 这两种装饰器的设计使开发者能够：
 
 - 专注于"函数应该做什么"而非"如何调用LLM API"
 - 通过类型注解自动处理输入验证和输出转换
-- 将函数文档字符串自动转换为系统提示
+- 将函数文档字符串自动转换为系统提示，让原本即应该是对功能和流程的表述出现在最像函数实现的位置上
 - 无缝集成工具调用能力
 
-## 新增功能亮点
-
-SimpleLLMFunc近期新增了两个重要功能：
-
-1. **OpenAICompatible通用接口** - 简化了不同LLM供应商的接入，无需为每个供应商创建专门的实现
-2. **装饰器自定义参数** - 允许在LLM函数和聊天装饰器中直接传递模型参数
-
-下面详细介绍这些功能的使用方法。
 
 ## 1. 装饰器详细使用指南
 
@@ -188,7 +191,6 @@ from typing import List, Dict
     llm_interface=your_llm_interface,    # 必需：LLM接口
     toolkit=None,                        # 可选：工具列表
     max_tool_calls=5,                    # 可选：最大工具调用次数
-    round_to_emphasize=None,             # 可选：何时强调工具使用
     **llm_kwargs                         # 可选：传递给LLM的额外参数
 )
 def chat_function(
@@ -198,6 +200,7 @@ def chat_function(
     """
     这里的文档字符串会作为系统提示发送给LLM。
     描述助手的角色、行为和能力。
+    Tools描述不需要在这里撰写，会根据传入的tools的name 和description自己生成并拼接在最后。
     """
     pass
 ```
@@ -215,16 +218,14 @@ history = [
 
 #### 使用对话函数
 
-由于`@llm_chat`返回一个生成器，您需要使用`next()`或迭代来获取结果：
+由于`@llm_chat`返回一个生成器，您需要使用迭代来获取结果：
+
+使用生成器返回是因为多轮Tool Call Reponse会自动进行ReAct模式的处理，所以我们希望每一次Tool Call都能及时被展示，而不是等整个ReAct过程都结束了再显示所有内容。
 
 ```python
-# 获取单个响应
-response, updated_history = next(chat_function("你好，请介绍一下自己"))
-
 # 或者使用循环处理多轮对话
-for response, updated_history in chat_function("分析这段代码的性能问题", history):
+for response, updated_history in chat_function(history,"分析这段代码的性能问题"):
     print(response)
-    # 每轮只产生一个结果，所以这个循环只会执行一次
 ```
 
 #### 工具集成
@@ -296,7 +297,7 @@ OpenAICompatible接口支持以下主要参数：
 | base_url | str | API基础URL，如"https://api.openai.com/v1" |
 | max_retries | int | 请求失败时的最大重试次数 |
 | retry_delay | float | 重试之间的延迟时间（秒） |
-| allowed_models | List[str] | 可选的允许模型列表，用于验证 |
+| allowed_models | List[str] | 可选的允许模型列表，建议用法是在配置文件中配置模型名称列表，用于在运行时验证所有Interface创建时传入的 model name 是否有效。|
 
 ### 对接不同供应商示例
 
@@ -431,8 +432,8 @@ def main():
         message = "请为我构思一个关于太空探索的短篇科幻故事开头"
         history = []
         
-        response, new_history = next(creative_assistant(message, history))
-        print(f"助手: {response}")
+        for response, history in creative_assistant(message, history):
+            print(f"助手: {response}")
     except Exception as e:
         print(f"对话失败: {e}")
 
@@ -450,20 +451,9 @@ if __name__ == "__main__":
 4. **工具设计**：为LLM提供清晰、原子化的工具，帮助它完成复杂任务的子步骤
 5. **错误处理**：考虑LLM可能失败的情况，实现适当的错误处理和重试机制
 
-### 如何选择合适的自定义参数
-
-根据任务类型调整参数：
-
-| 任务类型 | 推荐参数 |
-|---------|---------|
-| 创意写作 | temperature=0.7-0.9, top_p=0.9-1.0 |
-| 事实回答 | temperature=0.1-0.3, top_p=0.5-0.7 |
-| 代码生成 | temperature=0.2-0.4, top_p=0.8-0.95 |
-| 对话功能 | temperature=0.5-0.7, presence_penalty=0.5-0.7 |
 
 ### 调试技巧
 
-- 使用不同的temperature值测试输出差异
 - 利用SimpleLLMFunc的日志系统跟踪每次调用的参数和响应
 - 在开发阶段使用较小的max_tokens值以加快响应速度
 
