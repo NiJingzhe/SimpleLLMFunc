@@ -71,45 +71,43 @@ def llm_function(
 ):
     """
     LLM 函数装饰器，将函数的执行委托给大语言模型。
-    
+
     ## 使用方法
     1. 定义一个函数，包括参数和返回类型标注
     2. 在函数的文档字符串中描述函数的功能或执行策略
     3. 使用 @llm_function 装饰该函数
-    
+
     ## 参数传递流程
     1. 当用户调用被装饰的函数时，装饰器捕获所有实际参数
     2. 这些参数被格式化为文本提示，发送给 LLM
     3. 函数的文档字符串作为系统提示，指导 LLM 如何执行
     4. 每个参数名称和值都作为用户提示的一部分
-    
+
     ## 工具使用
     - 如果提供了工具集 (toolkit)，LLM 可以使用这些工具来辅助完成任务
     - 支持 Tool 对象或被 @tool 装饰的函数作为工具
-    
+
     ## 自定义提示模板
-    自定义模板中可以使用以下占位符：
-    
+    自定义模板中必须包含以下占位符：
+
     ### 系统提示模板 (system_prompt_template)
-    - `{function_name}`: 函数名称
     - `{function_description}`: 函数文档字符串内容
     - `{parameters_description}`: 函数参数及其类型的描述
     - `{return_type_description}`: 返回值类型的描述
-    
+
     ### 用户提示模板 (user_prompt_template)
-    - `{function_name}`: 函数名称
     - `{parameters}`: 格式化后的参数名称和值
-    
+
     如果不提供自定义模板，则使用默认模板。自定义模板必须包含上述占位符，否则格式化时会出错。
-    
+
     ## 返回值处理
     - LLM 的响应会根据函数声明的返回类型进行转换
     - 支持基本类型 (str, int, float, bool)、字典和 Pydantic 模型
-    
+
     ## LLM接口参数
     - 通过`**llm_kwargs`传递的参数将直接传递给LLM接口
     - 可以用于设置temperature、top_p等模型参数，而无需修改LLM接口类
-    
+
     Args:
         llm_interface: LLM 接口实例，用于与大语言模型通信
         toolkit: 可选的工具列表，可以是 Tool 对象或被 @tool 装饰的函数
@@ -120,27 +118,32 @@ def llm_function(
 
     Returns:
         装饰后的函数，返回值类型与原函数的返回类型标注一致
-        
-    示例:
+
+    示例1:
         ```python
         # 基本用法
         @llm_function(llm_interface=my_llm)
         def summarize_text(text: str, max_words: int = 100) -> str:
             \"\"\"生成输入文本的摘要，摘要不超过指定的词数。\"\"\"
             pass
-        
+
+        # 调用函数
+        summary = summarize_text(long_text, max_words=50)
+        ```
+    示例2:
+        ```python
         # 使用自定义系统提示模板
         custom_system_template = \"\"\"
         你是一名专业的文本处理专家，请根据以下信息执行任务:
         - 函数名: {function_name}
-        - 参数信息: 
+        - 参数信息:
         {parameters_description}
         - 返回类型: {return_type_description}
-        
+
         任务描述:
         {function_description}
         \"\"\"
-        
+
         @llm_function(
             llm_interface=my_llm,
             system_prompt_template=custom_system_template
@@ -148,9 +151,7 @@ def llm_function(
         def analyze_text(text: str) -> Dict[str, Any]:
             \"\"\"分析文本并返回关键信息，包括主题、情感和关键词。\"\"\"
             pass
-        
-        # 调用函数
-        summary = summarize_text(long_text, max_words=50)
+
         ```
     """
 
@@ -174,19 +175,20 @@ def llm_function(
             bound_args.apply_defaults()
 
             with log_context(trace_id=current_trace_id, function_name=func_name):
+
+                # 记录详细参数
+                args_str = json.dumps(
+                    bound_args.arguments, default=str, ensure_ascii=False, indent=4
+                )
+
                 app_log(
-                    f"LLM 函数 '{func_name}' 被调用，参数:",
+                    f"LLM 函数 '{func_name}' 被调用，参数: {args_str}",
                     location=get_location(),
                 )
-                
-                # 记录详细参数
-                args_str = json.dumps(bound_args.arguments, default=str, ensure_ascii=False, indent=4)
-                app_log(args_str, location=get_location())
-                
+
                 # ===== 第一步：构建提示 =====
                 # 构建系统提示和用户提示
                 system_prompt, user_prompt = _build_prompts(
-                    func_name=func_name,
                     docstring=docstring,
                     arguments=bound_args.arguments,
                     type_hints=type_hints,
@@ -197,28 +199,28 @@ def llm_function(
                 # 准备消息列表
                 messages = [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ]
-                
+
                 app_log(f"系统提示: {system_prompt}", location=get_location())
                 app_log(f"用户提示: {user_prompt}", location=get_location())
 
                 # ===== 第二步：处理工具 =====
                 tool_param = None
                 tool_map = {}  # 工具名称到函数的映射
-                
+
                 if toolkit:
                     # 处理工具列表
                     tool_objects, tool_map = _prepare_tools(toolkit, func_name)
-                    
+
                     if tool_objects:
                         # 序列化工具以供 LLM 使用
                         tool_param = Tool.serialize_tools(tool_objects)
-                
+
                 # ===== 第三步：执行 LLM 调用 =====
                 try:
                     app_log(f"开始 LLM 调用...", location=get_location())
-                    
+
                     # 调用 LLM 并获取最终响应
                     response_generator = execute_llm(
                         llm_interface=llm_interface,
@@ -228,17 +230,83 @@ def llm_function(
                         max_tool_calls=max_tool_calls,
                         **llm_kwargs,  # 传递额外的关键字参数
                     )
-                    
+
                     # 获取最后一个响应作为最终结果
                     final_response = get_last_item_of_generator(response_generator)
-                    
+
+                    # 检查final response中的content字段是否为空
+                    retry_times = llm_kwargs.get("retry_times", 2)
+                    content = ""
+                    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
+                        message = final_response.choices[0].message  # type: ignore
+                        content = (
+                            message.content
+                            if message and hasattr(message, "content")
+                            else ""
+                        )
+
+                    if content == "":
+                        # 如果响应内容为空，记录警告并重试
+                        push_warning(
+                            f"LLM 函数 '{func_name}' 返回的响应内容为空，将会自动重试。",
+                            location=get_location(),
+                        )
+                        # 重新调用 LLM
+                        while retry_times > 0 and final_response.choice.content == "":  # type: ignore
+                            retry_times -= 1
+                            app_log(
+                                f"LLM 函数 '{func_name}' 重试第 {llm_kwargs.get("retry_times", 2) - retry_times + 1} 次...",
+                                location=get_location(),
+                            )
+                            response_generator = execute_llm(
+                                llm_interface=llm_interface,
+                                messages=messages,
+                                tools=tool_param,
+                                tool_map=tool_map,
+                                max_tool_calls=max_tool_calls,
+                                **llm_kwargs,  # 传递额外的关键字参数
+                            )
+                            final_response = get_last_item_of_generator(
+                                response_generator
+                            )
+
+                            content = ""
+                            if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
+                                message = final_response.choices[0].message  # type: ignore
+                                content = (
+                                    message.content
+                                    if message and hasattr(message, "content")
+                                    else ""
+                                )
+
+                            if content != "":  # type: ignore
+                                break
+
+                    content = ""
+                    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
+                        message = final_response.choices[0].message  # type: ignore
+                        content = (
+                            message.content
+                            if message and hasattr(message, "content")
+                            else ""
+                        )
+
+                    if content == "":
+                        push_error(
+                            f"LLM 函数 '{func_name}' 返回的响应内容仍然为空，重试次数已用完。",
+                            location=get_location(),
+                        )
+                        raise ValueError("LLM response content is empty after retries.")
+
                     # 记录最终响应
                     app_log(
                         f"LLM 函数 '{func_name}' 收到最终响应",
                         location=get_location(),
                     )
-                    
-                    response_str = json.dumps(final_response, default=str, ensure_ascii=False, indent=4)
+
+                    response_str = json.dumps(
+                        final_response, default=str, ensure_ascii=False, indent=4
+                    )
                     app_log(response_str, location=get_location())
 
                     # ===== 第四步：处理响应 =====
@@ -268,39 +336,35 @@ def llm_function(
 
 # 默认系统提示模板
 DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
-作为函数执行者，你的任务是按照以下的函数说明，在给定的输入下给出这个函数的输出结果。
+你的任务是按照以下的**功能描述**，根据用户的要求，给出符合要求的结果。
 
-函数详情:
-- 名称: {function_name}
-- 类型信息:
-{parameters_description}
-- 返回类型: {return_type_description}
+- 功能描述:
+    {function_description}
 
-功能描述:
-{function_description}
+- 你会接受到以下参数：
+    {parameters_description}
+
+- 你需要返回内容的类型: 
+    {return_type_description}
 
 执行要求:
-1. 根据提供的参数值执行此函数
-2. 返回格式必须严格符合指定的返回类型
-3. 如果返回类型是 Pydantic 模型，请以 JSON 格式返回符合模型规范的数据
-4. 如果有工具可用，可以使用工具来辅助完成任务
-5. 不要用 markdown 格式或代码块包裹结果，直接输出
+1. 如果有工具可用，可以使用工具来辅助完成任务
+2. 不要用 markdown 格式或代码块包裹结果，请直接输出期望的内容或者对应的JSON表示
 """
 
 # 默认用户提示模板
 DEFAULT_USER_PROMPT_TEMPLATE = """
-请使用以下参数值执行函数 {function_name}:
+给定的参数如下:
+    {parameters}
 
-{parameters}
-
-直接返回函数的执行结果，不需要任何解释或格式化。
+直接返回结果，不需要任何解释或格式化。
 """
 
 
 # ===== 内部辅助函数 =====
 
+
 def _build_prompts(
-    func_name: str,
     docstring: str,
     arguments: Dict[str, Any],
     type_hints: Dict[str, Any],
@@ -309,13 +373,13 @@ def _build_prompts(
 ) -> Tuple[str, str]:
     """
     构建发送给 LLM 的系统提示和用户提示
-    
+
     流程:
     1. 从类型提示中提取参数类型
     2. 构建参数类型描述
     3. 获取返回类型的详细描述
     4. 使用模板格式化系统提示和用户提示
-    
+
     Args:
         func_name: 函数名
         docstring: 函数文档字符串
@@ -333,7 +397,9 @@ def _build_prompts(
     # 构建参数类型描述（用于系统提示）
     param_type_descriptions = []
     for param_name, param_type in param_type_hints.items():
-        type_str = get_detailed_type_description(param_type) if param_type else "未知类型"
+        type_str = (
+            get_detailed_type_description(param_type) if param_type else "未知类型"
+        )
         param_type_descriptions.append(f"  - {param_name}: {type_str}")
 
     # 获取返回类型的详细描述
@@ -346,7 +412,6 @@ def _build_prompts(
 
     # 构建系统提示
     system_prompt = system_template.format(
-        function_name=func_name,
         function_description=docstring,
         parameters_description="\n".join(param_type_descriptions),
         return_type_description=return_type_description,
@@ -358,7 +423,6 @@ def _build_prompts(
         user_param_values.append(f"  - {param_name}: {param_value}")
 
     user_prompt = user_template.format(
-        function_name=func_name,
         parameters="\n".join(user_param_values),
     )
 
@@ -366,17 +430,16 @@ def _build_prompts(
 
 
 def _prepare_tools(
-    toolkit: List[Union[Tool, Callable]], 
-    func_name: str
+    toolkit: List[Union[Tool, Callable]], func_name: str
 ) -> Tuple[List[Tool], Dict[str, Callable]]:
     """
     准备工具列表和工具映射
-    
+
     流程:
     1. 遍历工具列表
     2. 将每个工具转换为 Tool 对象
     3. 创建工具名称到函数的映射
-    
+
     Args:
         toolkit: 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
         func_name: 函数名，用于日志
@@ -386,7 +449,7 @@ def _prepare_tools(
     """
     tool_objects = []
     tool_map = {}
-    
+
     for tool in toolkit:
         if isinstance(tool, Tool):
             # 如果是 Tool 对象，直接添加
@@ -406,5 +469,5 @@ def _prepare_tools(
                 "工具必须是 Tool 对象或被 @tool 装饰的函数。",
                 location=get_location(),
             )
-    
+
     return tool_objects, tool_map

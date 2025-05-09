@@ -759,6 +759,8 @@ if __name__ == "__main__":
                     [history_GLaDos[0]] + history_GLaDos[-9:]
                 )
 
+            print(f"history: {history_GLaDos}")
+
             # 自动保存历史记录
             if args.auto_save and session_id:
                 save_history(history_GLaDos, session_id)
