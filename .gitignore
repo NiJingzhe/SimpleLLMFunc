@@ -155,3 +155,4 @@ logs/
 **/*.log
 
 sandbox/
+examples/provider.json

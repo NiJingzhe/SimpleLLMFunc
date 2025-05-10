@@ -5,22 +5,24 @@
 from typing import Dict, List
 from pydantic import BaseModel, Field
 
-from SimpleLLMFunc import llm_function
-from SimpleLLMFunc import app_log
+from SimpleLLMFunc import llm_chat, llm_function, app_log
 from SimpleLLMFunc import tool
-from SimpleLLMFunc.interface import APIKeyPool, Zhipu
+from SimpleLLMFunc import APIKeyPool
 from SimpleLLMFunc.config import global_settings
-from SimpleLLMFunc.interface.zhipu import ZhipuAI_glm_4_flash_Interface
+import os
+import sys
+import json
+import argparse
+from datetime import datetime
+from typing import List, Dict, Optional, Any, Callable, Union
 
+from SimpleLLMFunc import OpenAICompatible
+import os
 
-zhipu_key_pool = APIKeyPool(
-    api_keys=global_settings.ZHIPU_API_KEYS,
-    provider_id="zhipu"
-)
-ZhipuAI_glm_4_flash_Interface = Zhipu(
-    api_key_pool=zhipu_key_pool,
-    model_name='glm-4-flash'
-)
+# 当前脚本文件所在的文件夹下的provider.json文件
+current_dir = os.path.dirname(os.path.abspath(__file__))
+provider_json_path = os.path.join(current_dir, "provider.json")
+VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["volc_engine"]["deepseek-v3-250324"]
 
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):
@@ -32,7 +34,7 @@ class ProductReview(BaseModel):
 
 # 使用装饰器创建一个LLM函数
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
+    llm_interface=VolcEngine_deepseek_v3_Interface,
 )
 def analyze_product_review(product_name: str, review_text: str) -> ProductReview:  # type: ignore
     """
@@ -70,7 +72,7 @@ class WeatherInfo(BaseModel):
     recommendation: str = Field(..., description="推荐的活动")
 
 
-@llm_function(llm_interface=ZhipuAI_glm_4_flash_Interface, toolkit=[get_weather])
+@llm_function(llm_interface=VolcEngine_deepseek_v3_Interface, toolkit=[get_weather])
 def get_daily_recommendation(city: str) -> WeatherInfo:  # type: ignore
     """
     通过get_weather工具获取天气信息，并给出推荐的活动

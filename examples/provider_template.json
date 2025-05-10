@@ -1,0 +1,11 @@
+{
+    "volc_engine": [
+        {
+            "model_name": "deepseek-v3-250324",
+            "api_keys": ["your_api_key"],
+            "base_url": "https://ark.cn-beijing.volces.com/api/v3/",
+            "max_retries": 3,
+            "retry_delay": 1
+        }
+    ]
+}
