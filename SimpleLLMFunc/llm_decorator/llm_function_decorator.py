@@ -135,7 +135,6 @@ def llm_function(
         # 使用自定义系统提示模板
         custom_system_template = \"\"\"
         你是一名专业的文本处理专家，请根据以下信息执行任务:
-        - 函数名: {function_name}
         - 参数信息:
         {parameters_description}
         - 返回类型: {return_type_description}

@@ -1,14 +1,75 @@
-# SimpleLLMFunc 使用教程
+# SimpleLLMFunc 技术文档
 
-## 0.1.4版本新增功能亮点
+## 1. 框架概述
 
-SimpleLLMFunc近期新增了两个重要功能：
+SimpleLLMFunc 是一个轻量级的 LLM 调用和工具集成框架，其核心设计理念是 "Prompt As Code"。框架致力于让 AI 能力的集成变得简单、类型安全且易于维护,同时保持最大的自由度和灵活性。
 
-1. **OpenAICompatible通用接口** - 简化了不同LLM供应商的接入，无需为每个供应商创建专门的实现
-2. **装饰器自定义参数** 
+### 1.1 设计目标
 
-优化内容：
-1. 优化了LLM Chat中对于历史记录的管理策略。针对一个包含多伦ToolCall的response，我们会将每一次伴随tool call的response content进行记录，最终会将多轮tool call的response content和最终的response content进行拼接，形成最终的response content。
+1. **简单直观** - 以最自然的编程方式集成 LLM 能力
+2. **类型安全** - 通过类型注解确保输入输出的正确性
+3. **恰到好处的抽象** - 屏蔽复杂性但保持框架简单易懂
+4. **最大自由度** - 不限制开发者使用复杂流程,保持 Python 原生的灵活性
+5. **文档即代码** - Prompt 自然融入函数文档,提高可维护性
+
+### 1.2 最新版本亮点（0.1.5）
+
+1. **供应商配置优化**
+   - 使用 JSON 文件统一管理供应商配置
+   - 支持灵活的模型参数设置
+   - 统一的 OpenAI Compatible 接口
+  
+2. **Prompt 模板优化**
+   - 更节省 Token 的默认模板
+   - 更清晰的指令描述
+   - 更好的参数说明
+
+### 1.3 系统架构
+
+SimpleLLMFunc 由以下核心模块组成:
+
+1. **LLM 函数装饰器** (`llm_decorator/`)
+   - `llm_function_decorator.py` - 无状态函数装饰器
+   - `llm_chat_decorator.py` - 对话函数装饰器
+   - `utils.py` - 装饰器通用工具函数
+
+2. **LLM 接口** (`interface/`)
+   - `llm_interface.py` - LLM 接口抽象基类
+   - `openai_compatible.py` - OpenAI Compatible 通用接口
+   - `key_pool.py` - API 密钥管理
+
+3. **日志系统** (`logger/`)
+   - 自动记录代码位置和执行环境
+   - 支持 trace_id 关联所有相关日志
+   - JSON 格式文件日志,支持程序化分析
+
+4. **工具系统** (`tool/`)
+   - 支持函数装饰器和类继承两种定义方式
+   - 自动序列化工具信息给 LLM 使用
+   - 内置工具调用流程管理
+
+### 1.4 核心特性
+
+1. **强大的函数装饰器**
+   - `@llm_function` - 无状态 LLM 函数装饰器 
+   - `@llm_chat` - 对话函数装饰器,自动维护会话历史
+   - 完整的类型注解支持
+   - 自动处理工具调用
+   
+2. **统一的模型接口**
+   - 支持任何兼容 OpenAI API 的服务
+   - 内置 API 密钥负载均衡
+   - 支持普通和流式两种调用模式
+
+3. **智能日志系统** 
+   - 自动追踪每次函数调用
+   - 关联所有相关日志
+   - JSON 格式支持分析
+   
+4. **灵活的工具系统**
+   - 简单的工具定义方式
+   - 自动序列化给 LLM 使用
+   - 完整的工具调用管理
 
 
 ## 框架设计理念
@@ -98,30 +159,40 @@ def your_function(param1: type1, param2: type2 = default_value) -> return_type:
 使用Pydantic模型作为返回类型是推荐的做法，它提供了自动验证和清晰的结构定义。
 
 #### 自定义提示模板
+自定义模板中必须包含以下占位符：
 
-您可以通过`system_prompt_template`和`user_prompt_template`参数自定义提示模板：
+##### 系统提示模板 (system_prompt_template)
+- `{function_description}`: 函数文档字符串内容
+- `{parameters_description}`: 函数参数及其类型的描述
+- `{return_type_description}`: 返回值类型的描述
+
+##### 用户提示模板 (user_prompt_template)
+- `{parameters}`: 格式化后的参数名称和值
+
+如果不提供自定义模板，则使用默认模板。自定义模板必须包含上述占位符，否则格式化时会出错。
+
+例如:
 
 ```python
+# 使用自定义系统提示模板
 custom_system_template = """
-你是一名专业的{function_name}专家，请根据以下要求执行任务:
-
-功能描述:
-{function_description}
-
-参数信息:
+你是一名专业的文本处理专家，请根据以下信息执行任务:
+- 参数信息:
 {parameters_description}
+- 返回类型: {return_type_description}
 
-返回要求:
-你需要返回符合{return_type_description}格式的结果
+任务描述:
+{function_description}
 """
 
 @llm_function(
-    llm_interface=llm,
+    llm_interface=my_llm,
     system_prompt_template=custom_system_template
 )
 def analyze_text(text: str) -> Dict[str, Any]:
-    """分析文本内容，提取关键信息。"""
+    """分析文本并返回关键信息，包括主题、情感和关键词。"""
     pass
+
 ```
 
 #### 工具集成
@@ -297,38 +368,34 @@ OpenAICompatible接口支持以下主要参数：
 | base_url | str | API基础URL，如"https://api.openai.com/v1" |
 | max_retries | int | 请求失败时的最大重试次数 |
 | retry_delay | float | 重试之间的延迟时间（秒） |
-| allowed_models | List[str] | 可选的允许模型列表，建议用法是在配置文件中配置模型名称列表，用于在运行时验证所有Interface创建时传入的 model name 是否有效。|
 
-### 对接不同供应商示例
+### provider.json
 
-#### OpenAI API
+您可以通过在自己的项目中创建一个`provider.json`文件来配置供应商信息。该文件应包含以下内容：
 
-```python
-openai_llm = OpenAICompatible(
-    api_key_pool=APIKeyPool(["sk-..."], "openai"),
-    model_name="gpt-4-turbo",
-    base_url="https://api.openai.com/v1"
-)
-```
+```json
+{
+    "volc_engine": [
+        {
+            "model_name": "deepseek-v3-250324",
+            "api_keys": ["your_api_key"],
+            "base_url": "https://ark.cn-beijing.volces.com/api/v3/",
+            "max_retries": 3,
+            "retry_delay": 1
+        }
+    ]
+}
+``` 
+总体是一个 `Dict`，key是供应商名称，value是一个列表，列表中的每个元素是一个字典，包含模型名称、API密钥、基础URL等信息。
 
-#### Azure OpenAI
-
-```python
-azure_llm = OpenAICompatible(
-    api_key_pool=APIKeyPool(["your-azure-key"], "azure"),
-    model_name="gpt-4",
-    base_url="https://your-resource.openai.azure.com/openai/deployments/your-deployment-name"
-)
-```
-
-#### 智谱AI
+然后可以在代码中通过`OpenAICompatible`接口加载该配置：
 
 ```python
-zhipu_llm = OpenAICompatible(
-    api_key_pool=APIKeyPool(["your-zhipu-key"], "zhipu"),
-    model_name="glm-4",
-    base_url="https://open.bigmodel.cn/api/paas/v4/"
-)
+from SimpleLLMFunc.interface import OpenAICompatible
+
+all_models = OpenAICompatible.load_from_json_file("provider.json")
+
+dsv3 = all_models["volc_engine"]["deepseek-v3-250324"]
 ```
 
 ## 3. 完整示例：结合使用装饰器和OpenAICompatible
