@@ -1,8 +1,6 @@
 from multiprocessing import ProcessError
 from SimpleLLMFunc import llm_chat, llm_function
 from SimpleLLMFunc import tool
-from SimpleLLMFunc import APIKeyPool, VolcEngine
-from SimpleLLMFunc.config import global_settings
 import os
 import sys
 import json
@@ -10,15 +8,13 @@ import argparse
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union
 
+from SimpleLLMFunc import OpenAICompatible
+import os
 
-volc_api_key_pool = APIKeyPool(
-    global_settings.VOLCENGINE_API_KEYS, provider_id="volcengine"
-)
-
-VolcEngine_deepseek_v3_Interface = VolcEngine(
-    api_key_pool=volc_api_key_pool, model_name="deepseek-v3-250324"
-)
-
+# 当前脚本文件所在的文件夹下的provider.json文件
+current_dir = os.path.dirname(os.path.abspath(__file__))
+provider_json_path = os.path.join(current_dir, "provider.json")
+VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["volc_engine"]["deepseek-v3-250324"]
 
 # 历史记录管理相关函数
 def save_history(history: List[Dict[str, str]], session_id: str) -> str:

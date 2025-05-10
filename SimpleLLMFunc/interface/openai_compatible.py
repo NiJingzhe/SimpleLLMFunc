@@ -1,4 +1,6 @@
+from __future__ import annotations
 import json
+import os
 import time
 from typing import Generator, Optional, Dict, List, Literal, Iterable, Any
 
@@ -6,6 +8,7 @@ from openai import OpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
+from SimpleLLMFunc.logger.logger import push_critical
 
 class OpenAICompatible(LLM_Interface):
     """与OpenAI API兼容的LLM接口实现，支持任何符合OpenAI格式的API接口。
@@ -14,6 +17,133 @@ class OpenAICompatible(LLM_Interface):
     而不需要为每个供应商创建特定的实现。只需要提供正确的base_url和模型名称即可。
     """
 
+    @classmethod
+    def load_from_json_file(cls, json_path: str) -> Dict[str, Dict[str, OpenAICompatible]]:
+        """从JSON字符串加载OpenAICompatible实例
+
+        Args:
+            json_str: JSON字符串，包含API密钥和模型名称
+            
+            例如:
+            ```
+            {
+                "openai": [
+                    {
+                        "model_name": "gpt-3.5-turbo",
+                        "api_keys": [key1, key2, key3],
+                        "base_url": "https://api.openai.com/v1"
+                        "max_retries": 5,
+                        "retry_delay": 1.0
+                    },
+                    {
+                        "model_name": "gpt-4",
+                        "api_keys": [key1, key2, key3],
+                        "base_url": "https://api.openai.com/v1"
+                        "max_retries": 5,
+                        "retry_delay": 1.0
+                    }
+                ],
+                "zhipu": [
+                    {
+                        "model_name": "gpt-3.5-turbo",
+                        "api_keys": [key1, key2, key3],
+                        "base_url": "https://open.bigmodel.cn/api/paas/v4/"
+                        "max_retries": 5,
+                        "retry_delay": 1.0
+                    },
+                    {
+                        "model_name": "gpt-4",
+                        "api_keys": [key1, key2, key3],
+                        "base_url": "https://open.bigmodel.cn/api/paas/v4/"
+                        "max_retries": 5,
+                        "retry_delay": 1.0
+                    }
+                ]    
+            }
+            ```
+
+        Returns:
+            OpenAICompatible实例的字典, 可以这样访问： 
+            ```python
+            from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
+
+            all_models = OpenAICompatible.load_from_json(json_str)
+            gpt_3_5 = all_models["openai"]["gpt-3.5-turbo"]
+            gpt_4 = all_models["openai"]["gpt-4"]
+            ``` 
+        """
+        
+        if not os.path.exists(json_path):
+            push_critical(f"JSON file {json_path} does not exist. Please check your configuration.", location=get_location())
+            raise FileNotFoundError(f"JSON file {json_path} does not exist.")
+        
+        with open(json_path, "r", encoding="utf-8") as f:
+            json_str = f.read()
+        # 解析JSON字符串
+        try:
+            all_providers_info = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            push_critical(f"Failed to parse JSON string: {e}", location=get_location())
+            raise ValueError(f"Failed to parse JSON string: {e}")
+        # 检查JSON格式
+        
+        try: 
+            all_providers_dict: Dict[str, Dict[str, OpenAICompatible]] = {}
+            for provider_id, models in all_providers_info.items():
+                all_providers_dict[provider_id] = {}
+                app_log(
+                    f"Loading OpenAICompatible instances for provider: {provider_id}",
+                    location=get_location()
+                )
+                
+                if not isinstance(models, list):
+                    push_critical(f"Invalid format for models under provider {provider_id}. Expected a list.", location=get_location())
+                    raise TypeError(f"Invalid format for models under provider {provider_id}. Expected a list.")
+                
+                for model_info in models:
+                    model_name = model_info["model_name"]
+                    api_keys = model_info["api_keys"]
+                    base_url = model_info["base_url"]
+                    max_retries = model_info.get("max_retries", 5)
+                    retry_delay = model_info.get("retry_delay", 1.0)
+
+                    # 创建APIKeyPool实例
+                    key_pool = APIKeyPool(api_keys, provider_id)
+
+                    # 创建OpenAICompatible实例
+                    instance = OpenAICompatible(
+                        api_key_pool=key_pool,
+                        model_name=model_name,
+                        base_url=base_url,
+                        max_retries=max_retries,
+                        retry_delay=retry_delay,
+                    )
+
+                    all_providers_dict[provider_id][model_name] = instance
+                    
+                    app_log(
+                        f"Loaded OpenAICompatible instance for {provider_id} with model {model_name}",
+                        location=get_location()
+                    )
+        except ValueError as e:
+            push_critical(f"Error loading OpenAICompatible instances: {e}", location=get_location())
+            raise ValueError(f"Error loading OpenAICompatible instances: {e}")
+        except TypeError as e:
+            push_critical(f"Invalid type in JSON: {e}", location=get_location())
+            raise ValueError(f"Invalid type in JSON: {e}")
+        except KeyError as e:
+            push_critical(f"Missing required key in JSON: {e}", location=get_location())
+            raise ValueError(f"Missing required key in JSON: {e}")
+        except Exception as e:
+            push_critical(f"Error loading OpenAICompatible instances: {e}", location=get_location())
+            raise ValueError(f"Error loading OpenAICompatible instances: {e}")
+        
+        return all_providers_dict
+
+    def __repr__(self) -> str:
+        """返回OpenAICompatible实例的字符串表示"""
+        return f"OpenAICompatible(model_name={self.model_name}, base_url={self.base_url})"
+
     def __init__(
         self,
         api_key_pool: APIKeyPool,
@@ -21,7 +151,6 @@ class OpenAICompatible(LLM_Interface):
         base_url: str,
         max_retries: int = 5,
         retry_delay: float = 1.0,
-        allowed_models: Optional[List[str]] = None,
     ):
         """初始化OpenAI兼容的LLM接口
 
@@ -37,14 +166,7 @@ class OpenAICompatible(LLM_Interface):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
-        self.allowed_models = allowed_models
 
-        # 如果提供了允许的模型列表，检查当前模型是否在列表中
-        if self.allowed_models and model_name not in self.allowed_models:
-            location = get_location()
-            push_warning(
-                f"model_name should be one of {self.allowed_models}", location=location
-            )
         self.model_name = model_name
 
         self.key_pool = api_key_pool
