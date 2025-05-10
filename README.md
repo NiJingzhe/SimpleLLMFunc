@@ -13,16 +13,66 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-## 0.1.4版本新增功能亮点
+## 0.1.5版本更新说明
 
-SimpleLLMFunc近期新增了两个重要功能：
+### 主要更新
 
-1. **OpenAICompatible通用接口** - 简化了不同LLM供应商的接入，无需为每个供应商创建专门的实现
-2. **装饰器自定义参数** 
+1. **供应商配置优化** 
+   - 使用 JSON 文件替代 .env 配置供应商信息
+   - 更灵活的模型参数配置
+   - 多供应商统一配置管理
 
-优化内容：
-1. 优化了LLM Chat中对于历史记录的管理策略。针对一个包含多伦ToolCall的response，我们会将每一次伴随tool call的response content进行记录，最终会将多轮tool call的response content和最终的response content进行拼接，形成最终的response content。
+2. **Prompt 模板优化**
+   - 优化 LLM 函数装饰器的默认 prompt 模板
+   - 减少 token 使用的同时提升效果
+   - 更清晰的指令描述和参数说明
 
+### 配置示例 (provider.json)
+```json
+{
+    "volc_engine": [
+        {
+            "model_name": "deepseek-v3-250324",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.volc.example.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        }
+    ],
+    "openai": [
+        {
+            "model_name": "gpt-3.5-turbo",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.openai.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        },
+        {
+            "model_name": "gpt-4",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.openai.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        }
+    ]
+}
+```
+
+### 使用示例
+```python
+from SimpleLLMFunc import OpenAICompatible
+
+# 从配置文件加载所有模型接口
+provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
+
+# 获取特定模型接口
+deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
+
+# 在装饰器中使用
+@llm_function(llm_interface=deepseek_interface)
+def my_function():
+    pass
+```
 
 -----
 
@@ -52,7 +102,7 @@ Prompt会以DocString的形式存在，一方面强制你撰写良好的函数�
 ## 特性
 
 - **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理
-- **多模型支持**：支持多种LLM提供商接口（目前支持智谱AI）
+- **通用模型接口**：支持任何符合OpenAI API格式的模型服务，无需针对每个供应商开发专门实现
 - **API密钥管理**：自动化API密钥负载均衡，优化资源利用
 - **结构化输出**：使用Pydantic模型定义结构化返回类型
 - **强大的日志系统**：支持trace_id跟踪和搜索，方便调试和监控
@@ -66,7 +116,7 @@ SimpleLLMFunc/
 │   ├── interface/             # LLM 接口
 │   │   ├── llm_interface.py   # LLM 接口抽象类
 │   │   ├── key_pool.py        # API 密钥管理
-│   │   └── zhipu.py           # 智谱 AI 接口实现
+│   │   └── openai_compatible.py # OpenAI Compatible 通用接口实现
 │   ├── llm_function/          # LLM函数装饰器
 │   │   ├── llm_chat_decorator.py     # 对话函数装饰器实现
 │   │   └── llm_function_decorator.py # 无状态函数装饰器实现
@@ -78,7 +128,8 @@ SimpleLLMFunc/
 │   └── config.py              # 全局配置
 └── examples/                  # 示例代码
     ├── llm_function_example.py  # LLM函数示例
-    └── llm_chat_example.py      # 对话函数示例
+    ├── llm_chat_example.py      # 对话函数示例
+    └── simple_manus.py          # 包含多种工具和对话函数的综合示例
 ```
 ## 配置管理
 
@@ -86,22 +137,24 @@ SimpleLLMFunc使用分层配置系统：
 
 - 环境变量：最高优先级
 - `.env` 文件：次优先级
-- `config.py` 默认值：最低优先级
 
-### 配置示例 (.env)
+### 日志配置 (.env)
 
-```
-ZHIPU_API_KEYS=["your-api-key-1", "your-api-key-2"]
-LOG_DIR=./
+```bash
+# 日志相关配置
+LOG_DIR=./logs
 LOG_FILE=agent.log
 LOG_LEVEL=DEBUG
 ```
 
-## LLM函数装饰器
+## LLM函数装饰器 - Prompt As Code
 
-- #### llm function
+SimpleLLMFunc的核心理念是 **"Prompt即代码，代码即文档"**。通过将Prompt直接编写在函数的文档字符串（DocString）中，我们实现了：
 
-SimpleLLMFunc的核心特性是LLM函数装饰器，它允许您只通过声明带有类型标注的函数和撰写DocString来实现一个函数。
+1. **更好的代码可读性** - Prompt与其作用的函数紧密结合，一目了然
+2. **类型安全** - 使用Python类型标注和Pydantic模型确保输入输出的正确性
+3. **智能提示** - IDE可以提供完整的代码补全和类型检查
+4. **文档即Prompt** - DocString既是函数文档，也是LLM的指令集
 
 ```python
 """
@@ -124,34 +177,46 @@ class ProductReview(BaseModel):
 
 # 使用装饰器创建一个LLM函数
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
-    system_prompt="你是一个专业的产品评测专家，可以客观公正地评价各种产品。"
+    llm_interface=OpenAICompatible.load_from_json_file("provider.json")["volc_engine"]["deepseek-v3-250324"]
 )
 def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
-    """
-    分析产品评论，提取关键信息并生成结构化评测报告
+    """你是一个专业的产品评测专家，需要客观公正地分析以下产品评论，并生成一份结构化的评测报告。
+    
+    报告应该包括：
+    1. 产品总体评分（1-5分）
+    2. 产品的主要优点列表
+    3. 产品的主要缺点列表
+    4. 总结性评价
+    
+    评分规则：
+    - 5分：完美，几乎没有缺点
+    - 4分：优秀，优点明显大于缺点
+    - 3分：一般，优缺点基本持平
+    - 2分：较差，缺点明显大于优点
+    - 1分：很差，几乎没有优点
     
     Args:
-        product_name: 产品名称
-        review_text: 用户评论文本
+        product_name: 要评测的产品名称
+        review_text: 用户对产品的评论内容
         
     Returns:
-        包含评分、优缺点和总结的产品评测报告
+        一个结构化的ProductReview对象，包含评分、优点列表、缺点列表和总结
     """
-    pass  # 函数体为空，实际执行由LLM完成
+    pass  # Prompt as Code, Code as Doc
 
 
-@tool(name="天气查询", description="获取指定城市的天气信息")
+@tool(name="get_weather", description="获取指定城市的天气信息")
 def get_weather(city: str) -> Dict[str, str]:
-    """
-    获取指定城市的天气信息
-    
+    """天气查询工具，返回指定城市的实时天气数据
+
     Args:
-        city: 城市名称
-        
+        city: 要查询天气的城市名称
+    
     Returns:
-        包含温度、湿度和天气状况的字典
+        一个包含温度、湿度和天气状况的字典，
+        例如: {"temperature": "25°C", "humidity": "60%", "condition": "晴朗"}
     """
+    # 实际应用中会调用真实的天气API
     return {
         "temperature": "32°C",
         "humidity": "80%",
@@ -159,25 +224,29 @@ def get_weather(city: str) -> Dict[str, str]:
     }
 
 class WeatherInfo(BaseModel):
-    city: str = Field(..., description="城市名称")
-    temperature: str = Field(..., description="当前温度")
-    humidity: str = Field(..., description="当前湿度")
-    condition: str = Field(..., description="天气状况")
+    """天气信息的结构化表示"""
+    city: str = Field(..., description="查询的城市名称")
+    temperature: str = Field(..., description="当前气温，如：25°C")
+    humidity: str = Field(..., description="空气湿度，如：60%")
+    condition: str = Field(..., description="天气状况，如：晴朗、多云、雨天")
 
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
-    tools=[get_weather]
+    llm_interface=OpenAICompatible.load_from_json_file("provider.json")["volc_engine"]["deepseek-v3-250324"]
 )
-def weather(city: str) -> WeatherInfo:
-    """
-    获取指定城市的天气信息
-    
+def format_weather(city: str) -> WeatherInfo:
+    """你是一个天气助手，需要调用天气查询工具并将结果格式化为用户友好的格式。
+
+    工作流程：
+    1. 使用get_weather工具获取指定城市的天气数据
+    2. 将原始数据转换为结构化的WeatherInfo对象
+    3. 确保所有字段都使用统一的格式和单位
+
     Args:
-        city: 城市名称
-        
+        city: 要查询天气的城市名称
+
     Returns:
-        WeatherInfo对象，包含温度、湿度和天气状况
-    例如：{"city": "L.A.", "temperature": "25°C", "humidity": "60%", "condition": "晴天"}
+        一个格式规范的WeatherInfo对象，确保所有字段的格式统一
+        例如：city="北京", temperature="25°C", humidity="60%", condition="晴朗"
     """
     pass
 
@@ -197,6 +266,8 @@ def main():
     try:
         print("\n===== 产品评测分析 =====")
         result = analyze_product_review(product_name, review_text)
+        # result is directly a Pydantic model instance
+        # no need to deserialize
         print(f"评分: {result.rating}/5")
         print("优点:")
         for pro in result.pros:
@@ -267,66 +338,119 @@ Output:
 
 ## LLM供应商接口
 
-LLM接口的封装是为了能够分隔供应商，如果是OpenAI SDK Compatiable的模型，可以省去设置BASE URL的重复工作，同时具有更好的类型提示。
+SimpleLLMFunc 提供了灵活的 LLM 接口支持，主要包括：
 
-同样的也能够支持某些非OpenAI SDK Compatiable的模型。
+1. **OpenAI Compatible 通用接口** - 支持任何符合 OpenAI API 格式的模型服务，只需提供正确的 base_url 和模型名称即可。
+2. **自定义接口扩展** - 通过继承 `LLM_Interface` 基类实现自定义的模型接口。
+
+### OpenAI Compatible 接口示例
+
+```python
+from SimpleLLMFunc import OpenAICompatible
+
+# 从配置文件加载模型接口
+provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
+deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
+
+# 在装饰器中使用
+@llm_function(llm_interface=deepseek_interface)
+def my_function():
+    pass
+```
+
+### provider.json 配置示例
+
+```json
+{
+    "volc_engine": {
+        "deepseek-v3-250324": {
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.volc.example.com/v1",
+            "model": "deepseek-chat"
+        }
+    }
+}
+```
 
 SimpleLLMFunc的LLM接口设计原则：
 
-- 简单、无状态的函数调用
+- 简单统一的接口定义
 - 支持普通和流式两种调用模式
-- 集成了基于小根堆的API密钥负载均衡
-
-### 示例用法
-
-这里展示了接口的两种暴露接口，但实际使用过程中用户并不会接触到这样的直接调用。用户只会将接口对象作为参数传入装饰器。
-
-```python
-from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
-
-# 非流式调用
-response = ZhipuAI_glm_4_flash_Interface.chat(
-    trace_id="unique_trace_id",
-    messages=[{"role": "user", "content": "你好"}]
-)
-
-# 流式调用
-for chunk in ZhipuAI_glm_4_flash_Interface.chat_stream(
-    trace_id="unique_trace_id",
-    messages=[{"role": "user", "content": "你好"}]
-):
-    print(chunk)
-```
+- 支持自动的 API Key 负载均衡
+- 完整的类型提示支持
 
 ## 日志系统
 
-SimpleLLMFunc包含强大的日志系统，支持：
+SimpleLLMFunc包含强大的日志系统，融合了结构化日志、自动追踪和聚合分析的能力：
 
-- 不同级别的日志（DEBUG, INFO, WARNING, ERROR, CRITICAL）
-- 按trace_id跟踪和搜索相关日志，在`log_indices/trace_index.json`中，log会被按照trace id分类聚合，便于针对某一次特定的函数调用进行log分析。
-- 自动记录代码位置信息
-- 彩色控制台输出
-- JSON格式文件日志，便于解析
+### 1. 基本特性
 
-后续计划加入对每个llm function的性能监控，让开发者能够更好的追踪输入输出与响应时间，以进行Prompt调优和工作流效率优化。
+- 多级别日志支持（DEBUG, INFO, WARNING, ERROR, CRITICAL）
+- 自动记录代码位置和执行环境信息
+- JSON格式文件日志，便于程序化分析
+- 彩色控制台输出，提升可读性
+
+### 2. 智能日志关联
+
+每个 LLM 函数调用会自动生成唯一的 `trace_id`，例如：`GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125`。这个ID会关联该调用产生的所有日志，包括：
+
+- 函数调用的输入参数
+- LLM请求和响应内容
+- 工具调用记录
+- 错误和警告信息
+- 执行时间和性能数据
+
+### 3. 自动日志聚合
+
+所有日志会被自动整理到 `log_indices/trace_index.json`，按 trace_id 分类聚合。这意味着：
+
+- 可以轻松查看某次调用的完整执行流程
+- 方便进行问题诊断和性能分析
+- 有助于Prompt调优和工作流优化
 
 ### 日志使用示例
 
 ```python
-from SimpleLLMFunc.logger import app_log, push_error, search_logs_by_trace_id
+from SimpleLLMFunc.logger import app_log, push_error, search_logs_by_trace_id, log_context
 
-# 记录信息日志
-app_log("操作成功完成", trace_id="operation_123")
+# 1. 基础日志记录
+app_log("开始处理请求", trace_id="request_123")
+push_error("发生错误", trace_id="request_123", exc_info=True)
 
-# 记录错误日志
-push_error("操作失败", trace_id="operation_123", exc_info=True)
+# 2. 使用上下文管理器自动关联日志
+with log_context(trace_id="task_456", function_name="analyze_text"):
+    app_log("开始分析文本")  # 自动继承上下文的trace_id
+    try:
+        # 执行操作...
+        app_log("分析完成")
+    except Exception as e:
+        push_error("分析失败", exc_info=True)  # 同样自动继承trace_id
 
-# 使用日志上下文注入统一字段
-with log_context(trace_id = "unified traceid")
-
-    push_error("操作失败") # 不需要显式指定trace id，会自动获得上下文中的trace id
-
+# 3. 查看某次调用的所有相关日志
+logs = search_logs_by_trace_id("GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125")
 ```
+
+### 日志输出示例
+
+```json
+{
+    "timestamp": "2025-04-26T19:05:08.290234",
+    "level": "INFO",
+    "logger": "SimpleLLMFunc",
+    "message": "LLM Chat 'GLaDos' will execute llm with messages...",
+    "module": "logger",
+    "function": "app_log",
+    "line": 561,
+    "trace_id": "GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125",
+    "function_name": "GLaDos",
+    "taskName": null
+}
+```
+
+后续计划加入更多功能：
+- LLM函数调用的性能指标面板
+- 交互式日志分析工具
+- 自动化Prompt优化建议
 
 ## 工具系统
 

@@ -11,12 +11,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
    
-    ENABLE_ZHIPU: bool = False 
-    ZHIPU_API_KEYS: Annotated[List[str], ForceDecode] = []
-    
-    ENABLE_VOLCENGINE: bool = False
-    VOLCENGINE_API_KEYS: Annotated[List[str], ForceDecode] = []
-
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
