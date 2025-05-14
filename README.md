@@ -1,8 +1,11 @@
-# SimpleLLMFunc
 
 ![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover.png?raw=true)
 
+<center>
+<h2 style="font-size:2em;">Everything is Function, Prompt is Code</h2>
+</center>
 
+----
 
 ![Github Stars](https://img.shields.io/github/stars/NiJingzhe/SimpleLLMFunc.svg?style=social)
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
@@ -594,6 +597,19 @@ pip install SimpleLLMFunc
  </picture>
 </a>
 
+## Citation
+如果您在研究或项目中使用了SimpleLLMFunc，请引用以下信息：
+
+```bibtex
+@software{Jingzhe_SimpleLLMFunc_2025,
+  author = {Jingzhe Ni},
+  month = {4},
+  title = {{SimpleLLMFunc: A New Approach to Build LLM Apllications}},
+  url = {https://github.com/NiJingzhe/SimpleLLMFunc},
+  version = {0.1.5},
+  year = {2025}
+}
+```
 ## 许可证
 
 MIT
