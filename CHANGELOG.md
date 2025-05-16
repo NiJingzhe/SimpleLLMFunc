@@ -1,0 +1,231 @@
+## 0.1.6版本更新说明 (Latest)
+
+### 主要更新
+
+1. **实现token usage统计**
+   - 现在`llm_function`和`llm_chat`装饰的函数都能够对一次调用中属于自己上下文范围内的token用量进行统计，并呈现在log中。
+   - 我们可以通过查看同一个`function call trace id`下的所有log中时间上最后出现的带有token信息的log来看到在本次调用中消耗了多少token
+   - **!!!注意!!!**：token usage只统计函数自身上下文，对于其中的嵌套调用不会统计在外层函数的计数内。
+
+**例如:**
+
+```json
+"get_daily_recommendation_86cdc1b5-f279-4643-b2a0-13782ab30b26": [
+    {
+        "timestamp": "2025-05-16T20:23:02.428657+08:00",
+        "level": "INFO",
+        "location": "llm_function_example.py:main:116",
+        "message": "LLM 函数 'get_daily_recommendation' 被调用，参数: {\n    \"city\": \"Hangzhou\"\n}",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:02.429832+08:00",
+        "level": "DEBUG",
+        "location": "llm_function_example.py:main:116",
+        "message": "系统提示 .... 格式或代码块包裹结果，请直接输出期望的内容或者对应的JSON表示",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:02.430167+08:00",
+        "level": "DEBUG",
+        "location": "llm_function_example.py:main:116",
+        "message": "用户提示: 给定的参数如下:\n      - city: Hangzhou\n\n直接返回结果，不需要任何解释或格式化。",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:02.430431+08:00",
+        "level": "INFO",
+        "location": "llm_function_example.py:main:116",
+        "message": "开始 LLM 调用...",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:02.430682+08:00",
+        "level": "INFO",
+        "location": "utils.py:get_last_item_of_generator:12",
+        "message": "LLM 函数 'get_daily_recommendation' 发起初始请求，消息数: 2",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:02.498193+08:00",
+        "level": "INFO",
+        "location": "utils.py:execute_llm:74",
+        "message": "OpenAICompatible::chat: deepseek-v3-250324 request with API key: ..., and message: [\n    {\n        \"role\": \"system\",\n        \"content\": \"你的任务是按照以下的**功能描述**，根据用户的要求，给出符合要求的结果。\\n\\n- 功能描述:\\n    \\n通过get_weather工具获取天气信息，并给出推荐的活动\\n\\nArgs:\\n    city: 城市名称\\n\\nReturns:\\n    WeatherInfo对象，包含温度、湿度和天气状况\\n\\n\\n- 你会接受到以下参数：\\n      - city: <class 'str'>\\n\\n- 你需要返回内容的类型: \\n    WeatherInfo (Pydantic模型) 包含以下字段:\\n  - city (string, 必填): 城市名称\\n  - temperature (string, 必填): 当前温度\\n  - humidity (string, 必填): 当前湿度\\n  - condition (string, 必填): 天气状况\\n  - recommendation (string, 必填): 推荐的活动\\n\\n执行要求:\\n1. 如果有工具可用，可以使用工具来辅助完成任务\\n2. 不要用 markdown 格式或代码块包裹结果，请直接输出期望的内容或者对应的JSON表示\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"给定的参数如下:\\n      - city: Hangzhou\\n\\n直接返回结果，不需要任何解释或格式化。\"\n    }\n]",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.016900+08:00",
+        "level": "INFO",
+        "location": "utils.py:get_last_item_of_generator:12",
+        "message": "LLM 函数 'get_daily_recommendation' 收到初始响应",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.017463+08:00",
+        "level": "INFO",
+        "location": "utils.py:get_last_item_of_generator:12",
+        "message": "LLM 函数 'get_daily_recommendation' 发现 1 个工具调用，开始执行工具",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.021981+08:00",
+        "level": "INFO",
+        "location": "utils.py:_process_tool_calls:441",
+        "message": "执行工具 'get_weather' 参数: {\"city\":\"Hangzhou\"}",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.022385+08:00",
+        "level": "INFO",
+        "location": "utils.py:_process_tool_calls:454",
+        "message": "工具 'get_weather' 执行完成: {\"temperature\": \"32°C\", \"humidity\": \"80%\", \"condition\": \"Raining\"}",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.022618+08:00",
+        "level": "INFO",
+        "location": "utils.py:get_last_item_of_generator:12",
+        "message": "LLM 函数 'get_daily_recommendation' 工具调用循环: 第 2/5 次调用",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:04.073555+08:00",
+        "level": "INFO",
+        "location": "utils.py:execute_llm:121",
+        "message": "OpenAICompatible::chat: deepseek-v3-250324 request with API key: cfc2098a-5940-4ae8-b2d1-3c8e643295fd, and message: [\n    {\n        \"role\": \"system\",\n        \"content\": \"你的任务是按照以下的**功能描述**，根据用户的要求，给出符合要求的结果。\\n\\n- 功能描述:\\n    \\n通过get_weather工具获取天气信息，并给出推荐的活动\\n\\nArgs:\\n    city: 城市名称\\n\\nReturns:\\n    WeatherInfo对象，包含温度、湿度和天气状况\\n\\n\\n- 你会接受到以下参数：\\n      - city: <class 'str'>\\n\\n- 你需要返回内容的类型: \\n    WeatherInfo (Pydantic模型) 包含以下字段:\\n  - city (string, 必填): 城市名称\\n  - temperature (string, 必填): 当前温度\\n  - humidity (string, 必填): 当前湿度\\n  - condition (string, 必填): 天气状况\\n  - recommendation (string, 必填): 推荐的活动\\n\\n执行要求:\\n1. 如果有工具可用，可以使用工具来辅助完成任务\\n2. 不要用 markdown 格式或代码块包裹结果，请直接输出期望的内容或者对应的JSON表示\"\n    },\n    {\n        \"role\": \"user\",\n        \"content\": \"给定的参数如下:\\n      - city: Hangzhou\\n\\n直接返回结果，不需要任何解释或格式化。\"\n    },\n    {\n        \"role\": \"tool\",\n        \"tool_call_id\": \"call_e9tcmq348bazj913arib32d8\",\n        \"content\": \"{\\\"temperature\\\": \\\"32°C\\\", \\\"humidity\\\": \\\"80%\\\", \\\"condition\\\": \\\"Raining\\\"}\"\n    }\n]",
+        "input_tokens": 0,
+        "output_tokens": 0
+    },
+    {
+        "timestamp": "2025-05-16T20:23:07.450156+08:00",
+        "level": "DEBUG",
+        "location": "utils.py:get_last_item_of_generator:12",
+        "message": "LLM 函数 'get_daily_recommendation' 没有更多工具调用，返回最终响应",
+        "input_tokens": 360,
+        "output_tokens": 60
+    },
+    {
+        "timestamp": "2025-05-16T20:23:07.450659+08:00",
+        "level": "INFO",
+        "location": "llm_function_example.py:main:116",
+        "message": "LLM 函数 'get_daily_recommendation' 收到最终响应",
+        "input_tokens": 360,
+        "output_tokens": 60
+    },
+    {
+        "timestamp": "2025-05-16T20:23:07.451190+08:00",
+        "level": "INFO",
+        "location": "llm_function_example.py:main:116",
+        "message": "\"ChatCompletion(id='0217473981842466773b021bc722319529820bd350d494160c9a5', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='{\\\"city\\\": \\\"Hangzhou\\\", \\\"temperature\\\": \\\"32°C\\\", \\\"humidity\\\": \\\"80%\\\", \\\"condition\\\": \\\"Raining\\\", \\\"recommendation\\\": \\\"It\\\\'s raining and humid, so it\\\\'s best to stay indoors or carry an umbrella if you go out.\\\"}', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=None))], created=1747398187, model='deepseek-v3-250324', object='chat.completion', service_tier='default', system_fingerprint=None, usage=CompletionUsage(completion_tokens=60, prompt_tokens=360, total_tokens=420, completion_tokens_details=CompletionTokensDetails(accepted_prediction_tokens=None, audio_tokens=None, reasoning_tokens=0, rejected_prediction_tokens=None), prompt_tokens_details=PromptTokensDetails(audio_tokens=None, cached_tokens=0)))\"",
+        "input_tokens": 360,
+        "output_tokens": 60
+    },
+    // 读取这条log的token usage一定能表征这次调用的token消耗
+    {
+        "timestamp": "2025-05-16T20:23:07.451565+08:00",
+        "level": "DEBUG",
+        "location": "utils.py:_extract_content_from_response:278",
+        "message": "LLM 函数 'get_daily_recommendation' 提取的内容:\n{\"city\": \"Hangzhou\", \"temperature\": \"32°C\", \"humidity\": \"80%\", \"condition\": \"Raining\", \"recommendation\": \"It's raining and humid, so it's best to stay indoors or carry an umbrella if you go out.\"}",
+        "input_tokens": 360,
+        "output_tokens": 60
+    }
+]
+```
+
+2. **装饰器函数签名问题**
+   - 上一个版本中，被`llm_function`和`llm_chat`装饰的函数，其返回对象的函数签名会发生变化而无法正确的被其他依赖于函数签名信息的装饰器装饰
+   - 所以这一个版本修复了这个问题，主要是为了解决以下的场景：
+
+**例如：**
+
+你想要使用`llm_function`来实现一个`tool`，那么你会这样做：
+```python
+@tool(name="code_writer", description="你可以使用这个工具来生成高质量的代码")
+@llm_function(llm_interface=your_llm_interface)
+def code_generation(query: str) -> str:
+    """
+    Args:
+        query: str
+    Returns:
+        str: 生成的代码
+
+    你是一位得力的资深程序员 ...
+    """
+```
+这种非常符合直觉的写法在上一个版本中是不可行的，因为被`llm_function`装饰器装饰后，返回的函数是一个`wrapper(**args, **kargs)`，缺失了参数列表和type hint，而`tool`装饰器依赖于这些信息。
+
+但在`0.1.6`中，无论是使用`llm_function`装饰的函数还是使用`llm_chat`装饰的函数，其返回函数的签名信息：包括参数列表，类型提示，函数名称都和原始函数一致。所以上面的例子是可行的。
+
+------
+
+## 0.1.5版本更新说明
+
+### 主要更新
+
+1. **供应商配置优化** 
+   - 使用 JSON 文件替代 .env 配置供应商信息
+   - 更灵活的模型参数配置
+   - 多供应商统一配置管理
+
+2. **Prompt 模板优化**
+   - 优化 LLM 函数装饰器的默认 prompt 模板
+   - 减少 token 使用的同时提升效果
+   - 更清晰的指令描述和参数说明
+
+### 配置示例 (provider.json)
+```json
+{
+    "volc_engine": [
+        {
+            "model_name": "deepseek-v3-250324",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.volc.example.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        }
+    ],
+    "openai": [
+        {
+            "model_name": "gpt-3.5-turbo",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.openai.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        },
+        {
+            "model_name": "gpt-4",
+            "api_keys": ["your-api-key"],
+            "base_url": "https://api.openai.com/v1",
+            "max_retries": 3,
+            "retry_delay": 1,
+        }
+    ]
+}
+```
+
+### 使用示例
+```python
+from SimpleLLMFunc import OpenAICompatible
+
+# 从配置文件加载所有模型接口
+provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
+
+# 获取特定模型接口
+deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
+
+# 在装饰器中使用
+@llm_function(llm_interface=deepseek_interface)
+def my_function():
+    pass
+```

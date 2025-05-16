@@ -16,69 +16,11 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-## 0.1.5版本更新说明
-
-### 主要更新
-
-1. **供应商配置优化** 
-   - 使用 JSON 文件替代 .env 配置供应商信息
-   - 更灵活的模型参数配置
-   - 多供应商统一配置管理
-
-2. **Prompt 模板优化**
-   - 优化 LLM 函数装饰器的默认 prompt 模板
-   - 减少 token 使用的同时提升效果
-   - 更清晰的指令描述和参数说明
-
-### 配置示例 (provider.json)
-```json
-{
-    "volc_engine": [
-        {
-            "model_name": "deepseek-v3-250324",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.volc.example.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        }
-    ],
-    "openai": [
-        {
-            "model_name": "gpt-3.5-turbo",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.openai.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        },
-        {
-            "model_name": "gpt-4",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.openai.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        }
-    ]
-}
-```
-
-### 使用示例
-```python
-from SimpleLLMFunc import OpenAICompatible
-
-# 从配置文件加载所有模型接口
-provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
-
-# 获取特定模型接口
-deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
-
-# 在装饰器中使用
-@llm_function(llm_interface=deepseek_interface)
-def my_function():
-    pass
-```
+### 更新说明
+### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
 -----
-
+## What & why
 
 一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的空硬伤和强大的日志跟踪系统。
 
@@ -530,10 +472,10 @@ pip install SimpleLLMFunc
 ```bibtex
 @software{Jingzhe_SimpleLLMFunc_2025,
   author = {Jingzhe Ni},
-  month = {4},
+  month = {May},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Apllications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.1.5},
+  version = {0.1.6},
   year = {2025}
 }
 ```
