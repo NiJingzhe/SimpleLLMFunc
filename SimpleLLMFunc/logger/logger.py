@@ -265,8 +265,8 @@ class IndexedRotatingFileHandler(RotatingFileHandler):
                             else ""
                         ),
                         "message": record.getMessage(),
-                        "input_tokens": getattr(record, "input_tokens"),
-                        "output_tokens": getattr(record, "output_tokens")
+                        "input_tokens": getattr(record, "input_tokens", 0),
+                        "output_tokens": getattr(record, "output_tokens", 0)
                     }
 
                     # 更新索引

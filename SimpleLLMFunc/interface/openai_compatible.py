@@ -232,14 +232,15 @@ class OpenAICompatible(LLM_Interface):
                 )
 
                 # 统计token
-                prompt_tokens, completion_tokens = self._count_tokens(response)
-                
-                # 更新上下文中的token计数
-                input_tokens = get_current_context_attribute("input_tokens") or 0
-                output_tokens = get_current_context_attribute("output_tokens") or 0
-                
-                set_current_context_attribute("input_tokens", input_tokens + prompt_tokens)
-                set_current_context_attribute("output_tokens", output_tokens + completion_tokens)
+                if not (response.choices and response.choices[0].message and response.choices[0].message.tool_calls):  # type: ignore
+                    prompt_tokens, completion_tokens = self._count_tokens(response)
+                    
+                    # 更新上下文中的token计数
+                    input_tokens = get_current_context_attribute("input_tokens") or 0
+                    output_tokens = get_current_context_attribute("output_tokens") or 0
+                    
+                    set_current_context_attribute("input_tokens", input_tokens + prompt_tokens)
+                    set_current_context_attribute("output_tokens", output_tokens + completion_tokens)
                 
                 self.key_pool.decrement_task_count(key)
                 return response  # 请求成功，返回结果
@@ -308,8 +309,23 @@ class OpenAICompatible(LLM_Interface):
                     **kwargs,
                 )
 
+                total_prompt_tokens = 0
+                total_completion_tokens = 0
+
                 for chunk in response:
                     yield chunk  # 按块返回生成器中的数据
+                    if chunk.choices and chunk.choices[0].delta:  # type: ignore
+                        if not chunk.choices[0].delta.tool_calls:  # type: ignore
+                            prompt_tokens, completion_tokens = self._count_tokens(chunk)
+                            total_prompt_tokens += prompt_tokens
+                            total_completion_tokens += completion_tokens
+
+                # 在整个流结束后统计token
+                input_tokens = get_current_context_attribute("input_tokens") or 0
+                output_tokens = get_current_context_attribute("output_tokens") or 0
+
+                set_current_context_attribute("input_tokens", input_tokens + total_prompt_tokens)
+                set_current_context_attribute("output_tokens", output_tokens + total_completion_tokens)
 
                 self.key_pool.decrement_task_count(key)
                 break  # 如果成功，跳出重试循环
