@@ -270,7 +270,7 @@ def llm_function(
                         ):
                             retry_times -= 1
                             app_log(
-                                f"LLM 函数 '{func_name}' 重试第 {llm_kwargs.get("retry_times", 2) - retry_times + 1} 次...",
+                                f"LLM 函数 '{func_name}' 重试第 {llm_kwargs.get('retry_times', 2) - retry_times + 1} 次...",
                                 location=get_location(),
                             )
                             response_generator = execute_llm(
