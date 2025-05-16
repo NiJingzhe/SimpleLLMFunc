@@ -16,69 +16,11 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-## 0.1.5版本更新说明
-
-### 主要更新
-
-1. **供应商配置优化** 
-   - 使用 JSON 文件替代 .env 配置供应商信息
-   - 更灵活的模型参数配置
-   - 多供应商统一配置管理
-
-2. **Prompt 模板优化**
-   - 优化 LLM 函数装饰器的默认 prompt 模板
-   - 减少 token 使用的同时提升效果
-   - 更清晰的指令描述和参数说明
-
-### 配置示例 (provider.json)
-```json
-{
-    "volc_engine": [
-        {
-            "model_name": "deepseek-v3-250324",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.volc.example.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        }
-    ],
-    "openai": [
-        {
-            "model_name": "gpt-3.5-turbo",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.openai.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        },
-        {
-            "model_name": "gpt-4",
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.openai.com/v1",
-            "max_retries": 3,
-            "retry_delay": 1,
-        }
-    ]
-}
-```
-
-### 使用示例
-```python
-from SimpleLLMFunc import OpenAICompatible
-
-# 从配置文件加载所有模型接口
-provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
-
-# 获取特定模型接口
-deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
-
-# 在装饰器中使用
-@llm_function(llm_interface=deepseek_interface)
-def my_function():
-    pass
-```
+### 更新说明
+### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
 -----
-
+## What & why
 
 一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的空硬伤和强大的日志跟踪系统。
 
@@ -159,7 +101,7 @@ SimpleLLMFunc的核心理念是 **"Everything is Function, Prompt is Code"**。�
 1. **更好的代码可读性** - Prompt与其作用的函数紧密结合，一目了然
 2. **类型安全** - 使用Python类型标注和Pydantic模型确保输入输出的正确性
 3. **智能提示** - IDE可以提供完整的代码补全和类型检查
-4. **代码即文档，而文档即Prompt** - DocString既是函数文档，也是LLM的指令集
+4. **文档即Prompt，Prompt即代码，代码即文档** - DocString既是函数文档，也是LLM的Prompt
 
 ```python
 """
@@ -252,6 +194,7 @@ Output:
 
 
 正如这个例子展现的，只需要声明一个函数，声明返回类型，写好DocString，剩下的交给装饰器即可。
+函数直接返回的就是一个`Pydantic`对象，不需要做额外的反序列化操作。
 
 - ### llm chat
 
@@ -327,8 +270,8 @@ SimpleLLMFunc包含强大的日志系统，融合了结构化日志、自动追�
 - LLM请求和响应内容
 - 工具调用记录
 - 错误和警告信息
+- Token usage statistics
 - 执行时间和性能数据(Not Supported Yet)
-- Token usage statistics(Not Supported Yet)
 
 ### 3. 自动日志聚合
 
@@ -358,23 +301,6 @@ with log_context(trace_id="task_456", function_name="analyze_text"):
 
 # 3. 查看某次调用的所有相关日志
 logs = search_logs_by_trace_id("GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125")
-```
-
-### 日志输出示例
-
-```json
-{
-    "timestamp": "2025-04-26T19:05:08.290234",
-    "level": "INFO",
-    "logger": "SimpleLLMFunc",
-    "message": "LLM Chat 'GLaDos' will execute llm with messages...",
-    "module": "logger",
-    "function": "app_log",
-    "line": 561,
-    "trace_id": "GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125",
-    "function_name": "GLaDos",
-    "taskName": null
-}
 ```
 
 后续计划加入更多功能：
@@ -423,6 +349,7 @@ def get_weather(location: Location, days: int = 1) -> dict:
 - 直接使用Python原生类型和Pydantic模型进行参数标注
 - 自动从函数签名和文档字符串提取参数信息
 - 装饰后的函数仍可直接调用，便于测试
+- 当然，任何`llm_function`或者`llm_chat`装饰的函数，也可以接着被`tool`装饰器装饰以变成“智能工具”
 
 ### 类继承方式（向后兼容）
 
@@ -463,8 +390,7 @@ from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
 
 @llm_function(
     llm_interface=ZhipuAI_glm_4_flash_Interface,
-    tools=[get_weather, search_web],  # 直接传递被@tool装饰的函数
-    system_prompt="你是一个助手，可以使用工具来帮助用户。"
+    toolkit=[get_weather, search_web],  # 直接传递被@tool装饰的函数
 )
 def answer_with_tools(question: str) -> str:
     """
@@ -484,8 +410,7 @@ def answer_with_tools(question: str) -> str:
 ```python
 @llm_function(
     llm_interface=ZhipuAI_glm_4_flash_Interface,
-    tools=[get_weather, WebSearchTool()],  # 混合使用两种方式定义的工具
-    system_prompt="你是一个助手，可以使用工具来帮助用户。"
+    toolkit=[get_weather, WebSearchTool()],  # 混合使用两种方式定义的工具
 )
 def answer_with_mixed_tools(question: str) -> str:
     """回答用户问题，必要时使用工具获取信息"""
@@ -530,10 +455,10 @@ pip install SimpleLLMFunc
 ```bibtex
 @software{Jingzhe_SimpleLLMFunc_2025,
   author = {Jingzhe Ni},
-  month = {4},
+  month = {May},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Apllications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.1.5},
+  version = {0.1.6},
   year = {2025}
 }
 ```

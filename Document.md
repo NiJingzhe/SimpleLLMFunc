@@ -1,4 +1,4 @@
-# SimpleLLMFunc 技术文档
+# SimpleLLMFunc 技术文档 (OUT OF DATE)
 
 ## 1. 框架概述
 
