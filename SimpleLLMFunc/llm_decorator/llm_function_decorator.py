@@ -23,6 +23,7 @@ def generate_summary(text: str) -> str:
 """
 
 import inspect
+from functools import wraps
 import json
 from typing import (
     List,
@@ -30,6 +31,7 @@ from typing import (
     TypeVar,
     Dict,
     Any,
+    cast,
     get_type_hints,
     Optional,
     Union,
@@ -37,6 +39,7 @@ from typing import (
 )
 import uuid
 
+from SimpleLLMFunc.logger.logger import push_debug
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import (
@@ -162,6 +165,7 @@ def llm_function(
         docstring = func.__doc__ or ""
         func_name = func.__name__
 
+        @wraps(func)
         def wrapper(*args, **kwargs):
             # 构建追踪 ID，用于日志关联
             context_current_trace_id = get_current_trace_id()
@@ -173,7 +177,12 @@ def llm_function(
             bound_args = signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
 
-            with log_context(trace_id=current_trace_id, function_name=func_name):
+            with log_context(
+                trace_id=current_trace_id, 
+                function_name=func_name, 
+                input_tokens=0, 
+                output_tokens=0
+            ):
 
                 # 记录详细参数
                 args_str = json.dumps(
@@ -201,8 +210,8 @@ def llm_function(
                     {"role": "user", "content": user_prompt},
                 ]
 
-                app_log(f"系统提示: {system_prompt}", location=get_location())
-                app_log(f"用户提示: {user_prompt}", location=get_location())
+                push_debug(f"系统提示: {system_prompt}", location=get_location())
+                push_debug(f"用户提示: {user_prompt}", location=get_location())
 
                 # ===== 第二步：处理工具 =====
                 tool_param = None
@@ -251,7 +260,14 @@ def llm_function(
                             location=get_location(),
                         )
                         # 重新调用 LLM
-                        while retry_times > 0 and final_response.choice.content == "":  # type: ignore
+                        while (
+                            retry_times > 0
+                            and hasattr(
+                                final_response.choices[0].message, "content" # type: ignore
+                            )  
+                            and final_response.choices[0].message.content # type: ignore
+                            == ""  
+                        ):
                             retry_times -= 1
                             app_log(
                                 f"LLM 函数 '{func_name}' 重试第 {llm_kwargs.get("retry_times", 2) - retry_times + 1} 次...",
@@ -325,8 +341,9 @@ def llm_function(
         wrapper.__name__ = func_name
         wrapper.__doc__ = docstring
         wrapper.__annotations__ = func.__annotations__
+        wrapper.__signature__ = signature  # type: ignore
 
-        return wrapper
+        return cast(Callable[..., T], wrapper)
 
     return decorator
 

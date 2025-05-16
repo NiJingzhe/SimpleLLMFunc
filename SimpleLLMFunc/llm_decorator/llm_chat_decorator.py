@@ -1,4 +1,5 @@
 import inspect
+from functools import wraps
 import json
 from typing import (
     Concatenate,
@@ -10,6 +11,7 @@ from typing import (
     Optional,
     Union,
     Tuple,
+    cast
 )
 import uuid
 
@@ -105,6 +107,7 @@ def llm_chat(
         # 获取func name用于优质log
         func_name = func.__name__
 
+        @wraps(func)
         def wrapper(*args, **kwargs):
 
             context_current_trace_id = get_current_trace_id()
@@ -123,7 +126,12 @@ def llm_chat(
 
             possible_history_param_name = ["history", "chat_history"]
 
-            with log_context(trace_id=current_trace_id, function_name=func_name):
+            with log_context(
+                trace_id=current_trace_id, 
+                function_name=func_name,
+                input_tokens=0,
+                output_tokens=0
+            ):
 
                 # 处理tools参数
                 tool_param_for_api = None  # 序列化后的工具参数，用于传递给API
@@ -242,7 +250,7 @@ def llm_chat(
                         "role": "user",
                         "content": user_message,
                     }
-                    
+
                     current_messages.append(user_msg)
 
                 # 记录当前消息
@@ -278,13 +286,13 @@ def llm_chat(
                         content = process_response(response, str)
 
                         complete_content += content
-                        
+
                         yield content, current_messages
 
                     current_messages.append(
                         {"role": "assistant", "content": complete_content}
                     )
-                    
+
                     yield "", current_messages
 
                 except Exception as e:
@@ -299,7 +307,14 @@ def llm_chat(
         wrapper.__name__ = func.__name__
         wrapper.__doc__ = func.__doc__
         wrapper.__annotations__ = func.__annotations__
+        wrapper.__signature__ = signature  # type: ignore
 
-        return wrapper
+        return cast(
+            Callable[
+                Concatenate[List[Dict[str, str]], ...],
+                Generator[Tuple[str, List[Dict[str, str]]], None, None],
+            ],
+            wrapper,
+        )
 
     return decorator

@@ -15,7 +15,8 @@ from .logger import (
     ConsoleFormatter,
     IndexedRotatingFileHandler,
     get_current_trace_id,
-    get_current_context_attribute
+    get_current_context_attribute,
+    set_current_context_attribute
 )
 
 """
@@ -77,5 +78,6 @@ __all__ = [
     'IndexedRotatingFileHandler',
     'get_current_trace_id',
     'get_current_context_attribute',
+    'set_current_context_attribute'
 ]
 

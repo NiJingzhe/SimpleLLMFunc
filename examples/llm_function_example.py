@@ -98,19 +98,16 @@ def main():
     总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
     """
 
-    try:
-        print("\n===== 产品评测分析 =====")
-        result = analyze_product_review(product_name, review_text)
-        print(f"评分: {result.rating}/5")
-        print("优点:")
-        for pro in result.pros:
-            print(f"- {pro}")
-        print("缺点:")
-        for con in result.cons:
-            print(f"- {con}")
-        print(f"总结: {result.summary}")
-    except Exception as e:
-        print(f"产品评测分析失败: {e}")
+    print("\n===== 产品评测分析 =====")
+    result = analyze_product_review(product_name, review_text)
+    print(f"评分: {result.rating}/5")
+    print("优点:")
+    for pro in result.pros:
+        print(f"- {pro}")
+    print("缺点:")
+    for con in result.cons:
+        print(f"- {con}")
+    print(f"总结: {result.summary}")
 
     # 测试天气查询
     city = "Hangzhou"
