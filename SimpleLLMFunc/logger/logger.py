@@ -168,10 +168,10 @@ class ConsoleFormatter(logging.Formatter):
         extra_info = []
         for attr in self.SUPPORTTED_EXTRA_INFO:
             if hasattr(record, attr) and getattr(record, attr, ""):
-                extra_info.append(f"{attr}={getattr(record, attr, "")}")
+                extra_info.append(f"{attr}={getattr(record, attr, '')}")
 
         if extra_info:
-            formatted += f"\n{'\n'.join(extra_info)}"
+            formatted += "\n" + "\n".join(extra_info)
 
         formatted = "=" * 30 + "\n" + formatted + "\n" + "=" * 30
 
