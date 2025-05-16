@@ -8,7 +8,7 @@ from openai import OpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
-from SimpleLLMFunc.logger.logger import push_critical
+from SimpleLLMFunc.logger.logger import push_critical, get_current_context_attribute, set_current_context_attribute
 
 class OpenAICompatible(LLM_Interface):
     """与OpenAI API兼容的LLM接口实现，支持任何符合OpenAI格式的API接口。
@@ -16,6 +16,23 @@ class OpenAICompatible(LLM_Interface):
     这个类提供了一个通用的接口，可以连接任何兼容OpenAI API格式的大语言模型服务，
     而不需要为每个供应商创建特定的实现。只需要提供正确的base_url和模型名称即可。
     """
+
+    def _count_tokens(self, response: Any) -> tuple[int, int]:
+        """计算响应中的token数量
+        
+        Args:
+            response: OpenAI API的响应对象
+            
+        Returns:
+            (输入token数, 输出token数)的元组
+        """
+        try:
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            return prompt_tokens, completion_tokens
+        except (AttributeError, TypeError):
+            # 如果无法获取token计数,返回0
+            return 0, 0
 
     @classmethod
     def load_from_json_file(cls, json_path: str) -> Dict[str, Dict[str, OpenAICompatible]]:
@@ -214,8 +231,19 @@ class OpenAICompatible(LLM_Interface):
                     **kwargs,
                 )
 
+                # 统计token
+                prompt_tokens, completion_tokens = self._count_tokens(response)
+                
+                # 更新上下文中的token计数
+                input_tokens = get_current_context_attribute("input_tokens") or 0
+                output_tokens = get_current_context_attribute("output_tokens") or 0
+                
+                set_current_context_attribute("input_tokens", input_tokens + prompt_tokens)
+                set_current_context_attribute("output_tokens", output_tokens + completion_tokens)
+                
                 self.key_pool.decrement_task_count(key)
                 return response  # 请求成功，返回结果
+            
             except Exception as e:
                 self.key_pool.decrement_task_count(key)
                 attempt += 1

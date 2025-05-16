@@ -80,7 +80,7 @@ def my_function():
 -----
 
 
-一个轻量级的LLM调用和工具集成框架，支持类型安全的LLM函数装饰器、多种模型接口和强大的日志跟踪系统。
+一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的空硬伤和强大的日志跟踪系统。
 
 做过LLM开发的同志们或许都经历过这样的困境：
 
@@ -104,11 +104,11 @@ Prompt会以DocString的形式存在，一方面强制你撰写良好的函数�
 
 ## 特性
 
-- **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理
+- **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理（但是小模型有很大概率无法输出正确的json格式）
 - **通用模型接口**：支持任何符合OpenAI API格式的模型服务，无需针对每个供应商开发专门实现
 - **API密钥管理**：自动化API密钥负载均衡，优化资源利用
 - **结构化输出**：使用Pydantic模型定义结构化返回类型
-- **强大的日志系统**：支持trace_id跟踪和搜索，方便调试和监控
+- **强大的日志系统**：支持trace_id跟踪和搜索，方便调试和监控，即将支持token用量统计
 - **工具系统**：支持Agent与外部环境交互，易于扩展
 
 ## 项目结构
@@ -152,25 +152,19 @@ LOG_LEVEL=DEBUG
 
 ## LLM函数装饰器 - Prompt As Code
 
-SimpleLLMFunc的核心理念是 **"Prompt即代码，代码即文档"**。通过将Prompt直接编写在函数的文档字符串（DocString）中，我们实现了：
+- ### llm_function
+
+SimpleLLMFunc的核心理念是 **"Everything is Function, Prompt is Code"**。通过将Prompt直接编写在函数的文档字符串（DocString）中，我们实现了：
 
 1. **更好的代码可读性** - Prompt与其作用的函数紧密结合，一目了然
 2. **类型安全** - 使用Python类型标注和Pydantic模型确保输入输出的正确性
 3. **智能提示** - IDE可以提供完整的代码补全和类型检查
-4. **文档即Prompt** - DocString既是函数文档，也是LLM的指令集
+4. **代码即文档，而文档即Prompt** - DocString既是函数文档，也是LLM的指令集
 
 ```python
 """
 使用LLM函数装饰器的示例
 """
-from typing import Dict, List
-from pydantic import BaseModel, Field
-
-from SimpleLLMFunc.llm_decorator.llm_function_decorator import llm_function
-from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
-from SimpleLLMFunc.logger.logger import app_log
-from SimpleLLMFunc.tool import tool
-
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):
     rating: int = Field(..., description="产品评分，1-5分")
@@ -207,53 +201,6 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     """
     pass  # Prompt as Code, Code as Doc
 
-
-@tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
-    """天气查询工具，返回指定城市的实时天气数据
-
-    Args:
-        city: 要查询天气的城市名称
-    
-    Returns:
-        一个包含温度、湿度和天气状况的字典，
-        例如: {"temperature": "25°C", "humidity": "60%", "condition": "晴朗"}
-    """
-    # 实际应用中会调用真实的天气API
-    return {
-        "temperature": "32°C",
-        "humidity": "80%",
-        "condition": "Cloudy"
-    }
-
-class WeatherInfo(BaseModel):
-    """天气信息的结构化表示"""
-    city: str = Field(..., description="查询的城市名称")
-    temperature: str = Field(..., description="当前气温，如：25°C")
-    humidity: str = Field(..., description="空气湿度，如：60%")
-    condition: str = Field(..., description="天气状况，如：晴朗、多云、雨天")
-
-@llm_function(
-    llm_interface=OpenAICompatible.load_from_json_file("provider.json")["volc_engine"]["deepseek-v3-250324"]
-)
-def format_weather(city: str) -> WeatherInfo:
-    """你是一个天气助手，需要调用天气查询工具并将结果格式化为用户友好的格式。
-
-    工作流程：
-    1. 使用get_weather工具获取指定城市的天气数据
-    2. 将原始数据转换为结构化的WeatherInfo对象
-    3. 确保所有字段都使用统一的格式和单位
-
-    Args:
-        city: 要查询天气的城市名称
-
-    Returns:
-        一个格式规范的WeatherInfo对象，确保所有字段的格式统一
-        例如：city="北京", temperature="25°C", humidity="60%", condition="晴朗"
-    """
-    pass
-
-
 def main():
     
     app_log("开始运行示例代码")
@@ -281,20 +228,6 @@ def main():
         print(f"总结: {result.summary}")
     except Exception as e:
         print(f"产品评测分析失败: {e}")
-        
-    # 测试天气查询
-    city = "Hangzhou"
-    try:
-        print("\n===== 天气查询 =====")
-        weather_info = weather(city)
-        print(f"城市: {city}")
-        print(f"温度: {weather_info.temperature}")
-        print(f"湿度: {weather_info.humidity}")
-        print(f"天气状况: {weather_info.condition}")
-    except Exception as e:
-        print(f"天气查询失败: {e}")
-    
-        
 
 if __name__ == "__main__":
     main()
@@ -315,35 +248,28 @@ Output:
 - 触控操作不够灵敏，经常需要点击多次才能响应
 - 如果需要用于专业音频工作可能还不够
 总结: 音质和续航表现优秀，佩戴舒适，但连接稳定性不足，触控操作不够灵敏，适合日常使用，但不适合专业音频工作。
-
-===== 天气查询 =====
-城市: Hangzhou
-温度: 32°C
-湿度: 80%
-天气状况: Cloudy
 ```
 
 
 正如这个例子展现的，只需要声明一个函数，声明返回类型，写好DocString，剩下的交给装饰器即可。
 
-- #### llm chat
+- ### llm chat
 
 同样的我们也支持创建**对话类函数**，以下是一个简单的对话函数的例子：[Simple Manus](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/simple_manus.py)。
 
 这个例子实现了一些工具和一个对话函数，能够实现代码专精的Manus类似物
 
-
 ### 装饰器特性
 
 - **类型安全**：根据函数签名自动识别参数和返回类型
-- **Pydantic集成**：支持Pydantic模型作为返回类型，确保结果符合预定义结构
+- **Pydantic集成**：支持Pydantic模型作为返回类型，确保结果符合预定义结构，对于能力较弱的模型有较大概率在自动重试后也无法输出正确的json格式
 - **提示词自动构建**：基于函数文档和类型标注自动构建提示词
 
 ## LLM供应商接口
 
 SimpleLLMFunc 提供了灵活的 LLM 接口支持，主要包括：
 
-1. **OpenAI Compatible 通用接口** - 支持任何符合 OpenAI API 格式的模型服务，只需提供正确的 base_url 和模型名称即可。
+1. **OpenAI Compatible 通用接口** - 支持任何符合 OpenAI API 格式的模型服务，推荐通过`provider.json`配置文件来管理不同供应商的模型接口。
 2. **自定义接口扩展** - 通过继承 `LLM_Interface` 基类实现自定义的模型接口。
 
 ### OpenAI Compatible 接口示例
@@ -401,7 +327,8 @@ SimpleLLMFunc包含强大的日志系统，融合了结构化日志、自动追�
 - LLM请求和响应内容
 - 工具调用记录
 - 错误和警告信息
-- 执行时间和性能数据
+- 执行时间和性能数据(Not Supported Yet)
+- Token usage statistics(Not Supported Yet)
 
 ### 3. 自动日志聚合
 
