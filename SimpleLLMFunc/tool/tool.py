@@ -1,3 +1,4 @@
+from __future__ import annotations
 from abc import ABC
 from typing import Any, Dict, List, Optional, Union, Callable, get_type_hints, Type, TypeVar, get_origin, get_args
 import re
@@ -243,7 +244,7 @@ class Tool(ABC):
         Returns:
             符合OpenAI Function Calling API格式的工具描述列表
         """
-        return [tool.to_openai_tool() for tool in tools]
+        return [tool.to_openai_tool() if isinstance(tool, Tool) else tool._tool.to_openai_tool() for tool in tools]
 
 
 # 工具装饰器函数
