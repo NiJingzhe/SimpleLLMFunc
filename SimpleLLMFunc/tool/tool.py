@@ -6,6 +6,8 @@ import inspect
 import json
 from pydantic import BaseModel
 
+from SimpleLLMFunc.logger.logger import push_error
+
 class Parameter:
     """
     工具参数的简单包装类，仅用于存储信息，不作为主要API
@@ -234,7 +236,7 @@ class Tool(ABC):
         return tool_spec
     
     @staticmethod
-    def serialize_tools(tools: List["Tool"]) -> List[Dict[str, Any]]:
+    def serialize_tools(tools: List[Tool | Callable]) -> List[Dict[str, Any]]:
         """
         将多个工具序列化为OpenAI工具列表
         
@@ -244,7 +246,16 @@ class Tool(ABC):
         Returns:
             符合OpenAI Function Calling API格式的工具描述列表
         """
-        return [tool.to_openai_tool() if isinstance(tool, Tool) else tool._tool.to_openai_tool() for tool in tools]
+        try:
+            result = [tool.to_openai_tool() if isinstance(tool, Tool) else tool._tool.to_openai_tool() for tool in tools]
+        except AttributeError as e:
+            push_error(f"传入的工具列表中可能存在非 Tool 类型对象或者没有被 @tool 装饰的函数，序列化发生错误: {e}")
+            raise AttributeError(e)
+        except Exception as e:
+            push_error(f"序列化过程中发生未知错误: {e}")
+            raise Exception(e)
+            
+        return result
 
 
 # 工具装饰器函数
