@@ -1,4 +1,39 @@
-## 0.1.6.2版本更新说明 (Latest)
+## 0.1.6.3版本更新说明 (Latest) 
+
+1. **tools序列化手段更新**
+   - 此前的版本中，如果你想手动序列化一个工具，比较朴素的方法是使用`Tool`类的静态方法`serialize_tools(tools_list: List[Tool])`
+
+**例如**：
+```python
+from SimpleLLMFunc import Tool, tool
+
+@tool(name="shell", description="a shell")
+def shell(command: str) -> tuple[str, str]:
+
+    """
+    Args:
+        command: the command need to be executed in shell
+
+    Returns:
+        tuple[str, str]: stdout and stderr
+    """
+    # implement here
+
+serialized = Tool.serialize_tools([shell])[0]
+```
+这样`serialized`中会存放`shell`这个工具的序列化信息。
+
+但在此前的版本中这会有bug，实际上应该写作：
+```python
+serialized = Tool.serialize_tools([shell._tool])[0]
+```
+因为这个方法的列表要求是`Tool`对象列表，而实际上被`@tool`装饰的函数，其会被添加一个`_tool`属性，这个属性是一个`Tool`对象。
+
+而在`0.1.6.3+`的版本中，这一反直觉的问题被修复了，我们们可以使用第一个例子中符合直觉的写法，直接传入函数来得到序列化结果。
+
+----
+
+## 0.1.6.2版本更新说明
 
 ### 主要更新
 
