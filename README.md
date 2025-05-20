@@ -22,7 +22,7 @@
 -----
 ## What & why
 
-一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的空硬伤和强大的日志跟踪系统。
+一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的供应商和强大的日志跟踪系统。
 
 做过LLM开发的同志们或许都经历过这样的困境：
 
@@ -456,9 +456,9 @@ pip install SimpleLLMFunc
 @software{Jingzhe_SimpleLLMFunc_2025,
   author = {Jingzhe Ni},
   month = {May},
-  title = {{SimpleLLMFunc: A New Approach to Build LLM Apllications}},
+  title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.1.6},
+  version = {0.1.6.3},
   year = {2025}
 }
 ```
