@@ -27,6 +27,7 @@ T = TypeVar("T")
 
 # ======================= 数据流相关函数 =======================
 
+
 def execute_llm(
     llm_interface: LLM_Interface,
     messages: List[Dict[str, str]],
@@ -37,7 +38,7 @@ def execute_llm(
 ) -> Generator[Any, None, None]:
     """
     执行 LLM 调用并处理工具调用流程
-    
+
     数据流程:
     1. 以初始消息列表调用 LLM
     2. 检查响应中是否包含工具调用
@@ -58,19 +59,19 @@ def execute_llm(
         生成器，产生 LLM 响应，最后一个响应是最终结果
     """
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
-    
+
     # 创建消息历史副本，避免修改原始消息列表
     current_messages = list(messages)
-    
+
     # 记录调用次数
     call_count = 0
 
     # 第一次调用 LLM，获取初始响应
     app_log(
         f"LLM 函数 '{func_name}' 发起初始请求，消息数: {len(current_messages)}",
-        location=get_location()
+        location=get_location(),
     )
-    
+
     initial_response = llm_interface.chat(
         messages=current_messages,
         tools=tools,
@@ -80,10 +81,7 @@ def execute_llm(
     # 产生初始响应
     yield initial_response
 
-    app_log(
-        f"LLM 函数 '{func_name}' 收到初始响应",
-        location=get_location()
-    )
+    app_log(f"LLM 函数 '{func_name}' 收到初始响应", location=get_location())
 
     # 提取初始响应中的工具调用
     tool_calls = _extract_tool_calls(initial_response)
@@ -91,12 +89,12 @@ def execute_llm(
     # 如果没有工具调用，直接返回
     if not tool_calls:
         push_debug(f"未发现工具调用，直接返回结果", location=get_location())
-        return 
+        return
 
     # === 工具调用循环 ===
     app_log(
         f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用，开始执行工具",
-        location=get_location()
+        location=get_location(),
     )
 
     # 记录首次调用
@@ -114,16 +112,16 @@ def execute_llm(
     while call_count < max_tool_calls:
         app_log(
             f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count+1}/{max_tool_calls} 次调用",
-            location=get_location()
+            location=get_location(),
         )
-        
+
         # 使用更新后的消息历史再次调用 LLM
         response = llm_interface.chat(
             messages=current_messages,
             tools=tools,
             **llm_kwargs,  # 传递额外的关键字参数
         )
-        
+
         # 产生当前响应
         yield response
 
@@ -132,11 +130,17 @@ def execute_llm(
 
         if not tool_calls:
             # 没有更多工具调用，返回最终响应
-            push_debug(f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应", location=get_location())
-            return 
-        
+            push_debug(
+                f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应",
+                location=get_location(),
+            )
+            return
+
         # 处理新的工具调用
-        app_log(f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个新的工具调用", location=get_location())
+        app_log(
+            f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个新的工具调用",
+            location=get_location(),
+        )
 
         # 处理工具调用并更新消息历史
         current_messages = _process_tool_calls(
@@ -152,15 +156,15 @@ def execute_llm(
     # 如果达到最大调用次数但仍未完成所有工具调用
     app_log(
         f"LLM 函数 '{func_name}' 达到最大工具调用次数 ({max_tool_calls})，强制结束并获取最终响应",
-        location=get_location()
+        location=get_location(),
     )
-    
+
     # 最后一次调用 LLM 获取最终结果
     final_response = llm_interface.chat(
         messages=current_messages,
         **llm_kwargs,  # 传递额外的关键字参数
     )
-    
+
     # 产生最终响应
     yield final_response
 
@@ -168,14 +172,14 @@ def execute_llm(
 def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
     """
     处理 LLM 的响应，将其转换为指定的返回类型
-    
+
     数据流程:
     1. 从 LLM 响应中提取纯文本内容
     2. 根据指定的返回类型进行相应转换:
        - 基本类型 (str, int, float, bool): 直接转换
        - 字典类型: 解析 JSON
        - Pydantic 模型: 使用 model_validate_json 解析
-    
+
     Args:
         response: LLM 的原始响应对象
         return_type: 期望的返回类型
@@ -184,10 +188,10 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
         转换后的结果，类型为 T
     """
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
-    
+
     # 步骤 1: 从 API 响应中提取文本内容
     content = _extract_content_from_response(response, func_name)
-    
+
     # 步骤 2: 根据返回类型进行适当的转换
     # 如果内容为 None，转换为空字符串
     if content is None:
@@ -219,7 +223,7 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
 def get_detailed_type_description(type_hint: Any) -> str:
     """
     获取类型的详细描述，特别是对 Pydantic 模型进行更详细的展开
-    
+
     这个函数用于生成类型的人类可读描述，以便在提示中使用。
     对于 Pydantic 模型，会展开其字段结构；对于容器类型，会递归描述其元素类型。
 
@@ -259,6 +263,7 @@ def get_detailed_type_description(type_hint: Any) -> str:
 
 # ======================= 内部辅助函数 =======================
 
+
 def _extract_content_from_response(response: Any, func_name: str) -> str:
     """从 LLM 响应中提取文本内容"""
     try:
@@ -267,8 +272,8 @@ def _extract_content_from_response(response: Any, func_name: str) -> str:
             content = message.content if message and hasattr(message, "content") else ""
         else:
             push_warning(
-                f"LLM 函数 '{func_name}': 未知响应格式: {type(response)}，将直接转换为字符串", 
-                location=get_location()
+                f"LLM 函数 '{func_name}': 未知响应格式: {type(response)}，将直接转换为字符串",
+                location=get_location(),
             )
             content = str(response)
     except Exception as e:
@@ -289,7 +294,9 @@ def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
         elif return_type == bool:
             return content.strip().lower() in ("true", "yes", "1")
     except (ValueError, TypeError):
-        raise ValueError(f"无法将 LLM 响应 '{content}' 转换为 {return_type.__name__} 类型")
+        raise ValueError(
+            f"无法将 LLM 响应 '{content}' 转换为 {return_type.__name__} 类型"
+        )
 
 
 def _convert_to_dict(content: str, func_name: str) -> Dict:
@@ -311,7 +318,9 @@ def _convert_to_dict(content: str, func_name: str) -> Dict:
                 # 尝试清理后再解析
                 cleaned_content = content.strip()
                 # 移除可能的 markdown 标记
-                if cleaned_content.startswith("```") and cleaned_content.endswith("```"):
+                if cleaned_content.startswith("```") and cleaned_content.endswith(
+                    "```"
+                ):
                     cleaned_content = cleaned_content[3:-3].strip()
                 return json.loads(cleaned_content)
     except json.JSONDecodeError:
@@ -379,9 +388,7 @@ def _describe_pydantic_model(model_class: Type[BaseModel]) -> str:
         )
 
     # 构建 Pydantic 模型的描述
-    model_desc = f"{model_name} (Pydantic模型) 包含以下字段:\n" + "\n".join(
-        fields_desc
-    )
+    model_desc = f"{model_name} (Pydantic模型) 包含以下字段:\n" + "\n".join(fields_desc)
     return model_desc
 
 
@@ -393,7 +400,7 @@ def _process_tool_calls(
 ) -> List[Dict[str, Any]]:
     """
     处理工具调用并返回更新后的消息历史
-    
+
     工作流程:
     1. 为每个工具调用创建一个助手消息
     2. 对每个工具调用:
@@ -401,19 +408,19 @@ def _process_tool_calls(
        b. 检查工具是否存在
        c. 执行工具并获取结果
        d. 创建工具响应消息并添加到消息历史
-    
+
     Args:
         tool_calls: 工具调用列表
         response: LLM 响应
         messages: 当前消息历史
         tool_map: 工具名称到函数的映射
-        
+
     Returns:
         更新后的消息历史
     """
     # 创建消息历史副本
     current_messages = list(messages)
-    
+
     # 处理每个工具调用
     for tool_call in tool_calls:
         tool_call_id = tool_call.get("id")
@@ -455,7 +462,9 @@ def _process_tool_calls(
 
         except Exception as e:
             # 处理工具执行错误
-            error_message = f"执行工具 '{tool_name}' 出错，参数 {arguments_str}: {str(e)}"
+            error_message = (
+                f"执行工具 '{tool_name}' 出错，参数 {arguments_str}: {str(e)}"
+            )
             push_error(error_message)
 
             # 创建工具错误响应消息
@@ -472,14 +481,10 @@ def _process_tool_calls(
 def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
     """
     从 LLM 响应中提取工具调用
-    
-    支持两种格式:
-    1. 对象格式 (response.choices[0].message.tool_calls)
-    2. 字典格式 (response["choices"][0]["message"]["tool_calls"])
-    
+
     Args:
         response: LLM 响应
-        
+
     Returns:
         工具调用列表
     """
@@ -491,25 +496,33 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
             message = response.choices[0].message
             if hasattr(message, "tool_calls") and message.tool_calls:
                 # 将对象格式转换为字典
-                for tool_call in message.tool_calls:
-                    tool_calls.append(
-                        {
-                            "id": tool_call.id,
-                            "function": {
-                                "name": tool_call.function.name,
-                                "arguments": tool_call.function.arguments,
-                            },
-                        }
-                    )
-        # 检查字典格式
-        elif isinstance(response, dict) and "choices" in response:
-            choices = response["choices"]
-            if choices and "message" in choices[0]:
-                message = choices[0]["message"]
-                if "tool_calls" in message and message["tool_calls"]:
-                    tool_calls = message["tool_calls"]
+                tool_calls.extend(message.tool_calls)
     except Exception as e:
         push_error(f"提取工具调用时出错: {str(e)}")
+
+    return tool_calls
+
+
+def _extract_tool_call_stream(response: Any) -> List[Dict[str, Any]]:
+    """
+    从 LLM 流式响应中提取工具调用
+
+    Args:
+        response: LLM 流式响应
+
+    Returns:
+        工具调用列表
+    """
+    tool_calls = []
+
+    try:
+        # 检查流式响应格式
+        if hasattr(response, "choices") and len(response.choices) > 0:
+            for choice in response.choices:
+                if hasattr(choice, "delta") and hasattr(choice.delta, "tool_calls"):
+                    tool_calls.extend(choice.delta.tool_calls)
+    except Exception as e:
+        push_error(f"提取流式工具调用时出错: {str(e)}")
 
     return tool_calls
 
