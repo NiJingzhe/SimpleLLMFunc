@@ -1,0 +1,9 @@
+version: 2
+
+build:
+  os: archlinux
+  tools:
+    python: "3.13"
+
+sphinx:
+  configuration: docs/source/conf.py
