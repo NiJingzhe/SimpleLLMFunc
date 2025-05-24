@@ -44,19 +44,13 @@ cd SimpleLLMFunc
 poetry install
 ```
 
-如果你不使用 Poetry：
-
-```bash
-pip install -e ".[dev]"
-```
+<!--
 
 ### 测试
 
-运行项目的测试套件：
+TODO
 
-```bash
-pytest tests/
-```
+-->
 
 ## 代码规范
 
@@ -70,20 +64,17 @@ black SimpleLLMFunc tests
 
 ### 类型注解
 
-我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 mypy 检查类型：
-
-```bash
-mypy SimpleLLMFunc
-```
+我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 Pylint 检查类型。
 
 ### 文档
 
 - 所有公共 API 都应该有清晰的文档字符串
-- 文档应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings)
+- 文档注释应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings)
 - 更新功能时，请同时更新相关文档
 
-## 版本控制和发布
 
+<!-- TODO: 版本控制与 semver 并不一致
+## 版本控制和发布
 我们使用 [Semantic Versioning](https://semver.org/) 进行版本控制：
 
 - MAJOR 版本号：不向后兼容的 API 更改
@@ -91,6 +82,7 @@ mypy SimpleLLMFunc
 - PATCH 版本号：向后兼容的错误修复
 
 每次提交应包含适当的提交消息，推荐遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范。
+-->
 
 ## 行为准则
 
