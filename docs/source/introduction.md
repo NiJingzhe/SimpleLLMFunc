@@ -2,18 +2,19 @@
 
 ## SimpleLLMFunc 是什么?
 
-SimpleLLMFunc 是一个轻量级的 LLM 应用开发框架，旨在简化大语言模型（LLM）在应用中的集成过程。本框架的设计理念是"**Everything is Function, Prompt is Code**"，提供类型安全的装饰器，让开发者能以最自然、直观的方式利用大语言模型的能力。
+SimpleLLMFunc 是一个轻量级的大语言模型（Large Language Model, LLM）应用开发框架，旨在简化 LLM 在应用中的集成过程。本框架的设计理念是“**Everything is Function, Prompt is Code**”，提供类型安全的装饰器，让开发者能以一种自然、直观的方式利用大语言模型的能力。
 
 ## 为什么需要 SimpleLLMFunc?
 
 在开发基于大语言模型的应用时，我们常常面临以下挑战：
 
-1. 需要不断编写重复的 API 调用代码
-2. Prompt 作为字符串变量存在于代码中，不够直观
-3. 流程编排受到框架约束，缺乏灵活性
-4. 调试和监控 LLM 调用过程困难
+- 需要不断编写重复的 API 调用代码
+- Prompt 作为字符串变量存在于代码中，不够直观
+- 流程编排受到框架约束，缺乏灵活性
+- 调试和监控 LLM 调用过程困难
 
-SimpleLLMFunc 旨在解决这些问题，让你：
+SimpleLLMFunc 旨在解决这些问题，使得开发者可以：
+
 - 用函数式编程的方式定义 LLM 能力
 - 将 Prompt 直接放在函数的文档字符串中，使代码更加清晰
 - 灵活构建应用流程，不受框架约束
@@ -21,33 +22,33 @@ SimpleLLMFunc 旨在解决这些问题，让你：
 
 ## 核心特性
 
-- **装饰器驱动**: 使用 `@llm_function` 和 `@llm_chat` 装饰器轻松创建 LLM 驱动的功能
-- **DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性
-- **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确
-- **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务
-- **API 密钥管理**: 智能负载均衡多个 API 密钥
-- **工具系统**: 简单易用的工具定义和调用机制
-- **强大日志**: 支持 trace_id 跟踪和搜索，方便调试和监控
+- **装饰器驱动**: 使用 `@llm_function` 和 `@llm_chat` 装饰器轻松创建 LLM 驱动的功能。
+- **DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。
+- **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
+- **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。
+- **API 密钥管理**: 智能负载均衡多个 API 密钥。
+- **工具系统**: 支持 LLM tool use，具有简单易用的工具定义和调用机制。
+- **日志完备**: 支持 `trace_id` 跟踪和搜索，方便调试和监控。
 
 ## 项目架构
 
-SimpleLLMFunc 的核心架构包括以下几个主要模块：
+SimpleLLMFunc 的目录结构如下：
 
 ```
 SimpleLLMFunc/
-├── interface/            # LLM 接口
-│   ├── llm_interface.py  # LLM 接口抽象类
-│   ├── key_pool.py       # API 密钥管理
-│   └── openai_compatible.py # 通用接口实现
-├── llm_decorator/        # LLM装饰器
-│   ├── llm_function_decorator.py # 函数装饰器
-│   └── llm_chat_decorator.py     # 对话装饰器
-├── logger/               # 日志系统
-│   ├── logger.py         # 日志核心功能
-│   └── logger_config.py  # 日志配置
-├── tool/                 # 工具系统
-│   └── tool.py           # 工具定义和装饰器
-└── config.py             # 全局配置
+├── interface/                      # LLM 接口
+│   ├── llm_interface.py            # LLM 接口抽象类
+│   ├── key_pool.py                 # API 密钥池
+│   └── openai_compatible.py        # OpenAI 兼容接口实现
+├── llm_decorator/                  # LLM装饰器
+│   ├── llm_function_decorator.py   # 函数装饰器
+│   └── llm_chat_decorator.py       # 对话装饰器
+├── logger/                         # 日志系统
+│   ├── logger.py                   # 日志核心功能
+│   └── logger_config.py            # 日志配置
+├── tool/                           # 工具系统
+│   └── tool.py                     # 工具定义和装饰器
+└── config.py                       # 全局配置
 ```
 
 ### 模块介绍
