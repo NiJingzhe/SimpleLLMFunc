@@ -447,7 +447,7 @@ def _build_prompts(
 
 def _prepare_tools(
     toolkit: List[Union[Tool, Callable]], func_name: str
-) -> Tuple[List[Tool], Dict[str, Callable]]:
+) -> Tuple[List[Tool | Callable], Dict[str, Callable]]:
     """
     准备工具列表和工具映射
 
