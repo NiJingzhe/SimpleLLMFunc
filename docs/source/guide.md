@@ -155,7 +155,7 @@ def get_weather(city: str) -> Dict[str, str]:
 
 ### 创建使用工具的 LLM 函数
 
-在 `@llm_function` 装饰器中指定 `toolkit` 参数中传入工具函数列表即可，其余步骤与 [创建 LLM 函数](#创建-LLM-函数) 一节所述相同。
+在 `@llm_function` 装饰器中指定 `toolkit` 参数中传入工具函数列表即可，其余步骤与 [创建 LLM 函数](#创建 LLM 函数) 一节所述相同。
 
 ```python
 @llm_function(llm_interface=my_llm_interface, toolkit=[get_weather])
