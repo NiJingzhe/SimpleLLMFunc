@@ -158,3 +158,6 @@ logs/
 sandbox/
 examples/provider.json
 .venv310/
+
+
+.DS_Store
