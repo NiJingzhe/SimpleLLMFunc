@@ -19,6 +19,9 @@
 ### 更新说明
 ### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
+### 文档（ReadtheDoc）
+### Look here: [Docs](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html)
+
 -----
 ## What & why
 
