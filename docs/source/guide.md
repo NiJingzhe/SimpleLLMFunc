@@ -44,6 +44,18 @@ LOG_FILE=my_agent.log
 LOG_LEVEL=WARNING
 ```
 
+## 详细使用说明 (如果想快速开始请看下一个section)
+
+```{toctree}
+:maxdepth: 2
+:caption: 目录：
+
+llm_function 装饰器 <detailed_guide/llm_function>
+llm_chat 装饰器 <detailed_guide/llm_chat>
+tool 装饰器 <detailed_guide/tool>
+```
+
+
 ## 基本用法
 
 ### 设置 LLM 接口
@@ -195,65 +207,6 @@ print(response)
 next_response, updated_history = next(chat_assistant("那我应该穿什么衣服？", updated_history))
 ```
 
-## 高级用法
-
-### 自定义提示模板
-
-你可以通过 `system_prompt_template` 与 `user_prompt_template` 参数定制系统提示和用户提示的模板，示例如下：
-
-```python
-@llm_function(
-    llm_interface=my_llm_interface,
-    system_prompt_template="你是一个专业的{field}专家，请根据以下信息提供分析:\n{function_description}\n参数: {parameters_description}\n返回: {return_type_description}",
-    user_prompt_template="请分析以下数据:\n{parameters}\n请给出专业的分析结果。"
-)
-def analyze_data(field: str, data: Dict[str, Any]) -> AnalysisResult:
-    """详细分析提供的数据，生成结构化报告"""
-    pass
-```
-
-### API 密钥池管理
-
-本框架提供了一个密钥池，用以实现负载均衡和容错，具体使用步骤如下：
-
-- 若使用 `load_from_json_file` 方法创建 LLM 接口，则无需额外配置密钥池，框架会自动将其中配置的 `api_keys` 字段并创建密钥池；
-- 若直接创建 LLM 接口，则需要手动创建密钥池并传入，具体步骤如下：
-    1. 创建一个 `APIKeyPool` 实例；
-    2. 使用 `add_key` 方法，将 API 密钥依次添加；
-    3. 创建 `LLM_Interface` 实例时，将 `api_key_pool` 参数设置为密钥池实例。
-
-示例（直接创建 LLM 接口）：
-
-```python
-from SimpleLLMFunc import APIKeyPool, OpenAICompatible
-
-# 创建密钥池
-key_pool = APIKeyPool()
-key_pool.add_key("key1")
-key_pool.add_key("key2")
-key_pool.add_key("key3")
-
-# 创建使用密钥池的LLM接口
-llm_interface = OpenAICompatible(
-    api_key_pool=key_pool,
-    base_url="https://api.example.com/v1",
-    model="model-name"
-)
-```
-
-### 日志查询
-
-通过 `trace_id` 查询特定函数调用的完整日志：
-
-```python
-from SimpleLLMFunc import get_logs_by_trace_id
-
-# 获取指定trace_id的日志
-logs = get_logs_by_trace_id("aa123-bb456-cc789")
-for log in logs:
-    print(f"[{log['timestamp']}] {log['message']}")
-```
-
 ## 最佳实践
 
 1. **合理设计函数签名**：明确定义参数类型和返回类型，便于LLM理解任务要求
@@ -262,3 +215,5 @@ for log in logs:
 4. **工具函数保持简单明确**：每个工具只负责一个明确的任务
 5. **处理异常情况**：为LLM可能的错误输出添加错误处理逻辑
 6. **合理组合多个LLM函数**：将复杂任务拆分为多个子任务，由不同函数负责
+
+
