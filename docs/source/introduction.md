@@ -1,3 +1,5 @@
+![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover.png?raw=true)
+
 # 项目介绍
 
 ## SimpleLLMFunc 是什么?
