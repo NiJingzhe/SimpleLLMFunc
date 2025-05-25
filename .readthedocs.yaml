@@ -7,3 +7,12 @@ build:
 
 sphinx:
   configuration: docs/source/conf.py
+
+python:
+  install:
+    - method: pip
+      path: .
+      extra_requirements:
+        - docs  # 如果你的项目有 docs 额外依赖
+    - requirements: docs/requirements.txt  # 或者直接安装 myst-parser
+
