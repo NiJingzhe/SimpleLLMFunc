@@ -17,6 +17,12 @@ import pty
 import select
 import termios
 import tty
+import struct
+import fcntl
+import shutil
+import select
+import termios
+import tty
 from terminal_config import ConfigManager, TerminalConfig
 
 
@@ -267,6 +273,31 @@ class TerminalSession:
             # 创建pty
             master, slave = pty.openpty()
             
+            # 设置pty的终端尺寸以匹配当前终端
+            if requires_raw_mode:
+                try:
+                    # 获取当前终端的尺寸
+                    cols, rows = shutil.get_terminal_size()
+                    
+                    # 设置pty的窗口尺寸
+                    winsize = struct.pack('HHHH', rows, cols, 0, 0)
+                    fcntl.ioctl(slave, termios.TIOCSWINSZ, winsize)
+                    
+                    # 设置环境变量
+                    env = os.environ.copy()
+                    env['COLUMNS'] = str(cols)
+                    env['LINES'] = str(rows)
+                    env['TERM'] = 'xterm-256color'  # 确保支持颜色
+                except Exception as e:
+                    # 如果获取尺寸失败，使用默认值
+                    env = os.environ.copy()
+                    env['COLUMNS'] = '80'
+                    env['LINES'] = '24'
+                    env['TERM'] = 'xterm-256color'
+            else:
+                env = os.environ.copy()
+                env['TERM'] = 'xterm-256color'
+            
             # 启动子进程
             process = subprocess.Popen(
                 command,
@@ -275,7 +306,8 @@ class TerminalSession:
                 stdout=slave,
                 stderr=slave,
                 cwd=self.working_dir,
-                preexec_fn=os.setsid
+                preexec_fn=os.setsid,
+                env=env
             )
             
             os.close(slave)
@@ -283,6 +315,20 @@ class TerminalSession:
             # 设置终端模式
             if requires_raw_mode:
                 tty.setraw(sys.stdin.fileno())
+                
+                # 设置信号处理器来处理窗口尺寸变化
+                def handle_sigwinch(signum, frame):
+                    try:
+                        cols, rows = shutil.get_terminal_size()
+                        winsize = struct.pack('HHHH', rows, cols, 0, 0)
+                        fcntl.ioctl(master, termios.TIOCSWINSZ, winsize)
+                    except:
+                        pass
+                
+                # 保存原始信号处理器
+                old_winch_handler = signal.signal(signal.SIGWINCH, handle_sigwinch)
+            else:
+                old_winch_handler = None
             
             try:
                 stdin_eof = False
@@ -355,6 +401,10 @@ class TerminalSession:
                 # 恢复终端属性
                 if requires_raw_mode and old_tty is not None:
                     termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
+                
+                # 恢复信号处理器
+                if requires_raw_mode and old_winch_handler is not None:
+                    signal.signal(signal.SIGWINCH, old_winch_handler)
                 
                 # 关闭master
                 try:

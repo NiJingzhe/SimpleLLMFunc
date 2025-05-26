@@ -314,7 +314,7 @@ def demo_session():
     
     # 创建带有高级功能的session
     session = TerminalSession(
-        prompt=f"{Colors.BOLD}{Colors.MAGENTA}[AI-SmartTerm]{Colors.END} {Colors.GREEN}{{cwd}}{Colors.END} ➜ ",
+        config_file="./terminal_config.json",
         pre_processor=advanced_pre_processor,
         post_processor=analytics_post_processor
     )
