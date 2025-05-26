@@ -17,6 +17,7 @@ import pty
 import select
 import termios
 import tty
+from terminal_config import ConfigManager, TerminalConfig
 
 
 class Colors:
@@ -45,7 +46,8 @@ class TerminalSession:
                  prompt: Optional[str] = None,
                  pre_processor: Optional[Callable[[str], str]] = None,
                  post_processor: Optional[Callable[[str, int, str], None]] = None,
-                 working_dir: Optional[str] = None):
+                 working_dir: Optional[str] = None,
+                 config_file: Optional[str] = None):
         """
         初始化终端Session
         
@@ -54,18 +56,26 @@ class TerminalSession:
             pre_processor: 前置处理函数，接收命令字符串，返回处理后的命令
             post_processor: 后置处理函数，接收命令和返回码
             working_dir: 工作目录，默认为当前目录
+            config_file: 配置文件路径，默认为 terminal_config.json
         """
+        # 加载配置
+        self.config_manager = ConfigManager(config_file or "terminal_config.json")
+        self.config = self.config_manager.config
+        
         self.pre_processor = pre_processor
         self.post_processor = post_processor
         self.working_dir = working_dir or os.getcwd()
         self.running = False
         self.history = []
         
-        # 设置默认提示符
+        # 设置提示符
         if prompt is None:
-            username = os.getenv('USER', 'user')
-            hostname = os.uname().nodename
-            self.prompt_template = f"{Colors.GREEN}{username}@{hostname}{Colors.END}:{Colors.BLUE}{{cwd}}{Colors.END}$ "
+            if self.config.prompt_template:
+                self.prompt_template = self.config.prompt_template
+            else:
+                username = os.getenv('USER', 'user')
+                hostname = os.uname().nodename
+                self.prompt_template = f"{Colors.GREEN}{username}@{hostname}{Colors.END}:{Colors.BLUE}{{cwd}}{Colors.END}$ "
         else:
             self.prompt_template = prompt
     
@@ -85,7 +95,14 @@ class TerminalSession:
     
     def print_header(self):
         """打印欢迎头部"""
-        header = f"""
+        if self.config.welcome_message:
+            # 使用自定义欢迎消息
+            print(f"\n{Colors.CYAN}{'='*50}{Colors.END}")
+            print(f"{Colors.BOLD}{self.config.welcome_message}{Colors.END}")
+            print(f"{Colors.CYAN}{'='*50}{Colors.END}\n")
+        else:
+            # 使用默认欢迎消息
+            header = f"""
 {Colors.CYAN}╔══════════════════════════════════════╗
 ║          智能终端 Session            ║
 ║        Smart Terminal Session        ║
@@ -98,7 +115,7 @@ class TerminalSession:
 - 输入 'help' 查看内置命令
 
 """
-        print(header)
+            print(header)
     
     def builtin_commands(self, command: str) -> bool:
         """
@@ -127,6 +144,13 @@ class TerminalSession:
   {Colors.GREEN}clear{Colors.END}        - 清屏
   {Colors.GREEN}help{Colors.END}         - 显示此帮助
   {Colors.GREEN}exit/quit{Colors.END}    - 退出终端
+
+{Colors.BOLD}配置管理命令：{Colors.END}
+  {Colors.GREEN}config list{Colors.END}         - 列出交互式命令
+  {Colors.GREEN}config aliases{Colors.END}      - 列出命令别名
+  {Colors.GREEN}config add <cmd>{Colors.END}    - 添加交互式命令
+  {Colors.GREEN}config remove <cmd>{Colors.END} - 移除交互式命令
+  {Colors.GREEN}config reload{Colors.END}       - 重新加载配置
 
 {Colors.BOLD}支持的功能：{Colors.END}
   {Colors.CYAN}• 统一交互式框架{Colors.END} - 所有命令都支持完整的终端功能
@@ -181,15 +205,47 @@ class TerminalSession:
             os.system('clear' if os.name != 'nt' else 'cls')
             return True
             
+        elif cmd == 'config':
+            # 配置管理命令
+            if len(parts) < 2:
+                self.print_colored("用法: config <子命令>", Colors.YELLOW)
+                self.print_colored("可用子命令: list, aliases, add, remove, reload", Colors.YELLOW)
+                return True
+                
+            subcmd = parts[1].lower()
+            
+            if subcmd == 'list':
+                self.config_manager.list_full_control_commands()
+            elif subcmd == 'aliases':
+                self.config_manager.list_aliases()
+            elif subcmd == 'add' and len(parts) > 2:
+                cmd_to_add = parts[2]
+                self.config_manager.add_full_control_command(cmd_to_add)
+                # 重新加载配置
+                self.config = self.config_manager.config
+            elif subcmd == 'remove' and len(parts) > 2:
+                cmd_to_remove = parts[2]
+                self.config_manager.remove_full_control_command(cmd_to_remove)
+                # 重新加载配置
+                self.config = self.config_manager.config
+            elif subcmd == 'reload':
+                self.config_manager = ConfigManager(self.config_manager.config_file)
+                self.config = self.config_manager.config
+                self.print_colored("配置已重新加载", Colors.GREEN)
+            else:
+                self.print_colored(f"未知的配置子命令: {subcmd}", Colors.RED)
+                self.print_colored("可用子命令: list, aliases, add <cmd>, remove <cmd>, reload", Colors.YELLOW)
+            
+            return True
+            
         return False
     
     def requires_full_terminal_control(self, command: str) -> bool:
         """检查是否需要完全的终端控制（全屏、光标控制等）"""
-        full_control_commands = ['vim', 'vi', 'nano', 'emacs', 'less', 'more', 'man', 'top', 'htop', 'python', 'python3', 'ipython', 'node', 'mysql', 'psql', 'tmux', 'screen']
         cmd_parts = command.strip().split()
         if cmd_parts:
             cmd_name = os.path.basename(cmd_parts[0])
-            return cmd_name in full_control_commands
+            return cmd_name in self.config.full_control_commands
         return False
     
     def execute_command(self, command: str) -> Tuple[int, str]:
@@ -414,40 +470,48 @@ class TerminalSession:
 
 
 # 示例用法和自定义前置处理函数
-def smart_pre_processor(command: str) -> str:
+def smart_pre_processor(command: str, config: Optional[TerminalConfig] = None) -> str:
     """
     智能前置处理示例
     - 自动添加常用参数
     - 命令别名替换
     - 安全检查等
     """
-    # 命令别名
-    aliases = {
-        'll': 'ls -la --color=auto',
-        'la': 'ls -a',
-        'l': 'ls -CF',
-        'grep': 'grep --color=auto',
-        'egrep': 'egrep --color=auto',
-        'fgrep': 'fgrep --color=auto',
-    }
+    if config is None:
+        # 如果没有传入配置，创建一个临时的配置管理器
+        config_manager = ConfigManager()
+        config = config_manager.config
     
     # 分割命令
     parts = command.split()
-    if parts:
-        cmd = parts[0]
+    if not parts:
+        return command
         
-        # 应用别名
-        if cmd in aliases:
-            parts[0] = aliases[cmd]
-            command = ' '.join(parts)
-        
-        # 自动添加参数
-        if cmd == 'ls' and '--color' not in command:
-            command += ' --color=auto'
-        elif cmd == 'grep' and '--color' not in command:
-            command += ' --color=auto'
+    cmd = parts[0]
+    
+    # 应用别名
+    if cmd in config.command_aliases:
+        parts[0] = config.command_aliases[cmd]
+        command = ' '.join(parts)
+        # 重新分析命令（因为别名可能改变了命令结构）
+        parts = command.split()
+        if parts:
+            cmd = parts[0]
+    
+    # 自动添加参数
+    if cmd in config.auto_args:
+        auto_arg = config.auto_args[cmd]
+        if auto_arg not in command:
+            command += f' {auto_arg}'
     
     return command
+
+
+def create_smart_pre_processor(config: TerminalConfig):
+    """创建一个绑定配置的前置处理器"""
+    def processor(command: str) -> str:
+        return smart_pre_processor(command, config)
+    return processor
 
 
 def smart_post_processor(command: str, return_code: int, command_output: str):
@@ -472,9 +536,12 @@ def main():
     """主函数 - 演示如何使用TerminalSession"""
     print(f"{Colors.BOLD}启动智能终端Session...{Colors.END}")
     
+    # 创建配置管理器
+    config_manager = ConfigManager()
+    
     # 创建终端Session实例
     session = TerminalSession(
-        pre_processor=smart_pre_processor,
+        pre_processor=create_smart_pre_processor(config_manager.config),
         post_processor=smart_post_processor
     )
     
