@@ -127,6 +127,19 @@ class TerminalSession:
   {Colors.GREEN}clear{Colors.END}        - 清屏
   {Colors.GREEN}help{Colors.END}         - 显示此帮助
   {Colors.GREEN}exit/quit{Colors.END}    - 退出终端
+
+{Colors.BOLD}支持的功能：{Colors.END}
+  {Colors.CYAN}• 统一交互式框架{Colors.END} - 所有命令都支持完整的终端功能
+  {Colors.CYAN}• 全屏程序支持{Colors.END}   - vim, nano, less, man, top 等
+  {Colors.CYAN}• 彩色输出{Colors.END}       - 自动保持命令的颜色输出
+  {Colors.CYAN}• 信号处理{Colors.END}       - 正确处理 Ctrl+C, Ctrl+Z 等
+  {Colors.CYAN}• 实时输出{Colors.END}       - 命令输出实时显示
+
+{Colors.BOLD}示例命令：{Colors.END}
+  {Colors.YELLOW}vim file.txt{Colors.END}  - 编辑文件（完整vim功能）
+  {Colors.YELLOW}less file.txt{Colors.END} - 查看文件（支持翻页）
+  {Colors.YELLOW}top{Colors.END}           - 系统监控（实时更新）
+  {Colors.YELLOW}python3{Colors.END}       - Python交互式解释器
 """
             print(help_text)
             return True
@@ -170,17 +183,32 @@ class TerminalSession:
             
         return False
     
+    def requires_full_terminal_control(self, command: str) -> bool:
+        """检查是否需要完全的终端控制（全屏、光标控制等）"""
+        full_control_commands = ['vim', 'vi', 'nano', 'emacs', 'less', 'more', 'man', 'top', 'htop', 'python', 'python3', 'ipython', 'node', 'mysql', 'psql', 'tmux', 'screen']
+        cmd_parts = command.strip().split()
+        if cmd_parts:
+            cmd_name = os.path.basename(cmd_parts[0])
+            return cmd_name in full_control_commands
+        return False
+    
     def execute_command(self, command: str) -> Tuple[int, str]:
         """
-        执行命令并实时输出结果
+        统一的命令执行器 - 支持所有类型的命令
         
         Returns:
             (命令的返回码, 命令输出)
         """
         captured_output = ""
+        requires_raw_mode = self.requires_full_terminal_control(command)
+        old_tty = None
         
         try:
-            # 使用pty创建伪终端以支持彩色输出
+            # 如果需要完全终端控制，保存当前终端属性
+            if requires_raw_mode:
+                old_tty = termios.tcgetattr(sys.stdin)
+            
+            # 创建pty
             master, slave = pty.openpty()
             
             # 启动子进程
@@ -196,60 +224,100 @@ class TerminalSession:
             
             os.close(slave)
             
-            # 实时读取输出
+            # 设置终端模式
+            if requires_raw_mode:
+                tty.setraw(sys.stdin.fileno())
+            
             try:
+                stdin_eof = False
                 while True:
-                    ready, _, _ = select.select([master], [], [], 0.1)
-                    if ready:
+                    # 检查进程是否还在运行
+                    if process.poll() is not None:
+                        break
+                    
+                    # 确定要监听的文件描述符
+                    read_fds = [master]
+                    if not stdin_eof:
+                        read_fds.append(sys.stdin.fileno())
+                    
+                    # 选择可读的文件描述符
+                    ready, _, _ = select.select(read_fds, [], [], 0.1)
+                    
+                    # 处理用户输入
+                    if sys.stdin.fileno() in ready and not stdin_eof:
+                        try:
+                            data = os.read(sys.stdin.fileno(), 1024)
+                            if data:
+                                os.write(master, data)
+                            else:
+                                # EOF
+                                stdin_eof = True
+                        except OSError:
+                            stdin_eof = True
+                    
+                    # 处理程序输出
+                    if master in ready:
                         try:
                             data = os.read(master, 1024)
                             if data:
-                                decoded_data = data.decode('utf-8', errors='replace')
-                                sys.stdout.write(decoded_data)
-                                sys.stdout.flush()
-                                # 捕获输出用于后置处理
-                                captured_output += decoded_data
+                                if requires_raw_mode:
+                                    # 对于需要完全终端控制的程序，直接输出原始数据
+                                    sys.stdout.buffer.write(data)
+                                    sys.stdout.flush()
+                                else:
+                                    # 对于普通程序，解码后输出并捕获
+                                    decoded_data = data.decode('utf-8', errors='replace')
+                                    sys.stdout.write(decoded_data)
+                                    sys.stdout.flush()
+                                    captured_output += decoded_data
+                            else:
+                                break
                         except OSError:
                             break
-                    
-                    # 检查进程是否结束
-                    if process.poll() is not None:
-                        # 读取剩余输出
-                        try:
-                            while True:
-                                ready, _, _ = select.select([master], [], [], 0)
-                                if ready:
-                                    data = os.read(master, 1024)
-                                    if data:
-                                        decoded_data = data.decode('utf-8', errors='replace')
-                                        sys.stdout.write(decoded_data)
-                                        sys.stdout.flush()
-                                        captured_output += decoded_data
-                                    else:
-                                        break
-                                else:
-                                    break
-                        except OSError:
-                            pass
-                        break
-                        
+                            
             except KeyboardInterrupt:
-                # Ctrl+C 中断
-                self.print_colored("\n^C", Colors.YELLOW)
-                try:
-                    os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                    process.wait(timeout=2)
-                except:
+                if requires_raw_mode:
+                    # 对于全屏程序，将Ctrl+C传递给子进程
                     try:
-                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                    except:
+                        os.write(master, b'\x03')
+                    except OSError:
                         pass
-                return 130, captured_output  # Ctrl+C 的标准返回码
+                else:
+                    # 对于普通程序，显示中断信息并终止
+                    self.print_colored("\n^C", Colors.YELLOW)
+                    try:
+                        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+                        process.wait(timeout=2)
+                    except:
+                        try:
+                            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                        except:
+                            pass
+                    return 130, captured_output
             
             finally:
-                os.close(master)
+                # 恢复终端属性
+                if requires_raw_mode and old_tty is not None:
+                    termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
+                
+                # 关闭master
+                try:
+                    os.close(master)
+                except OSError:
+                    pass
+                
+                # 等待进程结束
+                try:
+                    process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
             
-            return process.returncode, captured_output
+            # 对于全屏程序，不返回捕获的输出（因为包含控制字符）
+            if requires_raw_mode:
+                return process.returncode, ""
+            else:
+                return process.returncode, captured_output
             
         except Exception as e:
             self.print_colored(f"执行命令时出错: {e}", Colors.RED)
