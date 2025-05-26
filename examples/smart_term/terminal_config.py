@@ -173,7 +173,7 @@ class ConfigManager:
             self.save_config(default_config)
             return default_config
     
-    def save_config(self, config: TerminalConfig = None):
+    def save_config(self, config: TerminalConfig | None = None):
         """保存配置到文件"""
         if config is None:
             config = self.config
