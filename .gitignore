@@ -157,6 +157,7 @@ logs/
 
 sandbox/
 examples/provider.json
+examples/**/provider.json
 .venv310/
 
 
