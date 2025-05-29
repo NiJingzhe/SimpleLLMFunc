@@ -226,7 +226,7 @@ def llm_chat(
                     current_messages.append(
                         {
                             "role": "system",
-                            "content": f"{docstring}" + "\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '' + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects])
+                            "content": f"{docstring}" + ("\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '' + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects]))
                         }
                     )
 
