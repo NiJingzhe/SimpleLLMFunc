@@ -44,6 +44,9 @@ def explain_result(command: str, command_result: str, return_code: int) -> str: 
     """
     智能结果解释器
     根据命令执行结果和返回码提供对于命令执行结果的详细解释或者建议。
+    可以给出具有教育意义的说明，例如详细解释每一行每一列都是什么含义，代表了什么，以及为什么会导致这样的输出。
+    以良好的markdown格式返回，包含emoji和表情符号来增强可读性。
+    如果命令执行失败，给出可能的原因和解决方案。
     例如：
     用以下参数
     command: "ls nonexistent"
@@ -258,7 +261,7 @@ def analytics_post_processor(command: str, return_code: int, command_output: str
             try:
                 # 清理输出中的颜色代码用于AI分析
                 clean_output = re.sub(r'\x1b\[[0-9;]*m', '', command_output)
-                ai_explanation = explain_result(command, clean_output, return_code)
+                ai_explanation = explain_result(command, clean_output, 0)
                 print(f"{Colors.MAGENTA}🧠 [AI解释] {ai_explanation}{Colors.END}")
             except Exception as e:
                 print(f"{Colors.RED}❌ [AI错误] 智能解释失败: {e}{Colors.END}")
