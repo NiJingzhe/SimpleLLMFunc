@@ -54,6 +54,7 @@ def llm_chat(
     [{"role": "user", "content": "用户消息"}, {"role": "assistant", "content": "助手回复"}]
     ```
     即包含 role 和 content 键的字典列表，role 可以是 user, assistant 或 system
+    要求历史记录必须是chat函数的第一个参数。
 
     ## 历史记录处理
     - 如果不存在历史记录参数：仅使用 system prompt 和当前 user prompt 请求 LLM
@@ -137,8 +138,9 @@ def llm_chat(
                 tool_param_for_api = None  # 序列化后的工具参数，用于传递给API
                 tool_map = {}  # 工具名称到函数的映射
 
+
+                tool_objects = []
                 if toolkit:
-                    tool_objects = []
                     for tool in toolkit:
                         if isinstance(tool, Tool):
                             # 如果是Tool对象，直接添加
@@ -224,7 +226,7 @@ def llm_chat(
                     current_messages.append(
                         {
                             "role": "system",
-                            "content": f"{docstring} \n\n你需要灵活的使用以下工具：\n\t" + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects])
+                            "content": f"{docstring}" + "\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '' + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects])
                         }
                     )
 
