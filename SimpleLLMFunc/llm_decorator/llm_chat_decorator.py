@@ -11,7 +11,8 @@ from typing import (
     Optional,
     Union,
     Tuple,
-    cast
+    cast,
+    ParamSpec,
 )
 import uuid
 
@@ -33,6 +34,7 @@ from SimpleLLMFunc.llm_decorator.utils import (
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
+P = ParamSpec("P")
 
 
 def llm_chat(
@@ -93,11 +95,11 @@ def llm_chat(
 
     def decorator(
         func: Callable[
-            Concatenate[List[Dict[str, str]], ...],
+            Concatenate[List[Dict[str, str]], P],
             Generator[Tuple[str, List[Dict[str, str]]], None, None] | None,
         ],
     ) -> Callable[
-        Concatenate[List[Dict[str, str]], ...],
+        Concatenate[List[Dict[str, str]], P],
         Generator[Tuple[str, List[Dict[str, str]]], None, None],
     ]:
         # 获取函数的签名
@@ -313,7 +315,7 @@ def llm_chat(
 
         return cast(
             Callable[
-                Concatenate[List[Dict[str, str]], ...],
+                Concatenate[List[Dict[str, str]], P],
                 Generator[Tuple[str, List[Dict[str, str]]], None, None],
             ],
             wrapper,
