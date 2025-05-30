@@ -22,8 +22,10 @@ from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import (
     app_log,
     push_warning,
+    push_debug,
     get_location,
     log_context,
+    push_debug,
     get_current_trace_id,
 )
 
@@ -163,9 +165,13 @@ def llm_chat(
                                 location=get_location(),
                             )
 
-                    if tool_objects:
+                    if len(tool_objects) > 0:
                         tool_param_for_api = Tool.serialize_tools(tool_objects)
 
+                push_debug(
+                    f"LLM Chat '{func.__name__}' has tools: {tool_param_for_api}",
+                    location=get_location(),
+                ) 
                 # 检查是否有messages参数，这会被直接作为API的messages参数。
                 user_message = ""
 
@@ -228,7 +234,7 @@ def llm_chat(
                     current_messages.append(
                         {
                             "role": "system",
-                            "content": f"{docstring}" + ("\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '' + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects]))
+                            "content": f"{docstring}" + ("\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '') + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects])
                         }
                     )
 
