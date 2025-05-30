@@ -1,4 +1,8 @@
-## 0.1.8版本更新说明 (Latest)
+## 0.1.9版本更新说明 (Latest)
+
+1. 修复了`llm_function`装饰器中由于三元表达式没有使用括号界定范围导致在没有toolkit的时候system prompt消失的问题
+-----
+## 0.1.8版本更新说明
 
 1. 修复了`llm_chat`装饰器中由于`toolkit`不传递导致的`tool_objects`局部变量未定义的问题
 
