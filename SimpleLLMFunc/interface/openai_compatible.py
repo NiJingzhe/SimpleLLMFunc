@@ -91,7 +91,7 @@ class OpenAICompatible(LLM_Interface):
         """
         
         if not os.path.exists(json_path):
-            push_critical(f"JSON file {json_path} does not exist. Please check your configuration.", location=get_location())
+            push_critical(f"JSON 文件 {json_path} 不存在。请检查您的配置。", location=get_location())
             raise FileNotFoundError(f"JSON file {json_path} does not exist.")
         
         with open(json_path, "r", encoding="utf-8") as f:
@@ -100,8 +100,8 @@ class OpenAICompatible(LLM_Interface):
         try:
             all_providers_info = json.loads(json_str)
         except json.JSONDecodeError as e:
-            push_critical(f"Failed to parse JSON string: {e}", location=get_location())
-            raise ValueError(f"Failed to parse JSON string: {e}")
+            push_critical(f"解析 JSON 字符串失败：{e}", location=get_location())
+            raise ValueError(f"解析 JSON 字符串失败：{e}")
         # 检查JSON格式
         
         try: 
@@ -109,13 +109,13 @@ class OpenAICompatible(LLM_Interface):
             for provider_id, models in all_providers_info.items():
                 all_providers_dict[provider_id] = {}
                 app_log(
-                    f"Loading OpenAICompatible instances for provider: {provider_id}",
+                    f"正在为提供商加载 OpenAICompatible 实例：{provider_id}",
                     location=get_location()
                 )
                 
                 if not isinstance(models, list):
-                    push_critical(f"Invalid format for models under provider {provider_id}. Expected a list.", location=get_location())
-                    raise TypeError(f"Invalid format for models under provider {provider_id}. Expected a list.")
+                    push_critical(f"提供商 {provider_id} 下的模型格式无效。应为列表。", location=get_location())
+                    raise TypeError(f"提供商 {provider_id} 下的模型格式无效。应为列表。")
                 
                 for model_info in models:
                     model_name = model_info["model_name"]
@@ -125,7 +125,7 @@ class OpenAICompatible(LLM_Interface):
                     retry_delay = model_info.get("retry_delay", 1.0)
 
                     # 创建APIKeyPool实例
-                    key_pool = APIKeyPool(api_keys, provider_id)
+                    key_pool = APIKeyPool(api_keys, f"{provider_id}-{model_name}")
 
                     # 创建OpenAICompatible实例
                     instance = OpenAICompatible(
@@ -139,21 +139,21 @@ class OpenAICompatible(LLM_Interface):
                     all_providers_dict[provider_id][model_name] = instance
                     
                     app_log(
-                        f"Loaded OpenAICompatible instance for {provider_id} with model {model_name}",
+                        f"已为提供商 {provider_id} 加载模型 {model_name} 的 OpenAICompatible 实例",
                         location=get_location()
                     )
         except ValueError as e:
-            push_critical(f"Error loading OpenAICompatible instances: {e}", location=get_location())
-            raise ValueError(f"Error loading OpenAICompatible instances: {e}")
+            push_critical(f"加载 OpenAICompatible 实例时出错：{e}", location=get_location())
+            raise ValueError(f"加载 OpenAICompatible 实例时出错：{e}")
         except TypeError as e:
-            push_critical(f"Invalid type in JSON: {e}", location=get_location())
-            raise ValueError(f"Invalid type in JSON: {e}")
+            push_critical(f"JSON 中的类型无效：{e}", location=get_location())
+            raise ValueError(f"JSON 中的类型无效：{e}")
         except KeyError as e:
-            push_critical(f"Missing required key in JSON: {e}", location=get_location())
-            raise ValueError(f"Missing required key in JSON: {e}")
+            push_critical(f"JSON 中缺少必需的密钥：{e}", location=get_location())
+            raise ValueError(f"JSON 中缺少必需的密钥：{e}")
         except Exception as e:
-            push_critical(f"Error loading OpenAICompatible instances: {e}", location=get_location())
-            raise ValueError(f"Error loading OpenAICompatible instances: {e}")
+            push_critical(f"加载 OpenAICompatible 实例时发生未知错误：{e}", location=get_location())
+            raise ValueError(f"加载 OpenAICompatible 实例时发生未知错误：{e}")
         
         return all_providers_dict
 
@@ -177,7 +177,6 @@ class OpenAICompatible(LLM_Interface):
             base_url: API基础URL，例如"https://api.openai.com/v1"或"https://open.bigmodel.cn/api/paas/v4/"
             max_retries: 最大重试次数
             retry_delay: 重试间隔时间（秒）
-            allowed_models: 允许使用的模型列表，如果为None则不检查
         """
         super().__init__(api_key_pool, model_name)
         self.max_retries = max_retries

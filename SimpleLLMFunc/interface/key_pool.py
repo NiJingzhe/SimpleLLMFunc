@@ -1,6 +1,7 @@
 import heapq
 from typing import List, Tuple, Dict
 from SimpleLLMFunc.logger import push_critical, get_location
+import threading # 导入 threading 模块
 
 class APIKeyPool:
     # 类变量用于存储单例实例
@@ -23,11 +24,11 @@ class APIKeyPool:
 
         if len(api_keys) == 0 or api_keys is None:
             push_critical(
-                f"API key pool for {provider_id} is empty. Please check your configuration.",
+                f"API 密钥池 {provider_id} 为空。请检查您的配置。", # 更新日志为中文
                 location=get_location()
             )
             
-            raise ValueError(f"API key pool for {provider_id} is empty. Please check your configuration.")
+            raise ValueError(f"API 密钥池 {provider_id} 为空。请检查您的配置。") # 更新错误信息为中文
             
             
         self.api_keys = api_keys
@@ -38,33 +39,37 @@ class APIKeyPool:
         heapq.heapify(self.heap)
         self.key_to_task_count: Dict[str, int] = {key: 0 for key in self.api_keys}
         
+        self.lock = threading.Lock() # 为每个实例创建一个锁
         self.initialized = True
     
     def get_least_loaded_key(self) -> str:
-        # 获取任务数量最小的 API key
-        if not self.heap:
-            raise ValueError(f"No API keys available for {self.app_id}")
-        return self.heap[0][1]
+        with self.lock: # 获取锁保护读操作
+            # 获取任务数量最小的 API key
+            if not self.heap:
+                raise ValueError(f"{self.app_id} 没有可用的 API 密钥") # 更新错误信息为中文
+            return self.heap[0][1]
     
     def increment_task_count(self, api_key: str) -> None:
-        if api_key not in self.key_to_task_count:
-            raise ValueError(f"API key {api_key} not found in pool")
+        with self.lock: # 获取锁
+            if api_key not in self.key_to_task_count:
+                raise ValueError(f"API 密钥 {api_key} 不在池中") # 更新错误信息为中文
             
-        # 增加任务计数
-        self.key_to_task_count[api_key] += 1
-        
-        # 更新堆
-        self._update_heap(api_key, self.key_to_task_count[api_key])
+            # 增加任务计数
+            self.key_to_task_count[api_key] += 1
+            
+            # 更新堆
+            self._update_heap(api_key, self.key_to_task_count[api_key])
     
     def decrement_task_count(self, api_key: str) -> None:
-        if api_key not in self.key_to_task_count:
-            raise ValueError(f"API key {api_key} not found in pool")
+        with self.lock: # 获取锁
+            if api_key not in self.key_to_task_count:
+                raise ValueError(f"API 密钥 {api_key} 不在池中") # 更新错误信息为中文
             
-        # 减少任务计数
-        self.key_to_task_count[api_key] -= 1
-        
-        # 更新堆
-        self._update_heap(api_key, self.key_to_task_count[api_key])
+            # 减少任务计数
+            self.key_to_task_count[api_key] -= 1
+            
+            # 更新堆
+            self._update_heap(api_key, self.key_to_task_count[api_key])
     
     def _update_heap(self, api_key: str, new_task_count: int) -> None:
         # 找到并移除当前条目
