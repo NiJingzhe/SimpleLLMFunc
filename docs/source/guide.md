@@ -69,9 +69,16 @@ from SimpleLLMFunc import OpenAICompatible
 llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
 ```
 - 直接创建接口
-```
+```python
+from SimpleLLMFunc import OpenAICompatible, APIKeyPool
+
+key_pool = APIKeyPool(
+    api_keys=["your-api-key-1", "your-api-key-2"],  # 替换为你的API密钥
+    provider_id="openai_model-name"
+)
+
 llm_interface = OpenAICompatible(
-    api_key="your-api-key",
+    api_key_pool=key_pool,
     base_url="https://api.example.com/v1",
     model="model-name"
 )
@@ -81,7 +88,7 @@ llm_interface = OpenAICompatible(
 
 使用 `@llm_function` 装饰器以创建 LLM 函数，具体步骤如下：
 
-1. 使用 Pydantic 定义输入参数和返回值类型（可选，推荐）；
+1. 使用 Pydantic 定义输入参数和返回值类型，返回值类型必须是可json序列化的类型，推荐Pydantic Model或者基础类型；
 2. 定义函数，并添加使用 `@llm_function` 装饰器；
 3. 在函数的 docstring 中描述函数的功能、参数和返回值；
 4. 函数体留空，实际操作由 LLM 完成，返回的字符串由框架自动尝试解析为指定格式，若解析失败则抛出异常。
@@ -137,7 +144,7 @@ print(f"优点: {', '.join(result.pros)}")
 使用 `@tool` 装饰器以创建工具函数，具体步骤如下：
 
 1. 定义工具函数，并添加 `@tool` 装饰器；
-2. 撰写工具函数的 docstring，描述函数的功能、参数和返回值；
+2. 撰写工具函数的 docstring，描述函数的功能、参数和返回值，返回值必须是可序列化的有语义的类型，建议是Pydantic Model或者基础类型；
 
 `@tool` 装饰器的参数包括：
 

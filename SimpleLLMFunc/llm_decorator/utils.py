@@ -67,7 +67,7 @@ def execute_llm(
 
     # 第一次调用 LLM，获取初始响应
     app_log(
-        f"LLM 函数 '{func_name}' 发起初始请求，消息数: {len(current_messages)}",
+        f"LLM 函数 '{func_name}' 将要发起初始请求，消息数: {len(current_messages)}",
         location=get_location()
     )
     
@@ -89,8 +89,8 @@ def execute_llm(
     tool_calls = _extract_tool_calls(initial_response)
 
     # 如果没有工具调用，直接返回
-    if not tool_calls:
-        push_debug(f"未发现工具调用，直接返回结果", location=get_location())
+    if len(tool_calls) == 0:
+        app_log(f"未发现工具调用，直接返回结果", location=get_location())
         return 
 
     # === 工具调用循环 ===
@@ -113,7 +113,7 @@ def execute_llm(
     # 继续处理可能的后续工具调用
     while call_count < max_tool_calls:
         app_log(
-            f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count+1}/{max_tool_calls} 次调用",
+            f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count}/{max_tool_calls} 次调用",
             location=get_location()
         )
         
@@ -130,7 +130,7 @@ def execute_llm(
         # 检查是否有更多工具调用
         tool_calls = _extract_tool_calls(response)
 
-        if not tool_calls:
+        if len(tool_calls) == 0:
             # 没有更多工具调用，返回最终响应
             push_debug(f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应", location=get_location())
             return 
@@ -473,10 +473,6 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
     """
     从 LLM 响应中提取工具调用
     
-    支持两种格式:
-    1. 对象格式 (response.choices[0].message.tool_calls)
-    2. 字典格式 (response["choices"][0]["message"]["tool_calls"])
-    
     Args:
         response: LLM 响应
         
@@ -501,17 +497,10 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                             },
                         }
                     )
-        # 检查字典格式
-        elif isinstance(response, dict) and "choices" in response:
-            choices = response["choices"]
-            if choices and "message" in choices[0]:
-                message = choices[0]["message"]
-                if "tool_calls" in message and message["tool_calls"]:
-                    tool_calls = message["tool_calls"]
     except Exception as e:
         push_error(f"提取工具调用时出错: {str(e)}")
-
-    return tool_calls
+    finally:
+        return tool_calls
 
 
 # 导出公共函数
