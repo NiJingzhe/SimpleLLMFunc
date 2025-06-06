@@ -662,7 +662,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--auto-save", "-a", action="store_true", help="自动保存每轮对话的历史记录"
     )
+    parser.add_argument(
+        "--output-delay", "-d", type=float, default=0.01, help="设置输出延迟时间（秒）"
+    )
     args = parser.parse_args()
+    output_delay = args.output_delay
 
     # 如果要列出所有会话
     if args.list_sessions:
@@ -719,7 +723,7 @@ if __name__ == "__main__":
             sys.stdout.write(response_GLaDos)
             sys.stdout.flush()
             # 添加小延时避免字符丢失
-            time.sleep(0.01)
+            time.sleep(output_delay)
     print("\n\n" + "==========================================" * 3)
 
     # 自动保存历史记录

@@ -679,7 +679,10 @@ def _accumulate_tool_calls_from_chunks(tool_call_chunks: List[Dict[str, Any]]) -
     accumulated_calls = {}
     
     for chunk in tool_call_chunks:
-        index = chunk.get("index", 0)  # 默认为0如果没有index
+        index = chunk.get("index")
+        if index is None:
+            push_warning("工具调用 chunk 缺少 'index' 属性，已跳过处理", location=get_location())
+            continue
         
         if index not in accumulated_calls:
             accumulated_calls[index] = {
