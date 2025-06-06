@@ -35,6 +35,7 @@ def your_chat_function(message: str, history: List[Dict[str, str]] = []) -> Gene
 - **llm_interface** (必需): LLM 接口实例，用于与大语言模型通信
 - **toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
 - **max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5
+- **stream**:  是否启用流式响应，默认为 False
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
 ### 函数参数要求
@@ -54,6 +55,9 @@ List[Dict[str, str]]
 装饰器修改后的函数返回 `Generator[Tuple[str, List[Dict[str, str]]], None, None]`：
 - 第一个元素 `str`: 助手的响应内容（可能是部分内容，支持流式输出）
 - 第二个元素 `List[Dict[str, str]]`: 更新后的对话历史记录（已过滤工具调用信息）
+
+需要说明的是无论流式还是非流返回，都是同样的格式，非流返回中的 `str` 可能是完整的响应内容，而流式返回则是每个`delta`中的内容。
+对于历史记录，我们只要关注生成器最后一个返回中的 `List[Dict[str, str]]`，它包含了更新好的对话历史记录。
 
 ## 装饰器行为
 
@@ -121,7 +125,7 @@ user_input = "你好，请介绍一下自己"
 # 获取响应和更新的历史记录
 for response_chunk, updated_history in simple_chat(user_input, history):
     if response_chunk:  # 非空响应
-        print(response_chunk, end="", flush=True)
+        print(response_chunk)
     else:  # 空响应表示对话结束
         history = updated_history
         break
@@ -218,7 +222,7 @@ def chat_session():
         
         for response, updated_history in assistant_with_tools(user_input, history):
             if response:
-                print(response, end="", flush=True)
+                print(response)
             else:
                 history = updated_history
                 break
@@ -268,7 +272,7 @@ def role_play_session():
             chat_history=history
         ):
             if response:
-                print(response, end="", flush=True)
+                print(response)
             else:
                 history = updated_history
                 break
@@ -281,124 +285,127 @@ def role_play_session():
 ### 示例 5: 流式响应处理
 
 ```python
-@llm_chat(llm_interface=llm)
-def streaming_chat(
-    message: str, 
-    history: List[Dict[str, str]] = []
-) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
+@llm_chat(
+    llm_interface=GPT_4o_Interface,
+    toolkit=[
+        calc,
+        get_current_time_and_date,
+        file_operator,
+        execute_command,
+        interactive_terminal,
+    ],
+    stream=True,
+    max_tool_calls=500,
+    timeout=600
+)
+def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     """
-    你是一个能提供详细解释的助手。
-    当回答复杂问题时，请给出充分的解释和例子。
+    你是GLaDos，一为全能AI助手。
+
+    由于你不能和控制台交互，所有的测试都需要首先使用unittest编写专门的测试脚本，并通过mock输入的方法来绕开控制台输入。
+
+    使用工具前请务必说明你要用什么工具做什么。
+
+
+    首先需要分析用户的需求，然后使用execute_command工具查看当前的工作环境，然后
+    建议遵循以下过程：
+        1. 使用file_operator工具创建TODO.md文档，用checkbox的形式将用户需求拆解成多个详细描述的小任务，并记录。
+            任务拆分务必拆分到最细致的粒度，推荐任何任务都拆分到10个子任务以上。
+        2. 使用file_operator工具读取TODO.md文档，检查任务列表
+        3. 逐步执行计划
+        4. 撰写每个部分的代码和测试代码（如果是代码任务）
+        5. 根据结果反思执行效果，并继续下一步或者作出弥补
+        6. 使用file_operator工具更新TODO.md文档
+
+    直到你认为任务已经完成，输出"<<任务完成>>"字样
+
     """
     pass
 
-def handle_streaming_response(message: str, history: List[Dict[str, str]]):
-    """处理流式响应的示例函数"""
-    print("助手正在回复: ", end="")
+if __name__ == "__main__":
+    # 测试流式响应
+    history = []
+    query = "请帮我完成一个Python项目的开发"
     
-    complete_response = ""
-    final_history = []
-    
-    for response_chunk, updated_history in streaming_chat(message, history):
+    for response_chunk, updated_history in GLaDos(history, query):
         if response_chunk:
-            # 实时显示响应片段
-            print(response_chunk, end="", flush=True)
-            complete_response += response_chunk
+            stdout.write(response_chunk)
+            stdout.flush()
+            time.sleep(0.1) 
         else:
-            # 响应完成，获取最终历史记录
-            final_history = updated_history
+            history = updated_history
             break
-    
+
     print()  # 换行
-    
-    return complete_response, final_history
-
-# 使用示例
-history = []
-response, history = handle_streaming_response(
-    "请详细解释什么是机器学习", 
-    history
-)
-
-print(f"\n完整回复: {response}")
-print(f"对话轮数: {len([msg for msg in history if msg['role'] == 'user'])}")
 ```
 
-### 示例 6: 自定义历史记录管理
+### 示例 6: 在Class中使用装饰器
 
 ```python
-class ChatManager:
-    """聊天管理器，提供高级历史记录管理功能"""
-    
-    def __init__(self, llm_interface):
-        self.llm = llm_interface
-        self.sessions = {}  # 存储多个会话的历史记录
-    
-    @llm_chat(llm_interface=llm, max_tool_calls=3)
-    def managed_chat(
-        self, 
-        message: str,
-        session_id: str = "default",
-        history: List[Dict[str, str]] = []
-    ) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
+class CADAgent:
+
+    def __init__(
+        self,
+        llm_interface: LLM_Interface,
+        max_tool_iterations: int = 50,
+        max_memory_length: int = 10,
+    ):
+
+        self.llm_interface: LLM_Interface = llm_interface
+        self.max_tool_iterations: int = max_tool_iterations
+
+        self.memory: list[dict[str, str]] = []
+        self.max_memory_length: int = max_memory_length
+
+        # 在实例化后应用装饰器
+        self.chat = llm_chat(
+            llm_interface=self.llm_interface,
+            max_tool_calls=self.max_tool_iterations,
+            toolkit=[
+                file_operator,
+                execute_command,
+                get_current_time_and_date,
+                write_code,
+                make_user_query_more_detailed,
+            ],
+            timeout=600,
+        )(self.chat_impl)
+
+    @staticmethod
+    def chat_impl(history: List[Dict[str, str]], user_requirement: str):  # type: ignore
         """
-        你是一个智能助手，能够管理多个独立的对话会话。
-        每个会话都有独立的上下文和历史记录。
-        请根据对话历史提供连贯和相关的回复。
+        ### 身份：
+        你是一位专业的CAD设计师，同时精通PythonOCC框架。
+
+        ### 任务：
+        - 你需要根据用户的需求(user_requirement)，和用户进行亲切的对话，回答问题或生成高质量的PythonOCC代码
+
+        ### 输出格式：
+        每次使用工具前，说明你要做什么。
+        每次工具使用之后，说明达到了什么效果或者目的。
+
+        ## 提醒：
+        1.  善用查看当前文件夹下的文件的能力，看看有没有什么能够帮助你的文件
+        2.  尽可能自动的完成从完善的需求到写代码到导出文件的全过程
         """
         pass
-    
-    def chat(self, message: str, session_id: str = "default") -> str:
-        """发送消息并获取回复"""
-        # 获取会话历史记录
-        history = self.sessions.get(session_id, [])
-        
-        complete_response = ""
-        
-        # 调用装饰的聊天函数
-        for response_chunk, updated_history in self.managed_chat(
-            message=message,
-            session_id=session_id,
-            history=history
-        ):
-            if response_chunk:
-                complete_response += response_chunk
-            else:
-                # 更新会话历史记录
-                self.sessions[session_id] = updated_history
-                break
-        
-        return complete_response
-    
-    def get_session_history(self, session_id: str = "default") -> List[Dict[str, str]]:
-        """获取指定会话的历史记录"""
-        return self.sessions.get(session_id, [])
-    
-    def clear_session(self, session_id: str = "default"):
-        """清除指定会话的历史记录"""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
 
-# 使用示例
-chat_manager = ChatManager(llm)
+    def run(self, query: str) -> Generator[str, None, None]:
+        """
+        运行CADAgent，处理用户的查询。
+        """
+        # 处理内存长度
+        if len(self.memory) > self.max_memory_length:
+            # 保留第一条，然后pop掉第二条
+            self.memory.pop(1)
 
-# 会话1
-response1 = chat_manager.chat("你好，我想了解Python编程", "python_session")
-print(f"Python会话: {response1}")
+        query = query.strip() + "。请务必不要忘记使用工具, 以及将代码写入本地文件。"
 
-# 会话2  
-response2 = chat_manager.chat("推荐一些好看的电影", "movie_session")
-print(f"电影会话: {response2}")
-
-# 继续Python会话
-response3 = chat_manager.chat("请给我一个简单的例子", "python_session")
-print(f"Python会话继续: {response3}")
-
-# 查看历史记录
-python_history = chat_manager.get_session_history("python_session")
-print(f"Python会话历史: {len(python_history)} 条消息")
+        llm_response_flow = self.chat(self.memory, query)
+        for response_str, history in llm_response_flow:
+            self.memory = history
+            yield response_str
 ```
-
 ---
 
 通过这些示例可以看出，`llm_chat` 装饰器提供了强大而灵活的对话功能，支持多种使用场景，从简单的问答到复杂的多会话管理都能很好地处理。装饰器的流式响应特性使得用户能够获得实时的交互体验。
