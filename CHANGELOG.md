@@ -1,4 +1,9 @@
-## 0.1.12版本更新说明 (Latest)
+## 0.1.13版本更新说明 (Latest)
+
+1. 原来的tool call流程中，extract出来的tool call不会按照openai定义的message格式添加到message中，这再众多模型上不会导致问题，但是在OpenAI自家的模型上，如果没有assistant的tool call信息，API在接收到 role 为 tool 的消息时会出现错误。现在修复了这个问题，tool call会被正确的添加到message中。
+
+-----
+## 0.1.12版本更新说明
 
 1. 更新了文档中对于`OpenAICompatible`借口创建的不正确样例
 2. 将ReAct模式下的工具调用判定修改的更加具有语义性

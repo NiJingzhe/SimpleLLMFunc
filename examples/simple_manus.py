@@ -14,7 +14,7 @@ import os
 # 当前脚本文件所在的文件夹下的provider.json文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
-VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["volc_engine"]["deepseek-v3-250324"]
+GPT_4o_Interface = OpenAICompatible.load_from_json_file("provider.json")["dreamcatcher"]["gpt-4o"]
 
 # 历史记录管理相关函数
 def save_history(history: List[Dict[str, str]], session_id: str) -> str:
@@ -187,7 +187,7 @@ def get_current_time_and_date() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-@llm_function(llm_interface=VolcEngine_deepseek_v3_Interface)
+@llm_function(llm_interface=GPT_4o_Interface)
 def auto_merge(prev_content: str, content_need_merge: str) -> str:  # type: ignore
     """自动合并函数
 
@@ -605,7 +605,7 @@ import os
 
 
 @llm_chat(
-    llm_interface=VolcEngine_deepseek_v3_Interface,
+    llm_interface=GPT_4o_Interface,
     toolkit=[
         calc,
         get_current_time_and_date,
@@ -755,7 +755,7 @@ if __name__ == "__main__":
                     [history_GLaDos[0]] + history_GLaDos[-9:]
                 )
 
-            print(f"history: {history_GLaDos}")
+            print(f"history: {json.dumps(history_GLaDos, ensure_ascii=False, indent=2)}")
 
             # 自动保存历史记录
             if args.auto_save and session_id:

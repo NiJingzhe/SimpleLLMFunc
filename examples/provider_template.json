@@ -7,5 +7,14 @@
             "max_retries": 3,
             "retry_delay": 1
         }
+    ],
+    "dreamcatcher": [
+        {
+            "model_name": "gpt-4o",
+            "api_keys": [
+                "your_api_key"
+            ],
+            "base_url": "https://api.chatanywhere.tech"
+        }
     ]
 }
