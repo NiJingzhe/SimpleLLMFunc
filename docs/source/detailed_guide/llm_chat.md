@@ -59,6 +59,11 @@ List[Dict[str, str]]
 需要说明的是无论流式还是非流返回，都是同样的格式，非流返回中的 `str` 可能是完整的响应内容，而流式返回则是每个`delta`中的内容。
 对于历史记录，我们只要关注生成器最后一个返回中的 `List[Dict[str, str]]`，它包含了更新好的对话历史记录。
 
+## 被装饰的函数有要求：
+- 函数必须包含 `history` 或 `chat_history` 参数，用于存储对话历史记录，且必须是第一个参数，且必须是 `List[Dict[str, str]]` 类型。
+- 函数的必须有文档字符串（docstring），这将作为系统消息传递给 LLM，但是不能有函数体
+- 函数可以接受其他参数，这些参数将被格式化为用户消息内容。
+
 ## 装饰器行为
 
 ### 参数处理流程
@@ -111,7 +116,7 @@ llm = OpenAICompatible(
 )
 
 @llm_chat(llm_interface=llm)
-def simple_chat(message: str, history: List[Dict[str, str]] = []) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
+def simple_chat(history: List[Dict[str, str]] = [], message: str) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
     """
     你是一个友好的助手，擅长回答各种问题。
     请保持对话自然流畅，回答要准确有用。
@@ -139,10 +144,10 @@ print(f"历史记录: {history}")
 ```python
 @llm_chat(llm_interface=llm, temperature=0.7)
 def multi_param_chat(
+    history: List[Dict[str, str]] = [],
     question: str, 
     context: str, 
     language: str = "中文",
-    history: List[Dict[str, str]] = []
 ) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
     """
     你是一个专业的问答助手。根据提供的上下文信息回答用户问题。
@@ -199,8 +204,8 @@ def calculate_math(expression: str) -> str:
     temperature=0.3
 )
 def assistant_with_tools(
+    history: List[Dict[str, str]] = [],
     message: str, 
-    history: List[Dict[str, str]] = []
 ) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
     """
     你是一个智能助手，可以帮助用户获取时间、查询天气和进行数学计算。
@@ -238,10 +243,10 @@ def chat_session():
 ```python
 @llm_chat(llm_interface=llm, temperature=0.8, top_p=0.9)
 def role_play_chat(
+    chat_history: List[Dict[str, str]] = [],
     user_message: str,
     character_name: str = "小助手",
     character_traits: str = "友好、幽默、博学",
-    chat_history: List[Dict[str, str]] = []
 ) -> Generator[Tuple[str, List[Dict[str, str]]], None, None]:
     """
     你需要扮演指定的角色与用户对话。
