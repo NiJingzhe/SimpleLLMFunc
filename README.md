@@ -458,10 +458,10 @@ pip install SimpleLLMFunc
 ```bibtex
 @software{Jingzhe_SimpleLLMFunc_2025,
   author = {Jingzhe Ni},
-  month = {May},
+  month = {June},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.1.11},
+  version = {0.1.12},
   year = {2025}
 }
 ```
