@@ -199,7 +199,7 @@ def get_daily_recommendation(city: str) -> WeatherInfo:
 from SimpleLLMFunc import llm_chat
 
 @llm_chat(llm_interface=my_llm_interface, toolkit=[get_weather])
-def chat_assistant(message: str, history: List[Dict[str, str]] = None):
+def chat_assistant(history: List[Dict[str, str]], message: str):
     """
     你是一个友好的助手，可以回答用户问题并提供帮助。
     你可以使用工具来获取实时信息，例如天气状况。
