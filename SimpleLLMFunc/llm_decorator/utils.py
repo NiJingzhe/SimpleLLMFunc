@@ -77,6 +77,11 @@ def execute_llm(
         **llm_kwargs,  # 传递额外的关键字参数
     )
 
+    push_debug(
+        f"LLM 函数 '{func_name}' 初始响应: {initial_response}",
+        location=get_location()
+    )
+
     # 产生初始响应
     yield initial_response
 
@@ -88,6 +93,16 @@ def execute_llm(
     # 提取初始响应中的工具调用
     tool_calls = _extract_tool_calls(initial_response)
 
+    assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
+    
+    if assistant_tool_call_message != {}: 
+        current_messages.append(assistant_tool_call_message)
+
+    push_debug(
+        f"LLM 函数 '{func_name}' 抽取工具后构建的完整消息: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+        location=get_location()
+    )
+     
     # 如果没有工具调用，直接返回
     if len(tool_calls) == 0:
         app_log(f"未发现工具调用，直接返回结果", location=get_location())
@@ -105,15 +120,15 @@ def execute_llm(
     # 处理初始工具调用，执行工具并将结果添加到消息历史
     current_messages = _process_tool_calls(
         tool_calls=tool_calls,
-        response=initial_response,
         messages=current_messages,
         tool_map=tool_map,
     )
+    
 
     # 继续处理可能的后续工具调用
     while call_count < max_tool_calls:
         app_log(
-            f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count}/{max_tool_calls} 次调用",
+            f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count}/{max_tool_calls} 次返回工具响应",
             location=get_location()
         )
         
@@ -123,12 +138,28 @@ def execute_llm(
             tools=tools,
             **llm_kwargs,  # 传递额外的关键字参数
         )
+
+        push_debug(
+            f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM，响应: {response}",
+            location=get_location()
+        )
         
         # 产生当前响应
         yield response
 
         # 检查是否有更多工具调用
         tool_calls = _extract_tool_calls(response)
+
+        assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
+        
+        # 将助手消息添加到消息历史
+        if assistant_tool_call_message != {}:
+            current_messages.append(assistant_tool_call_message)
+
+        push_debug(
+            f"LLM 函数 '{func_name}' 抽取工具后构建的完整消息: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+            location=get_location()
+        )
 
         if len(tool_calls) == 0:
             # 没有更多工具调用，返回最终响应
@@ -141,7 +172,6 @@ def execute_llm(
         # 处理工具调用并更新消息历史
         current_messages = _process_tool_calls(
             tool_calls=tool_calls,
-            response=response,
             messages=current_messages,
             tool_map=tool_map,
         )
@@ -387,7 +417,6 @@ def _describe_pydantic_model(model_class: Type[BaseModel]) -> str:
 
 def _process_tool_calls(
     tool_calls: List[Dict[str, Any]],
-    response: Any,
     messages: List[Dict[str, Any]],
     tool_map: Dict[str, Callable],
 ) -> List[Dict[str, Any]]:
@@ -491,6 +520,7 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
                     tool_calls.append(
                         {
                             "id": tool_call.id,
+                            "type": getattr(tool_call, "type", "function"),
                             "function": {
                                 "name": tool_call.function.name,
                                 "arguments": tool_call.function.arguments,
@@ -501,6 +531,19 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
         push_error(f"提取工具调用时出错: {str(e)}")
     finally:
         return tool_calls
+
+def _build_assistant_tool_message(tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    构造 assistant message，包含 tool_calls 字段
+    """
+    if tool_calls:
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": tool_calls
+        }
+    else:
+        return {}
 
 
 # 导出公共函数
