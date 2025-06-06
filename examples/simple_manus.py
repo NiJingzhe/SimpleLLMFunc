@@ -5,6 +5,12 @@ import os
 import sys
 import json
 import argparse
+import uuid
+import subprocess
+import time
+import select
+import shutil
+import math
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union
 
@@ -14,7 +20,7 @@ import os
 # 当前脚本文件所在的文件夹下的provider.json文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
-GPT_4o_Interface = OpenAICompatible.load_from_json_file("provider.json")["dreamcatcher"]["gpt-4o"]
+GPT_4o_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["dreamcatcher"]["gpt-4o"]
 
 # 历史记录管理相关函数
 def save_history(history: List[Dict[str, str]], session_id: str) -> str:
@@ -613,6 +619,7 @@ import os
         execute_command,
         interactive_terminal,
     ],
+    stream=True,
     max_tool_calls=500,
     timeout=600
 )
@@ -621,6 +628,8 @@ def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     你是GLaDos，一为全能AI助手。
 
     由于你不能和控制台交互，所有的测试都需要首先使用unittest编写专门的测试脚本，并通过mock输入的方法来绕开控制台输入。
+
+    使用工具前请务必说明你要用什么工具做什么。
 
 
     首先需要分析用户的需求，然后使用execute_command工具查看当前的工作环境，然后
@@ -653,7 +662,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--auto-save", "-a", action="store_true", help="自动保存每轮对话的历史记录"
     )
+    parser.add_argument(
+        "--output-delay", "-d", type=float, default=0.01, help="设置输出延迟时间（秒）"
+    )
     args = parser.parse_args()
+    output_delay = args.output_delay
 
     # 如果要列出所有会话
     if args.list_sessions:
@@ -705,10 +718,13 @@ if __name__ == "__main__":
     glados_gen = GLaDos(history_GLaDos, "用户说: " + initial_message)
     # 遍历生成器获取所有中间结果
     for response_GLaDos, history_GLaDos in glados_gen:
-        # 显示每一步的输出
-        print(f"{response_GLaDos}")
-        print("-----------------------------------------")
-    print("==========================================" * 3)
+        # 使用更可靠的流式输出方法
+        if response_GLaDos:
+            sys.stdout.write(response_GLaDos)
+            sys.stdout.flush()
+            # 添加小延时避免字符丢失
+            time.sleep(output_delay)
+    print("\n\n" + "==========================================" * 3)
 
     # 自动保存历史记录
     if args.auto_save and session_id:
@@ -746,16 +762,20 @@ if __name__ == "__main__":
             glados_gen = GLaDos(history_GLaDos, user_message)
             # 遍历生成器获取所有中间结果
             for response_GLaDos, history_GLaDos in glados_gen:
-                print(f"{response_GLaDos}")
-                print("-----------------------------------------")
-            print("==========================================" * 3)
+                # 使用更可靠的流式输出方法
+                if response_GLaDos:
+                    sys.stdout.write(response_GLaDos)
+                    sys.stdout.flush()
+                    # 添加小延时避免字符丢失
+                    time.sleep(0.01)
+            print("\n\n" + "==========================================" * 3)
 
             if len(history_GLaDos) > 10:
                 history_GLaDos = (
                     [history_GLaDos[0]] + history_GLaDos[-9:]
                 )
 
-            print(f"history: {json.dumps(history_GLaDos, ensure_ascii=False, indent=2)}")
+            #print(f"history: {json.dumps(history_GLaDos, ensure_ascii=False, indent=2)}")
 
             # 自动保存历史记录
             if args.auto_save and session_id:

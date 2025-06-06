@@ -59,6 +59,7 @@ from SimpleLLMFunc.llm_decorator.utils import (
 )
 
 from SimpleLLMFunc.utils import get_last_item_of_generator
+from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
@@ -178,10 +179,10 @@ def llm_function(
             bound_args.apply_defaults()
 
             with log_context(
-                trace_id=current_trace_id, 
-                function_name=func_name, 
-                input_tokens=0, 
-                output_tokens=0
+                trace_id=current_trace_id,
+                function_name=func_name,
+                input_tokens=0,
+                output_tokens=0,
             ):
 
                 # 记录详细参数
@@ -263,10 +264,10 @@ def llm_function(
                         while (
                             retry_times > 0
                             and hasattr(
-                                final_response.choices[0].message, "content" # type: ignore
-                            )  
-                            and final_response.choices[0].message.content # type: ignore
-                            == ""  
+                                final_response.choices[0].message, "content"  # type: ignore
+                            )
+                            and final_response.choices[0].message.content  # type: ignore
+                            == ""
                         ):
                             retry_times -= 1
                             app_log(
@@ -285,26 +286,13 @@ def llm_function(
                                 response_generator
                             )
 
-                            content = ""
-                            if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
-                                message = final_response.choices[0].message  # type: ignore
-                                content = (
-                                    message.content
-                                    if message and hasattr(message, "content")
-                                    else ""
-                                )
-
+                            content = extract_content_from_response(
+                                final_response, func_name
+                            )
                             if content != "":  # type: ignore
                                 break
 
-                    content = ""
-                    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
-                        message = final_response.choices[0].message  # type: ignore
-                        content = (
-                            message.content
-                            if message and hasattr(message, "content")
-                            else ""
-                        )
+                    content = extract_content_from_response(final_response, func_name)
 
                     if content == "":
                         push_error(
@@ -315,15 +303,11 @@ def llm_function(
 
                     # 记录最终响应
                     app_log(
-                        f"LLM 函数 '{func_name}' 收到最终响应",
+                        f"LLM 函数 '{func_name}' 收到最终响应{json.dumps(
+                            final_response, default=str, ensure_ascii=False, indent=2
+                        )}",
                         location=get_location(),
                     )
-
-                    response_str = json.dumps(
-                        final_response, default=str, ensure_ascii=False, indent=4
-                    )
-                    app_log(response_str, location=get_location())
-
                     # ===== 第四步：处理响应 =====
                     # 将响应转换为指定的返回类型
                     result = process_response(final_response, return_type)

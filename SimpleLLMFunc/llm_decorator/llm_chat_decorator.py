@@ -31,7 +31,7 @@ from SimpleLLMFunc.logger import (
 
 from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
-    process_response,
+    extract_content_from_stream_response
 )
 
 # 定义一个类型变量，用于函数的返回类型
@@ -43,6 +43,7 @@ def llm_chat(
     llm_interface: LLM_Interface,
     toolkit: Optional[List[Union[Tool, Callable]]] = None,
     max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
+    stream: bool = False,  # 是否使用流式响应
     **llm_kwargs,  # 额外的关键字参数，将直接传递给LLM接口
 ):
     """
@@ -278,6 +279,7 @@ def llm_chat(
                         tools=tool_param_for_api,
                         tool_map=tool_map,
                         max_tool_calls=max_tool_calls,
+                        stream=stream,
                         **llm_kwargs,  # 传递额外的关键字参数
                     )
 
@@ -293,8 +295,7 @@ def llm_chat(
                         )
 
                         # 提取响应内容
-                        content = process_response(response, str)
-
+                        content = extract_content_from_stream_response(response, func_name) 
                         complete_content += content
 
                         yield content, current_messages

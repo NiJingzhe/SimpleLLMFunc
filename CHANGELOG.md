@@ -1,4 +1,9 @@
-## 0.1.13版本更新说明 (Latest)
+## 0.2.0版本更新说明 (Latest)
+
+1. **Stream支持**：现在`llm_chat`装饰器支持传入一个`stream`参数，允许用户在调用时选择是否开启流式响应。开启流式响应后，LLM的响应将以流的形式返回，而不是一次性返回完整结果。
+
+-----
+## 0.1.13版本更新说明
 
 1. 原来的tool call流程中，extract出来的tool call不会按照openai定义的message格式添加到message中，这再众多模型上不会导致问题，但是在OpenAI自家的模型上，如果没有assistant的tool call信息，API在接收到 role 为 tool 的消息时会出现错误。现在修复了这个问题，tool call会被正确的添加到message中。
 
