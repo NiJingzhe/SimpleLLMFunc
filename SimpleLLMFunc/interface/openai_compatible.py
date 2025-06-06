@@ -4,7 +4,7 @@ import os
 import time
 from typing import Generator, Optional, Dict, List, Literal, Iterable, Any
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
@@ -92,7 +92,7 @@ class OpenAICompatible(LLM_Interface):
         
         if not os.path.exists(json_path):
             push_critical(f"JSON 文件 {json_path} 不存在。请检查您的配置。", location=get_location())
-            raise FileNotFoundError(f"JSON file {json_path} does not exist.")
+            raise FileNotFoundError(f"JSON 文件 {json_path} 不存在。")
         
         with open(json_path, "r", encoding="utf-8") as f:
             json_str = f.read()

@@ -33,6 +33,7 @@ def execute_llm(
     tools: List[Dict[str, Any]] | None,
     tool_map: Dict[str, Callable],
     max_tool_calls: int,
+    stream: bool = False,
     **llm_kwargs,  # 添加llm_kwargs参数接收额外的LLM配置
 ) -> Generator[Any, None, None]:
     """
@@ -70,43 +71,75 @@ def execute_llm(
         f"LLM 函数 '{func_name}' 将要发起初始请求，消息数: {len(current_messages)}",
         location=get_location()
     )
-    
-    initial_response = llm_interface.chat(
-        messages=current_messages,
-        tools=tools,
-        **llm_kwargs,  # 传递额外的关键字参数
-    )
+
+    # 如果 stream 为 True，使用流式响应
+    if stream:
+        push_debug(
+            f"LLM 函数 '{func_name}' 使用流式响应",
+            location=get_location()
+        )
+        # 使用流式响应
+        initial_response = llm_interface.chat_stream(
+            messages=current_messages,
+            tools=tools,
+            **llm_kwargs,  # 传递额外的关键字参数
+        )
+    else:
+        push_debug(
+            f"LLM 函数 '{func_name}' 使用非流式响应",
+            location=get_location()
+        )
+        # 使用非流式响应
+        initial_response = llm_interface.chat(
+            messages=current_messages,
+            tools=tools,
+            **llm_kwargs,  # 传递额外的关键字参数
+        )
 
     push_debug(
         f"LLM 函数 '{func_name}' 初始响应: {initial_response}",
         location=get_location()
     )
 
-    # 产生初始响应
-    yield initial_response
+    # 处理响应
+    content = "" 
+    tool_call_chunks = []  # 累积工具调用片段
+    if stream:
+        # 流式响应：在一次遍历中同时提取内容和工具调用片段
+        for chunk in initial_response:
+            content += extract_content_from_stream_response(chunk, func_name)
+            tool_call_chunks.extend(_extract_tool_calls_from_stream_response(chunk))
+            yield chunk  # 如果是流式响应，逐个返回 chunk
+        # 合并工具调用片段为完整的工具调用
+        tool_calls = _accumulate_tool_calls_from_chunks(tool_call_chunks)
+    else:
+        # 非流式响应：分别提取内容和工具调用
+        content = extract_content_from_response(initial_response, func_name)
+        tool_calls = _extract_tool_calls(initial_response)
+        yield initial_response
 
     app_log(
-        f"LLM 函数 '{func_name}' 收到初始响应",
+        f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
         location=get_location()
     )
 
-    # 提取初始响应中的工具调用
-    tool_calls = _extract_tool_calls(initial_response)
-
-    assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
+    # 根据content是否为空决定是否要构造助手中间输出
+    if content.strip() != "":
+        assistant_message = _build_assistant_response_message(content)
+        current_messages.append(assistant_message)
     
-    if assistant_tool_call_message != {}: 
+    # 根据工具调用是否为空决定是否要构造助手工具调用消息
+    if len(tool_calls) != 0:
+        assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
         current_messages.append(assistant_tool_call_message)
+    else:
+        app_log(f"未发现工具调用，直接返回结果", location=get_location())
+        return 
 
     push_debug(
         f"LLM 函数 '{func_name}' 抽取工具后构建的完整消息: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
         location=get_location()
     )
-     
-    # 如果没有工具调用，直接返回
-    if len(tool_calls) == 0:
-        app_log(f"未发现工具调用，直接返回结果", location=get_location())
-        return 
 
     # === 工具调用循环 ===
     app_log(
@@ -123,7 +156,6 @@ def execute_llm(
         messages=current_messages,
         tool_map=tool_map,
     )
-    
 
     # 继续处理可能的后续工具调用
     while call_count < max_tool_calls:
@@ -133,27 +165,66 @@ def execute_llm(
         )
         
         # 使用更新后的消息历史再次调用 LLM
-        response = llm_interface.chat(
-            messages=current_messages,
-            tools=tools,
-            **llm_kwargs,  # 传递额外的关键字参数
-        )
+        # 如果 stream 为 True，使用流式响应
+        if stream:
+            push_debug(
+                f"LLM 函数 '{func_name}' 使用流式响应",
+                location=get_location()
+            )
+            # 使用流式响应
+            response = llm_interface.chat_stream(
+                messages=current_messages,
+                tools=tools,
+                **llm_kwargs,  # 传递额外的关键字参数
+            )
+        else:
+            push_debug(
+                f"LLM 函数 '{func_name}' 使用非流式响应",
+                location=get_location()
+            )
+            # 使用非流式响应
+            response = llm_interface.chat(
+                messages=current_messages,
+                tools=tools,
+                **llm_kwargs,  # 传递额外的关键字参数
+            )
+
 
         push_debug(
             f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM，响应: {response}",
             location=get_location()
         )
         
-        # 产生当前响应
-        yield response
+        # 处理响应
+        content = "" 
+        tool_call_chunks = []  # 累积工具调用片段
+        if stream:
+            # 流式响应：在一次遍历中同时提取内容和工具调用片段
+            for chunk in response:
+                content += extract_content_from_stream_response(chunk, func_name)
+                tool_call_chunks.extend(_extract_tool_calls_from_stream_response(chunk))
+                yield chunk  # 如果是流式响应，逐个返回 chunk
+            # 合并工具调用片段为完整的工具调用
+            tool_calls = _accumulate_tool_calls_from_chunks(tool_call_chunks)
+        else:
+            # 非流式响应：分别提取内容和工具调用
+            content = extract_content_from_response(response, func_name)
+            tool_calls = _extract_tool_calls(response)
+            yield response
 
-        # 检查是否有更多工具调用
-        tool_calls = _extract_tool_calls(response)
+        app_log(
+            f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
+            location=get_location()
+        )
 
-        assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
-        
+        # 根据content是否为空决定是否要构造助手中间输出
+        if content.strip() != "":
+            assistant_message = _build_assistant_response_message(content)
+            current_messages.append(assistant_message)
+
         # 将助手消息添加到消息历史
-        if assistant_tool_call_message != {}:
+        if len(tool_calls) != 0:
+            assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
             current_messages.append(assistant_tool_call_message)
 
         push_debug(
@@ -216,7 +287,7 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
     
     # 步骤 1: 从 API 响应中提取文本内容
-    content = _extract_content_from_response(response, func_name)
+    content = extract_content_from_response(response, func_name)
     
     # 步骤 2: 根据返回类型进行适当的转换
     # 如果内容为 None，转换为空字符串
@@ -287,26 +358,77 @@ def get_detailed_type_description(type_hint: Any) -> str:
     return str(type_hint)
 
 
-# ======================= 内部辅助函数 =======================
-
-def _extract_content_from_response(response: Any, func_name: str) -> str:
+def extract_content_from_response(response: Any, func_name: str) -> str:
     """从 LLM 响应中提取文本内容"""
+    content = ""
     try:
         if hasattr(response, "choices") and len(response.choices) > 0:
             message = response.choices[0].message
-            content = message.content if message and hasattr(message, "content") else ""
+            if message and hasattr(message, "content") and message.content is not None:
+                content = message.content
+            else:
+                content = ""
         else:
-            push_warning(
+            push_error(
                 f"LLM 函数 '{func_name}': 未知响应格式: {type(response)}，将直接转换为字符串", 
                 location=get_location()
             )
-            content = str(response)
+            content = "" 
     except Exception as e:
         push_error(f"提取响应内容时出错: {str(e)}")
-        content = str(response)
+        content = ""
 
     push_debug(f"LLM 函数 '{func_name}' 提取的内容:\n{content}")
     return content
+
+
+def extract_content_from_stream_response(chunk: Any, func_name: str) -> str:
+    """从流返回中抽取一个chunk的内容
+
+    Args:
+        chunk (Any): 流响应chunk对象, chunk对象的内容在delta中
+        func_name (str): 函数名称
+
+    Returns:
+        str: 提取的文本内容
+    """
+
+    content = ""  # 初始化内容为空字符串
+    if not chunk:
+        push_warning(
+            f"LLM 函数 '{func_name}': 检测到空的流响应 chunk，返回空字符串",
+            location=get_location()
+        )
+        return content
+    try:
+        # 检查是否为OpenAI ChatCompletionChunk格式
+        if hasattr(chunk, "choices") and chunk.choices and len(chunk.choices) > 0:
+            choice = chunk.choices[0]
+            # 检查是否有delta属性（流式响应）
+            if hasattr(choice, "delta") and choice.delta:
+                delta = choice.delta
+                if hasattr(delta, "content") and delta.content is not None:
+                    content = delta.content
+                else:
+                    content = ""
+            else:
+                content = ""
+        else:
+            # 尝试其他可能的格式
+            app_log(
+                f"LLM 函数 '{func_name}': 检测到流响应格式: {type(chunk)}，内容为: {chunk}，预估不包含content，将会返回空串",
+                location=get_location()
+            )
+            content = "" 
+    except Exception as e:
+        push_error(f"提取流响应内容时出错: {str(e)}")
+        content = "" 
+
+    push_debug(f"LLM 函数 '{func_name}' 提取的流内容:\n{content}")
+    return content
+    
+    
+# ======================= 类型转换辅助函数 =======================
 
 
 def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
@@ -320,6 +442,8 @@ def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
             return content.strip().lower() in ("true", "yes", "1")
     except (ValueError, TypeError):
         raise ValueError(f"无法将 LLM 响应 '{content}' 转换为 {return_type.__name__} 类型")
+
+    
 
 
 def _convert_to_dict(content: str, func_name: str) -> Dict:
@@ -414,6 +538,10 @@ def _describe_pydantic_model(model_class: Type[BaseModel]) -> str:
     )
     return model_desc
 
+
+# ======================= 类型转换辅助函数 =======================
+
+# ======================= 工具调用处理函数 =======================
 
 def _process_tool_calls(
     tool_calls: List[Dict[str, Any]],
@@ -532,6 +660,115 @@ def _extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
     finally:
         return tool_calls
 
+
+def _accumulate_tool_calls_from_chunks(tool_call_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    累积并合并流式响应中的工具调用片段
+    
+    在流式响应中，工具调用信息会分散在多个chunk中：
+    - 第一个chunk可能包含id和type
+    - 后续chunks包含function name和arguments的不同部分
+    
+    Args:
+        tool_call_chunks: 从多个chunk中提取的工具调用片段列表
+        
+    Returns:
+        合并后的完整工具调用列表
+    """
+    # 使用字典来按index累积工具调用
+    accumulated_calls = {}
+    
+    for chunk in tool_call_chunks:
+        index = chunk.get("index")
+        if index is None:
+            push_warning("工具调用 chunk 缺少 'index' 属性，已跳过处理", location=get_location())
+            continue
+        
+        if index not in accumulated_calls:
+            accumulated_calls[index] = {
+                "id": None,
+                "type": None,
+                "function": {
+                    "name": None,
+                    "arguments": ""
+                }
+            }
+        
+        # 累积基本信息
+        if chunk.get("id"):
+            accumulated_calls[index]["id"] = chunk["id"]
+        if chunk.get("type"):
+            accumulated_calls[index]["type"] = chunk["type"]
+        
+        # 累积function信息
+        if "function" in chunk:
+            function_chunk = chunk["function"]
+            if function_chunk.get("name"):
+                accumulated_calls[index]["function"]["name"] = function_chunk["name"]
+            if function_chunk.get("arguments"):
+                # 累积arguments字符串
+                accumulated_calls[index]["function"]["arguments"] += function_chunk["arguments"]
+    
+    # 过滤出完整的工具调用（至少有id和function name）
+    complete_tool_calls = []
+    for call in accumulated_calls.values():
+        if call["id"] and call["function"]["name"]:
+            # 设置默认type
+            if not call["type"]:
+                call["type"] = "function"
+            complete_tool_calls.append(call)
+    
+    return complete_tool_calls
+
+
+def _extract_tool_calls_from_stream_response(chunk: Any) -> List[Dict[str, Any]]:
+    """
+    从流响应中提取工具调用片段
+    
+    注意：流式响应中工具调用信息会分散在多个chunk中，
+    这个函数只提取当前chunk中的部分信息，需要在上层进行累积。
+    
+    Args:
+        chunk: 流响应的一个 chunk
+        
+    Returns:
+        工具调用片段列表，每个元素包含当前chunk的部分信息
+    """
+    tool_call_chunks = []
+
+    try:
+        # 检查对象格式 (OpenAI API 格式)
+        if hasattr(chunk, "choices") and len(chunk.choices) > 0:
+            choice = chunk.choices[0]
+            if hasattr(choice, "delta") and choice.delta:
+                delta = choice.delta
+                if hasattr(delta, "tool_calls") and delta.tool_calls:
+                    # 将对象格式转换为字典，保留chunk中的所有信息
+                    for tool_call in delta.tool_calls:
+                        tool_call_chunk = {
+                            "index": getattr(tool_call, "index", None),
+                            "id": getattr(tool_call, "id", None),
+                            "type": getattr(tool_call, "type", None),
+                        }
+                        
+                        # 处理 function 部分
+                        if hasattr(tool_call, "function") and tool_call.function:
+                            function_info = {}
+                            if hasattr(tool_call.function, "name") and tool_call.function.name:
+                                function_info["name"] = tool_call.function.name
+                            if hasattr(tool_call.function, "arguments") and tool_call.function.arguments:
+                                function_info["arguments"] = tool_call.function.arguments
+                            
+                            if function_info:
+                                tool_call_chunk["function"] = function_info
+                        
+                        tool_call_chunks.append(tool_call_chunk)
+    except Exception as e:
+        push_error(f"提取流工具调用时出错: {str(e)}")
+    
+    return tool_call_chunks
+
+
 def _build_assistant_tool_message(tool_calls: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     构造 assistant message，包含 tool_calls 字段
@@ -546,9 +783,25 @@ def _build_assistant_tool_message(tool_calls: List[Dict[str, Any]]) -> Dict[str,
         return {}
 
 
+def _build_assistant_response_message(content: str) -> Dict[str, Any]:
+    """
+    构造 assistant message，包含 content 和 tool_calls 字段
+    """
+    return {
+        "role": "assistant",
+        "content": content,
+    }
+
+
+
+# ======================= 工具调用处理函数 =======================
+
+
 # 导出公共函数
 __all__ = [
     "execute_llm",
     "get_detailed_type_description",
     "process_response",
+    "extract_content_from_response",
+    "extract_content_from_stream_response",
 ]
