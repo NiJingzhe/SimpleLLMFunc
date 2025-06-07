@@ -303,9 +303,7 @@ def llm_function(
 
                     # 记录最终响应
                     app_log(
-                        f"LLM 函数 '{func_name}' 收到最终响应{json.dumps(
-                            final_response, default=str, ensure_ascii=False, indent=2
-                        )}",
+                        f"LLM 函数 '{func_name}' 收到最终响应{json.dumps(final_response, default=str, ensure_ascii=False, indent=2)}",
                         location=get_location(),
                     )
                     # ===== 第四步：处理响应 =====
