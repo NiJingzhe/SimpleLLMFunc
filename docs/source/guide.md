@@ -191,6 +191,31 @@ def get_daily_recommendation(city: str) -> WeatherInfo:
     pass
 ```
 
+### 创建async的 LLM 函数
+如果需要创建异步的 LLM 函数，可以在函数定义前添加 `async` 关键字，并使用 `@async_llm_function` 装饰器。
+```python
+from SimpleLLMFunc import async_llm_function
+
+@async_llm_function(llm_interface=my_llm_interface)
+async def async_analyze_product_review(product_name: str, review_text: str) -> ProductReview:
+    """    分析产品评论，提取关键信息并生成结构化评测报告  
+    Args:
+        product_name: 产品名称
+        review_text: 用户评论文本
+    Returns:
+        包含评分、优缺点和总结的产品评测报告
+    """
+    pass  # 函数体为空，实际执行由LLM完成
+
+# 使用异步函数
+import asyncio
+result = asyncio.run(async_analyze_product_review("无线耳机", "这款耳机音质不错，但电池续航较差..."))
+print(f"评分: {result.rating}")
+print(f"优点: {', '.join(result.pros)}")
+print(f"缺点: {', '.join(result.cons)}")
+print(f"总结: {result.summary}")
+```
+
 ### 创建对话型应用
 
 使用 `@llm_chat` 装饰器以创建对话式应用，具体步骤如下：
@@ -222,5 +247,5 @@ next_response, updated_history = next(chat_assistant("那我应该穿什么衣�
 4. **工具函数保持简单明确**：每个工具只负责一个明确的任务
 5. **处理异常情况**：为LLM可能的错误输出添加错误处理逻辑
 6. **合理组合多个LLM函数**：将复杂任务拆分为多个子任务，由不同函数负责
-
-
+7. **使用日志**：利用日志系统记录函数调用和LLM交互的详细信息，便于后续分析和调试
+8. **尝试从日志中清洗出训练数据用于微调模型**：定期分析日志，提取有价值的对话示例，构建高质量的训练数据集

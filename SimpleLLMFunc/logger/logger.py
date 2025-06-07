@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 import atexit
 import signal
 import weakref
+import contextvars
 
 
 class LogLevel(Enum):
@@ -374,9 +375,10 @@ class IndexedRotatingFileHandler(RotatingFileHandler):
 # 全局日志器对象和处理器
 _logger: Optional[logging.Logger] = None
 _indexed_handler: Optional[IndexedRotatingFileHandler] = None
-_log_context: Dict[str, Any] = {}
-_log_context_stack: List[Dict[str, Any]] = []
-_context_lock = threading.RLock()
+
+# 使用 contextvars 来管理日志上下文，支持异步和多线程环境
+_log_context: contextvars.ContextVar[Dict[str, Any]] = contextvars.ContextVar('log_context', default={})
+_context_lock = threading.RLock()  # 保留锁用于向后兼容，但主要逻辑会使用 contextvars
 
 # 用于表示默认trace_id的常量
 DEFAULT_TRACE_ID = ""
@@ -487,9 +489,10 @@ def _merge_context(extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         合并后的字典
     """
     result = {}
-    with _context_lock:
-        # 复制当前上下文
-        result.update(_log_context)
+    
+    # 获取当前上下文
+    current_context = _log_context.get({})
+    result.update(current_context)
 
     # 添加额外参数（如果有）
     if extra:
@@ -506,8 +509,8 @@ def get_current_trace_id() -> str:
     Returns:
         当前上下文中的trace_id
     """
-    with _context_lock:
-        return _log_context.get("trace_id", DEFAULT_TRACE_ID)
+    current_context = _log_context.get({})
+    return current_context.get("trace_id", DEFAULT_TRACE_ID)
 
 
 def get_current_context_attribute(key: str) -> Any:
@@ -519,8 +522,8 @@ def get_current_context_attribute(key: str) -> Any:
     Returns:
         属性值，如果不存在则返回None
     """
-    with _context_lock:
-        return _log_context.get(key, None)
+    current_context = _log_context.get({})
+    return current_context.get(key, None)
 
     
 def set_current_context_attribute(key: str, value: Any) -> None:
@@ -530,11 +533,21 @@ def set_current_context_attribute(key: str, value: Any) -> None:
         key (str): 属性名称
         value (Any): 属性值
     """
-    with _context_lock:
-        if key not in _log_context.keys():
-            push_warning(f"You are changing a never seen attribute in current log context: {key}")
-        
-        _log_context[key] = value 
+    current_context = _log_context.get({})
+    
+    # 系统已知的属性，不需要警告
+    KNOWN_SYSTEM_ATTRIBUTES = {
+        "input_tokens", "output_tokens", "trace_id", "location", 
+        "execution_time", "model_name", "function_name"
+    }
+    
+    if key not in current_context and key not in KNOWN_SYSTEM_ATTRIBUTES:
+        push_warning(f"You are changing a never seen attribute in current log context: {key}")
+    
+    # 创建新的上下文字典
+    new_context = current_context.copy()
+    new_context[key] = value
+    _log_context.set(new_context) 
 
 
 def setup_logger(
@@ -652,21 +665,21 @@ async def async_log_context(**kwargs: Any) -> AsyncGenerator[None, None]:
         async with async_log_context(trace_id="my_function_123", user_id="456"):
             push_info("处理用户请求")  # 日志会自动包含trace_id和user_id
     """
-    global _log_context
-    global _log_context_stack
-    # 保存原始上下文
-    with _context_lock:
-        _log_context_stack.append(_log_context.copy())
-        # 更新上下文
-        _log_context.update(kwargs)
-
+    # 获取当前上下文
+    current_context = _log_context.get({})
+    
+    # 创建新的上下文，合并新的属性
+    new_context = current_context.copy()
+    new_context.update(kwargs)
+    
+    # 设置新的上下文
+    token = _log_context.set(new_context)
+    
     try:
-        # 执行上下文中的代码
         yield
     finally:
         # 恢复原始上下文
-        with _context_lock:
-            _log_context = _log_context_stack.pop()
+        _log_context.reset(token)
 
 @contextmanager
 def log_context(**kwargs: Any) -> Generator[None, None, None]:
@@ -682,21 +695,21 @@ def log_context(**kwargs: Any) -> Generator[None, None, None]:
         with log_context(trace_id="my_function_123", user_id="456"):
             push_info("处理用户请求")  # 日志会自动包含trace_id和user_id
     """
-    global _log_context
-    global _log_context_stack
-    # 保存原始上下文
-    with _context_lock:
-        _log_context_stack.append(_log_context.copy())
-        # 更新上下文
-        _log_context.update(kwargs)
-
+    # 获取当前上下文
+    current_context = _log_context.get({})
+    
+    # 创建新的上下文，合并新的属性
+    new_context = current_context.copy()
+    new_context.update(kwargs)
+    
+    # 设置新的上下文
+    token = _log_context.set(new_context)
+    
     try:
-        # 执行上下文中的代码
         yield
     finally:
         # 恢复原始上下文
-        with _context_lock:
-            _log_context = _log_context_stack.pop()
+        _log_context.reset(token)
 
 
 def app_log(

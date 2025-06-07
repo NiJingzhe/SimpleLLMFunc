@@ -25,6 +25,8 @@ def generate_summary(text: str) -> str:
 import inspect
 from functools import wraps
 import json
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import (
     List,
     Callable,
@@ -37,6 +39,7 @@ from typing import (
     Union,
     Tuple,
     NamedTuple,
+    Awaitable,
 )
 import uuid
 
@@ -50,6 +53,7 @@ from SimpleLLMFunc.logger import (
     get_location,
     log_context,
     get_current_trace_id,
+    async_log_context,
 )
 
 # 从utils模块导入工具函数
@@ -621,3 +625,259 @@ def _prepare_tools(
             )
 
     return tool_objects, tool_map
+
+
+# ===== 异步版本的装饰器和辅助函数 =====
+
+async def _execute_llm_with_retry_async(
+    llm_interface: LLM_Interface,
+    context: FunctionCallContext,
+    llm_params: LLMCallParams,
+    max_tool_calls: int,
+    executor: Optional[ThreadPoolExecutor] = None
+) -> Any:
+    """
+    异步执行 LLM 调用并处理重试逻辑
+    
+    Args:
+        llm_interface: LLM 接口实例
+        context: 函数调用上下文
+        llm_params: LLM 调用参数
+        max_tool_calls: 最大工具调用次数
+        executor: 线程池执行器，如果为None则创建新的
+        
+    Returns:
+        最终的 LLM 响应
+    """
+    import contextvars
+    
+    # 获取当前上下文副本，确保contextvars能传播到线程池
+    ctx = contextvars.copy_context()
+    loop = asyncio.get_event_loop()
+    
+    if executor is None:
+        # 创建临时的线程池执行器
+        with ThreadPoolExecutor(max_workers=1) as temp_executor:
+            def run_with_context():
+                return _execute_llm_with_retry(llm_interface, context, llm_params, max_tool_calls)
+            
+            return await loop.run_in_executor(
+                temp_executor,
+                ctx.run,
+                run_with_context
+            )
+    else:
+        # 使用提供的线程池执行器
+        def run_with_context():
+            return _execute_llm_with_retry(llm_interface, context, llm_params, max_tool_calls)
+        
+        return await loop.run_in_executor(
+            executor,
+            ctx.run,
+            run_with_context
+        )
+
+def async_llm_function(
+    llm_interface: LLM_Interface,
+    toolkit: Optional[List[Union[Tool, Callable]]] = None,
+    max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
+    system_prompt_template: Optional[str] = None,  # 自定义系统提示模板
+    user_prompt_template: Optional[str] = None,  # 自定义用户提示模板
+    executor: Optional[ThreadPoolExecutor] = None,  # 线程池执行器
+    **llm_kwargs,  # 额外的关键字参数，将直接传递给LLM接口
+):
+    """
+    异步 LLM 函数装饰器，将函数的执行委托给大语言模型（异步版本）。
+
+    此装饰器与 llm_function 功能相同，但通过线程池实现异步执行，
+    避免在 LLM 调用期间阻塞事件循环。
+
+    ## 使用方法
+    1. 定义一个异步函数，包括参数和返回类型标注
+    2. 在函数的文档字符串中描述函数的功能或执行策略
+    3. 使用 @async_llm_function 装饰该函数
+
+    ## 异步特性
+    - LLM 调用在线程池中执行，不会阻塞主事件循环
+    - 支持并发调用多个 LLM 函数
+    - 可以与其他异步操作配合使用（如 asyncio.gather）
+
+    ## 线程池管理
+    - 如果不提供 executor 参数，每次调用会创建临时的线程池
+    - 建议为多个函数共享同一个线程池执行器以提高性能
+    - 可以通过 executor 参数传入自定义的线程池执行器
+
+    ## 参数传递流程
+    与同步版本相同：
+    1. 当用户调用被装饰的函数时，装饰器捕获所有实际参数
+    2. 这些参数被格式化为文本提示，发送给 LLM
+    3. 函数的文档字符串作为系统提示，指导 LLM 如何执行
+    4. 每个参数名称和值都作为用户提示的一部分
+
+    ## 工具使用
+    - 如果提供了工具集 (toolkit)，LLM 可以使用这些工具来辅助完成任务
+    - 支持 Tool 对象或被 @tool 装饰的函数作为工具
+
+    ## 自定义提示模板
+    与同步版本相同，支持自定义系统提示和用户提示模板。
+
+    ## 返回值处理
+    - LLM 的响应会根据函数声明的返回类型进行转换
+    - 支持基本类型 (str, int, float, bool)、字典和 Pydantic 模型
+
+    ## LLM接口参数
+    - 通过`**llm_kwargs`传递的参数将直接传递给LLM接口
+    - 可以用于设置temperature、top_p等模型参数
+
+    Args:
+        llm_interface: LLM 接口实例，用于与大语言模型通信
+        toolkit: 可选的工具列表，可以是 Tool 对象或被 @tool 装饰的函数
+        max_tool_calls: 最大工具调用次数，防止无限循环，默认为 5
+        system_prompt_template: 可选的自定义系统提示模板，用于替代默认模板
+        user_prompt_template: 可选的自定义用户提示模板，用于替代默认模板
+        executor: 可选的线程池执行器，用于执行 LLM 调用。如果为None，会为每次调用创建临时线程池
+        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口调用（如temperature、top_p等）
+
+    Returns:
+        装饰后的异步函数，返回值类型与原函数的返回类型标注一致
+
+    示例1:
+        ```python
+        # 基本用法
+        @async_llm_function(llm_interface=my_llm)
+        async def summarize_text(text: str, max_words: int = 100) -> str:
+            \"\"\"生成输入文本的摘要，摘要不超过指定的词数。\"\"\"
+            pass
+
+        # 调用函数
+        summary = await summarize_text(long_text, max_words=50)
+        ```
+
+    示例2:
+        ```python
+        # 使用共享线程池
+        from concurrent.futures import ThreadPoolExecutor
+        
+        executor = ThreadPoolExecutor(max_workers=4)
+        
+        @async_llm_function(
+            llm_interface=my_llm,
+            executor=executor
+        )
+        async def analyze_sentiment(text: str) -> str:
+            \"\"\"分析文本的情感倾向。\"\"\"
+            pass
+
+        @async_llm_function(
+            llm_interface=my_llm,
+            executor=executor
+        )
+        async def extract_keywords(text: str) -> List[str]:
+            \"\"\"提取文本中的关键词。\"\"\"
+            pass
+
+        # 并发调用
+        texts = ["text1", "text2", "text3"]
+        results = await asyncio.gather(*[
+            analyze_sentiment(text) for text in texts
+        ])
+        ```
+
+    示例3:
+        ```python
+        # 与其他异步操作配合
+        @async_llm_function(llm_interface=my_llm)
+        async def process_data(data: str) -> Dict[str, Any]:
+            \"\"\"处理数据并返回结构化结果。\"\"\"
+            pass
+
+        async def main():
+            # 同时进行多个操作
+            tasks = [
+                process_data(data1),
+                process_data(data2),
+                some_other_async_operation(),
+            ]
+            results = await asyncio.gather(*tasks)
+            return results
+        ```
+    """
+
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        # 获取函数的签名、类型提示和文档字符串
+        signature = inspect.signature(func)
+        type_hints = get_type_hints(func)
+        return_type = type_hints.get("return")
+        docstring = func.__doc__ or ""
+        func_name = func.__name__
+
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            # ===== 第一步：准备函数调用 =====
+            context = _prepare_function_call(func, args, kwargs)
+            
+            async with async_log_context(
+                trace_id=context.trace_id,
+                function_name=context.func_name,
+                input_tokens=0,
+                output_tokens=0,
+            ):
+                # 记录详细参数
+                args_str = json.dumps(
+                    context.bound_args.arguments, default=str, ensure_ascii=False, indent=4
+                )
+
+                app_log(
+                    f"异步 LLM 函数 '{context.func_name}' 被调用，参数: {args_str}",
+                    location=get_location(),
+                )
+
+                # ===== 第二步：构建消息 =====
+                messages = _build_messages(
+                    context=context,
+                    system_prompt_template=system_prompt_template,
+                    user_prompt_template=user_prompt_template,
+                )
+
+                # ===== 第三步：处理工具 =====
+                tool_param, tool_map = _prepare_tools_for_llm(toolkit, context.func_name)
+
+                # ===== 第四步：准备 LLM 调用参数 =====
+                llm_params = LLMCallParams(
+                    messages=messages,
+                    tool_param=tool_param,
+                    tool_map=tool_map,
+                    llm_kwargs=llm_kwargs
+                )
+
+                # ===== 第五步：异步执行 LLM 调用 =====
+                try:
+                    final_response = await _execute_llm_with_retry_async(
+                        llm_interface=llm_interface,
+                        context=context,
+                        llm_params=llm_params,
+                        max_tool_calls=max_tool_calls,
+                        executor=executor
+                    )
+
+                    # ===== 第六步：处理响应 =====
+                    result = _process_final_response(final_response, context.return_type)
+                    return result
+
+                except Exception as e:
+                    # 记录错误并重新抛出
+                    push_error(
+                        f"异步 LLM 函数 '{context.func_name}' 执行时出错: {str(e)}",
+                        location=get_location(),
+                    )
+                    raise
+
+        # 保留原始函数的元数据
+        async_wrapper.__name__ = func_name
+        async_wrapper.__doc__ = docstring
+        async_wrapper.__annotations__ = func.__annotations__
+        async_wrapper.__signature__ = signature  # type: ignore
+
+        return cast(Callable[..., Awaitable[T]], async_wrapper)
+
+    return decorator
