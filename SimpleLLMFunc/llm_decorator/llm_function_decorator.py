@@ -36,6 +36,7 @@ from typing import (
     Optional,
     Union,
     Tuple,
+    NamedTuple,
 )
 import uuid
 
@@ -63,6 +64,27 @@ from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
+
+
+# ===== 数据结构定义 =====
+
+class FunctionCallContext(NamedTuple):
+    """函数调用上下文信息"""
+    func_name: str
+    trace_id: str
+    bound_args: Any  # inspect.BoundArguments
+    signature: Any  # inspect.Signature
+    type_hints: Dict[str, Any]
+    return_type: Any
+    docstring: str
+
+
+class LLMCallParams(NamedTuple):
+    """LLM 调用参数"""
+    messages: List[Dict[str, Any]]
+    tool_param: Optional[List[Dict[str, Any]]]  # 修正为正确的类型
+    tool_map: Dict[str, Callable]
+    llm_kwargs: Dict[str, Any]
 
 
 def llm_function(
@@ -168,153 +190,60 @@ def llm_function(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 构建追踪 ID，用于日志关联
-            context_current_trace_id = get_current_trace_id()
-            current_trace_id = f"{func_name}_{uuid.uuid4()}" + (
-                f"_{context_current_trace_id}" if context_current_trace_id else ""
-            )
-
-            # 将参数绑定到函数签名，应用默认值
-            bound_args = signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-
+            # ===== 第一步：准备函数调用 =====
+            context = _prepare_function_call(func, args, kwargs)
+            
             with log_context(
-                trace_id=current_trace_id,
-                function_name=func_name,
+                trace_id=context.trace_id,
+                function_name=context.func_name,
                 input_tokens=0,
                 output_tokens=0,
             ):
-
                 # 记录详细参数
                 args_str = json.dumps(
-                    bound_args.arguments, default=str, ensure_ascii=False, indent=4
+                    context.bound_args.arguments, default=str, ensure_ascii=False, indent=4
                 )
 
                 app_log(
-                    f"LLM 函数 '{func_name}' 被调用，参数: {args_str}",
+                    f"LLM 函数 '{context.func_name}' 被调用，参数: {args_str}",
                     location=get_location(),
                 )
 
-                # ===== 第一步：构建提示 =====
-                # 构建系统提示和用户提示
-                system_prompt, user_prompt = _build_prompts(
-                    docstring=docstring,
-                    arguments=bound_args.arguments,
-                    type_hints=type_hints,
-                    custom_system_template=system_prompt_template,
-                    custom_user_template=user_prompt_template,
+                # ===== 第二步：构建消息 =====
+                messages = _build_messages(
+                    context=context,
+                    system_prompt_template=system_prompt_template,
+                    user_prompt_template=user_prompt_template,
                 )
 
-                # 准备消息列表
-                messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ]
+                # ===== 第三步：处理工具 =====
+                tool_param, tool_map = _prepare_tools_for_llm(toolkit, context.func_name)
 
-                push_debug(f"系统提示: {system_prompt}", location=get_location())
-                push_debug(f"用户提示: {user_prompt}", location=get_location())
+                # ===== 第四步：准备 LLM 调用参数 =====
+                llm_params = LLMCallParams(
+                    messages=messages,
+                    tool_param=tool_param,
+                    tool_map=tool_map,
+                    llm_kwargs=llm_kwargs
+                )
 
-                # ===== 第二步：处理工具 =====
-                tool_param = None
-                tool_map = {}  # 工具名称到函数的映射
-
-                if toolkit:
-                    # 处理工具列表
-                    tool_objects, tool_map = _prepare_tools(toolkit, func_name)
-
-                    if tool_objects:
-                        # 序列化工具以供 LLM 使用
-                        tool_param = Tool.serialize_tools(tool_objects)
-
-                # ===== 第三步：执行 LLM 调用 =====
+                # ===== 第五步：执行 LLM 调用 =====
                 try:
-                    app_log(f"开始 LLM 调用...", location=get_location())
-
-                    # 调用 LLM 并获取最终响应
-                    response_generator = execute_llm(
+                    final_response = _execute_llm_with_retry(
                         llm_interface=llm_interface,
-                        messages=messages,
-                        tools=tool_param,
-                        tool_map=tool_map,
-                        max_tool_calls=max_tool_calls,
-                        **llm_kwargs,  # 传递额外的关键字参数
+                        context=context,
+                        llm_params=llm_params,
+                        max_tool_calls=max_tool_calls
                     )
 
-                    # 获取最后一个响应作为最终结果
-                    final_response = get_last_item_of_generator(response_generator)
-
-                    # 检查final response中的content字段是否为空
-                    retry_times = llm_kwargs.get("retry_times", 2)
-                    content = ""
-                    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
-                        message = final_response.choices[0].message  # type: ignore
-                        content = (
-                            message.content
-                            if message and hasattr(message, "content")
-                            else ""
-                        )
-
-                    if content == "":
-                        # 如果响应内容为空，记录警告并重试
-                        push_warning(
-                            f"LLM 函数 '{func_name}' 返回的响应内容为空，将会自动重试。",
-                            location=get_location(),
-                        )
-                        # 重新调用 LLM
-                        while (
-                            retry_times > 0
-                            and hasattr(
-                                final_response.choices[0].message, "content"  # type: ignore
-                            )
-                            and final_response.choices[0].message.content  # type: ignore
-                            == ""
-                        ):
-                            retry_times -= 1
-                            app_log(
-                                f"LLM 函数 '{func_name}' 重试第 {llm_kwargs.get('retry_times', 2) - retry_times + 1} 次...",
-                                location=get_location(),
-                            )
-                            response_generator = execute_llm(
-                                llm_interface=llm_interface,
-                                messages=messages,
-                                tools=tool_param,
-                                tool_map=tool_map,
-                                max_tool_calls=max_tool_calls,
-                                **llm_kwargs,  # 传递额外的关键字参数
-                            )
-                            final_response = get_last_item_of_generator(
-                                response_generator
-                            )
-
-                            content = extract_content_from_response(
-                                final_response, func_name
-                            )
-                            if content != "":  # type: ignore
-                                break
-
-                    content = extract_content_from_response(final_response, func_name)
-
-                    if content == "":
-                        push_error(
-                            f"LLM 函数 '{func_name}' 返回的响应内容仍然为空，重试次数已用完。",
-                            location=get_location(),
-                        )
-                        raise ValueError("LLM response content is empty after retries.")
-
-                    # 记录最终响应
-                    app_log(
-                        f"LLM 函数 '{func_name}' 收到最终响应{json.dumps(final_response, default=str, ensure_ascii=False, indent=2)}",
-                        location=get_location(),
-                    )
-                    # ===== 第四步：处理响应 =====
-                    # 将响应转换为指定的返回类型
-                    result = process_response(final_response, return_type)
+                    # ===== 第六步：处理响应 =====
+                    result = _process_final_response(final_response, context.return_type)
                     return result
 
                 except Exception as e:
                     # 记录错误并重新抛出
                     push_error(
-                        f"LLM 函数 '{func_name}' 执行时出错: {str(e)}",
+                        f"LLM 函数 '{context.func_name}' 执行时出错: {str(e)}",
                         location=get_location(),
                     )
                     raise
@@ -360,6 +289,229 @@ DEFAULT_USER_PROMPT_TEMPLATE = """
 
 
 # ===== 内部辅助函数 =====
+
+
+def _prepare_function_call(
+    func: Callable,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any]
+) -> FunctionCallContext:
+    """
+    准备函数调用，处理参数绑定和上下文创建
+    
+    Args:
+        func: 被装饰的函数
+        args: 位置参数
+        kwargs: 关键字参数
+        
+    Returns:
+        FunctionCallContext: 函数调用上下文信息
+    """
+    # 获取函数的签名、类型提示和文档字符串
+    signature = inspect.signature(func)
+    type_hints = get_type_hints(func)
+    return_type = type_hints.get("return")
+    docstring = func.__doc__ or ""
+    func_name = func.__name__
+    
+    # 构建追踪 ID，用于日志关联
+    context_current_trace_id = get_current_trace_id()
+    current_trace_id = f"{func_name}_{uuid.uuid4()}" + (
+        f"_{context_current_trace_id}" if context_current_trace_id else ""
+    )
+    
+    # 将参数绑定到函数签名，应用默认值
+    bound_args = signature.bind(*args, **kwargs)
+    bound_args.apply_defaults()
+    
+    return FunctionCallContext(
+        func_name=func_name,
+        trace_id=current_trace_id,
+        bound_args=bound_args,
+        signature=signature,
+        type_hints=type_hints,
+        return_type=return_type,
+        docstring=docstring
+    )
+
+
+def _build_messages(
+    context: FunctionCallContext,
+    system_prompt_template: Optional[str] = None,
+    user_prompt_template: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    构建发送给 LLM 的消息列表
+    
+    Args:
+        context: 函数调用上下文
+        system_prompt_template: 自定义系统提示模板
+        user_prompt_template: 自定义用户提示模板
+        
+    Returns:
+        消息列表
+    """
+    # 构建系统提示和用户提示
+    system_prompt, user_prompt = _build_prompts(
+        docstring=context.docstring,
+        arguments=context.bound_args.arguments,
+        type_hints=context.type_hints,
+        custom_system_template=system_prompt_template,
+        custom_user_template=user_prompt_template,
+    )
+    
+    # 准备消息列表
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    
+    push_debug(f"系统提示: {system_prompt}", location=get_location())
+    push_debug(f"用户提示: {user_prompt}", location=get_location())
+    
+    return messages
+
+
+def _prepare_tools_for_llm(
+    toolkit: Optional[List[Union[Tool, Callable]]],
+    func_name: str
+) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable]]:
+    """
+    处理工具准备，返回工具参数和工具映射
+    
+    Args:
+        toolkit: 工具列表
+        func_name: 函数名，用于日志
+        
+    Returns:
+        (tool_param, tool_map) 元组
+    """
+    tool_param = None
+    tool_map = {}  # 工具名称到函数的映射
+    
+    if toolkit:
+        # 处理工具列表
+        tool_objects, tool_map = _prepare_tools(toolkit, func_name)
+        
+        if tool_objects:
+            # 序列化工具以供 LLM 使用
+            tool_param = Tool.serialize_tools(tool_objects)
+    
+    return tool_param, tool_map
+
+
+def _execute_llm_with_retry(
+    llm_interface: LLM_Interface,
+    context: FunctionCallContext,
+    llm_params: LLMCallParams,
+    max_tool_calls: int
+) -> Any:
+    """
+    执行 LLM 调用并处理重试逻辑
+    
+    Args:
+        llm_interface: LLM 接口实例
+        context: 函数调用上下文
+        llm_params: LLM 调用参数
+        max_tool_calls: 最大工具调用次数
+        
+    Returns:
+        最终的 LLM 响应
+    """
+    push_debug(f"开始 LLM 调用...", location=get_location())
+    
+    # 调用 LLM 并获取最终响应
+    response_generator = execute_llm(
+        llm_interface=llm_interface,
+        messages=llm_params.messages,
+        tools=llm_params.tool_param,
+        tool_map=llm_params.tool_map,
+        max_tool_calls=max_tool_calls,
+        **llm_params.llm_kwargs,  # 传递额外的关键字参数
+    )
+    
+    # 获取最后一个响应作为最终结果
+    final_response = get_last_item_of_generator(response_generator)
+    
+    # 检查final response中的content字段是否为空
+    retry_times = llm_params.llm_kwargs.get("retry_times", 2)
+    content = ""
+    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
+        message = final_response.choices[0].message  # type: ignore
+        content = (
+            message.content
+            if message and hasattr(message, "content")
+            else ""
+        )
+    
+    if content == "":
+        # 如果响应内容为空，记录警告并重试
+        push_warning(
+            f"LLM 函数 '{context.func_name}' 返回的响应内容为空，将会自动重试。",
+            location=get_location(),
+        )
+        # 重新调用 LLM
+        while (
+            retry_times > 0
+            and hasattr(
+                final_response.choices[0].message, "content"  # type: ignore
+            )
+            and final_response.choices[0].message.content  # type: ignore
+            == ""
+        ):
+            retry_times -= 1
+            push_debug(
+                f"LLM 函数 '{context.func_name}' 重试第 {llm_params.llm_kwargs.get('retry_times', 2) - retry_times + 1} 次...",
+                location=get_location(),
+            )
+            response_generator = execute_llm(
+                llm_interface=llm_interface,
+                messages=llm_params.messages,
+                tools=llm_params.tool_param,
+                tool_map=llm_params.tool_map,
+                max_tool_calls=max_tool_calls,
+                **llm_params.llm_kwargs,  # 传递额外的关键字参数
+            )
+            final_response = get_last_item_of_generator(
+                response_generator
+            )
+            
+            content = extract_content_from_response(
+                final_response, context.func_name
+            )
+            if content != "":  # type: ignore
+                break
+    
+    content = extract_content_from_response(final_response, context.func_name)
+    
+    if content == "":
+        push_error(
+            f"LLM 函数 '{context.func_name}' 返回的响应内容仍然为空，重试次数已用完。",
+            location=get_location(),
+        )
+        raise ValueError("LLM response content is empty after retries.")
+    
+    # 记录最终响应
+    push_debug(
+        f"LLM 函数 '{context.func_name}' 收到response {json.dumps(final_response, default=str, ensure_ascii=False, indent=2)}",
+        location=get_location(),
+    )
+    
+    return final_response
+
+
+def _process_final_response(response: Any, return_type: Any) -> Any:
+    """
+    处理最终响应，转换为指定的返回类型
+    
+    Args:
+        response: LLM 响应
+        return_type: 期望的返回类型
+        
+    Returns:
+        转换后的结果
+    """
+    return process_response(response, return_type)
 
 
 def _build_prompts(

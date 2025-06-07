@@ -68,7 +68,7 @@ def execute_llm(
     call_count = 0
 
     # 第一次调用 LLM，获取初始响应
-    app_log(
+    push_debug(
         f"LLM 函数 '{func_name}' 将要发起初始请求，消息数: {len(current_messages)}",
         location=get_location(),
     )
@@ -112,7 +112,7 @@ def execute_llm(
         tool_calls = _extract_tool_calls(initial_response)
         yield initial_response
 
-    app_log(
+    push_debug(
         f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
         location=get_location(),
     )
@@ -127,7 +127,12 @@ def execute_llm(
         assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
         current_messages.append(assistant_tool_call_message)
     else:
-        app_log(f"未发现工具调用，直接返回结果", location=get_location())
+        push_debug(f"未发现工具调用，直接返回结果", location=get_location())
+        # app_log 记录全过程messages
+        app_log(
+            f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+            location=get_location(),
+        )
         return
 
     push_debug(
@@ -136,7 +141,7 @@ def execute_llm(
     )
 
     # === 工具调用循环 ===
-    app_log(
+    push_debug(
         f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用，开始执行工具",
         location=get_location(),
     )
@@ -153,7 +158,7 @@ def execute_llm(
 
     # 继续处理可能的后续工具调用
     while call_count < max_tool_calls:
-        app_log(
+        push_debug(
             f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count}/{max_tool_calls} 次返回工具响应",
             location=get_location(),
         )
@@ -201,7 +206,7 @@ def execute_llm(
             tool_calls = _extract_tool_calls(response)
             yield response
 
-        app_log(
+        push_debug(
             f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
             location=get_location(),
         )
@@ -227,10 +232,14 @@ def execute_llm(
                 f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应",
                 location=get_location(),
             )
+            app_log(
+                f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+                location=get_location(),
+            )
             return
 
         # 处理新的工具调用
-        app_log(
+        push_debug(
             f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个新的工具调用",
             location=get_location(),
         )
@@ -246,7 +255,7 @@ def execute_llm(
         call_count += 1
 
     # 如果达到最大调用次数但仍未完成所有工具调用
-    app_log(
+    push_debug(
         f"LLM 函数 '{func_name}' 达到最大工具调用次数 ({max_tool_calls})，强制结束并获取最终响应",
         location=get_location(),
     )
@@ -255,6 +264,12 @@ def execute_llm(
     final_response = llm_interface.chat(
         messages=current_messages,
         **llm_kwargs,  # 传递额外的关键字参数
+    )
+    
+    # app_log 记录全过程messages
+    app_log(
+        f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+        location=get_location(),
     )
 
     # 产生最终响应
@@ -410,7 +425,7 @@ def extract_content_from_stream_response(chunk: Any, func_name: str) -> str:
                 content = ""
         else:
             # 尝试其他可能的格式
-            app_log(
+            push_debug(
                 f"LLM 函数 '{func_name}': 检测到流响应格式: {type(chunk)}，内容为: {chunk}，预估不包含content，将会返回空串",
                 location=get_location(),
             )
@@ -591,7 +606,7 @@ def _process_tool_calls(
             arguments = json.loads(arguments_str)
 
             # 执行工具
-            app_log(f"执行工具 '{tool_name}' 参数: {arguments_str}")
+            push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
             tool_func = tool_map[tool_name]
             tool_result = tool_func(**arguments)
 
@@ -604,7 +619,7 @@ def _process_tool_calls(
             }
             current_messages.append(tool_message)
 
-            app_log(f"工具 '{tool_name}' 执行完成: {tool_result_str}")
+            push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_str}")
 
         except Exception as e:
             # 处理工具执行错误

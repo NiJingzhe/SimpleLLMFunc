@@ -7,7 +7,7 @@ from typing import Generator, Optional, Dict, List, Literal, Iterable, Any
 from openai import OpenAI, AsyncOpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
-from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id
+from SimpleLLMFunc.logger import app_log, push_warning, push_error, get_location, get_current_trace_id, push_debug
 from SimpleLLMFunc.logger.logger import push_critical, get_current_context_attribute, set_current_context_attribute
 
 class OpenAICompatible(LLM_Interface):
@@ -217,7 +217,7 @@ class OpenAICompatible(LLM_Interface):
             try:
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                app_log(
+                push_debug(
                     f"OpenAICompatible::chat: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location()
                 )
@@ -295,7 +295,7 @@ class OpenAICompatible(LLM_Interface):
             try:
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
-                app_log(
+                push_debug(
                     f"OpenAICompatible::chat_stream: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location()
                 )

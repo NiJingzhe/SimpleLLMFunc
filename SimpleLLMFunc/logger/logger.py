@@ -18,9 +18,12 @@ from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 import threading
 from pathlib import Path
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import asynccontextmanager, contextmanager
+from typing import Generator, AsyncGenerator
 from datetime import datetime, timezone
+import atexit
+import signal
+import weakref
 
 
 class LogLevel(Enum):
@@ -215,6 +218,13 @@ class IndexedRotatingFileHandler(RotatingFileHandler):
 
         # 加载现有索引
         self._load_indices()
+        
+        # 将此实例添加到全局跟踪集合中
+        global _all_indexed_handlers
+        _all_indexed_handlers.add(self)
+        
+        # 确保清理函数已注册
+        _register_cleanup_handlers()
 
     def _get_index_file_path(self) -> str:
         """获取索引文件路径"""
@@ -371,6 +381,11 @@ _context_lock = threading.RLock()
 # 用于表示默认trace_id的常量
 DEFAULT_TRACE_ID = ""
 
+# 全局变量用于跟踪所有IndexedRotatingFileHandler实例
+_all_indexed_handlers: weakref.WeakSet[IndexedRotatingFileHandler] = weakref.WeakSet()
+_cleanup_registered = False
+_cleanup_lock = threading.RLock()
+
 
 def convert_float_to_datetime_with_tz(
     time_float: float, tz=timezone(timedelta(hours=8))
@@ -385,6 +400,53 @@ def convert_float_to_datetime_with_tz(
         datetime: 转换完成后的datetime对象
     """
     return datetime.fromtimestamp(time_float, tz=tz)
+
+
+def _cleanup_all_handlers() -> None:
+    """清理所有IndexedRotatingFileHandler实例，确保索引被保存"""
+    global _all_indexed_handlers
+    try:
+        # 复制一份列表，避免在迭代过程中集合被修改
+        handlers_to_cleanup = list(_all_indexed_handlers)
+        for handler in handlers_to_cleanup:
+            try:
+                if hasattr(handler, '_save_indices'):
+                    handler._save_indices()
+                    #sys.stderr.write(f"Successfully saved indices for handler: {handler.baseFilename}\n")
+            except Exception as e:
+                sys.stderr.write(f"Error saving indices for handler {getattr(handler, 'baseFilename', 'unknown')}: {str(e)}\n")
+    except Exception as e:
+        sys.stderr.write(f"Error during cleanup: {str(e)}\n")
+
+
+def _signal_handler(signum: int, frame) -> None:
+    """信号处理函数，确保在接收到信号时清理资源"""
+    sys.stderr.write(f"Received signal {signum}, cleaning up logger indices...\n")
+    _cleanup_all_handlers()
+    # 调用默认的信号处理行为
+    if signum == signal.SIGTERM:
+        sys.exit(0)
+    elif signum == signal.SIGINT:
+        sys.exit(130)  # 标准的Ctrl+C退出码
+
+
+def _register_cleanup_handlers() -> None:
+    """注册清理处理函数"""
+    global _cleanup_registered
+    with _cleanup_lock:
+        if not _cleanup_registered:
+            # 注册atexit处理函数
+            atexit.register(_cleanup_all_handlers)
+            
+            # 注册信号处理函数
+            try:
+                signal.signal(signal.SIGTERM, _signal_handler)
+                signal.signal(signal.SIGINT, _signal_handler)
+            except (OSError, ValueError):
+                # 在某些环境中可能无法注册信号处理器
+                pass
+            
+            _cleanup_registered = True
 
 
 def get_location(depth: int = 2) -> str:
@@ -576,6 +638,35 @@ def get_logger() -> logging.Logger:
         _logger = setup_logger()
     return _logger
 
+@asynccontextmanager
+async def async_log_context(**kwargs: Any) -> AsyncGenerator[None, None]:
+    """创建异步日志上下文，在上下文中的所有日志都会包含指定的字段
+
+    可以通过提供一些参数来指定在一层上下文中统一的属性值，并会被自动添加到log中
+    当context发生嵌套时，外层的属性并不会继承到内层，嵌套的上下文会以栈的形式被管理
+
+    Args:
+        **kwargs: 要添加到上下文的键值对
+
+    Example:
+        async with async_log_context(trace_id="my_function_123", user_id="456"):
+            push_info("处理用户请求")  # 日志会自动包含trace_id和user_id
+    """
+    global _log_context
+    global _log_context_stack
+    # 保存原始上下文
+    with _context_lock:
+        _log_context_stack.append(_log_context.copy())
+        # 更新上下文
+        _log_context.update(kwargs)
+
+    try:
+        # 执行上下文中的代码
+        yield
+    finally:
+        # 恢复原始上下文
+        with _context_lock:
+            _log_context = _log_context_stack.pop()
 
 @contextmanager
 def log_context(**kwargs: Any) -> Generator[None, None, None]:
@@ -808,3 +899,22 @@ def search_logs_by_trace_id(trace_id: str) -> List[Dict[str, Any]]:
     if _indexed_handler:
         return _indexed_handler.search_by_trace_id(trace_id)
     return []
+
+
+def save_all_indices() -> None:
+    """手动保存所有IndexedRotatingFileHandler的索引
+    
+    这个函数可以被外部调用来确保所有索引都被保存到trace_index.json文件中。
+    在程序正常退出时，这个功能会自动执行，但也可以手动调用来确保数据安全。
+    """
+    _cleanup_all_handlers()
+
+
+def get_active_handlers_count() -> int:
+    """获取当前活跃的IndexedRotatingFileHandler数量
+    
+    Returns:
+        当前活跃的handler数量
+    """
+    global _all_indexed_handlers
+    return len(_all_indexed_handlers)
