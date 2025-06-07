@@ -38,19 +38,26 @@ SimpleLLMFunc 的目录结构如下：
 
 ```
 SimpleLLMFunc/
+├── __init__.py                     # 包初始化文件
+├── config.py                       # 全局配置
+├── utils.py                        # 通用工具函数
 ├── interface/                      # LLM 接口
+│   ├── __init__.py                 # 包初始化文件
 │   ├── llm_interface.py            # LLM 接口抽象类
 │   ├── key_pool.py                 # API 密钥池
 │   └── openai_compatible.py        # OpenAI 兼容接口实现
 ├── llm_decorator/                  # LLM装饰器
+│   ├── __init__.py                 # 包初始化文件
 │   ├── llm_function_decorator.py   # 函数装饰器
-│   └── llm_chat_decorator.py       # 对话装饰器
+│   ├── llm_chat_decorator.py       # 对话装饰器
+│   └── utils.py                    # 装饰器工具函数
 ├── logger/                         # 日志系统
+│   ├── __init__.py                 # 包初始化文件
 │   ├── logger.py                   # 日志核心功能
 │   └── logger_config.py            # 日志配置
-├── tool/                           # 工具系统
-│   └── tool.py                     # 工具定义和装饰器
-└── config.py                       # 全局配置
+└── tool/                           # 工具系统
+    ├── __init__.py                 # 包初始化文件
+    └── tool.py                     # 工具定义和装饰器
 ```
 
 ### 模块介绍
@@ -68,7 +75,7 @@ SimpleLLMFunc/
 
 #### 日志系统
 
-`logger` 模块提供了全面的日志记录功能，包括 trace_id 跟踪、token 使用统计、系统和用户提示的记录等。
+`logger` 模块提供了全面的日志记录功能，包括 trace_id 跟踪、token 使用统计、系统和用户提示的记录等。特别地，日志系统会自动记录所有 LLM 的输入输出对话，生成结构化的 trace 索引文件以按照函数调用归类日志，开发者可以直接从这些日志中快速整理出高质量的对话语料，用于后续的模型微调和优化。
 
 #### 工具系统
 

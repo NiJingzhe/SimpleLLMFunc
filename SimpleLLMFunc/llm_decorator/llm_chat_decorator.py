@@ -31,7 +31,7 @@ from SimpleLLMFunc.logger import (
 
 from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
-    extract_content_from_stream_response
+    extract_content_from_stream_response,
 )
 
 # 定义一个类型变量，用于函数的返回类型
@@ -133,16 +133,15 @@ def llm_chat(
             possible_history_param_name = ["history", "chat_history"]
 
             with log_context(
-                trace_id=current_trace_id, 
+                trace_id=current_trace_id,
                 function_name=func_name,
                 input_tokens=0,
-                output_tokens=0
+                output_tokens=0,
             ):
 
                 # 处理tools参数
                 tool_param_for_api = None  # 序列化后的工具参数，用于传递给API
                 tool_map = {}  # 工具名称到函数的映射
-
 
                 tool_objects = []
                 if toolkit:
@@ -160,9 +159,9 @@ def llm_chat(
                             tool_map[tool_obj.name] = tool_obj.run
                         else:
                             push_warning(
-                                f"LLM Chat '{func.__name__}':"
-                                f" Unsupported tool type: {type(tool)}."
-                                " Tool must be a Tool object or a function decorated with @tool.",
+                                f"LLM 函数 '{func_name}': "
+                                f"不支持的工具类型: {type(tool)}。"
+                                "工具必须是 Tool 对象或被 @tool 装饰的函数。",
                                 location=get_location(),
                             )
 
@@ -170,9 +169,9 @@ def llm_chat(
                         tool_param_for_api = Tool.serialize_tools(tool_objects)
 
                 push_debug(
-                    f"LLM Chat '{func.__name__}' has tools: {tool_param_for_api}",
+                    f"LLM Chat '{func.__name__}' 具有以下工具: {tool_param_for_api}",
                     location=get_location(),
-                ) 
+                )
                 # 检查是否有messages参数，这会被直接作为API的messages参数。
                 user_message = ""
 
@@ -200,9 +199,9 @@ def llm_chat(
                 # 检查是否为空
                 if len(intersect_of_function_params_and_history_param) == 0:
                     push_warning(
-                        f"LLM Chat '{func.__name__}' doesn't have correct history parameter"
-                        " with name 'history' or 'chat_history', which is required for LLM chat function."
-                        " No history will be passed to llm.",
+                        f"LLM Chat '{func.__name__}' 没有正确的历史记录参数"
+                        "（参数名应为 'history' 或 'chat_history'），这是 LLM 聊天函数所必需的。"
+                        " 将不会向 LLM 传递历史记录。",
                         location=get_location(),
                     )
                 else:
@@ -218,8 +217,8 @@ def llm_chat(
                         and all(isinstance(item, dict) for item in custom_history)
                     ):
                         push_warning(
-                            f"LLM Chat '{func.__name__}' history parameter should be a List[Dict[str, str]]."
-                            " No history will be passed to llm.",
+                            f"LLM Chat '{func.__name__}' 历史记录参数应为 List[Dict[str, str]] 类型。"
+                            "将不会向 LLM 传递历史记录。",
                             location=get_location(),
                         )
                         custom_history = None
@@ -235,7 +234,18 @@ def llm_chat(
                     current_messages.append(
                         {
                             "role": "system",
-                            "content": f"{docstring}" + ("\n\n你需要灵活的使用以下工具：\n\t" if tool_objects != [] else '') + '\n\t'.join([f"- {tool.name}: {tool.description}" for tool in tool_objects])
+                            "content": f"{docstring}"
+                            + (
+                                "\n\n你需要灵活的使用以下工具：\n\t"
+                                if tool_objects != []
+                                else ""
+                            )
+                            + "\n\t".join(
+                                [
+                                    f"- {tool.name}: {tool.description}"
+                                    for tool in tool_objects
+                                ]
+                            ),
                         }
                     )
 
@@ -247,8 +257,8 @@ def llm_chat(
                         if isinstance(msg, dict) and "role" in msg and "content" in msg:
                             formatted_history.append(msg)
                         else:
-                            app_log(
-                                f"LLM Chat '{func.__name__}' Skip history item with incorrect format: {msg}",
+                            push_warning(
+                                f"LLM Chat '{func.__name__}' 跳过格式不正确的历史记录项: {msg}",
                                 location=get_location(),
                             )
 
@@ -265,9 +275,10 @@ def llm_chat(
                     current_messages.append(user_msg)
 
                 # 记录当前消息
-                app_log(
-                    f"LLM Chat '{func.__name__}' will execute llm with messages:"
-                    f"\n{json.dumps(current_messages, ensure_ascii=False, indent=4)}",
+                push_debug(
+                    f"LLM Chat '{func.__name__}' 将使用以下消息执行 LLM:"
+                    + "\n"
+                    + f"{json.dumps(current_messages, ensure_ascii=False, indent=4)}",
                     location=get_location(),
                 )
 
@@ -289,13 +300,15 @@ def llm_chat(
 
                         # 记录响应
                         app_log(
-                            f"LLM Chat '{func.__name__}' got response:"
+                            f"LLM Chat '{func.__name__}' 收到响应:"
                             f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=4)}",
                             location=get_location(),
                         )
 
                         # 提取响应内容
-                        content = extract_content_from_stream_response(response, func_name) 
+                        content = extract_content_from_stream_response(
+                            response, func_name
+                        )
                         complete_content += content
 
                         yield content, current_messages

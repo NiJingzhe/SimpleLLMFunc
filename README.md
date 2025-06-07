@@ -461,7 +461,7 @@ pip install SimpleLLMFunc
   month = {June},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.2.0},
+  version = {0.2.1},
   year = {2025}
 }
 ```
