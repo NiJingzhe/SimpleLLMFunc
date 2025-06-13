@@ -1,5 +1,5 @@
 
-![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover.png?raw=true)
+![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)
 
 <center>
 <h2 style="font-size:2em;">Everything is Function, Prompt is Code</h2>
