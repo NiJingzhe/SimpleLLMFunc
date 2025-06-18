@@ -1,6 +1,7 @@
 from multiprocessing import ProcessError
 from SimpleLLMFunc import llm_chat, llm_function
 from SimpleLLMFunc import tool
+from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
 import os
 import sys
 import json
@@ -11,6 +12,7 @@ import time
 import select
 import shutil
 import math
+import re
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union
 
@@ -623,24 +625,40 @@ import os
     max_tool_calls=500,
     timeout=600
 )
-def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
+def GLaDos(
+    history: List[Dict[str, str]], 
+    query: Text,
+    image_urls: Optional[List[ImgUrl]] = None,
+    local_images: Optional[List[ImgPath]] = None
+):  # type: ignore
     """
-    你是GLaDos，一为全能AI助手。
+    你是GLaDos，一个支持多模态输入的全能AI助手。
+
+    你能够分析图片内容，包括：
+    - 图片中的文字识别和理解
+    - 图像内容描述和分析
+    - 图表、图形、代码截图的理解
+    - 结合图像和文本进行综合分析
+    - 支持同时分析多张图片
+
+    当用户提供图片时，请仔细分析图片内容，并结合用户的问题给出准确的回答。
+    如果提供了多张图片，请逐一分析每张图片，然后进行综合比较或分析。
+    如果没有提供图片，则正常进行文本对话。
 
     由于你不能和控制台交互，所有的测试都需要首先使用unittest编写专门的测试脚本，并通过mock输入的方法来绕开控制台输入。
 
     使用工具前请务必说明你要用什么工具做什么。
 
-
     首先需要分析用户的需求，然后使用execute_command工具查看当前的工作环境，然后
     建议遵循以下过程：
-        1. 使用file_operator工具创建TODO.md文档，用checkbox的形式将用户需求拆解成多个详细描述的小任务，并记录。
+        1. 如果用户提供了图片，先逐一分析每张图片内容
+        2. 使用file_operator工具创建TODO.md文档，用checkbox的形式将用户需求拆解成多个详细描述的小任务，并记录。
             任务拆分务必拆分到最细致的粒度，推荐任何任务都拆分到10个子任务以上。
-        2. 使用file_operator工具读取TODO.md文档，检查任务列表
-        3. 逐步执行计划
-        4. 撰写每个部分的代码和测试代码（如果是代码任务）
-        5. 根据结果反思执行效果，并继续下一步或者作出弥补
-        6. 使用file_operator工具更新TODO.md文档
+        3. 使用file_operator工具读取TODO.md文档，检查任务列表
+        4. 逐步执行计划
+        5. 撰写每个部分的代码和测试代码（如果是代码任务）
+        6. 根据结果反思执行效果，并继续下一步或者作出弥补
+        7. 使用file_operator工具更新TODO.md文档
 
     直到你认为任务已经完成，输出"<<任务完成>>"字样
 
@@ -648,9 +666,66 @@ def GLaDos(history: List[Dict[str, str]], query: str):  # type: ignore
     pass
 
 
+def parse_multimodal_input(user_input: str) -> tuple[str, List[ImgPath], List[ImgUrl]]:
+    """
+    解析用户输入中的多模态标签，支持任意数量的图片
+    
+    支持的标签:
+    - <imp>图片路径</imp> : 本地图片路径
+    - <imu>图片URL</imu> : 网络图片URL
+    
+    Args:
+        user_input: 用户原始输入
+        
+    Returns:
+        tuple: (清理后的文本, 本地图片列表, 图片URL列表)
+    """
+    clean_text = user_input
+    local_images = []
+    image_urls = []
+    
+    # 解析本地图片路径 <imp>...</imp>
+    imp_pattern = r'<imp>(.*?)</imp>'
+    imp_matches = re.findall(imp_pattern, user_input)
+    
+    for match in imp_matches:
+        img_path = match.strip()
+        try:
+            local_image = ImgPath(img_path)
+            local_images.append(local_image)
+            print(f"✓ 已加载本地图片: {img_path}")
+        except Exception as e:
+            print(f"✗ 本地图片加载失败 '{img_path}': {e}")
+    
+    # 解析图片URL <imu>...</imu>
+    imu_pattern = r'<imu>(.*?)</imu>'
+    imu_matches = re.findall(imu_pattern, user_input)
+    
+    for match in imu_matches:
+        img_url = match.strip()
+        try:
+            image_url = ImgUrl(img_url)
+            image_urls.append(image_url)
+            print(f"✓ 已加载图片URL: {img_url}")
+        except Exception as e:
+            print(f"✗ 图片URL加载失败 '{img_url}': {e}")
+    
+    # 清理文本，移除所有多模态标签
+    clean_text = re.sub(imp_pattern, '', clean_text)
+    clean_text = re.sub(imu_pattern, '', clean_text)
+    clean_text = clean_text.strip()
+    
+    # 如果检测到多模态内容，添加提示
+    if local_images or image_urls:
+        total_images = len(local_images) + len(image_urls)
+        print(f"🖼️  检测到 {total_images} 张图片（{len(local_images)} 张本地图片，{len(image_urls)} 张网络图片），启用多模态模式")
+    
+    return clean_text, local_images, image_urls
+
+
 if __name__ == "__main__":
     # 添加命令行参数解析
-    parser = argparse.ArgumentParser(description="GLaDos对话系统，支持历史记录持久化")
+    parser = argparse.ArgumentParser(description="GLaDos对话系统，支持历史记录持久化。多模态输入通过对话内容中的标签实现")
     parser.add_argument(
         "--session", "-s", help="指定会话ID，用于加载或创建一个持久化会话"
     )
@@ -665,6 +740,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output-delay", "-d", type=float, default=0.01, help="设置输出延迟时间（秒）"
     )
+    
     args = parser.parse_args()
     output_delay = args.output_delay
 
@@ -707,15 +783,41 @@ if __name__ == "__main__":
             print("将使用空的历史记录开始新会话")
 
     # 获取用户输入作为初始化对话的内容
+    print("\n=== GLaDos多模态聊天系统 ===")
+    print("支持的多模态输入格式：")
+    print("- <imp>本地图片路径</imp> : 加载本地图片（支持多张）")
+    print("- <imu>图片URL</imu> : 加载网络图片（支持多张）")
+    print("- 输入 'exit'、'quit'、'q' 或 '退出' : 退出程序")
+    print("- 输入 'save' 或 '保存' : 保存当前会话")
+    print("")
+    print("示例用法：")
+    print("  分析这两张图片 <imp>../img/logo1.png</imp> <imp>../img/logo2.png</imp> 的差异")
+    print("  比较 <imu>https://example.com/img1.jpg</imu> 和 <imu>https://example.com/img2.jpg</imu>")
+    print("  混合使用 <imp>local.png</imp> 和 <imu>https://example.com/remote.jpg</imu>")
+    print("  分析项目Logo <imp>../img/repocover_new.png</imp> 的设计理念")
+    print("=" * 50)
+    
     user_input = input("请输入您的消息以开始对话: ")
 
-    # 使用用户输入初始化对话，由GLaDos先发起
-    initial_message = f"用户说: {user_input}"
+    # 解析用户输入中的多模态标签
+    clean_text, local_images, image_urls = parse_multimodal_input(user_input)
 
-    # 调用GLaDos获取响应生成器
+    local_images = [ImgPath(
+        os.path.join(current_dir, "repocover_new.png")
+    )]
+
+    # 使用清理后的文本作为消息内容
+    initial_message = clean_text
+
+    # 根据是否有多模态内容选择GLaDos版本
     print("==========================================" * 3)
-    print("GLaDos思考中...")
-    glados_gen = GLaDos(history_GLaDos, "用户说: " + initial_message)
+    print("GLaDos多模态版本思考中...")
+    glados_gen = GLaDos(
+        history_GLaDos, 
+        Text(initial_message),
+        image_urls=image_urls if image_urls else None,
+        local_images=local_images if local_images else None
+    )
     # 遍历生成器获取所有中间结果
     for response_GLaDos, history_GLaDos in glados_gen:
         # 使用更可靠的流式输出方法
@@ -753,13 +855,20 @@ if __name__ == "__main__":
                 save_history(history_GLaDos, session_id)
                 continue
 
-            # 添加用户消息
-            user_message = f"用户说: {user_input}"
-
-            # 调用GLaDos获取响应
-            print("GLaDos思考中...")
+            # 解析用户输入中的多模态标签
+            clean_text, local_images, image_urls = parse_multimodal_input(user_input)
+            user_message = clean_text
+            
+            # 根据是否有多模态内容选择GLaDos版本
+            print("GLaDos多模态版本思考中...")
             print("==========================================" * 3)
-            glados_gen = GLaDos(history_GLaDos, user_message)
+            glados_gen = GLaDos(
+                history_GLaDos,
+                Text(user_message),
+                image_urls=image_urls if image_urls else None,
+                local_images=local_images if local_images else None
+            )
+
             # 遍历生成器获取所有中间结果
             for response_GLaDos, history_GLaDos in glados_gen:
                 # 使用更可靠的流式输出方法
