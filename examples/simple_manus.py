@@ -1,7 +1,7 @@
 from multiprocessing import ProcessError
 from SimpleLLMFunc import llm_chat, llm_function
 from SimpleLLMFunc import tool
-from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
+from SimpleLLMFunc.type import Text, ImgUrl, ImgPath
 import os
 import sys
 import json
