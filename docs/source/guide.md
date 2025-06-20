@@ -207,13 +207,6 @@ async def async_analyze_product_review(product_name: str, review_text: str) -> P
     """
     pass  # 函数体为空，实际执行由LLM完成
 
-# 使用异步函数
-import asyncio
-result = asyncio.run(async_analyze_product_review("无线耳机", "这款耳机音质不错，但电池续航较差..."))
-print(f"评分: {result.rating}")
-print(f"优点: {', '.join(result.pros)}")
-print(f"缺点: {', '.join(result.cons)}")
-print(f"总结: {result.summary}")
 ```
 
 ### 创建对话型应用
@@ -237,6 +230,18 @@ response, updated_history = next(chat_assistant("今天北京天气怎么样？"
 print(response)
 # 继续对话，传入更新后的历史记录
 next_response, updated_history = next(chat_assistant("那我应该穿什么衣服？", updated_history))
+```
+
+### 创建异步的对话型应用
+如果需要创建异步的对话型应用，可以在函数定义前添加 `async` 关键字，并使用 `@async_llm_chat` 装饰器。
+```python
+from SimpleLLMFunc import async_llm_chat    
+@async_llm_chat(llm_interface=my_llm_interface, toolkit=[get_weather])
+async def async_chat_assistant(history: List[Dict[str, str]], message: str):
+    """你是一个友好的助手，可以回答用户问题并提供帮助。
+    你可以使用工具来获取实时信息，例如天气状况。
+    """
+    pass
 ```
 
 ## 最佳实践

@@ -16,39 +16,15 @@ import argparse
 from datetime import datetime
 from typing import List, Dict, Optional, Any, Callable, Union
 
+from SimpleLLMFunc.type import *
+
 from SimpleLLMFunc import OpenAICompatible
 import os
 
 # 当前脚本文件所在的文件夹下的provider.json文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
-VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["volc_engine"]["deepseek-v3-250324"]
-
-# 定义一个Pydantic模型作为返回类型
-class ProductReview(BaseModel):
-    rating: int = Field(..., description="产品评分，1-5分")
-    pros: List[str] = Field(..., description="产品优点列表")
-    cons: List[str] = Field(..., description="产品缺点列表")
-    summary: str = Field(..., description="评价总结")
-
-
-# 使用装饰器创建一个LLM函数
-@llm_function(
-    llm_interface=VolcEngine_deepseek_v3_Interface,
-)
-def analyze_product_review(product_name: str, review_text: str) -> ProductReview:  # type: ignore
-    """
-    分析产品评论，提取关键信息并生成结构化评测报告
-
-    Args:
-        product_name: 产品名称
-        review_text: 用户评论文本
-
-    Returns:
-        包含评分、优缺点和总结的产品评测报告
-    """
-    pass  # 函数体为空，实际执行由LLM完成
-
+VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(provider_json_path)["dreamcatcher"]["gpt-4o"]
 
 @tool(name="get_weather", description="获取指定城市的天气信息")
 def get_weather(city: str) -> Dict[str, str]:
@@ -85,29 +61,28 @@ def get_daily_recommendation(city: str) -> WeatherInfo:  # type: ignore
     """
     pass
 
+@llm_function(llm_interface=VolcEngine_deepseek_v3_Interface, toolkit=[])
+def analyze_image(
+    focus: Text,
+    image_path: ImgPath 
+) -> str:  # type: ignore
+    """
+    分析图像并提供描述
+
+    Args:
+        focus: 图像分析的重点描述
+        image_path: 本地图片路径
+
+    Returns:
+        图像分析结果的字符串描述
+    """
+    pass
+
 
 def main():
 
     app_log("开始运行示例代码")
-    # 测试产品评测分析
-    product_name = "XYZ无线耳机"
-    review_text = """
-    我买了这款XYZ无线耳机已经使用了一个月。音质非常不错，尤其是低音部分表现出色，
-    佩戴也很舒适，可以长时间使用不感到疲劳。电池续航能力也很强，充满电后可以使用约8小时。
-    不过连接偶尔会有些不稳定，有时候会突然断开。另外，触控操作不够灵敏，经常需要点击多次才能响应。
-    总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
-    """
 
-    print("\n===== 产品评测分析 =====")
-    result = analyze_product_review(product_name, review_text)
-    print(f"评分: {result.rating}/5")
-    print("优点:")
-    for pro in result.pros:
-        print(f"- {pro}")
-    print("缺点:")
-    for con in result.cons:
-        print(f"- {con}")
-    print(f"总结: {result.summary}")
 
     # 测试天气查询
     city = "Hangzhou"
@@ -122,6 +97,18 @@ def main():
     except Exception as e:
         print(f"天气查询失败: {e}")
 
+        
+    # 测试图像分析
+    focus = Text("分析图像中的主要元素")
+    image_path = ImgPath("./repocover_new.png", detail="high") 
 
+    try:
+        print("\n===== 图像分析 =====")
+        analysis_result = analyze_image(focus, image_path)
+        print(f"图像分析结果: {analysis_result}")
+    except Exception as e:
+        print(f"图像分析失败: {e}")
+
+    app_log("示例代码运行结束")
 if __name__ == "__main__":
     main()
