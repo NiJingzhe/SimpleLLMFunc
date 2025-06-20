@@ -26,7 +26,6 @@ import inspect
 from functools import wraps
 import json
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 from typing import (
     List,
     Callable,
@@ -40,6 +39,8 @@ from typing import (
     Tuple,
     NamedTuple,
     Awaitable,
+    get_origin,
+    get_args,
 )
 import uuid
 
@@ -63,8 +64,13 @@ from SimpleLLMFunc.llm_decorator.utils import (
     get_detailed_type_description,
 )
 
-from SimpleLLMFunc.utils import get_last_item_of_generator
+from SimpleLLMFunc.utils import get_last_item_of_generator, get_last_item_of_async_generator
 from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
+from SimpleLLMFunc.llm_decorator.multimodal_types import (
+    Text,
+    ImgUrl,
+    ImgPath,
+)
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
@@ -72,8 +78,10 @@ T = TypeVar("T")
 
 # ===== 数据结构定义 =====
 
+
 class FunctionCallContext(NamedTuple):
     """函数调用上下文信息"""
+
     func_name: str
     trace_id: str
     bound_args: Any  # inspect.BoundArguments
@@ -85,6 +93,7 @@ class FunctionCallContext(NamedTuple):
 
 class LLMCallParams(NamedTuple):
     """LLM 调用参数"""
+
     messages: List[Dict[str, Any]]
     tool_param: Optional[List[Dict[str, Any]]]  # 修正为正确的类型
     tool_map: Dict[str, Callable]
@@ -187,8 +196,6 @@ def llm_function(
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
         # 获取函数的签名、类型提示和文档字符串
         signature = inspect.signature(func)
-        type_hints = get_type_hints(func)
-        return_type = type_hints.get("return")
         docstring = func.__doc__ or ""
         func_name = func.__name__
 
@@ -196,7 +203,7 @@ def llm_function(
         def wrapper(*args, **kwargs):
             # ===== 第一步：准备函数调用 =====
             context = _prepare_function_call(func, args, kwargs)
-            
+
             with log_context(
                 trace_id=context.trace_id,
                 function_name=context.func_name,
@@ -205,7 +212,10 @@ def llm_function(
             ):
                 # 记录详细参数
                 args_str = json.dumps(
-                    context.bound_args.arguments, default=str, ensure_ascii=False, indent=4
+                    context.bound_args.arguments,
+                    default=str,
+                    ensure_ascii=False,
+                    indent=4,
                 )
 
                 app_log(
@@ -221,14 +231,16 @@ def llm_function(
                 )
 
                 # ===== 第三步：处理工具 =====
-                tool_param, tool_map = _prepare_tools_for_llm(toolkit, context.func_name)
+                tool_param, tool_map = _prepare_tools_for_llm(
+                    toolkit, context.func_name
+                )
 
                 # ===== 第四步：准备 LLM 调用参数 =====
                 llm_params = LLMCallParams(
                     messages=messages,
                     tool_param=tool_param,
                     tool_map=tool_map,
-                    llm_kwargs=llm_kwargs
+                    llm_kwargs=llm_kwargs,
                 )
 
                 # ===== 第五步：执行 LLM 调用 =====
@@ -237,11 +249,13 @@ def llm_function(
                         llm_interface=llm_interface,
                         context=context,
                         llm_params=llm_params,
-                        max_tool_calls=max_tool_calls
+                        max_tool_calls=max_tool_calls,
                     )
 
                     # ===== 第六步：处理响应 =====
-                    result = _process_final_response(final_response, context.return_type)
+                    result = _process_final_response(
+                        final_response, context.return_type
+                    )
                     return result
 
                 except Exception as e:
@@ -259,6 +273,199 @@ def llm_function(
         wrapper.__signature__ = signature  # type: ignore
 
         return cast(Callable[..., T], wrapper)
+
+    return decorator
+
+
+def async_llm_function(
+    llm_interface: LLM_Interface,
+    toolkit: Optional[List[Union[Tool, Callable]]] = None,
+    max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
+    system_prompt_template: Optional[str] = None,  # 自定义系统提示模板
+    user_prompt_template: Optional[str] = None,  # 自定义用户提示模板
+    **llm_kwargs,  # 额外的关键字参数，将直接传递给LLM接口
+):
+    """
+    异步 LLM 函数装饰器，将函数的执行委托给大语言模型（异步版本）。
+
+    此装饰器与 llm_function 功能相同，但使用原生异步实现，
+    避免在 LLM 调用期间阻塞事件循环。
+
+    ## 使用方法
+    1. 定义一个异步函数，包括参数和返回类型标注
+    2. 在函数的文档字符串中描述函数的功能或执行策略
+    3. 使用 @async_llm_function 装饰该函数
+
+    ## 异步特性
+    - LLM 调用直接使用异步接口，不会阻塞主事件循环
+    - 支持并发调用多个 LLM 函数
+    - 可以与其他异步操作配合使用（如 asyncio.gather）
+
+    ## 参数传递流程
+    与同步版本相同：
+    1. 当用户调用被装饰的函数时，装饰器捕获所有实际参数
+    2. 这些参数被格式化为文本提示，发送给 LLM
+    3. 函数的文档字符串作为系统提示，指导 LLM 如何执行
+    4. 每个参数名称和值都作为用户提示的一部分
+
+    ## 工具使用
+    - 如果提供了工具集 (toolkit)，LLM 可以使用这些工具来辅助完成任务
+    - 支持 Tool 对象或被 @tool 装饰的函数作为工具
+
+    ## 自定义提示模板
+    与同步版本相同，支持自定义系统提示和用户提示模板。
+
+    ## 返回值处理
+    - LLM 的响应会根据函数声明的返回类型进行转换
+    - 支持基本类型 (str, int, float, bool)、字典和 Pydantic 模型
+
+    ## LLM接口参数
+    - 通过`**llm_kwargs`传递的参数将直接传递给LLM接口
+    - 可以用于设置temperature、top_p等模型参数
+
+    Args:
+        llm_interface: LLM 接口实例，用于与大语言模型通信
+        toolkit: 可选的工具列表，可以是 Tool 对象或被 @tool 装饰的函数
+        max_tool_calls: 最大工具调用次数，防止无限循环，默认为 5
+        system_prompt_template: 可选的自定义系统提示模板，用于替代默认模板
+        user_prompt_template: 可选的自定义用户提示模板，用于替代默认模板
+        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口调用（如temperature、top_p等）
+
+    Returns:
+        装饰后的异步函数，返回值类型与原函数的返回类型标注一致
+
+    示例1:
+        ```python
+        # 基本用法
+        @async_llm_function(llm_interface=my_llm)
+        async def summarize_text(text: str, max_words: int = 100) -> str:
+            \"\"\"生成输入文本的摘要，摘要不超过指定的词数。\"\"\"
+            pass
+
+        # 调用函数
+        summary = await summarize_text(long_text, max_words=50)
+        ```
+
+    示例2:
+        ```python
+        # 并发调用
+        @async_llm_function(llm_interface=my_llm)
+        async def analyze_sentiment(text: str) -> str:
+            \"\"\"分析文本的情感倾向。\"\"\"
+            pass
+
+        @async_llm_function(llm_interface=my_llm)
+        async def extract_keywords(text: str) -> List[str]:
+            \"\"\"提取文本中的关键词。\"\"\"
+            pass
+
+        # 并发调用
+        texts = ["text1", "text2", "text3"]
+        results = await asyncio.gather(*[
+            analyze_sentiment(text) for text in texts
+        ])
+        ```
+
+    示例3:
+        ```python
+        # 与其他异步操作配合
+        @async_llm_function(llm_interface=my_llm)
+        async def process_data(data: str) -> Dict[str, Any]:
+            \"\"\"处理数据并返回结构化结果。\"\"\"
+            pass
+
+        async def main():
+            # 同时进行多个操作
+            tasks = [
+                process_data(data1),
+                process_data(data2),
+                some_other_async_operation(),
+            ]
+            results = await asyncio.gather(*tasks)
+            return results
+        ```
+    """
+
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        # 获取函数的签名、类型提示和文档字符串
+        signature = inspect.signature(func)
+        docstring = func.__doc__ or ""
+        func_name = func.__name__
+
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            # ===== 第一步：准备函数调用 =====
+            context = _prepare_function_call(func, args, kwargs)
+
+            async with async_log_context(
+                trace_id=context.trace_id,
+                function_name=context.func_name,
+                input_tokens=0,
+                output_tokens=0,
+            ):
+                # 记录详细参数
+                args_str = json.dumps(
+                    context.bound_args.arguments,
+                    default=str,
+                    ensure_ascii=False,
+                    indent=4,
+                )
+
+                app_log(
+                    f"异步 LLM 函数 '{context.func_name}' 被调用，参数: {args_str}",
+                    location=get_location(),
+                )
+
+                # ===== 第二步：构建消息 =====
+                messages = _build_messages(
+                    context=context,
+                    system_prompt_template=system_prompt_template,
+                    user_prompt_template=user_prompt_template,
+                )
+
+                # ===== 第三步：处理工具 =====
+                tool_param, tool_map = _prepare_tools_for_llm(
+                    toolkit, context.func_name
+                )
+
+                # ===== 第四步：准备 LLM 调用参数 =====
+                llm_params = LLMCallParams(
+                    messages=messages,
+                    tool_param=tool_param,
+                    tool_map=tool_map,
+                    llm_kwargs=llm_kwargs,
+                )
+
+                # ===== 第五步：异步执行 LLM 调用 =====
+                try:
+                    final_response = await _execute_llm_with_retry_async(
+                        llm_interface=llm_interface,
+                        context=context,
+                        llm_params=llm_params,
+                        max_tool_calls=max_tool_calls,
+                    )
+
+                    # ===== 第六步：处理响应 =====
+                    result = _process_final_response(
+                        final_response, context.return_type
+                    )
+                    return result
+
+                except Exception as e:
+                    # 记录错误并重新抛出
+                    push_error(
+                        f"异步 LLM 函数 '{context.func_name}' 执行时出错: {str(e)}",
+                        location=get_location(),
+                    )
+                    raise
+
+        # 保留原始函数的元数据
+        async_wrapper.__name__ = func_name
+        async_wrapper.__doc__ = docstring
+        async_wrapper.__annotations__ = func.__annotations__
+        async_wrapper.__signature__ = signature  # type: ignore
+
+        return cast(Callable[..., Awaitable[T]], async_wrapper)
 
     return decorator
 
@@ -296,18 +503,16 @@ DEFAULT_USER_PROMPT_TEMPLATE = """
 
 
 def _prepare_function_call(
-    func: Callable,
-    args: Tuple[Any, ...],
-    kwargs: Dict[str, Any]
+    func: Callable, args: Tuple[Any, ...], kwargs: Dict[str, Any]
 ) -> FunctionCallContext:
     """
     准备函数调用，处理参数绑定和上下文创建
-    
+
     Args:
         func: 被装饰的函数
         args: 位置参数
         kwargs: 关键字参数
-        
+
     Returns:
         FunctionCallContext: 函数调用上下文信息
     """
@@ -317,17 +522,17 @@ def _prepare_function_call(
     return_type = type_hints.get("return")
     docstring = func.__doc__ or ""
     func_name = func.__name__
-    
+
     # 构建追踪 ID，用于日志关联
     context_current_trace_id = get_current_trace_id()
     current_trace_id = f"{func_name}_{uuid.uuid4()}" + (
         f"_{context_current_trace_id}" if context_current_trace_id else ""
     )
-    
+
     # 将参数绑定到函数签名，应用默认值
     bound_args = signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
-    
+
     return FunctionCallContext(
         func_name=func_name,
         trace_id=current_trace_id,
@@ -335,7 +540,7 @@ def _prepare_function_call(
         signature=signature,
         type_hints=type_hints,
         return_type=return_type,
-        docstring=docstring
+        docstring=docstring,
     )
 
 
@@ -345,62 +550,71 @@ def _build_messages(
     user_prompt_template: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
-    构建发送给 LLM 的消息列表
-    
+    构建发送给 LLM 的消息列表，支持多模态内容
+
     Args:
         context: 函数调用上下文
         system_prompt_template: 自定义系统提示模板
         user_prompt_template: 自定义用户提示模板
-        
+
     Returns:
         消息列表
     """
-    # 构建系统提示和用户提示
-    system_prompt, user_prompt = _build_prompts(
-        docstring=context.docstring,
-        arguments=context.bound_args.arguments,
-        type_hints=context.type_hints,
-        custom_system_template=system_prompt_template,
-        custom_user_template=user_prompt_template,
+    # 检查是否包含多模态内容
+    has_multimodal = _has_multimodal_content(
+        context.bound_args.arguments, context.type_hints
     )
-    
-    # 准备消息列表
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    
-    push_debug(f"系统提示: {system_prompt}", location=get_location())
-    push_debug(f"用户提示: {user_prompt}", location=get_location())
-    
+
+    if has_multimodal:
+        # 构建多模态消息
+        messages = _build_multimodal_messages(
+            context, system_prompt_template, user_prompt_template
+        )
+    else:
+        # 构建传统的文本消息
+        system_prompt, user_prompt = _build_prompts(
+            docstring=context.docstring,
+            arguments=context.bound_args.arguments,
+            type_hints=context.type_hints,
+            custom_system_template=system_prompt_template,
+            custom_user_template=user_prompt_template,
+        )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        push_debug(f"系统提示: {system_prompt}", location=get_location())
+        push_debug(f"用户提示: {user_prompt}", location=get_location())
+
     return messages
 
 
 def _prepare_tools_for_llm(
-    toolkit: Optional[List[Union[Tool, Callable]]],
-    func_name: str
+    toolkit: Optional[List[Union[Tool, Callable]]], func_name: str
 ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable]]:
     """
     处理工具准备，返回工具参数和工具映射
-    
+
     Args:
         toolkit: 工具列表
         func_name: 函数名，用于日志
-        
+
     Returns:
         (tool_param, tool_map) 元组
     """
     tool_param = None
     tool_map = {}  # 工具名称到函数的映射
-    
+
     if toolkit:
         # 处理工具列表
         tool_objects, tool_map = _prepare_tools(toolkit, func_name)
-        
+
         if tool_objects:
             # 序列化工具以供 LLM 使用
             tool_param = Tool.serialize_tools(tool_objects)
-    
+
     return tool_param, tool_map
 
 
@@ -408,110 +622,37 @@ def _execute_llm_with_retry(
     llm_interface: LLM_Interface,
     context: FunctionCallContext,
     llm_params: LLMCallParams,
-    max_tool_calls: int
+    max_tool_calls: int,
 ) -> Any:
     """
-    执行 LLM 调用并处理重试逻辑
-    
+    执行 LLM 调用并处理重试逻辑（同步版本，内部使用异步调用）
+
     Args:
         llm_interface: LLM 接口实例
         context: 函数调用上下文
         llm_params: LLM 调用参数
         max_tool_calls: 最大工具调用次数
-        
+
     Returns:
         最终的 LLM 响应
     """
-    push_debug(f"开始 LLM 调用...", location=get_location())
-    
-    # 调用 LLM 并获取最终响应
-    response_generator = execute_llm(
+    # 使用asyncio.run来在同步环境中运行异步操作
+    return asyncio.run(_execute_llm_with_retry_async(
         llm_interface=llm_interface,
-        messages=llm_params.messages,
-        tools=llm_params.tool_param,
-        tool_map=llm_params.tool_map,
+        context=context,
+        llm_params=llm_params,
         max_tool_calls=max_tool_calls,
-        **llm_params.llm_kwargs,  # 传递额外的关键字参数
-    )
-    
-    # 获取最后一个响应作为最终结果
-    final_response = get_last_item_of_generator(response_generator)
-    
-    # 检查final response中的content字段是否为空
-    retry_times = llm_params.llm_kwargs.get("retry_times", 2)
-    content = ""
-    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
-        message = final_response.choices[0].message  # type: ignore
-        content = (
-            message.content
-            if message and hasattr(message, "content")
-            else ""
-        )
-    
-    if content == "":
-        # 如果响应内容为空，记录警告并重试
-        push_warning(
-            f"LLM 函数 '{context.func_name}' 返回的响应内容为空，将会自动重试。",
-            location=get_location(),
-        )
-        # 重新调用 LLM
-        while (
-            retry_times > 0
-            and hasattr(
-                final_response.choices[0].message, "content"  # type: ignore
-            )
-            and final_response.choices[0].message.content  # type: ignore
-            == ""
-        ):
-            retry_times -= 1
-            push_debug(
-                f"LLM 函数 '{context.func_name}' 重试第 {llm_params.llm_kwargs.get('retry_times', 2) - retry_times + 1} 次...",
-                location=get_location(),
-            )
-            response_generator = execute_llm(
-                llm_interface=llm_interface,
-                messages=llm_params.messages,
-                tools=llm_params.tool_param,
-                tool_map=llm_params.tool_map,
-                max_tool_calls=max_tool_calls,
-                **llm_params.llm_kwargs,  # 传递额外的关键字参数
-            )
-            final_response = get_last_item_of_generator(
-                response_generator
-            )
-            
-            content = extract_content_from_response(
-                final_response, context.func_name
-            )
-            if content != "":  # type: ignore
-                break
-    
-    content = extract_content_from_response(final_response, context.func_name)
-    
-    if content == "":
-        push_error(
-            f"LLM 函数 '{context.func_name}' 返回的响应内容仍然为空，重试次数已用完。",
-            location=get_location(),
-        )
-        raise ValueError("LLM response content is empty after retries.")
-    
-    # 记录最终响应
-    push_debug(
-        f"LLM 函数 '{context.func_name}' 收到response {json.dumps(final_response, default=str, ensure_ascii=False, indent=2)}",
-        location=get_location(),
-    )
-    
-    return final_response
+    ))
 
 
 def _process_final_response(response: Any, return_type: Any) -> Any:
     """
     处理最终响应，转换为指定的返回类型
-    
+
     Args:
         response: LLM 响应
         return_type: 期望的返回类型
-        
+
     Returns:
         转换后的结果
     """
@@ -612,7 +753,7 @@ def _prepare_tools(
             tool_map[tool.name] = tool.run
         elif callable(tool) and hasattr(tool, "_tool"):
             # 如果是被 @tool 装饰的函数，获取其 _tool 属性
-            tool_obj = tool._tool
+            tool_obj = tool._tool  # type: ignore
             tool_objects.append(tool_obj)
             # 添加到工具映射（使用原始函数）
             tool_map[tool_obj.name] = tool
@@ -629,255 +770,377 @@ def _prepare_tools(
 
 # ===== 异步版本的装饰器和辅助函数 =====
 
+
 async def _execute_llm_with_retry_async(
     llm_interface: LLM_Interface,
     context: FunctionCallContext,
     llm_params: LLMCallParams,
     max_tool_calls: int,
-    executor: Optional[ThreadPoolExecutor] = None
 ) -> Any:
     """
     异步执行 LLM 调用并处理重试逻辑
-    
+
     Args:
         llm_interface: LLM 接口实例
         context: 函数调用上下文
         llm_params: LLM 调用参数
         max_tool_calls: 最大工具调用次数
-        executor: 线程池执行器，如果为None则创建新的
-        
+
     Returns:
         最终的 LLM 响应
     """
-    import contextvars
-    
-    # 获取当前上下文副本，确保contextvars能传播到线程池
-    ctx = contextvars.copy_context()
-    loop = asyncio.get_event_loop()
-    
-    if executor is None:
-        # 创建临时的线程池执行器
-        with ThreadPoolExecutor(max_workers=1) as temp_executor:
-            def run_with_context():
-                return _execute_llm_with_retry(llm_interface, context, llm_params, max_tool_calls)
-            
-            return await loop.run_in_executor(
-                temp_executor,
-                ctx.run,
-                run_with_context
-            )
-    else:
-        # 使用提供的线程池执行器
-        def run_with_context():
-            return _execute_llm_with_retry(llm_interface, context, llm_params, max_tool_calls)
-        
-        return await loop.run_in_executor(
-            executor,
-            ctx.run,
-            run_with_context
+    push_debug("开始异步 LLM 调用...", location=get_location())
+
+    # 调用异步 LLM 并获取最终响应
+    response_generator = execute_llm(
+        llm_interface=llm_interface,
+        messages=llm_params.messages,
+        tools=llm_params.tool_param,
+        tool_map=llm_params.tool_map,
+        max_tool_calls=max_tool_calls,
+        **llm_params.llm_kwargs,  # 传递额外的关键字参数
+    )
+
+    # 获取最后一个响应作为最终结果
+    final_response = await get_last_item_of_async_generator(response_generator)
+
+    # 检查final response中的content字段是否为空
+    retry_times = llm_params.llm_kwargs.get("retry_times", 2)
+    content = ""
+    if hasattr(final_response, "choices") and len(final_response.choices) > 0:  # type: ignore
+        message = final_response.choices[0].message  # type: ignore
+        content = message.content if message and hasattr(message, "content") else ""
+
+    if content == "":
+        # 如果响应内容为空，记录警告并重试
+        push_warning(
+            f"异步 LLM 函数 '{context.func_name}' 返回的响应内容为空，将会自动重试。",
+            location=get_location(),
         )
+        # 重新调用 LLM
+        while (
+            retry_times > 0
+            and hasattr(final_response.choices[0].message, "content")  # type: ignore
+            and final_response.choices[0].message.content == ""  # type: ignore
+        ):
+            retry_times -= 1
+            push_debug(
+                f"异步 LLM 函数 '{context.func_name}' 重试第 {llm_params.llm_kwargs.get('retry_times', 2) - retry_times + 1} 次...",
+                location=get_location(),
+            )
+            response_generator = execute_llm(
+                llm_interface=llm_interface,
+                messages=llm_params.messages,
+                tools=llm_params.tool_param,
+                tool_map=llm_params.tool_map,
+                max_tool_calls=max_tool_calls,
+                **llm_params.llm_kwargs,  # 传递额外的关键字参数
+            )
+            final_response = await get_last_item_of_async_generator(response_generator)
 
-def async_llm_function(
-    llm_interface: LLM_Interface,
-    toolkit: Optional[List[Union[Tool, Callable]]] = None,
-    max_tool_calls: int = 5,  # 最大工具调用次数，防止无限循环
-    system_prompt_template: Optional[str] = None,  # 自定义系统提示模板
-    user_prompt_template: Optional[str] = None,  # 自定义用户提示模板
-    executor: Optional[ThreadPoolExecutor] = None,  # 线程池执行器
-    **llm_kwargs,  # 额外的关键字参数，将直接传递给LLM接口
-):
+            content = extract_content_from_response(final_response, context.func_name)
+            if content != "":  # type: ignore
+                break
+
+    content = extract_content_from_response(final_response, context.func_name)
+
+    if content == "":
+        push_error(
+            f"异步 LLM 函数 '{context.func_name}' 返回的响应内容仍然为空，重试次数已用完。",
+            location=get_location(),
+        )
+        raise ValueError("LLM response content is empty after retries.")
+
+    # 记录最终响应
+    push_debug(
+        f"异步 LLM 函数 '{context.func_name}' 收到response {json.dumps(final_response, default=str, ensure_ascii=False, indent=2)}",
+        location=get_location(),
+    )
+
+    return final_response
+
+
+def _has_multimodal_content(
+    arguments: Dict[str, Any], type_hints: Dict[str, Any]
+) -> bool:
     """
-    异步 LLM 函数装饰器，将函数的执行委托给大语言模型（异步版本）。
-
-    此装饰器与 llm_function 功能相同，但通过线程池实现异步执行，
-    避免在 LLM 调用期间阻塞事件循环。
-
-    ## 使用方法
-    1. 定义一个异步函数，包括参数和返回类型标注
-    2. 在函数的文档字符串中描述函数的功能或执行策略
-    3. 使用 @async_llm_function 装饰该函数
-
-    ## 异步特性
-    - LLM 调用在线程池中执行，不会阻塞主事件循环
-    - 支持并发调用多个 LLM 函数
-    - 可以与其他异步操作配合使用（如 asyncio.gather）
-
-    ## 线程池管理
-    - 如果不提供 executor 参数，每次调用会创建临时的线程池
-    - 建议为多个函数共享同一个线程池执行器以提高性能
-    - 可以通过 executor 参数传入自定义的线程池执行器
-
-    ## 参数传递流程
-    与同步版本相同：
-    1. 当用户调用被装饰的函数时，装饰器捕获所有实际参数
-    2. 这些参数被格式化为文本提示，发送给 LLM
-    3. 函数的文档字符串作为系统提示，指导 LLM 如何执行
-    4. 每个参数名称和值都作为用户提示的一部分
-
-    ## 工具使用
-    - 如果提供了工具集 (toolkit)，LLM 可以使用这些工具来辅助完成任务
-    - 支持 Tool 对象或被 @tool 装饰的函数作为工具
-
-    ## 自定义提示模板
-    与同步版本相同，支持自定义系统提示和用户提示模板。
-
-    ## 返回值处理
-    - LLM 的响应会根据函数声明的返回类型进行转换
-    - 支持基本类型 (str, int, float, bool)、字典和 Pydantic 模型
-
-    ## LLM接口参数
-    - 通过`**llm_kwargs`传递的参数将直接传递给LLM接口
-    - 可以用于设置temperature、top_p等模型参数
+    检查参数中是否包含多模态内容
 
     Args:
-        llm_interface: LLM 接口实例，用于与大语言模型通信
-        toolkit: 可选的工具列表，可以是 Tool 对象或被 @tool 装饰的函数
-        max_tool_calls: 最大工具调用次数，防止无限循环，默认为 5
-        system_prompt_template: 可选的自定义系统提示模板，用于替代默认模板
-        user_prompt_template: 可选的自定义用户提示模板，用于替代默认模板
-        executor: 可选的线程池执行器，用于执行 LLM 调用。如果为None，会为每次调用创建临时线程池
-        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口调用（如temperature、top_p等）
+        arguments: 函数参数值
+        type_hints: 类型提示
 
     Returns:
-        装饰后的异步函数，返回值类型与原函数的返回类型标注一致
-
-    示例1:
-        ```python
-        # 基本用法
-        @async_llm_function(llm_interface=my_llm)
-        async def summarize_text(text: str, max_words: int = 100) -> str:
-            \"\"\"生成输入文本的摘要，摘要不超过指定的词数。\"\"\"
-            pass
-
-        # 调用函数
-        summary = await summarize_text(long_text, max_words=50)
-        ```
-
-    示例2:
-        ```python
-        # 使用共享线程池
-        from concurrent.futures import ThreadPoolExecutor
-        
-        executor = ThreadPoolExecutor(max_workers=4)
-        
-        @async_llm_function(
-            llm_interface=my_llm,
-            executor=executor
-        )
-        async def analyze_sentiment(text: str) -> str:
-            \"\"\"分析文本的情感倾向。\"\"\"
-            pass
-
-        @async_llm_function(
-            llm_interface=my_llm,
-            executor=executor
-        )
-        async def extract_keywords(text: str) -> List[str]:
-            \"\"\"提取文本中的关键词。\"\"\"
-            pass
-
-        # 并发调用
-        texts = ["text1", "text2", "text3"]
-        results = await asyncio.gather(*[
-            analyze_sentiment(text) for text in texts
-        ])
-        ```
-
-    示例3:
-        ```python
-        # 与其他异步操作配合
-        @async_llm_function(llm_interface=my_llm)
-        async def process_data(data: str) -> Dict[str, Any]:
-            \"\"\"处理数据并返回结构化结果。\"\"\"
-            pass
-
-        async def main():
-            # 同时进行多个操作
-            tasks = [
-                process_data(data1),
-                process_data(data2),
-                some_other_async_operation(),
-            ]
-            results = await asyncio.gather(*tasks)
-            return results
-        ```
+        是否包含多模态内容
     """
+    for param_name, param_value in arguments.items():
+        if param_name in type_hints:
+            annotation = type_hints[param_name]
+            if _is_multimodal_type(param_value, annotation):
+                return True
+    return False
 
-    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
-        # 获取函数的签名、类型提示和文档字符串
-        signature = inspect.signature(func)
-        type_hints = get_type_hints(func)
-        return_type = type_hints.get("return")
-        docstring = func.__doc__ or ""
-        func_name = func.__name__
 
-        @wraps(func)
-        async def async_wrapper(*args, **kwargs):
-            # ===== 第一步：准备函数调用 =====
-            context = _prepare_function_call(func, args, kwargs)
-            
-            async with async_log_context(
-                trace_id=context.trace_id,
-                function_name=context.func_name,
-                input_tokens=0,
-                output_tokens=0,
-            ):
-                # 记录详细参数
-                args_str = json.dumps(
-                    context.bound_args.arguments, default=str, ensure_ascii=False, indent=4
-                )
+def _is_multimodal_type(value: Any, annotation: Any) -> bool:
+    """
+    检查值和类型注解是否为多模态类型
 
-                app_log(
-                    f"异步 LLM 函数 '{context.func_name}' 被调用，参数: {args_str}",
-                    location=get_location(),
-                )
+    Args:
+        value: 参数值
+        annotation: 类型注解
 
-                # ===== 第二步：构建消息 =====
-                messages = _build_messages(
-                    context=context,
-                    system_prompt_template=system_prompt_template,
-                    user_prompt_template=user_prompt_template,
-                )
+    Returns:
+        是否为多模态类型
+    """
+    # 检查直接的多模态类型
+    if isinstance(value, (Text, ImgUrl, ImgPath)):
+        return True
 
-                # ===== 第三步：处理工具 =====
-                tool_param, tool_map = _prepare_tools_for_llm(toolkit, context.func_name)
+    # 检查类型注解
+    if annotation in (Text, ImgUrl, ImgPath):
+        return True
 
-                # ===== 第四步：准备 LLM 调用参数 =====
-                llm_params = LLMCallParams(
-                    messages=messages,
-                    tool_param=tool_param,
-                    tool_map=tool_map,
-                    llm_kwargs=llm_kwargs
-                )
+    # 检查List类型
+    origin = get_origin(annotation)
+    if origin is list or origin is List:
+        args = get_args(annotation)
+        if args:
+            element_type = args[0]
+            if element_type in (Text, ImgUrl, ImgPath):
+                return True
+            # 检查列表中的实际值
+            if isinstance(value, (list, tuple)):
+                return any(isinstance(item, (Text, ImgUrl, ImgPath)) for item in value)
 
-                # ===== 第五步：异步执行 LLM 调用 =====
-                try:
-                    final_response = await _execute_llm_with_retry_async(
-                        llm_interface=llm_interface,
-                        context=context,
-                        llm_params=llm_params,
-                        max_tool_calls=max_tool_calls,
-                        executor=executor
-                    )
+    # 检查Union类型
+    if origin is Union:
+        args = get_args(annotation)
+        return any(arg in (Text, ImgUrl, ImgPath) for arg in args)
 
-                    # ===== 第六步：处理响应 =====
-                    result = _process_final_response(final_response, context.return_type)
-                    return result
+    return False
 
-                except Exception as e:
-                    # 记录错误并重新抛出
-                    push_error(
-                        f"异步 LLM 函数 '{context.func_name}' 执行时出错: {str(e)}",
-                        location=get_location(),
-                    )
-                    raise
 
-        # 保留原始函数的元数据
-        async_wrapper.__name__ = func_name
-        async_wrapper.__doc__ = docstring
-        async_wrapper.__annotations__ = func.__annotations__
-        async_wrapper.__signature__ = signature  # type: ignore
+def _build_multimodal_messages(
+    context: FunctionCallContext,
+    system_prompt_template: Optional[str] = None,
+    user_prompt_template: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    构建多模态消息列表
 
-        return cast(Callable[..., Awaitable[T]], async_wrapper)
+    Args:
+        context: 函数调用上下文
+        system_prompt_template: 自定义系统提示模板
+        user_prompt_template: 自定义用户提示模板
 
-    return decorator
+    Returns:
+        消息列表
+    """
+    # 构建系统提示（仍然是纯文本）
+    system_prompt, _ = _build_prompts(
+        docstring=context.docstring,
+        arguments=context.bound_args.arguments,
+        type_hints=context.type_hints,
+        custom_system_template=system_prompt_template,
+        custom_user_template=user_prompt_template,
+    )
+
+    # 构建多模态用户消息内容
+    user_content = _parse_multimodal_arguments(
+        context.bound_args.arguments, context.type_hints
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_content},
+    ]
+
+    push_debug(f"系统提示: {system_prompt}", location=get_location())
+    push_debug(
+        f"多模态用户消息包含 {len(user_content)} 个内容块", location=get_location()
+    )
+
+    return messages
+
+
+def _parse_multimodal_arguments(
+    arguments: Dict[str, Any], type_hints: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    解析多模态参数，构建OpenAI格式的内容列表
+
+    Args:
+        arguments: 函数参数值
+        type_hints: 类型提示
+
+    Returns:
+        OpenAI格式的内容列表
+    """
+    content = []
+
+    for param_name, param_value in arguments.items():
+        if param_name in type_hints:
+            annotation = type_hints[param_name]
+            parsed_content = _parse_parameter(param_value, annotation, param_name)
+            content.extend(parsed_content)
+        else:
+            # 没有类型注解的参数，默认作为文本处理
+            content.append(_create_text_content(param_value, param_name))
+
+    return content
+
+
+def _parse_parameter(
+    value: Any, annotation: Any, param_name: str
+) -> List[Dict[str, Any]]:
+    """
+    递归解析参数，返回OpenAI内容格式列表
+
+    Args:
+        value: 参数值
+        annotation: 类型注解
+        param_name: 参数名称（用于日志）
+
+    Returns:
+        OpenAI格式内容列表
+    """
+    content = []
+
+    # 获取类型的origin和args（处理泛型）
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+
+    # 处理List类型
+    if origin is list or origin is List:
+        if not isinstance(value, (list, tuple)):
+            push_warning(
+                f"参数 {param_name} 应为列表类型，但获得 {type(value)}",
+                location=get_location(),
+            )
+            content.append(_create_text_content(value, param_name))
+            return content
+
+        # 获取List的元素类型
+        element_type = args[0] if args else Any
+
+        # 递归处理列表中的每个元素
+        for i, item in enumerate(value):
+            item_content = _parse_parameter(item, element_type, f"{param_name}[{i}]")
+            content.extend(item_content)
+
+    # 处理基础多模态类型
+    elif annotation is Text or annotation == Text:
+        content.append(_create_text_content(value, param_name))
+
+    elif annotation is ImgUrl or annotation == ImgUrl:
+        content.append(_create_image_url_content(value, param_name))
+
+    elif annotation is ImgPath or annotation == ImgPath:
+        content.append(_create_image_path_content(value, param_name))
+
+    # 处理Union类型
+    elif origin is Union:
+        content.append(_handle_union_type(value, args, param_name))
+
+    # 处理普通字符串（向后兼容）
+    elif annotation is str:
+        content.append(_create_text_content(value, param_name))
+
+    else:
+        # 未知类型，尝试转换为文本
+        content.append(_create_text_content(value, param_name))
+
+    return content
+
+
+def _create_text_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建文本内容"""
+    if isinstance(value, Text):
+        text = value.content
+    else:
+        text = str(value)
+
+    # 在文本前添加参数名称以提供上下文
+    formatted_text = f"{param_name}: {text}"
+
+    return {"type": "text", "text": formatted_text}
+
+
+def _create_image_url_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建图片URL内容"""
+    if isinstance(value, ImgUrl):
+        url = value.url
+        detail = value.detail
+    else:
+        url = str(value)
+        detail = "auto"  # 默认值
+
+    push_debug(
+        f"添加图片URL: {param_name} = {url} (detail: {detail})", location=get_location()
+    )
+
+    image_url_data = {"url": url}
+    # 只有在非默认值时才添加detail参数，保持与OpenAI API的兼容性
+    if detail != "auto":
+        image_url_data["detail"] = detail
+
+    return {"type": "image_url", "image_url": image_url_data}
+
+
+def _create_image_path_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建本地图片内容"""
+    if isinstance(value, ImgPath):
+        img_path = value
+        detail = value.detail
+    else:
+        img_path = ImgPath(value)
+        detail = "auto"  # 默认值
+
+    # 将本地图片转换为base64
+    base64_img = img_path.to_base64()
+    mime_type = img_path.get_mime_type()
+    data_url = f"data:{mime_type};base64,{base64_img}"
+
+    push_debug(
+        f"添加本地图片: {param_name} = {img_path.path} (detail: {detail})",
+        location=get_location(),
+    )
+
+    image_url_data = {"url": data_url}
+    # 只有在非默认值时才添加detail参数，保持与OpenAI API的兼容性
+    if detail != "auto":
+        image_url_data["detail"] = detail
+
+    return {"type": "image_url", "image_url": image_url_data}
+
+
+def _handle_union_type(
+    value: Any, union_args: tuple, param_name: str
+) -> Dict[str, Any]:
+    """处理Union类型，尝试匹配最合适的类型"""
+    # 首先检查实际值的类型
+    if isinstance(value, Text):
+        return _create_text_content(value, param_name)
+    elif isinstance(value, ImgUrl):
+        return _create_image_url_content(value, param_name)
+    elif isinstance(value, ImgPath):
+        return _create_image_path_content(value, param_name)
+
+    # 如果不是多模态类型，按Union中的类型顺序尝试匹配
+    for arg_type in union_args:
+        try:
+            if arg_type is Text and isinstance(value, str):
+                return _create_text_content(Text(value), param_name)
+            elif arg_type is ImgUrl and isinstance(value, str):
+                return _create_image_url_content(ImgUrl(value), param_name)
+            elif arg_type is ImgPath and isinstance(value, str):
+                return _create_image_path_content(ImgPath(value), param_name)
+        except Exception as e:
+            push_debug(
+                f"尝试将 {param_name} 转换为 {arg_type} 失败: {e}",
+                location=get_location(),
+            )
+            continue
+
+    # 默认作为文本处理
+    return _create_text_content(value, param_name)

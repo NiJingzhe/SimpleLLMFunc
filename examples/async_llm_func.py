@@ -1,12 +1,20 @@
 """
 使用异步LLM函数装饰器的示例
+
+本示例展示了如何使用async_llm_function装饰器创建异步的LLM函数。
+异步装饰器现在使用原生异步实现，无需线程池，提供更好的性能和并发能力。
+
+主要特性:
+1. 原生异步实现，不阻塞事件循环
+2. 支持真正的并发调用，提高性能
+3. 与其他异步操作无缝配合
+4. 自动处理异步LLM接口调用
 """
 
 import asyncio
 import time
 from typing import Dict, List
 from pydantic import BaseModel, Field
-from concurrent.futures import ThreadPoolExecutor
 
 from SimpleLLMFunc import llm_chat, app_log
 from SimpleLLMFunc.llm_decorator import async_llm_function
@@ -76,14 +84,9 @@ class WeatherInfo(BaseModel):
     recommendation: str = Field(..., description="推荐的活动")
 
 
-# 创建共享的线程池执行器
-executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="LLM-Async-")
-
-
 @async_llm_function(
     llm_interface=VolcEngine_deepseek_v3_Interface, 
     toolkit=[get_weather],
-    executor=executor  # 使用共享线程池
 )
 async def get_daily_recommendation(city: str) -> WeatherInfo:  # type: ignore
     """
@@ -100,7 +103,6 @@ async def get_daily_recommendation(city: str) -> WeatherInfo:  # type: ignore
 
 @async_llm_function(
     llm_interface=VolcEngine_deepseek_v3_Interface,
-    executor=executor  # 使用共享线程池
 )
 async def translate_text(text: str, target_language: str = "English") -> str:  # type: ignore
     """
@@ -118,7 +120,6 @@ async def translate_text(text: str, target_language: str = "English") -> str:  #
 
 @async_llm_function(
     llm_interface=VolcEngine_deepseek_v3_Interface,
-    executor=executor  # 使用共享线程池
 )
 async def generate_summary(text: str, max_words: int = 100) -> str:  # type: ignore
     """
@@ -178,7 +179,7 @@ async def test_concurrent_functions():
     
     cities = ["Beijing", "Shanghai", "Hangzhou"]
     
-    print("开始并发处理...")
+    print("开始并发处理（使用原生异步实现）...")
     start_time = time.time()
     
     # 创建所有任务
@@ -221,7 +222,7 @@ async def test_concurrent_functions():
 
 
 async def test_sequential_vs_concurrent():
-    """测试串行执行 vs 并发执行的性能差异"""
+    """测试串行执行 vs 并发执行的性能差异（原生异步实现）"""
     print("\n===== 性能对比测试 =====")
     
     texts = [
@@ -241,8 +242,8 @@ async def test_sequential_vs_concurrent():
     
     serial_time = time.time() - start_time
     
-    # 测试并发执行
-    print("测试并发执行...")
+    # 测试并发执行（原生异步）
+    print("测试并发执行（原生异步）...")
     start_time = time.time()
     
     concurrent_tasks = [translate_text(text, "English") for text in texts]
@@ -252,7 +253,7 @@ async def test_sequential_vs_concurrent():
     
     # 显示结果
     print(f"串行执行耗时: {serial_time:.2f}秒")
-    print(f"并发执行耗时: {concurrent_time:.2f}秒")
+    print(f"并发执行耗时（原生异步）: {concurrent_time:.2f}秒")
     print(f"性能提升: {serial_time / concurrent_time:.2f}x")
     
     # 验证结果一致性
@@ -287,7 +288,7 @@ async def test_with_real_weather():
     
     cities = ["Beijing", "Shanghai", "Guangzhou", "Shenzhen"]
     
-    print("开始并发查询天气信息...")
+    print("开始并发查询天气信息（原生异步）...")
     start_time = time.time()
     
     # 并发查询多个城市的天气
@@ -306,10 +307,47 @@ async def test_with_real_weather():
         print(f"  建议: {weather_info.recommendation}")
 
 
+async def test_massive_concurrency():
+    """测试大规模并发能力（展示原生异步的优势）"""
+    print("\n===== 大规模并发测试 =====")
+    
+    # 创建大量的并发任务
+    test_texts = [
+        f"这是第{i}条测试文本，用于验证大规模并发处理能力。"
+        for i in range(1, 21)  # 20个并发任务
+    ]
+    
+    print(f"开始处理 {len(test_texts)} 个并发翻译任务...")
+    start_time = time.time()
+    
+    # 创建所有翻译任务
+    translation_tasks = [
+        translate_text(text, "English") 
+        for text in test_texts
+    ]
+    
+    # 并发执行所有任务
+    results = await asyncio.gather(*translation_tasks)
+    
+    end_time = time.time()
+    
+    print(f"大规模并发处理完成!")
+    print(f"处理了 {len(results)} 个任务")
+    print(f"总耗时: {end_time - start_time:.2f}秒")
+    print(f"平均每个任务: {(end_time - start_time) / len(results):.2f}秒")
+    
+    # 显示部分结果
+    print("\n前3个翻译结果:")
+    for i, (original, translated) in enumerate(zip(test_texts[:3], results[:3])):
+        print(f"{i+1}. 原文: {original}")
+        print(f"   译文: {translated}\n")
+
+
 async def main():
     """主函数，运行所有测试"""
     print("异步 LLM 函数装饰器示例")
     print("=" * 50)
+    print("使用原生异步实现，无需线程池，性能更优！")
     
     try:
         # 运行各种测试
@@ -318,20 +356,16 @@ async def main():
         await test_sequential_vs_concurrent()
         await test_error_handling()
         await test_with_real_weather()
+        await test_massive_concurrency()  # 新增的大规模并发测试
         
     except Exception as e:
         print(f"运行时错误: {e}")
         import traceback
         traceback.print_exc()
     
-    finally:
-        # 关闭线程池
-        print("\n关闭线程池...")
-        executor.shutdown(wait=True)
-        print("所有资源已清理完成")
-    
     print("\n" + "=" * 50)
     print("所有异步示例运行完成！")
+    print("原生异步实现提供了更好的性能和并发能力。")
 
 
 if __name__ == "__main__":
