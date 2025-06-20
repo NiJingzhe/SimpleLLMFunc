@@ -27,9 +27,12 @@ from SimpleLLMFunc.llm_decorator.multimodal_types import ImgPath, ImgUrl, Text
 from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
     extract_content_from_stream_response,
+    has_multimodal_content,
+    build_multimodal_content,
 )
 from SimpleLLMFunc.logger import (
     app_log,
+    async_log_context,
     get_current_trace_id,
     get_location,
     log_context,
@@ -122,41 +125,62 @@ def llm_chat(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            # 使用内部异步函数处理实际逻辑
-            async def _async_chat_logic():
-                async for result in _async_llm_chat_impl(
-                    func_name=func_name,
-                    signature=signature,
-                    type_hints=type_hints,
-                    docstring=docstring,
-                    args=args,
-                    kwargs=kwargs,
-                    llm_interface=llm_interface,
-                    toolkit=toolkit,
-                    max_tool_calls=max_tool_calls,
-                    stream=stream,
-                    **llm_kwargs,
-                ):
-                    yield result
+            # 生成唯一的追踪ID
+            context_trace_id = get_current_trace_id()
+            current_trace_id = f"{func_name}_{uuid.uuid4()}"
+            if context_trace_id:
+                current_trace_id += f"_{context_trace_id}"
 
-            # 将异步生成器转换为同步生成器
-            try:
-                async_gen = _async_chat_logic()
-                
-                while True:
-                    try:
-                        # 使用 asyncio.run 获取下一个值
-                        result = asyncio.run(async_gen.__anext__())
+            # 使用同步的日志上下文
+            with log_context(
+                trace_id=current_trace_id,
+                function_name=func_name,
+                input_tokens=0,
+                output_tokens=0,
+            ):
+                # 使用内部异步函数处理实际逻辑
+                async def _async_chat_logic():
+                    async for result in _async_llm_chat_impl(
+                        func_name=func_name,
+                        signature=signature,
+                        type_hints=type_hints,
+                        docstring=docstring,
+                        args=args,
+                        kwargs=kwargs,
+                        llm_interface=llm_interface,
+                        toolkit=toolkit,
+                        max_tool_calls=max_tool_calls,
+                        stream=stream,
+                        use_log_context=False,  # 不在异步实现中使用日志上下文
+                        **llm_kwargs,
+                    ):
                         yield result
-                    except StopAsyncIteration:
-                        break
+
+                # 将异步生成器转换为同步生成器
+                try:
+                    # 创建一个新的事件循环来处理整个异步生成器
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    try:
+                        async_gen = _async_chat_logic()
                         
-            except Exception as e:
-                push_error(
-                    f"LLM Chat '{func_name}' 执行出错: {str(e)}",
-                    location=get_location(),
-                )
-                raise
+                        # 使用 run_until_complete 来逐个获取异步生成器的值
+                        while True:
+                            try:
+                                result = loop.run_until_complete(async_gen.__anext__())
+                                yield result
+                            except StopAsyncIteration:
+                                break
+                    finally:
+                        loop.close()
+                        
+                except Exception as e:
+                    push_error(
+                        f"LLM Chat '{func_name}' 执行出错: {str(e)}",
+                        location=get_location(),
+                    )
+                    raise
 
         # 保留原始函数的元数据
         wrapper.__name__ = func.__name__
@@ -247,20 +271,34 @@ def async_llm_chat(
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            async for result in _async_llm_chat_impl(
-                func_name=func_name,
-                signature=signature,
-                type_hints=type_hints,
-                docstring=docstring,
-                args=args,
-                kwargs=kwargs,
-                llm_interface=llm_interface,
-                toolkit=toolkit,
-                max_tool_calls=max_tool_calls,
-                stream=stream,
-                **llm_kwargs,
+            # 生成唯一的追踪ID
+            context_trace_id = get_current_trace_id()
+            current_trace_id = f"{func_name}_{uuid.uuid4()}"
+            if context_trace_id:
+                current_trace_id += f"_{context_trace_id}"
+
+            # 使用异步的日志上下文
+            async with async_log_context(
+                trace_id=current_trace_id,
+                function_name=func_name,
+                input_tokens=0,
+                output_tokens=0,
             ):
-                yield result
+                async for result in _async_llm_chat_impl(
+                    func_name=func_name,
+                    signature=signature,
+                    type_hints=type_hints,
+                    docstring=docstring,
+                    args=args,
+                    kwargs=kwargs,
+                    llm_interface=llm_interface,
+                    toolkit=toolkit,
+                    max_tool_calls=max_tool_calls,
+                    stream=stream,
+                    use_log_context=False,  # 不在异步实现中使用日志上下文
+                    **llm_kwargs,
+                ):
+                    yield result
 
         # 保留原始函数的元数据
         wrapper.__name__ = func.__name__
@@ -287,6 +325,7 @@ async def _async_llm_chat_impl(
     toolkit: Optional[List[Union[Tool, Callable]]],
     max_tool_calls: int,
     stream: bool,
+    use_log_context: bool = True,
     **llm_kwargs,
 ) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
     """
@@ -303,90 +342,106 @@ async def _async_llm_chat_impl(
         toolkit: 工具列表
         max_tool_calls: 最大工具调用次数
         stream: 是否流式响应
+        use_log_context: 是否使用异步日志上下文
         **llm_kwargs: 额外的LLM参数
         
     Yields:
         (响应内容, 更新后的历史记录) 元组
     """
-    # 生成唯一的追踪ID
-    context_trace_id = get_current_trace_id()
-    current_trace_id = f"{func_name}_{uuid.uuid4()}"
-    if context_trace_id:
-        current_trace_id += f"_{context_trace_id}"
-
     # 绑定参数到函数签名
     bound_args = signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
 
-    with log_context(
-        trace_id=current_trace_id,
-        function_name=func_name,
-        input_tokens=0,
-        output_tokens=0,
-    ):
-        try:
-            # 1. 处理工具
-            tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
-            
-            # 2. 检查多模态内容
-            has_multimodal = _has_multimodal_content_chat(
-                bound_args.arguments, type_hints
-            )
-            
-            # 3. 构建用户消息
-            user_message_content = _build_user_message_content(
-                bound_args.arguments, type_hints, has_multimodal
-            )
-            
-            # 4. 处理历史记录
-            custom_history = _extract_history_from_args(
-                bound_args.arguments, func_name
-            )
-            
-            # 5. 构建完整消息列表
-            current_messages = _build_messages(
-                docstring, custom_history, user_message_content, 
-                tool_param_for_api, has_multimodal
-            )
-            
-            # 6. 记录调试信息
-            push_debug(
-                f"LLM Chat '{func_name}' 将使用以下消息执行:"
-                f"\n{json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+    async def _execute_impl():
+        # 1. 处理工具
+        tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
+        
+        # 2. 检查多模态内容
+        has_multimodal = has_multimodal_content(
+            bound_args.arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
+        )
+        
+        # 3. 构建用户消息
+        user_message_content = _build_user_message_content(
+            bound_args.arguments, type_hints, has_multimodal
+        )
+        
+        # 4. 处理历史记录
+        custom_history = _extract_history_from_args(
+            bound_args.arguments, func_name
+        )
+        
+        # 5. 构建完整消息列表
+        current_messages = _build_messages(
+            docstring, custom_history, user_message_content, 
+            tool_param_for_api, has_multimodal
+        )
+        
+        # 6. 记录调试信息
+        push_debug(
+            f"LLM Chat '{func_name}' 将使用以下消息执行:"
+            f"\n{json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+            location=get_location(),
+        )
+        
+        # 7. 执行LLM调用并处理响应
+        complete_content = ""
+        response_flow = execute_llm(
+            llm_interface=llm_interface,
+            messages=current_messages,
+            tools=tool_param_for_api,
+            tool_map=tool_map,
+            max_tool_calls=max_tool_calls,
+            stream=stream,
+            **llm_kwargs,
+        )
+        
+        # 8. 处理响应流（异步迭代）
+        async for response in response_flow:
+            app_log(
+                f"LLM Chat '{func_name}' 收到响应:"
+                f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=2)}",
                 location=get_location(),
             )
             
-            # 7. 执行LLM调用并处理响应
-            complete_content = ""
-            response_flow = execute_llm(
-                llm_interface=llm_interface,
-                messages=current_messages,
-                tools=tool_param_for_api,
-                tool_map=tool_map,
-                max_tool_calls=max_tool_calls,
-                stream=stream,
-                **llm_kwargs,
-            )
-            
-            # 8. 处理响应流（异步迭代）
-            async for response in response_flow:
-                app_log(
-                    f"LLM Chat '{func_name}' 收到响应:"
-                    f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=2)}",
+            content = extract_content_from_stream_response(response, func_name)
+            complete_content += content
+            yield content, current_messages
+        
+        # 9. 添加最终响应到历史记录
+        current_messages.append({
+            "role": "assistant", 
+            "content": complete_content
+        })
+        yield "", current_messages
+
+    if use_log_context:
+        # 生成唯一的追踪ID
+        context_trace_id = get_current_trace_id()
+        current_trace_id = f"{func_name}_{uuid.uuid4()}"
+        if context_trace_id:
+            current_trace_id += f"_{context_trace_id}"
+
+        async with async_log_context(
+            trace_id=current_trace_id,
+            function_name=func_name,
+            input_tokens=0,
+            output_tokens=0,
+        ):
+            try:
+                async for result in _execute_impl():
+                    yield result
+            except Exception as e:
+                push_error(
+                    f"LLM Chat '{func_name}' 执行出错: {str(e)}",
                     location=get_location(),
                 )
-                
-                content = extract_content_from_stream_response(response, func_name)
-                complete_content += content
-                yield content, current_messages
-            
-            # 9. 添加最终响应到历史记录
-            current_messages.append({
-                "role": "assistant", 
-                "content": complete_content
-            })
-            yield "", current_messages
-
+                raise
+    else:
+        # 不使用日志上下文，直接执行
+        try:
+            async for result in _execute_impl():
+                yield result
         except Exception as e:
             push_error(
                 f"LLM Chat '{func_name}' 执行出错: {str(e)}",
@@ -499,7 +554,7 @@ def _build_user_message_content(
         用户消息内容（文本或多模态内容列表）
     """
     if has_multimodal:
-        return _build_multimodal_user_message_chat(arguments, type_hints)
+        return build_multimodal_content(arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES)
     else:
         # 构建传统文本消息，排除历史记录参数
         message_parts = []
@@ -566,249 +621,3 @@ def _build_messages(
     
     return messages
 
-# ===== 多模态支持辅助函数 =====
-
-def _has_multimodal_content_chat(arguments: Dict[str, Any], type_hints: Dict[str, Any]) -> bool:
-    """
-    检查聊天参数中是否包含多模态内容（自动排除历史记录参数）
-    
-    Args:
-        arguments: 函数参数值
-        type_hints: 类型提示
-        
-    Returns:
-        是否包含多模态内容
-    """
-    for param_name, param_value in arguments.items():
-        # 跳过历史记录参数
-        if param_name in HISTORY_PARAM_NAMES:
-            continue
-            
-        if param_name in type_hints:
-            annotation = type_hints[param_name]
-            if _is_multimodal_type_chat(param_value, annotation):
-                return True
-    return False
-
-
-def _is_multimodal_type_chat(value: Any, annotation: Any) -> bool:
-    """
-    检查值和类型注解是否为多模态类型
-    
-    Args:
-        value: 参数值
-        annotation: 类型注解
-        
-    Returns:
-        是否为多模态类型
-    """
-    # 检查直接的多模态类型实例
-    if isinstance(value, (Text, ImgUrl, ImgPath)):
-        return True
-    
-    # 检查类型注解
-    if annotation in (Text, ImgUrl, ImgPath):
-        return True
-    
-    # 检查泛型类型
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    
-    # 处理List类型
-    if origin in (list, List) and args:
-        element_type = args[0]
-        if element_type in (Text, ImgUrl, ImgPath):
-            return True
-        # 检查列表中的实际值
-        if isinstance(value, (list, tuple)):
-            return any(isinstance(item, (Text, ImgUrl, ImgPath)) for item in value)
-    
-    # 处理Union类型
-    if origin is Union:
-        return any(arg in (Text, ImgUrl, ImgPath) for arg in args)
-    
-    return False
-
-
-def _build_multimodal_user_message_chat(
-    arguments: Dict[str, Any], 
-    type_hints: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """
-    为聊天函数构建多模态用户消息（自动排除历史记录参数）
-    
-    Args:
-        arguments: 函数参数值
-        type_hints: 类型提示
-        
-    Returns:
-        多模态消息内容列表
-    """
-    content = []
-    
-    for param_name, param_value in arguments.items():
-        # 跳过历史记录参数
-        if param_name in HISTORY_PARAM_NAMES:
-            continue
-            
-        if param_name in type_hints:
-            annotation = type_hints[param_name]
-            parsed_content = _parse_parameter_chat(param_value, annotation, param_name)
-            content.extend(parsed_content)
-        else:
-            # 没有类型注解的参数，默认作为文本处理
-            content.append(_create_text_content_chat(param_value, param_name))
-    
-    return content
-
-
-def _parse_parameter_chat(value: Any, annotation: Any, param_name: str) -> List[Dict[str, Any]]:
-    """
-    递归解析聊天参数，返回OpenAI内容格式列表
-    
-    Args:
-        value: 参数值
-        annotation: 类型注解
-        param_name: 参数名称（用于日志）
-        
-    Returns:
-        OpenAI格式内容列表
-    """
-    if value is None:
-        return [_create_text_content_chat("None", param_name)]
-    
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    
-    # 处理List类型
-    if origin in (list, List):
-        if not isinstance(value, (list, tuple)):
-            push_warning(
-                f"参数 {param_name} 应为列表类型，但获得 {type(value)}", 
-                location=get_location()
-            )
-            return [_create_text_content_chat(value, param_name)]
-        
-        element_type = args[0] if args else Any
-        content = []
-        for i, item in enumerate(value):
-            item_content = _parse_parameter_chat(item, element_type, f"{param_name}[{i}]")
-            content.extend(item_content)
-        return content
-    
-    # 处理基础多模态类型
-    if annotation in (Text, str):
-        return [_create_text_content_chat(value, param_name)]
-    elif annotation is ImgUrl:
-        return [_create_image_url_content_chat(value, param_name)]
-    elif annotation is ImgPath:
-        return [_create_image_path_content_chat(value, param_name)]
-    
-    # 处理Union类型
-    if origin is Union:
-        return [_handle_union_type_chat(value, args, param_name)]
-    
-    # 默认作为文本处理
-    return [_create_text_content_chat(value, param_name)]
-
-
-def _create_text_content_chat(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建文本内容格式"""
-    if isinstance(value, Text):
-        text = value.content
-    else:
-        text = str(value)
-    
-    return {
-        "type": "text", 
-        "text": f"{param_name}: {text}"
-    }
-
-
-def _create_image_url_content_chat(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建图片URL内容格式"""
-    if value is None:
-        return _create_text_content_chat("None", param_name)
-    
-    if isinstance(value, ImgUrl):
-        url = value.url
-        detail = value.detail
-    else:
-        url = str(value)
-        detail = "auto"
-    
-    push_debug(
-        f"添加图片URL: {param_name} = {url} (detail: {detail})", 
-        location=get_location()
-    )
-    
-    image_url_data = {"url": url}
-    if detail != "auto":
-        image_url_data["detail"] = detail
-    
-    return {
-        "type": "image_url",
-        "image_url": image_url_data
-    }
-
-
-def _create_image_path_content_chat(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建本地图片内容格式"""
-    if value is None:
-        return _create_text_content_chat("None", param_name)
-    
-    if isinstance(value, ImgPath):
-        img_path = value
-        detail = value.detail
-    else:
-        img_path = ImgPath(value)
-        detail = "auto"
-    
-    # 转换为base64编码的data URL
-    base64_img = img_path.to_base64()
-    mime_type = img_path.get_mime_type()
-    data_url = f"data:{mime_type};base64,{base64_img}"
-    
-    push_debug(
-        f"添加本地图片: {param_name} = {img_path.path} (detail: {detail})", 
-        location=get_location()
-    )
-    
-    image_url_data = {"url": data_url}
-    if detail != "auto":
-        image_url_data["detail"] = detail
-    
-    return {
-        "type": "image_url", 
-        "image_url": image_url_data
-    }
-
-
-def _handle_union_type_chat(value: Any, union_args: tuple, param_name: str) -> Dict[str, Any]:
-    """处理Union类型，尝试匹配最合适的类型"""
-    # 优先检查实际值的类型
-    if isinstance(value, Text):
-        return _create_text_content_chat(value, param_name)
-    elif isinstance(value, ImgUrl):
-        return _create_image_url_content_chat(value, param_name)
-    elif isinstance(value, ImgPath):
-        return _create_image_path_content_chat(value, param_name)
-    
-    # 尝试根据Union中的类型进行转换
-    for arg_type in union_args:
-        try:
-            if arg_type is Text and isinstance(value, str):
-                return _create_text_content_chat(Text(value), param_name)
-            elif arg_type is ImgUrl and isinstance(value, str):
-                return _create_image_url_content_chat(ImgUrl(value), param_name)
-            elif arg_type is ImgPath and isinstance(value, str):
-                return _create_image_path_content_chat(ImgPath(value), param_name)
-        except Exception as e:
-            push_debug(
-                f"尝试将参数 {param_name} 转换为 {arg_type} 失败: {e}", 
-                location=get_location()
-            )
-            continue
-    
-    # 默认作为文本处理
-    return _create_text_content_chat(value, param_name)

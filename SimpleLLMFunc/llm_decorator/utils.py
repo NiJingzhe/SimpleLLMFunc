@@ -10,7 +10,7 @@ LLM 装饰器通用工具函数模块
 """
 
 import json
-from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable, AsyncGenerator
+from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable, AsyncGenerator, Union, get_origin, get_args
 from pydantic import BaseModel
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
@@ -819,6 +819,332 @@ def _build_assistant_response_message(content: str) -> Dict[str, Any]:
 # ======================= 工具调用处理函数 =======================
 
 
+# ======================= 多模态支持辅助函数 =======================
+
+def has_multimodal_content(
+    arguments: Dict[str, Any], 
+    type_hints: Dict[str, Any], 
+    exclude_params: Optional[List[str]] = None
+) -> bool:
+    """
+    检查参数中是否包含多模态内容
+    
+    Args:
+        arguments: 函数参数值
+        type_hints: 类型提示
+        exclude_params: 要排除的参数名列表（如历史记录参数）
+        
+    Returns:
+        是否包含多模态内容
+    """
+    from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
+    
+    exclude_params = exclude_params or []
+    
+    for param_name, param_value in arguments.items():
+        # 跳过排除的参数
+        if param_name in exclude_params:
+            continue
+            
+        if param_name in type_hints:
+            annotation = type_hints[param_name]
+            if is_multimodal_type(param_value, annotation):
+                return True
+    return False
+
+
+def is_multimodal_type(value: Any, annotation: Any) -> bool:
+    """
+    检查值和类型注解是否为多模态类型
+    按层次检查：Union -> List -> 基础类型
+    
+    Args:
+        value: 参数值
+        annotation: 类型注解
+        
+    Returns:
+        是否为多模态类型
+    """
+    from typing import Union, List, get_origin, get_args
+    from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
+    
+    # 检查直接的多模态类型实例
+    if isinstance(value, (Text, ImgUrl, ImgPath)):
+        return True
+    
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    
+    # 1. 首先检查Union类型（Optional等）
+    if origin is Union:
+        # 过滤掉None类型，递归检查其他类型
+        non_none_args = [arg for arg in args if arg is not type(None)]
+        for arg_type in non_none_args:
+            if is_multimodal_type(value, arg_type):
+                return True
+        return False
+    
+    # 2. 然后检查List类型
+    if origin in (list, List):
+        if not args:
+            return False
+        element_type = args[0]
+        # List必须直接包裹基础类型
+        if element_type in (Text, ImgUrl, ImgPath):
+            return True
+        # 检查列表中的实际值
+        if isinstance(value, (list, tuple)):
+            return any(isinstance(item, (Text, ImgUrl, ImgPath)) for item in value)
+        return False
+    
+    # 3. 最后检查基础类型
+    if annotation in (Text, ImgUrl, ImgPath):
+        return True
+    
+    return False
+
+
+def build_multimodal_content(
+    arguments: Dict[str, Any], 
+    type_hints: Dict[str, Any],
+    exclude_params: Optional[List[str]] = None
+) -> List[Dict[str, Any]]:
+    """
+    构建多模态内容列表
+    
+    Args:
+        arguments: 函数参数值
+        type_hints: 类型提示
+        exclude_params: 要排除的参数名列表（如历史记录参数）
+        
+    Returns:
+        多模态消息内容列表
+    """
+    exclude_params = exclude_params or []
+    content = []
+    
+    for param_name, param_value in arguments.items():
+        # 跳过排除的参数
+        if param_name in exclude_params:
+            continue
+            
+        if param_name in type_hints:
+            annotation = type_hints[param_name]
+            parsed_content = parse_multimodal_parameter(param_value, annotation, param_name)
+            content.extend(parsed_content)
+        else:
+            # 没有类型注解的参数，默认作为文本处理
+            content.append(create_text_content(param_value, param_name))
+    
+    return content
+
+
+def parse_multimodal_parameter(value: Any, annotation: Any, param_name: str) -> List[Dict[str, Any]]:
+    """
+    递归解析参数，返回OpenAI内容格式列表
+    按层次检查：Union -> List -> 基础类型
+    
+    Args:
+        value: 参数值
+        annotation: 类型注解
+        param_name: 参数名称（用于日志）
+        
+    Returns:
+        OpenAI格式内容列表
+    """
+    from typing import Union, List, get_origin, get_args
+    from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
+    
+    if value is None:
+        return []
+    
+    origin = get_origin(annotation)
+    args = get_args(annotation)
+    
+    # 1. 首先检查Union类型（Optional等）
+    if origin is Union:
+        return handle_union_type(value, args, param_name)
+    
+    # 2. 然后检查List类型
+    if origin in (list, List):
+        if not isinstance(value, (list, tuple)):
+            push_warning(
+                f"参数 {param_name} 应为列表类型，但获得 {type(value)}", 
+                location=get_location()
+            )
+            return [create_text_content(value, param_name)]
+        
+        if not args:
+            push_error(
+                f"参数 {param_name} 的List类型缺少元素类型注解", 
+                location=get_location()
+            )
+            return [create_text_content(value, param_name)]
+            
+        element_type = args[0]
+        
+        # List必须直接包裹基础类型
+        if element_type not in (Text, ImgUrl, ImgPath, str):
+            push_error(
+                f"参数 {param_name} 的List类型必须直接包裹基础类型（Text, ImgUrl, ImgPath, str），"
+                f"但获得 {element_type}", 
+                location=get_location()
+            )
+            return [create_text_content(value, param_name)]
+        
+        content = []
+        for i, item in enumerate(value):
+            # 递归解析列表元素
+            item_content = parse_multimodal_parameter(item, element_type, f"{param_name}[{i}]")
+            content.extend(item_content)
+        return content
+    
+    # 3. 最后检查基础类型
+    if annotation in (Text, str):
+        return [create_text_content(value, param_name)]
+    elif annotation is ImgUrl:
+        return [create_image_url_content(value, param_name)]
+    elif annotation is ImgPath:
+        return [create_image_path_content(value, param_name)]
+    
+    # 默认作为文本处理
+    return [create_text_content(value, param_name)]
+
+
+def handle_union_type(value: Any, args: tuple, param_name: str) -> List[Dict[str, Any]]:
+    """
+    处理Union类型，实际上是处理以下两种情况：
+    1. Optional[List[Text/ImgUrl/ImgPath]]
+    2. Optional[Text/ImgUrl/ImgPath]
+    
+    Args:
+        value: 参数值
+        args: Union类型的参数
+        param_name: 参数名称
+        
+    Returns:
+        OpenAI格式内容列表
+    """
+    from typing import List
+    from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
+    
+    # 由于None已经在上一级返回了空列表了所以这里不用检查
+    content = []
+    
+    # 直接检查value的类型
+    if isinstance(value, (Text, ImgUrl, ImgPath, str)):
+        # 如果value是多模态类型，直接处理
+        if isinstance(value, (Text, str)):
+            content.append(create_text_content(value, param_name))
+        elif isinstance(value, ImgUrl):
+            content.append(create_image_url_content(value, param_name))
+        elif isinstance(value, ImgPath):
+            content.append(create_image_path_content(value, param_name))
+        return content
+
+    # 如果value是列表类型，递归处理每个元素
+    if isinstance(value, (list, tuple)):
+        for i, item in enumerate(value):
+            if isinstance(item, (Text, ImgUrl, ImgPath, str)):
+                # 递归解析列表元素
+                if isinstance(item, (Text, str)):
+                    content.append(create_text_content(item, f"{param_name}[{i}]"))
+                elif isinstance(item, ImgUrl):
+                    content.append(create_image_url_content(item, f"{param_name}[{i}]"))
+                elif isinstance(item, ImgPath):
+                    content.append(create_image_path_content(item, f"{param_name}[{i}]"))
+            else:
+                push_error(
+                    f"多模态参数只能被标注为Optional[List[Text/ImgUrl/ImgPath]] 或 Optional[Text/ImgUrl/ImgPath] 或 List[Text/ImgUrl/ImgPath] 或 Text/ImgUrl/ImgPath",
+                    location=get_location()
+                )
+                content.append(create_text_content(item, f"{param_name}[{i}]")) 
+        return content
+    
+    # 如果value不是预期的类型，作为文本处理
+    return [create_text_content(value, param_name)]
+
+
+def create_text_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建文本内容格式"""
+    from SimpleLLMFunc.llm_decorator.multimodal_types import Text
+    
+    if isinstance(value, Text):
+        text = value.content
+    else:
+        text = str(value)
+    
+    return {
+        "type": "text", 
+        "text": f"{param_name}: {text}"
+    }
+
+
+def create_image_url_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建图片URL内容格式"""
+    from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl
+    
+    if value is None:
+        return create_text_content("None", param_name)
+    
+    if isinstance(value, ImgUrl):
+        url = value.url
+        detail = value.detail
+    else:
+        url = str(value)
+        detail = "auto"
+    
+    push_debug(
+        f"添加图片URL: {param_name} = {url} (detail: {detail})", 
+        location=get_location()
+    )
+    
+    image_url_data = {"url": url}
+    if detail != "auto":
+        image_url_data["detail"] = detail
+    
+    return {
+        "type": "image_url",
+        "image_url": image_url_data
+    }
+
+
+def create_image_path_content(value: Any, param_name: str) -> Dict[str, Any]:
+    """创建本地图片内容格式"""
+    from SimpleLLMFunc.llm_decorator.multimodal_types import ImgPath
+    
+    if value is None:
+        return create_text_content("None", param_name)
+    
+    if isinstance(value, ImgPath):
+        img_path = value
+        detail = value.detail
+    else:
+        img_path = ImgPath(value)
+        detail = "auto"
+    
+    # 转换为base64编码的data URL
+    base64_img = img_path.to_base64()
+    mime_type = img_path.get_mime_type()
+    data_url = f"data:{mime_type};base64,{base64_img}"
+    
+    push_debug(
+        f"添加本地图片: {param_name} = {img_path.path} (detail: {detail})", 
+        location=get_location()
+    )
+    
+    image_url_data = {"url": data_url}
+    if detail != "auto":
+        image_url_data["detail"] = detail
+    
+    return {
+        "type": "image_url", 
+        "image_url": image_url_data
+    }
+
+# ======================= 多模态支持辅助函数 =======================
+
+
 # 导出公共函数
 __all__ = [
     "execute_llm",
@@ -826,4 +1152,12 @@ __all__ = [
     "process_response",
     "extract_content_from_response",
     "extract_content_from_stream_response",
+    "has_multimodal_content",
+    "is_multimodal_type", 
+    "build_multimodal_content",
+    "parse_multimodal_parameter",
+    "handle_union_type",
+    "create_text_content",
+    "create_image_url_content", 
+    "create_image_path_content",
 ]

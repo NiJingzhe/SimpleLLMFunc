@@ -23,6 +23,20 @@ cd SimpleLLMFunc
 poetry install
 ```
 
+
+## 详细使用说明
+```{toctree}
+:maxdepth: 1
+:caption: 目录：
+
+config 配置 <detailed_guide/config>
+llm_interface 接口 <detailed_guide/llm_interface>
+llm_function 装饰器 <detailed_guide/llm_function>
+llm_chat 装饰器 <detailed_guide/llm_chat>
+tool 装饰器 <detailed_guide/tool>
+```
+
+
 ## 配置
 
 ### 环境变量配置
@@ -42,17 +56,6 @@ SimpleLLMFunc 使用环境变量和 `.env` 文件进行配置。你可以在项�
 LOG_DIR=./logs
 LOG_FILE=my_agent.log
 LOG_LEVEL=WARNING
-```
-
-## 详细使用说明 (如果想快速开始请看下一个section)
-
-```{toctree}
-:maxdepth: 2
-:caption: 目录：
-
-llm_function 装饰器 <detailed_guide/llm_function>
-llm_chat 装饰器 <detailed_guide/llm_chat>
-tool 装饰器 <detailed_guide/tool>
 ```
 
 
