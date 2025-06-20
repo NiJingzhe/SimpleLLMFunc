@@ -677,9 +677,30 @@ async def async_log_context(**kwargs: Any) -> AsyncGenerator[None, None]:
     
     try:
         yield
-    finally:
-        # 恢复原始上下文
-        _log_context.reset(token)
+    except GeneratorExit:
+        # 处理异步生成器被提前关闭的情况
+        # 直接重置上下文并重新抛出异常
+        try:
+            _log_context.reset(token)
+        except (ValueError, RuntimeError):
+            # 忽略上下文重置错误
+            pass
+        raise
+    except Exception:
+        # 处理其他异常
+        try:
+            _log_context.reset(token)
+        except (ValueError, RuntimeError):
+            # 忽略上下文重置错误
+            pass
+        raise
+    else:
+        # 正常完成时重置上下文
+        try:
+            _log_context.reset(token)
+        except (ValueError, RuntimeError):
+            # 忽略上下文重置错误
+            pass
 
 @contextmanager
 def log_context(**kwargs: Any) -> Generator[None, None, None]:
@@ -709,7 +730,12 @@ def log_context(**kwargs: Any) -> Generator[None, None, None]:
         yield
     finally:
         # 恢复原始上下文
-        _log_context.reset(token)
+        try:
+            _log_context.reset(token)
+        except ValueError:
+            # 在某些边缘情况下，Context 可能在不同的任务中被重置
+            # 这种情况下忽略 ValueError 是安全的
+            pass
 
 
 def app_log(

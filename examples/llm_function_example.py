@@ -83,32 +83,37 @@ def main():
 
     app_log("开始运行示例代码")
 
-
-    # 测试天气查询
-    city = "Hangzhou"
     try:
-        print("\n===== 天气查询 =====")
-        weather_info = get_daily_recommendation(city)
-        print(f"推荐活动: {weather_info.recommendation}")
-        print(f"城市: {city}")
-        print(f"温度: {weather_info.temperature}")
-        print(f"湿度: {weather_info.humidity}")
-        print(f"天气状况: {weather_info.condition}")
-    except Exception as e:
-        print(f"天气查询失败: {e}")
+        # 测试天气查询
+        city = "Hangzhou"
+        try:
+            print("\n===== 天气查询 =====")
+            weather_info = get_daily_recommendation(city)
+            print(f"推荐活动: {weather_info.recommendation}")
+            print(f"城市: {city}")
+            print(f"温度: {weather_info.temperature}")
+            print(f"湿度: {weather_info.humidity}")
+            print(f"天气状况: {weather_info.condition}")
+        except Exception as e:
+            print(f"天气查询失败: {e}")
 
+            
+        # 测试图像分析
+        focus = Text("分析图像中的主要元素")
+        image_path = ImgPath("./repocover_new.png", detail="high") 
+
+        try:
+            print("\n===== 图像分析 =====")
+            analysis_result = analyze_image(focus, image_path)
+            print(f"图像分析结果: {analysis_result}")
+        except Exception as e:
+            print(f"图像分析失败: {e}")
+
+    finally:
+        # 确保异步资源得到清理
+        import time
+        time.sleep(0.1)  # 给异步清理任务一些时间完成
         
-    # 测试图像分析
-    focus = Text("分析图像中的主要元素")
-    image_path = ImgPath("./repocover_new.png", detail="high") 
-
-    try:
-        print("\n===== 图像分析 =====")
-        analysis_result = analyze_image(focus, image_path)
-        print(f"图像分析结果: {analysis_result}")
-    except Exception as e:
-        print(f"图像分析失败: {e}")
-
     app_log("示例代码运行结束")
 if __name__ == "__main__":
     main()

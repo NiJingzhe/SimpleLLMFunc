@@ -802,9 +802,11 @@ if __name__ == "__main__":
     # 解析用户输入中的多模态标签
     clean_text, local_images, image_urls = parse_multimodal_input(user_input)
 
-    local_images = [ImgPath(
-        os.path.join(current_dir, "repocover_new.png")
-    )]
+    local_images = [
+        ImgPath(
+            os.path.join(current_dir, "repocover_new.png")
+        )
+    ]
 
     # 使用清理后的文本作为消息内容
     initial_message = clean_text

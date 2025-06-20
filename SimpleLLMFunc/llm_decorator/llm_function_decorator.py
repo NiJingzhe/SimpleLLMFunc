@@ -62,6 +62,8 @@ from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
     process_response,
     get_detailed_type_description,
+    has_multimodal_content,
+    build_multimodal_content,
 )
 
 from SimpleLLMFunc.utils import get_last_item_of_generator, get_last_item_of_async_generator
@@ -636,13 +638,36 @@ def _execute_llm_with_retry(
     Returns:
         最终的 LLM 响应
     """
-    # 使用asyncio.run来在同步环境中运行异步操作
-    return asyncio.run(_execute_llm_with_retry_async(
-        llm_interface=llm_interface,
-        context=context,
-        llm_params=llm_params,
-        max_tool_calls=max_tool_calls,
-    ))
+    import warnings
+    
+    async def _async_execution():
+        """异步执行逻辑"""
+        return await _execute_llm_with_retry_async(
+            llm_interface=llm_interface,
+            context=context,
+            llm_params=llm_params,
+            max_tool_calls=max_tool_calls,
+        )
+    
+    # 参考 llm_chat_decorator 的实现方式
+    try:
+        # 创建一个新的事件循环来处理异步操作
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        try:
+            result = loop.run_until_complete(_async_execution())
+            return result
+        finally:
+            # 确保事件循环被正确关闭
+            loop.close()
+            
+    except Exception as e:
+        push_error(
+            f"LLM 函数 '{context.func_name}' 执行出错: {str(e)}",
+            location=get_location(),
+        )
+        raise
 
 
 def _process_final_response(response: Any, return_type: Any) -> Any:
@@ -873,51 +898,7 @@ def _has_multimodal_content(
     Returns:
         是否包含多模态内容
     """
-    for param_name, param_value in arguments.items():
-        if param_name in type_hints:
-            annotation = type_hints[param_name]
-            if _is_multimodal_type(param_value, annotation):
-                return True
-    return False
-
-
-def _is_multimodal_type(value: Any, annotation: Any) -> bool:
-    """
-    检查值和类型注解是否为多模态类型
-
-    Args:
-        value: 参数值
-        annotation: 类型注解
-
-    Returns:
-        是否为多模态类型
-    """
-    # 检查直接的多模态类型
-    if isinstance(value, (Text, ImgUrl, ImgPath)):
-        return True
-
-    # 检查类型注解
-    if annotation in (Text, ImgUrl, ImgPath):
-        return True
-
-    # 检查List类型
-    origin = get_origin(annotation)
-    if origin is list or origin is List:
-        args = get_args(annotation)
-        if args:
-            element_type = args[0]
-            if element_type in (Text, ImgUrl, ImgPath):
-                return True
-            # 检查列表中的实际值
-            if isinstance(value, (list, tuple)):
-                return any(isinstance(item, (Text, ImgUrl, ImgPath)) for item in value)
-
-    # 检查Union类型
-    if origin is Union:
-        args = get_args(annotation)
-        return any(arg in (Text, ImgUrl, ImgPath) for arg in args)
-
-    return False
+    return has_multimodal_content(arguments, type_hints)
 
 
 def _build_multimodal_messages(
@@ -946,7 +927,7 @@ def _build_multimodal_messages(
     )
 
     # 构建多模态用户消息内容
-    user_content = _parse_multimodal_arguments(
+    user_content = build_multimodal_content(
         context.bound_args.arguments, context.type_hints
     )
 
@@ -961,186 +942,3 @@ def _build_multimodal_messages(
     )
 
     return messages
-
-
-def _parse_multimodal_arguments(
-    arguments: Dict[str, Any], type_hints: Dict[str, Any]
-) -> List[Dict[str, Any]]:
-    """
-    解析多模态参数，构建OpenAI格式的内容列表
-
-    Args:
-        arguments: 函数参数值
-        type_hints: 类型提示
-
-    Returns:
-        OpenAI格式的内容列表
-    """
-    content = []
-
-    for param_name, param_value in arguments.items():
-        if param_name in type_hints:
-            annotation = type_hints[param_name]
-            parsed_content = _parse_parameter(param_value, annotation, param_name)
-            content.extend(parsed_content)
-        else:
-            # 没有类型注解的参数，默认作为文本处理
-            content.append(_create_text_content(param_value, param_name))
-
-    return content
-
-
-def _parse_parameter(
-    value: Any, annotation: Any, param_name: str
-) -> List[Dict[str, Any]]:
-    """
-    递归解析参数，返回OpenAI内容格式列表
-
-    Args:
-        value: 参数值
-        annotation: 类型注解
-        param_name: 参数名称（用于日志）
-
-    Returns:
-        OpenAI格式内容列表
-    """
-    content = []
-
-    # 获取类型的origin和args（处理泛型）
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-
-    # 处理List类型
-    if origin is list or origin is List:
-        if not isinstance(value, (list, tuple)):
-            push_warning(
-                f"参数 {param_name} 应为列表类型，但获得 {type(value)}",
-                location=get_location(),
-            )
-            content.append(_create_text_content(value, param_name))
-            return content
-
-        # 获取List的元素类型
-        element_type = args[0] if args else Any
-
-        # 递归处理列表中的每个元素
-        for i, item in enumerate(value):
-            item_content = _parse_parameter(item, element_type, f"{param_name}[{i}]")
-            content.extend(item_content)
-
-    # 处理基础多模态类型
-    elif annotation is Text or annotation == Text:
-        content.append(_create_text_content(value, param_name))
-
-    elif annotation is ImgUrl or annotation == ImgUrl:
-        content.append(_create_image_url_content(value, param_name))
-
-    elif annotation is ImgPath or annotation == ImgPath:
-        content.append(_create_image_path_content(value, param_name))
-
-    # 处理Union类型
-    elif origin is Union:
-        content.append(_handle_union_type(value, args, param_name))
-
-    # 处理普通字符串（向后兼容）
-    elif annotation is str:
-        content.append(_create_text_content(value, param_name))
-
-    else:
-        # 未知类型，尝试转换为文本
-        content.append(_create_text_content(value, param_name))
-
-    return content
-
-
-def _create_text_content(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建文本内容"""
-    if isinstance(value, Text):
-        text = value.content
-    else:
-        text = str(value)
-
-    # 在文本前添加参数名称以提供上下文
-    formatted_text = f"{param_name}: {text}"
-
-    return {"type": "text", "text": formatted_text}
-
-
-def _create_image_url_content(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建图片URL内容"""
-    if isinstance(value, ImgUrl):
-        url = value.url
-        detail = value.detail
-    else:
-        url = str(value)
-        detail = "auto"  # 默认值
-
-    push_debug(
-        f"添加图片URL: {param_name} = {url} (detail: {detail})", location=get_location()
-    )
-
-    image_url_data = {"url": url}
-    # 只有在非默认值时才添加detail参数，保持与OpenAI API的兼容性
-    if detail != "auto":
-        image_url_data["detail"] = detail
-
-    return {"type": "image_url", "image_url": image_url_data}
-
-
-def _create_image_path_content(value: Any, param_name: str) -> Dict[str, Any]:
-    """创建本地图片内容"""
-    if isinstance(value, ImgPath):
-        img_path = value
-        detail = value.detail
-    else:
-        img_path = ImgPath(value)
-        detail = "auto"  # 默认值
-
-    # 将本地图片转换为base64
-    base64_img = img_path.to_base64()
-    mime_type = img_path.get_mime_type()
-    data_url = f"data:{mime_type};base64,{base64_img}"
-
-    push_debug(
-        f"添加本地图片: {param_name} = {img_path.path} (detail: {detail})",
-        location=get_location(),
-    )
-
-    image_url_data = {"url": data_url}
-    # 只有在非默认值时才添加detail参数，保持与OpenAI API的兼容性
-    if detail != "auto":
-        image_url_data["detail"] = detail
-
-    return {"type": "image_url", "image_url": image_url_data}
-
-
-def _handle_union_type(
-    value: Any, union_args: tuple, param_name: str
-) -> Dict[str, Any]:
-    """处理Union类型，尝试匹配最合适的类型"""
-    # 首先检查实际值的类型
-    if isinstance(value, Text):
-        return _create_text_content(value, param_name)
-    elif isinstance(value, ImgUrl):
-        return _create_image_url_content(value, param_name)
-    elif isinstance(value, ImgPath):
-        return _create_image_path_content(value, param_name)
-
-    # 如果不是多模态类型，按Union中的类型顺序尝试匹配
-    for arg_type in union_args:
-        try:
-            if arg_type is Text and isinstance(value, str):
-                return _create_text_content(Text(value), param_name)
-            elif arg_type is ImgUrl and isinstance(value, str):
-                return _create_image_url_content(ImgUrl(value), param_name)
-            elif arg_type is ImgPath and isinstance(value, str):
-                return _create_image_path_content(ImgPath(value), param_name)
-        except Exception as e:
-            push_debug(
-                f"尝试将 {param_name} 转换为 {arg_type} 失败: {e}",
-                location=get_location(),
-            )
-            continue
-
-    # 默认作为文本处理
-    return _create_text_content(value, param_name)
