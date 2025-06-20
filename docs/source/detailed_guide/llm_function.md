@@ -350,12 +350,6 @@ async def function2(text: str) -> str:
 6. **响应转换**: 将 LLM 的文本响应转换为指定的返回类型
 7. **结果返回**: 返回转换后的结果给调用者
 
-### 异步执行机制
-
-- **线程池隔离**: LLM 调用在独立的线程池中执行，不会阻塞事件循环
-- **上下文传播**: 支持 contextvars 的正确传播，保持日志追踪等上下文信息
-- **异常处理**: 完整的异步异常处理机制
-
 ### 内置功能
 
 异步版本继承了同步版本的所有内置功能：
@@ -450,62 +444,7 @@ async def process_texts_concurrently():
 asyncio.run(process_texts_concurrently())
 ```
 
-### 示例 3: 使用共享线程池
-
-```python
-from concurrent.futures import ThreadPoolExecutor
-from pydantic import BaseModel
-from typing import List
-
-class AnalysisResult(BaseModel):
-    keywords: List[str]
-    sentiment: str
-    summary: str
-
-# 创建共享的线程池执行器
-executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="LLM-Async-")
-
-@async_llm_function(llm_interface=llm, executor=executor)
-async def extract_keywords_async(text: str) -> List[str]:
-    """从文本中提取关键词。"""
-    pass
-
-@async_llm_function(llm_interface=llm, executor=executor)
-async def analyze_sentiment_async(text: str) -> str:
-    """分析文本情感。"""
-    pass
-
-@async_llm_function(llm_interface=llm, executor=executor)
-async def summarize_async(text: str) -> str:
-    """生成文本摘要。"""
-    pass
-
-async def comprehensive_analysis(text: str) -> AnalysisResult:
-    """对文本进行综合分析"""
-    # 并发执行多个分析任务
-    keywords, sentiment, summary = await asyncio.gather(
-        extract_keywords_async(text),
-        analyze_sentiment_async(text),
-        summarize_async(text)
-    )
-    
-    return AnalysisResult(
-        keywords=keywords,
-        sentiment=sentiment,
-        summary=summary
-    )
-
-async def main():
-    text = "这是一段需要分析的长文本..."
-    result = await comprehensive_analysis(text)
-    print(f"关键词: {result.keywords}")
-    print(f"情感: {result.sentiment}")
-    print(f"摘要: {result.summary}")
-
-asyncio.run(main())
-```
-
-### 示例 4: 与其他异步操作配合
+### 示例 3: 与其他异步操作配合
 
 ```python
 import aiohttp
@@ -632,12 +571,7 @@ asyncio.run(test_sequential_vs_concurrent())
 
 ## 最佳实践
 
-### 1. 线程池管理
-- 对于频繁调用，使用共享线程池而不是为每次调用创建临时线程池
-- 根据 LLM 接口的并发限制设置合适的线程池大小
-- 记得在应用结束时关闭线程池
-
-### 2. 错误处理
+### 1. 错误处理
 ```python
 async def robust_llm_call():
     try:
@@ -648,7 +582,7 @@ async def robust_llm_call():
         return "默认值"
 ```
 
-### 3. 超时控制
+### 2. 超时控制
 ```python
 async def llm_call_with_timeout():
     try:
@@ -660,14 +594,6 @@ async def llm_call_with_timeout():
     except asyncio.TimeoutError:
         print("LLM 调用超时")
         return "超时默认值"
-```
-
-### 4. 资源清理
-```python
-# 在应用结束时清理资源
-async def cleanup():
-    if executor:
-        executor.shutdown(wait=True)
 ```
 
 ---

@@ -10,7 +10,7 @@ LLM 装饰器通用工具函数模块
 """
 
 import json
-from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable, Generator
+from typing import List, Dict, Any, Type, Optional, TypeVar, cast, Callable, AsyncGenerator
 from pydantic import BaseModel
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
@@ -28,7 +28,7 @@ T = TypeVar("T")
 # ======================= 数据流相关函数 =======================
 
 
-def execute_llm(
+async def execute_llm(
     llm_interface: LLM_Interface,
     messages: List[Dict[str, str]],
     tools: List[Dict[str, Any]] | None,
@@ -36,7 +36,7 @@ def execute_llm(
     max_tool_calls: int,
     stream: bool = False,
     **llm_kwargs,  # 添加llm_kwargs参数接收额外的LLM配置
-) -> Generator[Any, None, None]:
+) -> AsyncGenerator[Any, None]:
     """
     执行 LLM 调用并处理工具调用流程
 
@@ -76,38 +76,39 @@ def execute_llm(
     # 如果 stream 为 True，使用流式响应
     if stream:
         push_debug(f"LLM 函数 '{func_name}' 使用流式响应", location=get_location())
-        # 使用流式响应
-        initial_response = llm_interface.chat_stream(
-            messages=current_messages,
-            tools=tools,
-            **llm_kwargs,  # 传递额外的关键字参数
-        )
-    else:
-        push_debug(f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location())
-        # 使用非流式响应
-        initial_response = llm_interface.chat(
-            messages=current_messages,
-            tools=tools,
-            **llm_kwargs,  # 传递额外的关键字参数
+        
+        push_debug(
+            f"LLM 函数 '{func_name}' 初始流式响应开始", location=get_location()
         )
 
-    push_debug(
-        f"LLM 函数 '{func_name}' 初始响应: {initial_response}", location=get_location()
-    )
-
-    # 处理响应
-    content = ""
-    tool_call_chunks = []  # 累积工具调用片段
-    if stream:
+        # 处理流式响应
+        content = ""
+        tool_call_chunks = []  # 累积工具调用片段
         # 流式响应：在一次遍历中同时提取内容和工具调用片段
-        for chunk in initial_response:
+        async for chunk in llm_interface.chat_stream(
+            messages=current_messages,
+            tools=tools,
+            **llm_kwargs,  # 传递额外的关键字参数
+        ):
             content += extract_content_from_stream_response(chunk, func_name)
             tool_call_chunks.extend(_extract_tool_calls_from_stream_response(chunk))
             yield chunk  # 如果是流式响应，逐个返回 chunk
         # 合并工具调用片段为完整的工具调用
         tool_calls = _accumulate_tool_calls_from_chunks(tool_call_chunks)
     else:
-        # 非流式响应：分别提取内容和工具调用
+        push_debug(f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location())
+        # 使用非流式响应
+        initial_response = await llm_interface.chat(
+            messages=current_messages,
+            tools=tools,
+            **llm_kwargs,  # 传递额外的关键字参数
+        )
+
+        push_debug(
+            f"LLM 函数 '{func_name}' 初始响应: {initial_response}", location=get_location()
+        )
+
+        # 处理非流式响应
         content = extract_content_from_response(initial_response, func_name)
         tool_calls = _extract_tool_calls(initial_response)
         yield initial_response
@@ -167,41 +168,43 @@ def execute_llm(
         # 如果 stream 为 True，使用流式响应
         if stream:
             push_debug(f"LLM 函数 '{func_name}' 使用流式响应", location=get_location())
-            # 使用流式响应
-            response = llm_interface.chat_stream(
-                messages=current_messages,
-                tools=tools,
-                **llm_kwargs,  # 传递额外的关键字参数
-            )
-        else:
+
             push_debug(
-                f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location()
+                f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM流式响应开始",
+                location=get_location(),
             )
-            # 使用非流式响应
-            response = llm_interface.chat(
+
+            # 处理流式响应
+            content = ""
+            tool_call_chunks = []  # 累积工具调用片段
+            # 流式响应：在一次遍历中同时提取内容和工具调用片段
+            async for chunk in llm_interface.chat_stream(
                 messages=current_messages,
                 tools=tools,
                 **llm_kwargs,  # 传递额外的关键字参数
-            )
-
-        push_debug(
-            f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM，响应: {response}",
-            location=get_location(),
-        )
-
-        # 处理响应
-        content = ""
-        tool_call_chunks = []  # 累积工具调用片段
-        if stream:
-            # 流式响应：在一次遍历中同时提取内容和工具调用片段
-            for chunk in response:
+            ):
                 content += extract_content_from_stream_response(chunk, func_name)
                 tool_call_chunks.extend(_extract_tool_calls_from_stream_response(chunk))
                 yield chunk  # 如果是流式响应，逐个返回 chunk
             # 合并工具调用片段为完整的工具调用
             tool_calls = _accumulate_tool_calls_from_chunks(tool_call_chunks)
         else:
-            # 非流式响应：分别提取内容和工具调用
+            push_debug(
+                f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location()
+            )
+            # 使用非流式响应
+            response = await llm_interface.chat(
+                messages=current_messages,
+                tools=tools,
+                **llm_kwargs,  # 传递额外的关键字参数
+            )
+
+            push_debug(
+                f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM，响应: {response}",
+                location=get_location(),
+            )
+
+            # 处理非流式响应
             content = extract_content_from_response(response, func_name)
             tool_calls = _extract_tool_calls(response)
             yield response
@@ -261,7 +264,7 @@ def execute_llm(
     )
 
     # 最后一次调用 LLM 获取最终结果
-    final_response = llm_interface.chat(
+    final_response = await llm_interface.chat(
         messages=current_messages,
         **llm_kwargs,  # 传递额外的关键字参数
     )
