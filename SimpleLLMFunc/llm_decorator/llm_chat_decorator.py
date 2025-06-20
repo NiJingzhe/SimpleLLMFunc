@@ -6,8 +6,7 @@ from functools import wraps
 from typing import (
     Any,
     AsyncGenerator,
-    Callable, 
-    Concatenate,
+    Callable,
     Dict,
     Generator,
     List,
@@ -17,13 +16,10 @@ from typing import (
     TypeVar,
     Union,
     cast,
-    get_args,
-    get_origin,
     get_type_hints,
 )
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.llm_decorator.multimodal_types import ImgPath, ImgUrl, Text
 from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
     extract_content_from_stream_response,
@@ -41,7 +37,6 @@ from SimpleLLMFunc.logger import (
     push_warning,
 )
 from SimpleLLMFunc.tool import Tool
-from SimpleLLMFunc.utils import get_last_item_of_async_generator
 
 # 类型变量定义
 T = TypeVar("T")
@@ -61,7 +56,7 @@ def llm_chat(
 ):
     """
     LLM聊天装饰器，用于实现与大语言模型的对话功能，支持工具调用和历史记录管理。
-    
+
     这是同步版本的装饰器，内部使用 asyncio.run 来调用异步的 LLM 接口。
     对于需要原生异步支持的场景，请使用 @async_llm_chat 装饰器。
 
@@ -80,7 +75,7 @@ def llm_chat(
     ## 历史记录格式要求
     ```python
     [
-        {"role": "user", "content": "用户消息"}, 
+        {"role": "user", "content": "用户消息"},
         {"role": "assistant", "content": "助手回复"},
         {"role": "system", "content": "系统消息"}
     ]
@@ -161,10 +156,10 @@ def llm_chat(
                     # 创建一个新的事件循环来处理整个异步生成器
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                    
+
                     try:
                         async_gen = _async_chat_logic()
-                        
+
                         # 使用 run_until_complete 来逐个获取异步生成器的值
                         while True:
                             try:
@@ -174,7 +169,7 @@ def llm_chat(
                                 break
                     finally:
                         loop.close()
-                        
+
                 except Exception as e:
                     push_error(
                         f"LLM Chat '{func_name}' 执行出错: {str(e)}",
@@ -205,7 +200,7 @@ def async_llm_chat(
 ):
     """
     异步LLM聊天装饰器，用于实现与大语言模型的异步对话功能，支持工具调用和历史记录管理。
-    
+
     这是原生异步版本的装饰器，提供完全的异步支持，返回 AsyncGenerator。
     对于不需要异步的场景，请使用 @llm_chat 装饰器。
 
@@ -225,7 +220,7 @@ def async_llm_chat(
     ## 历史记录格式要求
     ```python
     [
-        {"role": "user", "content": "用户消息"}, 
+        {"role": "user", "content": "用户消息"},
         {"role": "assistant", "content": "助手回复"},
         {"role": "system", "content": "系统消息"}
     ]
@@ -330,7 +325,7 @@ async def _async_llm_chat_impl(
 ) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
     """
     共享的异步LLM聊天实现逻辑
-    
+
     Args:
         func_name: 函数名称
         signature: 函数签名
@@ -344,7 +339,7 @@ async def _async_llm_chat_impl(
         stream: 是否流式响应
         use_log_context: 是否使用异步日志上下文
         **llm_kwargs: 额外的LLM参数
-        
+
     Yields:
         (响应内容, 更新后的历史记录) 元组
     """
@@ -355,35 +350,36 @@ async def _async_llm_chat_impl(
     async def _execute_impl():
         # 1. 处理工具
         tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
-        
+
         # 2. 检查多模态内容
         has_multimodal = has_multimodal_content(
             bound_args.arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
         )
-        
+
         # 3. 构建用户消息
         user_message_content = _build_user_message_content(
             bound_args.arguments, type_hints, has_multimodal
         )
-        
+
         # 4. 处理历史记录
-        custom_history = _extract_history_from_args(
-            bound_args.arguments, func_name
-        )
-        
+        custom_history = _extract_history_from_args(bound_args.arguments, func_name)
+
         # 5. 构建完整消息列表
         current_messages = _build_messages(
-            docstring, custom_history, user_message_content, 
-            tool_param_for_api, has_multimodal
+            docstring,
+            custom_history,
+            user_message_content,
+            tool_param_for_api,
+            has_multimodal,
         )
-        
+
         # 6. 记录调试信息
         push_debug(
             f"LLM Chat '{func_name}' 将使用以下消息执行:"
             f"\n{json.dumps(current_messages, ensure_ascii=False, indent=2)}",
             location=get_location(),
         )
-        
+
         # 7. 执行LLM调用并处理响应
         complete_content = ""
         response_flow = execute_llm(
@@ -395,7 +391,7 @@ async def _async_llm_chat_impl(
             stream=stream,
             **llm_kwargs,
         )
-        
+
         # 8. 处理响应流（异步迭代）
         async for response in response_flow:
             app_log(
@@ -403,16 +399,13 @@ async def _async_llm_chat_impl(
                 f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=2)}",
                 location=get_location(),
             )
-            
+
             content = extract_content_from_stream_response(response, func_name)
             complete_content += content
             yield content, current_messages
-        
+
         # 9. 添加最终响应到历史记录
-        current_messages.append({
-            "role": "assistant", 
-            "content": complete_content
-        })
+        current_messages.append({"role": "assistant", "content": complete_content})
         yield "", current_messages
 
     if use_log_context:
@@ -452,23 +445,26 @@ async def _async_llm_chat_impl(
 
 # ===== 核心辅助函数 =====
 
-def _process_tools(toolkit: Optional[List[Union[Tool, Callable]]], func_name: str) -> Tuple[Optional[List], Dict]:
+
+def _process_tools(
+    toolkit: Optional[List[Union[Tool, Callable]]], func_name: str
+) -> Tuple[Optional[List], Dict]:
     """
     处理工具列表，返回API所需的工具参数和工具映射
-    
+
     Args:
         toolkit: 工具列表
         func_name: 函数名，用于日志记录
-        
+
     Returns:
         (tool_param_for_api, tool_map): API工具参数和工具名称到函数的映射
     """
     if not toolkit:
         return None, {}
-    
+
     tool_objects = []
     tool_map = {}
-    
+
     for tool in toolkit:
         if isinstance(tool, Tool):
             # Tool对象直接添加
@@ -476,7 +472,10 @@ def _process_tools(toolkit: Optional[List[Union[Tool, Callable]]], func_name: st
             tool_map[tool.name] = tool.run
         elif callable(tool) and hasattr(tool, "_tool"):
             # @tool装饰的函数
-            tool_obj = tool._tool
+            tool_obj = getattr(tool, "_tool", None)
+            assert isinstance(
+                tool_obj, Tool
+            ), "这一定是一个Tool对象，不会是None！是None我赤石"
             tool_objects.append(tool_obj)
             tool_map[tool_obj.name] = tool_obj.run
         else:
@@ -485,25 +484,27 @@ def _process_tools(toolkit: Optional[List[Union[Tool, Callable]]], func_name: st
                 "工具必须是Tool对象或被@tool装饰的函数",
                 location=get_location(),
             )
-    
+
     tool_param_for_api = Tool.serialize_tools(tool_objects) if tool_objects else None
-    
+
     push_debug(
         f"LLM Chat '{func_name}' 加载了 {len(tool_objects)} 个工具",
         location=get_location(),
     )
-    
+
     return tool_param_for_api, tool_map
 
 
-def _extract_history_from_args(arguments: Dict[str, Any], func_name: str) -> Optional[List[Dict]]:
+def _extract_history_from_args(
+    arguments: Dict[str, Any], func_name: str
+) -> Optional[List[Dict]]:
     """
     从函数参数中提取历史记录
-    
+
     Args:
         arguments: 函数参数字典
         func_name: 函数名，用于日志记录
-        
+
     Returns:
         历史记录列表或None
     """
@@ -513,7 +514,7 @@ def _extract_history_from_args(arguments: Dict[str, Any], func_name: str) -> Opt
         if param_name in arguments:
             history_param_name = param_name
             break
-    
+
     if not history_param_name:
         push_warning(
             f"LLM Chat '{func_name}' 缺少历史记录参数"
@@ -521,40 +522,42 @@ def _extract_history_from_args(arguments: Dict[str, Any], func_name: str) -> Opt
             location=get_location(),
         )
         return None
-    
+
     custom_history = arguments[history_param_name]
-    
+
     # 验证历史记录格式
-    if not (isinstance(custom_history, list) and 
-            all(isinstance(item, dict) for item in custom_history)):
+    if not (
+        isinstance(custom_history, list)
+        and all(isinstance(item, dict) for item in custom_history)
+    ):
         push_warning(
             f"LLM Chat '{func_name}' 历史记录参数应为 List[Dict[str, str]] 类型，"
             "将不传递历史记录",
             location=get_location(),
         )
         return None
-    
+
     return custom_history
 
 
 def _build_user_message_content(
-    arguments: Dict[str, Any], 
-    type_hints: Dict[str, Any], 
-    has_multimodal: bool
+    arguments: Dict[str, Any], type_hints: Dict[str, Any], has_multimodal: bool
 ) -> Union[str, List[Dict[str, Any]]]:
     """
     构建用户消息内容
-    
+
     Args:
         arguments: 函数参数字典
         type_hints: 类型提示字典
         has_multimodal: 是否包含多模态内容
-        
+
     Returns:
         用户消息内容（文本或多模态内容列表）
     """
     if has_multimodal:
-        return build_multimodal_content(arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES)
+        return build_multimodal_content(
+            arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
+        )
     else:
         # 构建传统文本消息，排除历史记录参数
         message_parts = []
@@ -569,37 +572,41 @@ def _build_messages(
     custom_history: Optional[List[Dict]],
     user_message_content: Union[str, List[Dict[str, Any]]],
     tool_objects: Optional[List],
-    has_multimodal: bool
+    has_multimodal: bool,
 ) -> List[Dict[str, Any]]:
     """
     构建完整的消息列表
-    
+
     Args:
         docstring: 函数文档字符串
         custom_history: 用户提供的历史记录
         user_message_content: 用户消息内容
         tool_objects: 工具列表
         has_multimodal: 是否为多模态消息
-        
+
     Returns:
         完整的消息列表
     """
     messages = []
-    
+
     # 1. 添加系统消息
     if docstring:
         system_content = docstring
         if tool_objects:
             system_content += "\n\n你需要灵活使用以下工具：\n\t" + "\n\t".join(
-                f"- {tool.name}: {tool.description}"   
-                if isinstance(tool, Tool) else  
-                f"- {tool._tool.name}: {tool._tool.description}" 
-                if isinstance(tool, Callable) and hasattr(tool, "_tool") 
-                else f"- {tool}"  # 处理其他类型的工具
+                (
+                    f"- {tool.name}: {tool.description}"
+                    if isinstance(tool, Tool)
+                    else (
+                        f"- {getattr(getattr(tool, '_tool'), 'name')}: {getattr(getattr(tool, '_tool'), 'description')}"
+                        if isinstance(tool, Callable) and hasattr(tool, "_tool")
+                        else f"- {tool}"
+                    )
+                )  # 处理其他类型的工具
                 for tool in tool_objects
             )
         messages.append({"role": "system", "content": system_content})
-    
+
     # 2. 添加历史记录
     if custom_history:
         for msg in custom_history:
@@ -610,7 +617,7 @@ def _build_messages(
                     f"跳过格式不正确的历史记录项: {msg}",
                     location=get_location(),
                 )
-    
+
     # 3. 添加当前用户消息
     if user_message_content:
         if has_multimodal and isinstance(user_message_content, list):
@@ -618,6 +625,5 @@ def _build_messages(
         else:
             user_msg = {"role": "user", "content": user_message_content}
         messages.append(user_msg)
-    
-    return messages
 
+    return messages

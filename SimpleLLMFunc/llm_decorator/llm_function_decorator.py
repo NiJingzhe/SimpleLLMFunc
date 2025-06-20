@@ -39,9 +39,8 @@ from typing import (
     Tuple,
     NamedTuple,
     Awaitable,
-    get_origin,
-    get_args,
 )
+
 import uuid
 
 from SimpleLLMFunc.logger.logger import push_debug
@@ -66,13 +65,10 @@ from SimpleLLMFunc.llm_decorator.utils import (
     build_multimodal_content,
 )
 
-from SimpleLLMFunc.utils import get_last_item_of_generator, get_last_item_of_async_generator
-from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
-from SimpleLLMFunc.llm_decorator.multimodal_types import (
-    Text,
-    ImgUrl,
-    ImgPath,
+from SimpleLLMFunc.utils import (
+    get_last_item_of_async_generator,
 )
+from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
@@ -638,8 +634,7 @@ def _execute_llm_with_retry(
     Returns:
         最终的 LLM 响应
     """
-    import warnings
-    
+
     async def _async_execution():
         """异步执行逻辑"""
         return await _execute_llm_with_retry_async(
@@ -648,20 +643,20 @@ def _execute_llm_with_retry(
             llm_params=llm_params,
             max_tool_calls=max_tool_calls,
         )
-    
+
     # 参考 llm_chat_decorator 的实现方式
     try:
         # 创建一个新的事件循环来处理异步操作
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         try:
             result = loop.run_until_complete(_async_execution())
             return result
         finally:
             # 确保事件循环被正确关闭
             loop.close()
-            
+
     except Exception as e:
         push_error(
             f"LLM 函数 '{context.func_name}' 执行出错: {str(e)}",
