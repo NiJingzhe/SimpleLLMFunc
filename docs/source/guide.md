@@ -29,6 +29,7 @@ poetry install
 :maxdepth: 1
 :caption: 目录：
 
+config 配置 <detailed_guide/config>
 llm_interface 接口 <detailed_guide/llm_interface>
 llm_function 装饰器 <detailed_guide/llm_function>
 llm_chat 装饰器 <detailed_guide/llm_chat>
