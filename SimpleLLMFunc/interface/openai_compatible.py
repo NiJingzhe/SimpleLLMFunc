@@ -466,7 +466,6 @@ class OpenAICompatible(LLM_Interface):
             except Exception as e:
                 self.key_pool.decrement_task_count(key)
                 attempt += 1
-                location = get_location()
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
                 push_warning(
                     f"{self.model_name} Interface attempt {attempt} failed: With message : {data} send, \n but exception : {str(e)} was caught",

@@ -62,7 +62,8 @@ async def execute_llm(
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
 
     # 创建消息历史副本，避免修改原始消息列表
-    current_messages = list(messages)
+    #current_messages = list(messages)
+    current_messages = messages
 
     # 记录调用次数
     call_count = 0
@@ -73,7 +74,6 @@ async def execute_llm(
         location=get_location(),
     )
 
-    # 如果 stream 为 True，使用流式响应
     if stream:
         push_debug(f"LLM 函数 '{func_name}' 使用流式响应", location=get_location())
         
@@ -583,7 +583,8 @@ def _process_tool_calls(
         更新后的消息历史
     """
     # 创建消息历史副本
-    current_messages = list(messages)
+    #current_messages = list(messages)
+    current_messages = messages
 
     # 处理每个工具调用
     for tool_call in tool_calls:
