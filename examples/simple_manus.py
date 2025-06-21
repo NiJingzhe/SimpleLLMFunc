@@ -6,15 +6,10 @@ import os
 import sys
 import json
 import argparse
-import uuid
-import subprocess
 import time
-import select
-import shutil
-import math
 import re
 from datetime import datetime
-from typing import List, Dict, Optional, Any, Callable, Union
+from typing import List, Dict, Optional
 
 from SimpleLLMFunc import OpenAICompatible
 import os
@@ -802,18 +797,12 @@ if __name__ == "__main__":
     # 解析用户输入中的多模态标签
     clean_text, local_images, image_urls = parse_multimodal_input(user_input)
 
-    local_images = [
-        ImgPath(
-            os.path.join(current_dir, "repocover_new.png")
-        )
-    ]
-
     # 使用清理后的文本作为消息内容
     initial_message = clean_text
 
     # 根据是否有多模态内容选择GLaDos版本
     print("==========================================" * 3)
-    print("GLaDos多模态版本思考中...")
+    print("GLaDos多模态版本思考...")
     glados_gen = GLaDos(
         history_GLaDos, 
         Text(initial_message),
@@ -886,7 +875,7 @@ if __name__ == "__main__":
                     [history_GLaDos[0]] + history_GLaDos[-9:]
                 )
 
-            #print(f"history: {json.dumps(history_GLaDos, ensure_ascii=False, indent=2)}")
+            print(f"history: {json.dumps(history_GLaDos, ensure_ascii=False, indent=2)}")
 
             # 自动保存历史记录
             if args.auto_save and session_id:

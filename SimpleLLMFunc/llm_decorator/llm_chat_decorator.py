@@ -120,6 +120,7 @@ def llm_chat(
 
         @wraps(func)
         def wrapper(*args, **kwargs):
+            
             # 生成唯一的追踪ID
             context_trace_id = get_current_trace_id()
             current_trace_id = f"{func_name}_{uuid.uuid4()}"
@@ -405,7 +406,7 @@ async def _async_llm_chat_impl(
             yield content, current_messages
 
         # 9. 添加最终响应到历史记录
-        current_messages.append({"role": "assistant", "content": complete_content})
+        # current_messages.append({"role": "assistant", "content": complete_content})
         yield "", current_messages
 
     if use_log_context:
@@ -611,7 +612,8 @@ def _build_messages(
     if custom_history:
         for msg in custom_history:
             if isinstance(msg, dict) and "role" in msg and "content" in msg:
-                messages.append(msg)
+                if msg["role"] not in ["system"]:
+                    messages.append(msg)
             else:
                 push_warning(
                     f"跳过格式不正确的历史记录项: {msg}",
