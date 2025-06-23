@@ -21,6 +21,11 @@ from SimpleLLMFunc.logger import (
     push_debug,
 )
 from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_location
+from SimpleLLMFunc.llm_decorator.multimodal_types import (
+    Text,
+    ImgUrl,
+    ImgPath,
+)
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
@@ -437,7 +442,6 @@ def extract_content_from_stream_response(chunk: Any, func_name: str) -> str:
         push_error(f"提取流响应内容时出错: {str(e)}")
         content = ""
 
-    push_debug(f"LLM 函数 '{func_name}' 提取的流内容:\n{content}")
     return content
 
 
@@ -615,15 +619,79 @@ def _process_tool_calls(
             tool_result = tool_func(**arguments)
 
             # 创建工具响应消息
-            tool_result_str = json.dumps(tool_result, ensure_ascii=False, indent=2)
-            tool_message = {
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": tool_result_str,
-            }
+            # 如果是多模态消息，构建对应的content
+            if isinstance(tool_result, ImgUrl):
+                # 将工具返回的图片URL转换为用户消息
+                tool_result_packet = {
+                    "type": "image_url", 
+                    "image_url": {"url": tool_result.url, "detail": tool_result.detail}
+                }
+                
+                # 移除最后一条tool call消息，替换为assistant消息
+                if current_messages and current_messages[-1].get("role") == "assistant" and current_messages[-1].get("tool_calls"):
+                    current_messages[-1] = {
+                        "role": "assistant",
+                        "content": f"我将会通过工具 '{tool_name}' 获取目标的图像"
+                    }
+                
+                # 添加包含多模态内容的用户消息
+                user_multimodal_message = {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"这是工具 '{tool_name}' 返回的图像："
+                        },
+                        tool_result_packet
+                    ]
+                }
+                current_messages.append(user_multimodal_message)
+                continue  # 跳过默认的tool消息处理
+                
+            elif isinstance(tool_result, ImgPath):
+                # 转换本地图片为base64格式
+                base64_img = tool_result.to_base64()
+                mime_type = tool_result.get_mime_type()
+                data_url = f"data:{mime_type};base64,{base64_img}"
+                
+                tool_result_packet = {
+                    "type": "image_url", 
+                    "image_url": {"url": data_url, "detail": tool_result.detail}
+                }
+                
+                # 移除最后一条tool call消息，替换为assistant消息
+                if current_messages and current_messages[-1].get("role") == "assistant" and current_messages[-1].get("tool_calls"):
+                    current_messages[-1] = {
+                        "role": "assistant", 
+                        "content": f"我将要调用工具 '{tool_name}' 获取图像文件"
+                    }
+                
+                # 添加包含多模态内容的用户消息
+                user_multimodal_message = {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"这是工具 '{tool_name}' 返回的图像文件："
+                        },
+                        tool_result_packet
+                    ]
+                }
+                current_messages.append(user_multimodal_message)
+                continue  # 跳过默认的tool消息处理
+
+            elif isinstance(tool_result, (Text, str)):
+                tool_result_packet = json.dumps(tool_result, ensure_ascii=False, indent=2)
+
+                tool_message = {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": tool_result_packet,
+                }
+
             current_messages.append(tool_message)
 
-            push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_str}")
+            push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_packet}")
 
         except Exception as e:
             # 处理工具执行错误
@@ -838,7 +906,6 @@ def has_multimodal_content(
     Returns:
         是否包含多模态内容
     """
-    from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
     
     exclude_params = exclude_params or []
     
