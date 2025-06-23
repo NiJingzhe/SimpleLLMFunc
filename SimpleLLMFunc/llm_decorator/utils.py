@@ -442,7 +442,6 @@ def extract_content_from_stream_response(chunk: Any, func_name: str) -> str:
         push_error(f"提取流响应内容时出错: {str(e)}")
         content = ""
 
-    #push_debug(f"LLM 函数 '{func_name}' 提取的流内容:\n{content}")
     return content
 
 
