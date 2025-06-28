@@ -14,7 +14,7 @@ gpt_4o = OpenAICompatible.load_from_json_file(provider_json_path)["dreamcatcher"
     name="get_image",
     description="Get an image from local path",
 )
-def get_image(image_path: str) -> ImgPath:
+def get_image(image_path: str) -> tuple[str, ImgPath]:
 
     """Get an image from the local file system.
 
@@ -27,7 +27,7 @@ def get_image(image_path: str) -> ImgPath:
         ImgPath: An object representing the image file with its path and detail level.
     """
 
-    return ImgPath(image_path, detail='low')
+    return "仔细分析这张图的几何结构", ImgPath(image_path, detail='low')
 
 @llm_function(
    llm_interface=gpt_4o,

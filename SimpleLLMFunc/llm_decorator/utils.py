@@ -764,7 +764,104 @@ def _process_tool_calls(
                 current_messages.append(user_multimodal_message)
                 continue  # 跳过默认的tool消息处理
 
+            elif isinstance(tool_result, tuple) and len(tool_result) == 2:
+                # 处理 Tuple[str, ImgPath] 和 Tuple[str, ImgUrl] 类型
+                text_part, img_part = tool_result
+                if isinstance(text_part, str) and isinstance(img_part, ImgUrl):
+                    # 处理 Tuple[str, ImgUrl]
+                    tool_result_packet = {
+                        "type": "image_url",
+                        "image_url": {"url": img_part.url, "detail": img_part.detail},
+                    }
+
+                    # 移除最后一条tool call消息，替换为assistant消息
+                    if (
+                        current_messages
+                        and current_messages[-1].get("role") == "assistant"
+                        and current_messages[-1].get("tool_calls")
+                    ):
+                        current_messages[-1] = {
+                            "role": "assistant",
+                            "content": f"我将会通过工具 '{tool_name}' 获取目标的图像，并提供说明文本",
+                        }
+
+                    # 添加包含多模态内容的用户消息
+                    user_multimodal_message = {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"这是工具 '{tool_name}' 返回的图像和说明：{text_part}",
+                            },
+                            tool_result_packet,
+                        ],
+                    }
+                    current_messages.append(user_multimodal_message)
+                    continue  # 跳过默认的tool消息处理
+
+                elif isinstance(text_part, str) and isinstance(img_part, ImgPath):
+                    # 处理 Tuple[str, ImgPath]
+                    base64_img = img_part.to_base64()
+                    mime_type = img_part.get_mime_type()
+                    data_url = f"data:{mime_type};base64,{base64_img}"
+
+                    tool_result_packet = {
+                        "type": "image_url",
+                        "image_url": {"url": data_url, "detail": img_part.detail},
+                    }
+
+                    # 移除最后一条tool call消息，替换为assistant消息
+                    if (
+                        current_messages
+                        and current_messages[-1].get("role") == "assistant"
+                        and current_messages[-1].get("tool_calls")
+                    ):
+                        current_messages[-1] = {
+                            "role": "assistant",
+                            "content": f"我将要调用工具 '{tool_name}' 获取图像文件，并提供说明文本",
+                        }
+
+                    # 添加包含多模态内容的用户消息
+                    user_multimodal_message = {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": f"这是工具 '{tool_name}' 返回的图像文件和说明：{text_part}",
+                            },
+                            tool_result_packet,
+                        ],
+                    }
+                    current_messages.append(user_multimodal_message)
+                    continue  # 跳过默认的tool消息处理
+
+                else:
+                    # 元组格式不正确，按普通方式处理
+                    tool_result_packet = json.dumps(
+                        tool_result, ensure_ascii=False, indent=2
+                    )
+
+                    tool_message = {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": tool_result_packet,
+                    }
+                    current_messages.append(tool_message)
+                    push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_packet}")
+                    continue  # 跳过后续的tool消息处理
+
             elif isinstance(tool_result, (Text, str)):
+                tool_result_packet = json.dumps(
+                    tool_result, ensure_ascii=False, indent=2
+                )
+
+                tool_message = {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": tool_result_packet,
+                }
+            else:
+                # 处理其他JSON可序列化的类型（dict, list, int, float, bool, None等）
                 tool_result_packet = json.dumps(
                     tool_result, ensure_ascii=False, indent=2
                 )
@@ -782,7 +879,7 @@ def _process_tool_calls(
         except Exception as e:
             # 处理工具执行错误
             error_message = (
-                f"执行工具 '{tool_name}' 出错，参数 {arguments_str}: {str(e)}"
+                f"工具 '{tool_name}' 以参数 {arguments_str} 在执行或结果解析中出错，错误: {str(e)}"
             )
             push_error(error_message)
 
