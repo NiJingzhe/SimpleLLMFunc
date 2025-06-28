@@ -15,7 +15,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.2.8 Latest)
+### 更新说明 (0.2.9 Latest)
 ### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
 ### 文档（ReadtheDoc）
@@ -49,8 +49,11 @@ Prompt会以DocString的形式存在，一方面强制你撰写良好的函数�
 ## 特性
 
 - **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理（但是小模型有很大概率无法输出正确的json格式）
+- **异步支持**：提供 `async_llm_function` 和 `async_llm_chat` 装饰器，支持原生异步调用
+- **多模态支持**：支持文本、图片URL和本地图片路径的多模态输入处理
 - **通用模型接口**：支持任何符合OpenAI API格式的模型服务，无需针对每个供应商开发专门实现
 - **API密钥管理**：自动化API密钥负载均衡，优化资源利用
+- **流量控制**：集成令牌桶算法，实现智能流量平滑
 - **结构化输出**：使用Pydantic模型定义结构化返回类型
 - **强大的日志系统**：支持trace_id跟踪和搜索，方便调试和监控，即将支持token用量统计
 - **工具系统**：支持Agent与外部环境交互，易于扩展
@@ -63,19 +66,26 @@ SimpleLLMFunc/
 │   ├── interface/             # LLM 接口
 │   │   ├── llm_interface.py   # LLM 接口抽象类
 │   │   ├── key_pool.py        # API 密钥管理
-│   │   └── openai_compatible.py # OpenAI Compatible 通用接口实现
-│   ├── llm_function/          # LLM函数装饰器
+│   │   ├── openai_compatible.py # OpenAI Compatible 通用接口实现
+│   │   └── token_bucket.py    # 流量控制令牌桶实现
+│   ├── llm_decorator/         # LLM装饰器
 │   │   ├── llm_chat_decorator.py     # 对话函数装饰器实现
-│   │   └── llm_function_decorator.py # 无状态函数装饰器实现
+│   │   ├── llm_function_decorator.py # 无状态函数装饰器实现
+│   │   ├── multimodal_types.py       # 多模态类型定义
+│   │   └── utils.py           # 装饰器工具函数
 │   ├── logger/                # 日志系统
 │   │   ├── logger.py          # 日志核心实现
 │   │   └── logger_config.py   # 日志配置
 │   ├── tool/                  # 工具系统
 │   │   └── tool.py            # 工具基类和工具函数装饰器定义
-│   └── config.py              # 全局配置
+│   ├── type/                  # 类型定义
+│   │   └── __init__.py        # 多模态类型导出
+│   ├── config.py              # 全局配置
+│   └── utils.py               # 通用工具函数
 └── examples/                  # 示例代码
     ├── llm_function_example.py  # LLM函数示例
     ├── llm_chat_example.py      # 对话函数示例
+    ├── async_llm_func.py        # 异步LLM函数示例
     └── simple_manus.py          # 包含多种工具和对话函数的综合示例
 ```
 ## 配置管理
@@ -109,6 +119,10 @@ SimpleLLMFunc的核心理念是 **"Everything is Function, Prompt is Code"**。�
 """
 使用LLM函数装饰器的示例
 """
+from typing import List
+from pydantic import BaseModel, Field
+from SimpleLLMFunc import llm_function, OpenAICompatible, app_log
+
 # 定义一个Pydantic模型作为返回类型
 class ProductReview(BaseModel):
     rating: int = Field(..., description="产品评分，1-5分")
@@ -204,9 +218,72 @@ Output:
 
 这个例子实现了一些工具和一个对话函数，能够实现代码专精的Manus类似物
 
+- ### 异步装饰器支持
+
+SimpleLLMFunc 提供了完整的异步支持，包括 `async_llm_function` 和 `async_llm_chat` 装饰器：
+
+```python
+from SimpleLLMFunc import async_llm_function, async_llm_chat
+
+# 异步LLM函数
+@async_llm_function(llm_interface=my_llm_interface)
+async def async_analyze_text(text: str) -> str:
+    """异步分析文本内容"""
+    pass
+
+# 异步对话函数
+@async_llm_chat(llm_interface=my_llm_interface, stream=True)
+async def async_chat(message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
+    """异步对话功能，支持流式响应"""
+    pass
+
+# 使用示例
+async def main():
+    result = await async_analyze_text("需要分析的文本")
+    
+    async for response, updated_history in async_chat("你好", []):
+        print(response)
+```
+
+- ### 多模态支持
+
+SimpleLLMFunc 支持多模态输入，可以处理文本、图片URL和本地图片：
+
+```python
+from SimpleLLMFunc import llm_function
+from SimpleLLMFunc.type import Text, ImgUrl, ImgPath
+
+@llm_function(llm_interface=my_llm_interface)
+def analyze_image(
+    description: Text,           # 文本描述
+    web_image: ImgUrl,          # 网络图片URL
+    local_image: ImgPath        # 本地图片路径
+) -> str:
+    """分析图像并根据描述提供详细说明
+    
+    Args:
+        description: 对图像分析的具体要求
+        web_image: 要分析的网络图片URL
+        local_image: 要对比的本地参考图片路径
+        
+    Returns:
+        详细的图像分析结果
+    """
+    pass
+
+# 使用示例
+result = analyze_image(
+    description=Text("请详细描述这两张图片的区别"),
+    web_image=ImgUrl("https://example.com/image.jpg"),
+    local_image=ImgPath("./reference.jpg")
+)
+```
+
 ### 装饰器特性
 
 - **类型安全**：根据函数签名自动识别参数和返回类型
+- **异步支持**：提供 `async_llm_function` 和 `async_llm_chat` 装饰器，支持原生异步调用
+- **多模态处理**：支持 `Text`、`ImgUrl`、`ImgPath` 类型的多模态输入
 - **Pydantic集成**：支持Pydantic模型作为返回类型，确保结果符合预定义结构，对于能力较弱的模型有较大概率在自动重试后也无法输出正确的json格式
 - **提示词自动构建**：基于函数文档和类型标注自动构建提示词
 
@@ -351,7 +428,47 @@ def get_weather(location: Location, days: int = 1) -> dict:
 - 直接使用Python原生类型和Pydantic模型进行参数标注
 - 自动从函数签名和文档字符串提取参数信息
 - 装饰后的函数仍可直接调用，便于测试
-- 当然，任何`llm_function`或者`llm_chat`装饰的函数，也可以接着被`tool`装饰器装饰以变成“智能工具”
+- **支持多模态返回**：工具可以返回 `ImgPath`（本地图片）或 `ImgUrl`（网络图片），实现多模态工具调用
+- 当然，任何`llm_function`或者`llm_chat`装饰的函数，也可以接着被`tool`装饰器装饰以变成"智能工具"
+
+### 多模态工具示例
+
+```python
+from SimpleLLMFunc.tool import tool
+from SimpleLLMFunc.type import ImgPath, ImgUrl
+
+@tool(name="generate_chart", description="根据数据生成图表")
+def generate_chart(data: str, chart_type: str = "bar") -> ImgPath:
+    """
+    根据提供的数据生成图表
+    
+    Args:
+        data: CSV格式的数据
+        chart_type: 图表类型，默认为柱状图
+        
+    Returns:
+        生成的图表文件路径
+    """
+    # 实际实现会生成图表并保存到本地
+    chart_path = "./generated_chart.png"
+    # ... 图表生成逻辑
+    return ImgPath(chart_path)
+
+@tool(name="search_web_image", description="搜索网络图片")
+def search_web_image(query: str) -> ImgUrl:
+    """
+    搜索网络图片
+    
+    Args:
+        query: 搜索关键词
+        
+    Returns:
+        找到的图片URL
+    """
+    # 实际实现会调用图片搜索API
+    image_url = "https://example.com/search_result.jpg"
+    return ImgUrl(image_url)
+```
 
 ### 类继承方式（向后兼容）
 
@@ -387,11 +504,10 @@ class WebSearchTool(Tool):
 使用装饰器方式定义的工具可以直接传递给LLM函数装饰器：
 
 ```python
-from SimpleLLMFunc.llm_decorator import llm_function
-from SimpleLLMFunc.interface import ZhipuAI_glm_4_flash_Interface
+from SimpleLLMFunc import llm_function
 
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
+    llm_interface=my_llm_interface,
     toolkit=[get_weather, search_web],  # 直接传递被@tool装饰的函数
 )
 def answer_with_tools(question: str) -> str:
@@ -411,7 +527,7 @@ def answer_with_tools(question: str) -> str:
 
 ```python
 @llm_function(
-    llm_interface=ZhipuAI_glm_4_flash_Interface,
+    llm_interface=my_llm_interface,
     toolkit=[get_weather, WebSearchTool()],  # 混合使用两种方式定义的工具
 )
 def answer_with_mixed_tools(question: str) -> str:
@@ -421,11 +537,22 @@ def answer_with_mixed_tools(question: str) -> str:
 
 ## API密钥管理
 
-SimpleLLMFunc使用`APIKeyPool`类通过小根堆管理多个API密钥，实现负载均衡：
+SimpleLLMFunc提供了完善的API密钥和流量管理机制：
+
+### API密钥负载均衡
+使用`APIKeyPool`类通过小根堆管理多个API密钥，实现负载均衡：
 
 - 自动选择最少负载的API密钥
 - 单例模式确保每个提供商只有一个密钥池，密钥池使用小根堆来进行负载均衡，每次取出load最低的KEY
 - 自动跟踪每个密钥的使用情况
+
+### 流量控制
+集成了令牌桶算法（TokenBucket）实现智能流量平滑：
+
+- 防止API调用频率过高触发限制
+- 支持突发流量的缓冲处理
+- 可在`provider.json`中配置每个模型的流量控制参数
+- 与API密钥池协同工作，提供更稳定的服务
 
 ## 安装和使用
 
@@ -460,7 +587,7 @@ pip install SimpleLLMFunc
   month = {June},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.2.1},
+  version = {0.2.9},
   year = {2025}
 }
 ```
