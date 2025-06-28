@@ -12,14 +12,101 @@ SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 AP
 - **灵活创建**: 支持装饰器和继承两种创建方式
 - **批量序列化**: 支持将多个工具一次性序列化为 API 格式
 
-### 支持的数据类型
+### 支持的数据类型（参数类型）
 - **基本类型**: `str`, `int`, `float`, `bool`
-- **容器类型**: `List[T]`, `Dict[K, V]`, `Set[T]`
+- **容器类型**: `List[T]`, `Dict[K, V]`
 - **Pydantic 模型**: 自动解析模型字段和验证规则
 - **可选参数**: 支持带默认值的可选参数
 - **复杂嵌套**: 支持嵌套的容器类型和复杂对象
 
-**⚠️ 注意： 由于LLM提供给工具的参数只能是json支持的类型，所以实际上`Tuple`, `Set`等容器是无法作为工具参数的，但是可以作为返回值类型**
+**⚠️ 注意： 由于LLM提供给工具的参数只能是json支持的类型，所以实际上`Tuple`, `Set`等容器是无法作为工具参数的**
+
+### 支持的返回类型
+工具函数可以返回多种数据格式，系统会自动处理这些返回值并将其传递给 LLM：
+
+#### 基本返回类型
+- **字符串 (`str`)**: 直接作为文本内容返回给 LLM
+- **JSON 可序列化对象**: 包括 `dict`, `list`, `int`, `float`, `bool`, `None`
+- **Pydantic 模型**: 自动序列化为 JSON 格式
+
+#### 多模态返回类型
+- **图片URL (`ImgUrl`)**: 返回网络图片链接，LLM 可以"看到"图片内容
+- **本地图片 (`ImgPath`)**: 返回本地图片文件路径，自动转换为 base64 格式
+- **文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片
+
+#### 返回类型示例
+
+```python
+from SimpleLLMFunc.tool import tool
+from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+from typing import Dict, List, Tuple, Any
+
+# 1. 基本类型返回
+@tool(name="calculate", description="执行数学计算")
+def calculate(expression: str) -> float:
+    """返回计算结果（浮点数）"""
+    return eval(expression)
+
+@tool(name="get_status", description="获取系统状态")
+def get_status() -> str:
+    """返回状态信息（字符串）"""
+    return "系统运行正常"
+
+# 2. JSON 对象返回
+@tool(name="get_user_info", description="获取用户信息")
+def get_user_info(user_id: int) -> Dict[str, Any]:
+    """返回用户信息（字典）"""
+    return {
+        "id": user_id,
+        "name": "张三",
+        "age": 25,
+        "skills": ["Python", "AI", "数据分析"]
+    }
+
+@tool(name="search_results", description="搜索并返回结果列表")
+def search_results(query: str) -> List[Dict[str, str]]:
+    """返回搜索结果（字典列表）"""
+    return [
+        {"title": "结果1", "url": "https://example1.com"},
+        {"title": "结果2", "url": "https://example2.com"}
+    ]
+
+# 3. 多模态返回 - 单独图片
+@tool(name="get_chart", description="生成数据图表")
+def get_chart(data: List[float]) -> ImgPath:
+    """返回图表图片（本地文件）"""
+    # 在chart path下有一个对应的图片文件
+    chart_path = "/path/to/generated/chart.png"
+    return ImgPath(chart_path)
+
+@tool(name="fetch_image", description="获取网络图片")
+def fetch_image(image_url: str) -> ImgUrl:
+    """返回网络图片URL"""
+    return ImgUrl(image_url)
+
+# 4. 多模态返回 - 文本+图片组合
+@tool(name="analyze_image", description="分析图片并生成报告")
+def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
+    """返回分析报告和标注后的图片"""
+    analysis_text = "检测到3个对象：2个人、1辆汽车"
+    annotated_image = ImgPath("/path/to/annotated_image.png")
+    return (analysis_text, annotated_image)
+```
+
+#### 返回类型处理机制
+
+1. **基本类型**: 直接序列化为 JSON 字符串传递给 LLM
+2. **图片类型**: 
+   - `ImgUrl`: 直接使用网络 URL
+   - `ImgPath`: 自动转换为 base64 编码的 data URL
+3. **组合类型**: 将文本和图片组合成多模态消息，LLM 可以同时看到文本说明和图片内容
+4. **错误处理**: 不支持的返回类型会自动转换为字符串格式
+
+**⚠️ 返回类型注意事项**:
+- 确保本地图片文件路径存在且可读
+- 网络图片 URL 应该是公开可访问的
+- 组合类型的元组必须是 `(str, ImgPath)` 或 `(str, ImgUrl)` 格式, 不能交换`str`和`ImgPath`/`ImgUrl`的顺序
+- 避免返回过大的数据结构，以免影响 LLM 处理效率
 
 **⚠️ 注意： 由于暂时还不支持异步Tool Call，所以`@tool`装饰器不能装饰异步函数，例如不能装饰`@async_llm_function`装饰的函数，但是可以装饰`@llm_function`装饰的函数**
 
@@ -267,6 +354,103 @@ def analyze_data(
         result["charts"] = {"type": "bar", "data": "chart_data"}
     
     return result
+
+# 示例5：多模态返回类型
+from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+from typing import Tuple
+
+@tool(name="generate_chart", description="生成数据图表")
+def generate_chart(data: List[float], chart_type: str = "bar") -> ImgPath:
+    """
+    根据数据生成图表并保存为本地文件
+    
+    Args:
+        data: 数据列表
+        chart_type: 图表类型，如 bar、line、pie
+        
+    Returns:
+        生成的图表文件路径
+    """
+    # 模拟图表生成
+    import matplotlib.pyplot as plt
+    import tempfile
+    import os
+    
+    plt.figure(figsize=(10, 6))
+    if chart_type == "bar":
+        plt.bar(range(len(data)), data)
+    elif chart_type == "line":
+        plt.plot(data)
+    
+    # 保存到临时文件
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+    plt.savefig(temp_file.name)
+    plt.close()
+    
+    return ImgPath(temp_file.name)
+
+@tool(name="fetch_web_image", description="获取网络图片")
+def fetch_web_image(image_url: str) -> ImgUrl:
+    """
+    验证并返回网络图片URL
+    
+    Args:
+        image_url: 图片的网络地址
+        
+    Returns:
+        验证后的图片URL对象
+    """
+    # 可以添加URL验证逻辑
+    return ImgUrl(image_url, detail="high")
+
+@tool(name="analyze_image_with_report", description="分析图片并生成详细报告")
+def analyze_image_with_report(image_path: str) -> Tuple[str, ImgPath]:
+    """
+    分析图片内容并生成带标注的图片
+    
+    Args:
+        image_path: 要分析的图片路径
+        
+    Returns:
+        分析报告文本和标注后的图片路径
+    """
+    # 模拟图像分析
+    analysis_report = """
+    图像分析报告：
+    - 检测到 3 个对象
+    - 主要颜色：蓝色、绿色
+    - 场景类型：户外风景
+    - 置信度：95%
+    """
+    
+    # 模拟生成标注图片
+    annotated_image_path = "/path/to/annotated_image.png"
+    
+    return (analysis_report.strip(), ImgPath(annotated_image_path))
+
+@tool(name="create_data_visualization", description="创建在线数据可视化")
+def create_data_visualization(dataset: Dict[str, Any]) -> Tuple[str, ImgUrl]:
+    """
+    创建数据可视化并上传到云端
+    
+    Args:
+        dataset: 包含数据和配置的字典
+        
+    Returns:
+        可视化说明和在线图片URL
+    """
+    # 模拟数据可视化处理
+    description = f"""
+    数据可视化已创建：
+    - 数据点数量：{len(dataset.get('data', []))}
+    - 图表类型：{dataset.get('chart_type', '未指定')}
+    - 创建时间：刚刚
+    """
+    
+    # 模拟上传到云端并获取URL
+    visualization_url = ImgUrl("https://example.com/visualizations/chart_12345.png")
+    
+    return (description.strip(), visualization_url)
 ```
 
 ### 继承方式示例
@@ -468,6 +652,121 @@ def multi_step_analysis(data: List[Dict[str, Any]], steps: List[str]) -> Dict[st
     return results
 ```
 
+### 返回类型最佳实践
+
+#### 选择合适的返回类型
+
+1. **文本输出优先**: 如果工具主要产生文本结果，使用 `str` 或结构化的 `Dict`
+2. **结构化数据**: 复杂数据使用 `Dict` 或 `List`，便于 LLM 理解和处理
+3. **多模态内容**: 需要展示图片时使用 `ImgPath`、`ImgUrl` 或组合类型
+4. **组合输出**: 需要同时提供说明和图片时使用 `Tuple[str, ImgPath/ImgUrl]`
+
+#### 性能优化建议
+
+```python
+# ✅ 推荐：结构化返回，便于LLM理解
+@tool(name="search_products", description="搜索商品")
+def search_products(query: str) -> Dict[str, Any]:
+    return {
+        "total": 10,
+        "products": [
+            {"name": "商品1", "price": 99.9, "in_stock": True},
+            {"name": "商品2", "price": 149.9, "in_stock": False}
+        ],
+        "query_time": "2024-01-01 12:00:00"
+    }
+
+# ✅ 推荐：多模态组合返回
+@tool(name="generate_report", description="生成分析报告")
+def generate_report(data: List[Dict]) -> Tuple[str, ImgPath]:
+    summary = f"分析了 {len(data)} 条记录，发现 3 个关键趋势"
+    chart_path = ImgPath("/tmp/analysis_chart.png")
+    return (summary, chart_path)
+
+# ❌ 避免：返回过大的数据结构
+def bad_example() -> Dict:
+    return {
+        "huge_data": list(range(10000)),  # 过大的数据
+        "binary_content": b"..."  # 二进制数据无法JSON序列化
+    }
+```
+
+#### 错误处理模式
+
+```python
+@tool(name="safe_division", description="安全除法运算")
+def safe_division(a: float, b: float) -> Dict[str, Any]:
+    """
+    安全的除法运算，包含错误处理
+    
+    Returns:
+        包含结果或错误信息的字典
+    """
+    if b == 0:
+        return {
+            "success": False,
+            "error": "除数不能为零",
+            "result": None
+        }
+    
+    return {
+        "success": True,
+        "error": None,
+        "result": a / b
+    }
+
+@tool(name="robust_image_tool", description="鲁棒的图像处理工具")
+def robust_image_tool(image_path: str) -> Tuple[str, ImgPath]:
+    """
+    带错误处理的图像工具
+    """
+    try:
+        # 图像处理逻辑
+        processed_image = process_image(image_path)
+        return ("图像处理成功", ImgPath(processed_image))
+    except Exception as e:
+        # 返回错误信息和默认图片
+        error_msg = f"图像处理失败: {str(e)}"
+        default_img = ImgPath("/path/to/error_placeholder.png")
+        return (error_msg, default_img)
+```
+
+#### 多模态类型详细说明
+
+```python
+from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+
+# ImgPath 使用示例
+img_local = ImgPath(
+    path="/path/to/image.jpg",
+    detail="high"  # 可选：图片细节级别 low/high
+)
+
+# ImgUrl 使用示例  
+img_url = ImgUrl(
+    url="https://example.com/image.jpg",
+    detail="low"  # 网络图片建议使用low以节省token
+)
+
+# 组合类型使用
+def complex_analysis() -> Tuple[str, ImgPath]:
+    analysis = """
+    检测结果：
+    - 人数：3人
+    - 车辆：1辆
+    - 置信度：92%
+    """
+    annotated_img = ImgPath("/tmp/detection_result.jpg")
+    return (analysis.strip(), annotated_img)
+```
+
 ---
 
 工具系统提供了强大而灵活的扩展机制，让 LLM 能够调用各种外部功能。通过装饰器方式，开发者可以轻松地将现有函数转换为 LLM 可用的工具，而继承方式则提供了更多的自定义控制。系统自动处理类型转换和参数验证，确保工具调用的安全性和准确性。
+
+**关键要点总结**：
+- 支持多种返回类型：基本类型、JSON对象、多模态内容
+- 多模态支持：单独图片或文本+图片组合
+- 自动类型转换：本地图片转base64，网络图片直接使用URL
+- 错误处理：推荐返回结构化的错误信息
+- 性能考虑：避免返回过大数据，网络图片使用低细节级别
