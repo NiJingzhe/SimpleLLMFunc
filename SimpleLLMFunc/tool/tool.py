@@ -319,12 +319,63 @@ def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[.
 
     工具的描述信息是: `description + "\\n" + docstring`
 
+    ## 一个工具函数支持的传入参数类型：
+    - **基本类型**: str, int, float, bool
+    - **复合类型**: List[T], Dict[K, V]  
+    - **可选类型**: Optional[T], Union[T, None]
+    - **Pydantic模型**: 继承自BaseModel的类，会自动解析为JSON Schema
+    - **多模态类型**: ImgPath（本地图片）, ImgUrl（网络图片）, Text（文本）
+
+    ## 一个工具函数支持的返回值类型：
+    - **基本类型**: str, int, float, bool, dict, list等可序列化类型
+    - **多模态返回**: 
+      - ImgPath: 返回本地图片路径，用于生成图表、处理后的图片等
+      - ImgUrl: 返回网络图片URL，用于搜索到的图片、在线资源等
+      - Tuple[str, ImgPath]: 返回说明文本和图片的组合
+      - Tuple[str, ImgUrl]: 返回说明文本和网络图片的组合
+    - **注意**: 返回值必须是可序列化的，不支持复杂对象
+
+    ## 参数描述解析：
+    装饰器会自动解析函数docstring中的Args/Parameters部分，格式为：
+    ```
     Args:
-        name: 工具名称
-        description: 工具描述，可以简短一些，更详细的内容可以在docstring中给出
+        param_name: 参数描述信息
+        another_param: 另一个参数的描述
+    ```
+
+    Args:
+        name: 工具名称，在LLM工具调用中使用
+        description: 工具简短描述，更详细的内容可以在被装饰函数的docstring中给出
 
     Returns:
-        装饰器函数
+        装饰器函数，保持原函数功能的同时添加_tool属性
+
+    Example:
+        ```python
+        from SimpleLLMFunc.tool import tool
+        from SimpleLLMFunc.type import ImgPath
+        from pydantic import BaseModel, Field
+
+        class Location(BaseModel):
+            lat: float = Field(..., description="纬度")
+            lng: float = Field(..., description="经度")
+
+        @tool(name="generate_map", description="生成位置地图")
+        def generate_map(location: Location, zoom: int = 10) -> ImgPath:
+            '''
+            根据位置信息生成地图图片
+            
+            Args:
+                location: 位置坐标信息
+                zoom: 地图缩放级别，默认为10
+                
+            Returns:
+                生成的地图图片路径
+            '''
+            # 实现地图生成逻辑
+            map_path = "./generated_map.png"
+            return ImgPath(map_path)
+        ```
     """
 
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
