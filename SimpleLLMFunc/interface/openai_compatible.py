@@ -334,15 +334,15 @@ class OpenAICompatible(LLM_Interface):
                     f"OpenAICompatible::chat: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location(),
                 )
-                async with client:  # 确保在使用后关闭客户端
-                    response: Dict[Any, Any] = await client.chat.completions.create(  # type: ignore
-                        messages=messages,  # type: ignore
-                        model=self.model_name,
-                        stream=stream,
-                        timeout=timeout,
-                        *args,
-                        **kwargs,
-                    )
+
+                response: Dict[Any, Any] = await client.chat.completions.create(  # type: ignore
+                    messages=messages,  # type: ignore
+                    model=self.model_name,
+                    stream=stream,
+                    timeout=timeout,
+                    *args,
+                    **kwargs,
+                )
 
                 # 统计token
                 if not (response.choices and response.choices[0].message and response.choices[0].message.tool_calls):  # type: ignore
@@ -431,15 +431,15 @@ class OpenAICompatible(LLM_Interface):
                     f"OpenAICompatible::chat_stream: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location(),
                 )
-                async with client:  # 确保在使用后关闭客户端
-                    response = await client.chat.completions.create(  # type: ignore
-                        messages=messages,  # type: ignore
-                        model=self.model_name,
-                        stream=stream,
-                        timeout=timeout,
-                        *args,
-                        **kwargs,
-                    )
+
+                response = await client.chat.completions.create(  # type: ignore
+                    messages=messages,  # type: ignore
+                    model=self.model_name,
+                    stream=stream,
+                    timeout=timeout,
+                    *args,
+                    **kwargs,
+                )
 
                 total_prompt_tokens = 0
                 total_completion_tokens = 0
