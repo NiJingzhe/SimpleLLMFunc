@@ -20,9 +20,6 @@ from typing import (
     cast,
     Callable,
     AsyncGenerator,
-    Union,
-    get_origin,
-    get_args,
 )
 from pydantic import BaseModel
 
@@ -878,9 +875,7 @@ def _process_tool_calls(
 
         except Exception as e:
             # 处理工具执行错误
-            error_message = (
-                f"工具 '{tool_name}' 以参数 {arguments_str} 在执行或结果解析中出错，错误: {str(e)}"
-            )
+            error_message = f"工具 '{tool_name}' 以参数 {arguments_str} 在执行或结果解析中出错，错误: {str(e)}"
             push_error(error_message)
 
             # 创建工具错误响应消息
