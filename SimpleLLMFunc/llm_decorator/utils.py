@@ -142,7 +142,7 @@ async def execute_llm(
         assistant_tool_call_message = _build_assistant_tool_message(tool_calls)
         current_messages.append(assistant_tool_call_message)
     else:
-        push_debug(f"未发现工具调用，直接返回结果", location=get_location())
+        push_debug("未发现工具调用，直接返回结果", location=get_location())
         # app_log 记录全过程messages
         app_log(
             f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
@@ -322,7 +322,7 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
         content = ""
 
     # 如果没有返回类型或返回类型是 str，直接返回内容
-    if return_type is None or return_type == str:
+    if return_type is None or return_type is str:
         return cast(T, content)
 
     # 如果返回类型是基本类型，尝试转换
@@ -330,7 +330,7 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
         return _convert_to_primitive_type(content, return_type)
 
     # 如果返回类型是字典，尝试解析 JSON
-    if return_type == dict or getattr(return_type, "__origin__", None) is dict:
+    if return_type is dict or getattr(return_type, "__origin__", None) is dict:
         return _convert_to_dict(content, func_name)  # type: ignore
 
     # 如果返回类型是 Pydantic 模型，使用 model_validate_json 解析
@@ -460,11 +460,11 @@ def extract_content_from_stream_response(chunk: Any, func_name: str) -> str:
 def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
     """将文本内容转换为基本类型 (int, float, bool)"""
     try:
-        if return_type == int:
+        if return_type is int:
             return int(content.strip())
-        elif return_type == float:
+        elif return_type is float:
             return float(content.strip())
-        elif return_type == bool:
+        elif return_type is bool:
             return content.strip().lower() in ("true", "yes", "1")
     except (ValueError, TypeError):
         raise ValueError(
@@ -1279,7 +1279,6 @@ def handle_union_type(value: Any, args: tuple, param_name: str) -> List[Dict[str
     Returns:
         OpenAI格式内容列表
     """
-    from typing import List
     from SimpleLLMFunc.llm_decorator.multimodal_types import Text, ImgUrl, ImgPath
 
     # 由于None已经在上一级返回了空列表了所以这里不用检查
@@ -1311,7 +1310,7 @@ def handle_union_type(value: Any, args: tuple, param_name: str) -> List[Dict[str
                     )
             else:
                 push_error(
-                    f"多模态参数只能被标注为Optional[List[Text/ImgUrl/ImgPath]] 或 Optional[Text/ImgUrl/ImgPath] 或 List[Text/ImgUrl/ImgPath] 或 Text/ImgUrl/ImgPath",
+                    "多模态参数只能被标注为Optional[List[Text/ImgUrl/ImgPath]] 或 Optional[Text/ImgUrl/ImgPath] 或 List[Text/ImgUrl/ImgPath] 或 Text/ImgUrl/ImgPath",
                     location=get_location(),
                 )
                 content.append(create_text_content(item, f"{param_name}[{i}]"))
