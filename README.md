@@ -9,19 +9,21 @@
 ![Github Stars](https://img.shields.io/github/stars/NiJingzhe/SimpleLLMFunc.svg?style=social)
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
 
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.2.10 Latest)
+### 更新说明 (0.2.12 Latest)
+
 ### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
 ### 文档（ReadtheDoc）
+
 ### Look here: [Docs](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html)
 
 -----
+
 ## What & why
 
 一个轻量级的LLM应用开发框架，支持类型安全的`llm_function`装饰器用于设计Workflow步骤，同时也支持`llm_chat`装饰器用于设计Agent系统。同时具有可配置的供应商和强大的日志跟踪系统。
@@ -33,10 +35,10 @@
   3. 我只想要一个非常非常简单的无状态功能，但是用LangChain还得阅读一堆文档，创建一堆节点。
   4. 不管是LangChain还是Dify，居然都不能构建有向有环的逻辑？？？？（虽然Dify新出了Condition Loop但并不是理想的形式）
   5. 但是不用框架的话又要自己写LLM API Call，每次都要写一遍这个Call代码很麻烦。而且Prompt作为变量形式存在没有那么直观的体现逻辑和在程序中的作用。
-   
+
 **这时候就有人问了，啊主播主播这些框架啊什么的都太复杂了，而不用框架有又很麻烦，有没有一种又简单又方便又快速的方法呢?**
 
-### 有的兄弟，有的！！
+### 有的兄弟，有的
 
 **SimpleLLMFunc** 的目标就是提供一个简单的恰到好处的框架，帮你实现了繁琐的API CALL撰写，帮你做了一点点Prompt工程，同时保留最大的自由度。
 
@@ -88,6 +90,7 @@ SimpleLLMFunc/
     ├── async_llm_func.py        # 异步LLM函数示例
     └── simple_manus.py          # 包含多种工具和对话函数的综合示例
 ```
+
 ## 配置管理
 
 SimpleLLMFunc使用分层配置系统：
@@ -191,6 +194,7 @@ if __name__ == "__main__":
     main()
 
 ```
+
 Output:
 
 ```text
@@ -207,7 +211,6 @@ Output:
 - 如果需要用于专业音频工作可能还不够
 总结: 音质和续航表现优秀，佩戴舒适，但连接稳定性不足，触控操作不够灵敏，适合日常使用，但不适合专业音频工作。
 ```
-
 
 正如这个例子展现的，只需要声明一个函数，声明返回类型，写好DocString，剩下的交给装饰器即可。
 函数直接返回的就是一个`Pydantic`对象，不需要做额外的反序列化操作。
@@ -383,6 +386,7 @@ logs = search_logs_by_trace_id("GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125")
 ```
 
 后续计划加入更多功能：
+
 - LLM函数调用的性能指标面板
 - 交互式日志分析工具
 - 自动化Prompt优化建议
@@ -425,6 +429,7 @@ def get_weather(location: Location, days: int = 1) -> dict:
 ```
 
 这种方式具有以下优势：
+
 - 直接使用Python原生类型和Pydantic模型进行参数标注
 - 自动从函数签名和文档字符串提取参数信息
 - 装饰后的函数仍可直接调用，便于测试
@@ -540,6 +545,7 @@ def answer_with_mixed_tools(question: str) -> str:
 SimpleLLMFunc提供了完善的API密钥和流量管理机制：
 
 ### API密钥负载均衡
+
 使用`APIKeyPool`类通过小根堆管理多个API密钥，实现负载均衡：
 
 - 自动选择最少负载的API密钥
@@ -547,6 +553,7 @@ SimpleLLMFunc提供了完善的API密钥和流量管理机制：
 - 自动跟踪每个密钥的使用情况
 
 ### 流量控制
+
 集成了令牌桶算法（TokenBucket）实现智能流量平滑：
 
 - 防止API调用频率过高触发限制
@@ -557,6 +564,7 @@ SimpleLLMFunc提供了完善的API密钥和流量管理机制：
 ## 安装和使用
 
 ### 1. 源码安装
+
 1. 克隆此仓库
 2. 根据`env_template`创建`.env`文件并配置您的API密钥
 3. 使用Poetry安装依赖：`poetry install`
@@ -579,6 +587,7 @@ pip install SimpleLLMFunc
 </a>
 
 ## Citation
+
 如果您在研究或项目中使用了SimpleLLMFunc，请引用以下信息：
 
 ```bibtex
@@ -591,7 +600,7 @@ pip install SimpleLLMFunc
   year = {2025}
 }
 ```
+
 ## 许可证
 
 MIT
-

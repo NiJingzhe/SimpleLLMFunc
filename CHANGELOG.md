@@ -1,22 +1,38 @@
+# Change log for SimpleLLMFunc
+
+-----
+
+## 0.2.12 版本更新说明(Latest)
+
+1. 优化了日志记录，此前的日志自动个归档会对所有的indices进行统计，每次启动也会加载全部的indices。这是没有必要的。我们现在会将同一个trace id的log统计在同一个以trace
+id命名的小文件中，这样可以实现增量存储同时分散磁盘读写压力。
+
+2. 优化了Interface中的异步支持，使用asyncio的延时替换了同步延时。
+
+-----
+
 ## 0.2.10 版本更新说明
 
 1. **优化对工具返回值的处理**：现在的多模态工具可以返回说明文本的图像模态的组合。例如，你可以定义一个工具返回一个文本和一个图像路径的元组，这样在提示LLM如何理解工具返回时会更加灵活。
 
 -----
-## 0.2.8 版本更新说明 
+
+## 0.2.8 版本更新说明
 
 1. **添加了多模态返回支持的Tool Call**：原来的tool只能是返回str或者是可序列化的内容的对象，现在可以通过标注返回值是`ImgPath`来返回本地图像，或者标注为`ImgUrl`来返回网络图像。请依然注意tool装饰器装饰的函数只能有一个返回值，不能是元组或列表，也不能是不可序列化的类型。
 
 2. **优化了日志记录**：减少了重复日志的保存。
 
 -----
-## 0.2.7 版本更新说明 
+
+## 0.2.7 版本更新说明
 
 1. **修改了llm chat装饰器返回的history内容**：原来会自动过滤掉tool call内容，现在这些内容也会被返回，用户可以自行决定是否保留或去除
 
 2. **使用rich提供更好的traceback打印**：现在的trace back打印更加优雅和美观了，rich果然是好东西
 
 -----
+
 ## 0.2.6 版本更新说明
 
 1. **给Tools添加了可选参数支持**：现在你可以在定义工具时添加可选参数，这些参数可以在调用工具时被省略。这样可以使得工具更加灵活，适应不同的调用场景。
@@ -26,11 +42,12 @@
 **WARNING**: 由于使用了`nested_asyncio`，我们不能保证在所有的环境下都能正常工作，特别是在某些特定的异步框架中可能会出现问题。如果你遇到问题，请考虑提出issue
 
 -----
-## 0.2.5 版本更新说明 
+
+## 0.2.5 版本更新说明
 
 1. **修正多模态参数解析问题**
 
-2. **修正了同步装饰器依赖于asyncio loop异步方法条件下的loop不正确关闭的问题** 
+2. **修正了同步装饰器依赖于asyncio loop异步方法条件下的loop不正确关闭的问题**
 
 3. **添加了TokenBucket**： OpenAICompatible接口现在集成了令牌桶算法用于流量平滑，和APIKeyPool一样可以在json中配置，也是针对一个模型管理一个令牌桶。
 
@@ -41,29 +58,36 @@
 1. **提供了多模态支持，现在能够处理图像输入了**：提供了更加语意明确的多模态类型标注，`Text`， `ImgUrl`和`ImgPath`，推荐使用这三个进行所有`llm_function`和`llm_chat`装饰器的函数参数类型标注，装饰器会根据标注构建正确的多模态用户消息。但是对于`Text`，使用`str` 类型标注也可以正常工作，但从语意上来说，`Text`更为明确。
 
 2. **使用原生async来实现异步，而不是上一个版本的基于线程池的异步**：现在所有的异步函数都使用原生的`async`和`await`来实现，这样可以更好地支持异步调用，避免了线程池带来的性能瓶颈。现在`llm_function`和`llm_chat`装饰器都支持异步函数，使用时只需在函数定义前添加`async`关键字，并使用相应的异步装饰器``@async_llm_function`或`@async_llm_chat`。
+
 ----
-## 0.2.1版本更新说明 
+
+## 0.2.1版本更新说明
+
 1. **llm function异步支持**：专门为异步函数调用提供了`@async_llm_function`装饰器，允许开发者创建异步的 LLM 函数。这个装饰器与`@llm_function`类似，但支持异步函数的调用。
 
 2. **更好的log**：
-  - 现在将更多用于中间调试的信息改为debug级别的log，减少了info级别的log输出，使得日志更加简洁明了。专门为提取训练数据而生。
-  - 注册了一个自定义清理逻辑，确保在主进程结束时所有的日志都会被正确地写入文件中，避免日志丢失。
+
+- 现在将更多用于中间调试的信息改为debug级别的log，减少了info级别的log输出，使得日志更加简洁明了。专门为提取训练数据而生。
+- 注册了一个自定义清理逻辑，确保在主进程结束时所有的日志都会被正确地写入文件中，避免日志丢失。
 
 3. **文档更新**：
    - 更新了文档中对于`@async_llm_function`的使用示例，提供了更清晰的异步函数调用方式。
    - 增加了关于如何在异步环境中使用 LLM 函数的指导。
 
 ----
-## 0.2.0版本更新说明 
+
+## 0.2.0版本更新说明
 
 1. **Stream支持**：现在`llm_chat`装饰器支持传入一个`stream`参数，允许用户在调用时选择是否开启流式响应。开启流式响应后，LLM的响应将以流的形式返回，而不是一次性返回完整结果。
 
 -----
+
 ## 0.1.13版本更新说明
 
 1. 原来的tool call流程中，extract出来的tool call不会按照openai定义的message格式添加到message中，这再众多模型上不会导致问题，但是在OpenAI自家的模型上，如果没有assistant的tool call信息，API在接收到 role 为 tool 的消息时会出现错误。现在修复了这个问题，tool call会被正确的添加到message中。
 
 -----
+
 ## 0.1.12版本更新说明
 
 1. 更新了文档中对于`OpenAICompatible`借口创建的不正确样例
@@ -71,23 +95,31 @@
 3. 给API Key Pool加上互斥锁，确保读取和修改load的线程安全，但是高并发下这个锁可能成为性能瓶颈
 
 -----
+
 ## 0.1.11版本更新说明
 
 1. 修复了`llm_chat`装饰器中工具信息没有在system prompt中被正确传递的问题
+
 -----
-## 0.1.10版本更新说明 
+
+## 0.1.10版本更新说明
 
 1. 修复了`llm_chat`装饰器中不正确的Callable类型标注
+
 -----
+
 ## 0.1.9版本更新说明
 
 1. 修复了`llm_function`装饰器中由于三元表达式没有使用括号界定范围导致在没有toolkit的时候system prompt消失的问题
+
 -----
+
 ## 0.1.8版本更新说明
 
 1. 修复了`llm_chat`装饰器中由于`toolkit`不传递导致的`tool_objects`局部变量未定义的问题
 
 -----
+
 ## 0.1.7版本更新说明
 
 1. fix a small bug
@@ -100,6 +132,7 @@
    - 此前的版本中，如果你想手动序列化一个工具，比较朴素的方法是使用`Tool`类的静态方法`serialize_tools(tools_list: List[Tool])`
 
 **例如**：
+
 ```python
 from SimpleLLMFunc import Tool, tool
 
@@ -117,12 +150,15 @@ def shell(command: str) -> tuple[str, str]:
 
 serialized = Tool.serialize_tools([shell])[0]
 ```
+
 这样`serialized`中会存放`shell`这个工具的序列化信息。
 
 但在此前的版本中这会有bug，实际上应该写作：
+
 ```python
 serialized = Tool.serialize_tools([shell._tool])[0]
 ```
+
 因为这个方法的列表要求是`Tool`对象列表，而实际上被`@tool`装饰的函数，其会被添加一个`_tool`属性，这个属性是一个`Tool`对象。
 
 而在`0.1.6.3+`的版本中，这一反直觉的问题被修复了，我们们可以使用第一个例子中符合直觉的写法，直接传入函数来得到序列化结果。
@@ -281,6 +317,7 @@ serialized = Tool.serialize_tools([shell._tool])[0]
 **例如：**
 
 你想要使用`llm_function`来实现一个`tool`，那么你会这样做：
+
 ```python
 @tool(name="code_writer", description="你可以使用这个工具来生成高质量的代码")
 @llm_function(llm_interface=your_llm_interface)
@@ -294,6 +331,7 @@ def code_generation(query: str) -> str:
     你是一位得力的资深程序员 ...
     """
 ```
+
 这种非常符合直觉的写法在上一个版本中是不可行的，因为被`llm_function`装饰器装饰后，返回的函数是一个`wrapper(**args, **kargs)`，缺失了参数列表和type hint，而`tool`装饰器依赖于这些信息。
 
 但在`0.1.6+`中，无论是使用`llm_function`装饰的函数还是使用`llm_chat`装饰的函数，其返回函数的签名信息：包括参数列表，类型提示，函数名称都和原始函数一致。所以上面的例子是可行的。
@@ -304,7 +342,7 @@ def code_generation(query: str) -> str:
 
 ### 主要更新
 
-1. **供应商配置优化** 
+1. **供应商配置优化**
    - 使用 JSON 文件替代 .env 配置供应商信息
    - 更灵活的模型参数配置
    - 多供应商统一配置管理
@@ -315,6 +353,7 @@ def code_generation(query: str) -> str:
    - 更清晰的指令描述和参数说明
 
 ### 配置示例 (provider.json)
+
 ```json
 {
     "volc_engine": [
@@ -346,6 +385,7 @@ def code_generation(query: str) -> str:
 ```
 
 ### 使用示例
+
 ```python
 from SimpleLLMFunc import OpenAICompatible
 

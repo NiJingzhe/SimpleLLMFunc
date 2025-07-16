@@ -1,13 +1,13 @@
 from __future__ import annotations
 import json
 import os
-import time
+import asyncio
 from typing import Optional, Dict, Literal, Iterable, Any, AsyncGenerator
 
 from openai import AsyncOpenAI
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
-from SimpleLLMFunc.interface.token_bucket import TokenBucket, rate_limit_manager
+from SimpleLLMFunc.interface.token_bucket import rate_limit_manager
 from SimpleLLMFunc.logger import (
     app_log,
     push_warning,
@@ -155,7 +155,9 @@ class OpenAICompatible(LLM_Interface):
                     max_retries = model_info.get("max_retries", 5)
                     retry_delay = model_info.get("retry_delay", 1.0)
                     rate_limit_capacity = model_info.get("rate_limit_capacity", 10)
-                    rate_limit_refill_rate = model_info.get("rate_limit_refill_rate", 1.0)
+                    rate_limit_refill_rate = model_info.get(
+                        "rate_limit_refill_rate", 1.0
+                    )
 
                     # 创建APIKeyPool实例
                     key_pool = APIKeyPool(api_keys, f"{provider_id}-{model_name}")
@@ -205,12 +207,12 @@ class OpenAICompatible(LLM_Interface):
 
     def get_rate_limit_status(self) -> Dict[str, Any]:
         """获取当前实例的令牌桶状态
-        
+
         Returns:
             包含令牌桶状态信息的字典
         """
         return self.token_bucket.get_info()
-    
+
     def reset_rate_limit(self) -> None:
         """重置令牌桶（填满令牌）"""
         self.token_bucket.reset()
@@ -244,15 +246,15 @@ class OpenAICompatible(LLM_Interface):
         self.model_name = model_name
 
         self.key_pool = api_key_pool
-        
+
         # 创建令牌桶，使用provider和model作为唯一标识
         bucket_id = f"{base_url}_{model_name}"
         self.token_bucket = rate_limit_manager.get_or_create_bucket(
             bucket_id=bucket_id,
             capacity=rate_limit_capacity,
-            refill_rate=rate_limit_refill_rate
+            refill_rate=rate_limit_refill_rate,
         )
-        
+
         self.client = AsyncOpenAI(
             api_key=api_key_pool.get_least_loaded_key(), base_url=self.base_url
         )
@@ -260,26 +262,30 @@ class OpenAICompatible(LLM_Interface):
     async def _get_or_create_client(self, key: str) -> AsyncOpenAI:
         """获取或创建客户端，确保使用正确的API密钥"""
         # 如果当前客户端的API密钥不匹配，或者客户端为None，创建新的客户端
-        if (not hasattr(self, '_current_key') or self._current_key != key or 
-            not hasattr(self, 'client') or self.client is None):
-            
+        if (
+            not hasattr(self, "_current_key")
+            or self._current_key != key
+            or not hasattr(self, "client")
+            or self.client is None
+        ):
+
             # 关闭旧客户端
-            if hasattr(self, 'client') and self.client is not None:
+            if hasattr(self, "client") and self.client is not None:
                 try:
                     await self.client.close()  # type: ignore
                 except Exception:
                     # 忽略关闭异常
                     pass
-            
+
             # 创建新客户端
             self.client = AsyncOpenAI(api_key=key, base_url=self.base_url)
             self._current_key = key
-        
+
         return self.client
 
     async def aclose(self):
         """关闭客户端连接"""
-        if hasattr(self, 'client') and self.client is not None:
+        if hasattr(self, "client") and self.client is not None:
             try:
                 await self.client.close()  # type: ignore
             except Exception:
@@ -320,21 +326,22 @@ class OpenAICompatible(LLM_Interface):
         while attempt < self.max_retries:
             try:
                 # 获取令牌桶令牌，设置30秒超时
-                token_acquired = await self.token_bucket.acquire(tokens_needed=1, timeout=30.0)
+                token_acquired = await self.token_bucket.acquire(
+                    tokens_needed=1, timeout=30.0
+                )
                 if not token_acquired:
                     push_warning(
                         f"{self.model_name} 令牌桶获取令牌超时，跳过此次请求",
                         location=get_location(),
                     )
                     raise Exception("Rate limit: 令牌桶获取令牌超时")
-                
+
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
                 push_debug(
                     f"OpenAICompatible::chat: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location(),
                 )
-
                 response: Dict[Any, Any] = await client.chat.completions.create(  # type: ignore
                     messages=messages,  # type: ignore
                     model=self.model_name,
@@ -381,7 +388,7 @@ class OpenAICompatible(LLM_Interface):
                         location=location,
                     )
                     raise e  # 达到最大重试次数后抛出异常
-                time.sleep(self.retry_delay)  # 重试前等待一段时间
+                await asyncio.sleep(self.retry_delay)  # 重试前等待一段时间
         return {}  # 添加默认返回以满足类型检查，实际上这行代码永远不会执行
 
     async def chat_stream(
@@ -417,14 +424,16 @@ class OpenAICompatible(LLM_Interface):
         while attempt < self.max_retries:
             try:
                 # 获取令牌桶令牌，设置30秒超时
-                token_acquired = await self.token_bucket.acquire(tokens_needed=1, timeout=30.0)
+                token_acquired = await self.token_bucket.acquire(
+                    tokens_needed=1, timeout=30.0
+                )
                 if not token_acquired:
                     push_warning(
                         f"{self.model_name} 流式请求令牌桶获取令牌超时，跳过此次请求",
                         location=get_location(),
                     )
                     raise Exception("Rate limit: 令牌桶获取令牌超时")
-                
+
                 self.key_pool.increment_task_count(key)
                 data = json.dumps(messages, ensure_ascii=False, indent=4)
                 push_debug(
@@ -483,9 +492,8 @@ class OpenAICompatible(LLM_Interface):
                         location=get_location(),
                     )
                     raise e
-                time.sleep(self.retry_delay)
+                await asyncio.sleep(self.retry_delay)
 
         # 下面是一个空生成器，用于满足类型检查，实际上永远不会执行到这里
         if False:
             yield {}
-
