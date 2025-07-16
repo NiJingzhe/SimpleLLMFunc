@@ -316,13 +316,13 @@ def my_function():
 
 ```json
 {
-    "volc_engine": {
-        "deepseek-v3-250324": {
-            "api_keys": ["your-api-key"],
-            "base_url": "https://api.volc.example.com/v1",
-            "model": "deepseek-chat"
-        }
-    }
+    "volc_engine": [
+      "deepseek-v3-250324": {
+          "api_keys": ["your-api-key"],
+          "base_url": "https://api.volc.example.com/v1",
+          "model": "deepseek-chat"
+      }
+  ]
 }
 ```
 
