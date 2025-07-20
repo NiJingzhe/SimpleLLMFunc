@@ -516,6 +516,7 @@ def setup_logger(
         maxBytes=max_file_size,
         backupCount=backup_count,
         encoding="utf-8",
+        index_dir=log_dir + "/trace_indices",
     )
     indexed_handler.setLevel(getattr(logging, file_level.name))
     indexed_handler.setFormatter(file_formatter)
