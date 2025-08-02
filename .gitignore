@@ -162,3 +162,5 @@ examples/**/provider.json
 
 
 .DS_Store
+
+**/*log*

@@ -48,6 +48,21 @@ Prompt会以DocString的形式存在，一方面强制你撰写良好的函数�
 
 -----
 
+## 安装和使用
+
+### 1. 源码安装
+
+1. 克隆此仓库
+2. 根据`env_template`创建`.env`文件并配置您的API密钥
+3. 使用Poetry安装依赖：`poetry install`
+4. 导入并使用`SimpleLLMFunc`的各个组件
+
+### 2. PyPI安装
+
+```bash
+pip install SimpleLLMFunc
+```
+
 ## 特性
 
 - **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理（但是小模型有很大概率无法输出正确的json格式）
@@ -59,53 +74,6 @@ Prompt会以DocString的形式存在，一方面强制你撰写良好的函数�
 - **结构化输出**：使用Pydantic模型定义结构化返回类型
 - **强大的日志系统**：支持trace_id跟踪和搜索，方便调试和监控，即将支持token用量统计
 - **工具系统**：支持Agent与外部环境交互，易于扩展
-
-## 项目结构
-
-```
-SimpleLLMFunc/
-├── SimpleLLMFunc/            # 核心包
-│   ├── interface/             # LLM 接口
-│   │   ├── llm_interface.py   # LLM 接口抽象类
-│   │   ├── key_pool.py        # API 密钥管理
-│   │   ├── openai_compatible.py # OpenAI Compatible 通用接口实现
-│   │   └── token_bucket.py    # 流量控制令牌桶实现
-│   ├── llm_decorator/         # LLM装饰器
-│   │   ├── llm_chat_decorator.py     # 对话函数装饰器实现
-│   │   ├── llm_function_decorator.py # 无状态函数装饰器实现
-│   │   ├── multimodal_types.py       # 多模态类型定义
-│   │   └── utils.py           # 装饰器工具函数
-│   ├── logger/                # 日志系统
-│   │   ├── logger.py          # 日志核心实现
-│   │   └── logger_config.py   # 日志配置
-│   ├── tool/                  # 工具系统
-│   │   └── tool.py            # 工具基类和工具函数装饰器定义
-│   ├── type/                  # 类型定义
-│   │   └── __init__.py        # 多模态类型导出
-│   ├── config.py              # 全局配置
-│   └── utils.py               # 通用工具函数
-└── examples/                  # 示例代码
-    ├── llm_function_example.py  # LLM函数示例
-    ├── llm_chat_example.py      # 对话函数示例
-    ├── async_llm_func.py        # 异步LLM函数示例
-    └── simple_manus.py          # 包含多种工具和对话函数的综合示例
-```
-
-## 配置管理
-
-SimpleLLMFunc使用分层配置系统：
-
-- 环境变量：最高优先级
-- `.env` 文件：次优先级
-
-### 日志配置 (.env)
-
-```bash
-# 日志相关配置
-LOG_DIR=./logs
-LOG_FILE=agent.log
-LOG_LEVEL=DEBUG
-```
 
 ## LLM函数装饰器 - Prompt As Code
 
@@ -561,20 +529,54 @@ SimpleLLMFunc提供了完善的API密钥和流量管理机制：
 - 可在`provider.json`中配置每个模型的流量控制参数
 - 与API密钥池协同工作，提供更稳定的服务
 
-## 安装和使用
+## 项目结构
 
-### 1. 源码安装
+```
+SimpleLLMFunc/
+├── SimpleLLMFunc/            # 核心包
+│   ├── interface/             # LLM 接口
+│   │   ├── llm_interface.py   # LLM 接口抽象类
+│   │   ├── key_pool.py        # API 密钥管理
+│   │   ├── openai_compatible.py # OpenAI Compatible 通用接口实现
+│   │   └── token_bucket.py    # 流量控制令牌桶实现
+│   ├── llm_decorator/         # LLM装饰器
+│   │   ├── llm_chat_decorator.py     # 对话函数装饰器实现
+│   │   ├── llm_function_decorator.py # 无状态函数装饰器实现
+│   │   ├── multimodal_types.py       # 多模态类型定义
+│   │   └── utils.py           # 装饰器工具函数
+│   ├── logger/                # 日志系统
+│   │   ├── logger.py          # 日志核心实现
+│   │   └── logger_config.py   # 日志配置
+│   ├── tool/                  # 工具系统
+│   │   └── tool.py            # 工具基类和工具函数装饰器定义
+│   ├── type/                  # 类型定义
+│   │   └── __init__.py        # 多模态类型导出
+│   ├── config.py              # 全局配置
+│   └── utils.py               # 通用工具函数
+└── examples/                  # 示例代码
+    ├── llm_function_example.py  # LLM函数示例
+    ├── llm_chat_example.py      # 对话函数示例
+    ├── async_llm_func.py        # 异步LLM函数示例
+    └── simple_manus.py          # 包含多种工具和对话函数的综合示例
+```
 
-1. 克隆此仓库
-2. 根据`env_template`创建`.env`文件并配置您的API密钥
-3. 使用Poetry安装依赖：`poetry install`
-4. 导入并使用`SimpleLLMFunc`的各个组件
+## 配置管理
 
-### 2. PyPI安装
+SimpleLLMFunc使用分层配置系统：
+
+- 环境变量：最高优先级
+- `.env` 文件：次优先级
+
+### 日志配置 (.env)
 
 ```bash
-pip install SimpleLLMFunc
+# 日志相关配置
+LOG_DIR=./logs
+LOG_FILE=agent.log
+LOG_LEVEL=DEBUG
 ```
+
+
 
 ## Star History
 
@@ -591,12 +593,12 @@ pip install SimpleLLMFunc
 如果您在研究或项目中使用了SimpleLLMFunc，请引用以下信息：
 
 ```bibtex
-@software{Jingzhe_SimpleLLMFunc_2025,
+@software{ni2025simplellmfunc,
   author = {Jingzhe Ni},
   month = {June},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.2.9},
+  version = {0.2.12},
   year = {2025}
 }
 ```
