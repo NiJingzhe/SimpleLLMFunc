@@ -1,28 +1,6 @@
 # 使用指南
 
-本指南将帮助你快速上手 SimpleLLMFunc 框架，从安装到实现第一个 LLM（大语言模型）应用。
-
-## 安装
-
-### 通过 pip 安装
-本项目发表在 PyPI，可以直接通过 `pip` 安装（安装前请根据需要创建相应虚拟环境）：
-
-```bash
-pip install SimpleLLMFunc
-```
-
-注意：发表在 PyPI 的版本可能不是最新的开发版本，可能会缺少一些新功能或修复。
-
-### 从源代码安装
-
-首先您需要安装 [Poetry](https://python-poetry.org/) 作为包管理工具（根据 Poetry 的官方指南，请勿将 Poetry 安装至本项目的虚拟或者任何欲使用其管理的虚拟环境中）。然后可以通过以下命令克隆项目并安装依赖：
-
-```bash
-git clone https://github.com/NiJingzhe/SimpleLLMFunc.git
-cd SimpleLLMFunc
-poetry install
-```
-
+本指南将帮助你快速上手 SimpleLLMFunc 框架，实现第一个 LLM（大语言模型）应用。
 
 ## 详细使用说明
 ```{toctree}
@@ -36,6 +14,7 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 tool 装饰器 <detailed_guide/tool>
 ```
 
+如果你不想阅读这些详细的文档说明，可以看下面的样例展示。
 
 ## 配置
 
