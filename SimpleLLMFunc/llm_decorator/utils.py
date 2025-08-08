@@ -20,6 +20,8 @@ from typing import (
     cast,
     Callable,
     AsyncGenerator,
+    Union,
+    TypedDict,
 )
 from pydantic import BaseModel
 
@@ -40,14 +42,25 @@ from SimpleLLMFunc.llm_decorator.multimodal_types import (
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")
 
+# ==== 类型定义：用于流式工具调用片段的累积结构 ====
+class ToolCallFunctionInfo(TypedDict):
+    name: Optional[str]
+    arguments: str
+
+
+class AccumulatedToolCall(TypedDict):
+    id: Optional[str]
+    type: Optional[str]
+    function: ToolCallFunctionInfo
+
 # ======================= 数据流相关函数 =======================
 
 
 async def execute_llm(
     llm_interface: LLM_Interface,
-    messages: List[Dict[str, str]],
+    messages: List[Dict[str, Any]],
     tools: List[Dict[str, Any]] | None,
-    tool_map: Dict[str, Callable],
+    tool_map: Dict[str, Callable[..., Any]],
     max_tool_calls: int,
     stream: bool = False,
     **llm_kwargs,  # 添加llm_kwargs参数接收额外的LLM配置
@@ -615,7 +628,7 @@ def _is_valid_tool_result(result: Any) -> bool:
 def _process_tool_calls(
     tool_calls: List[Dict[str, Any]],
     messages: List[Dict[str, Any]],
-    tool_map: Dict[str, Callable],
+    tool_map: Dict[str, Callable[..., Any]],
 ) -> List[Dict[str, Any]]:
     """
     处理工具调用并返回更新后的消息历史
@@ -681,13 +694,13 @@ def _process_tool_calls(
                     location=get_location(),
                 )
                 # 强制转换为字符串处理
-                tool_result_packet = json.dumps(
+                tool_result_content_json: str = json.dumps(
                     str(tool_result), ensure_ascii=False, indent=2
                 )
                 tool_message = {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
-                    "content": tool_result_packet,
+                    "content": tool_result_content_json,
                 }
                 current_messages.append(tool_message)
                 continue
@@ -695,7 +708,7 @@ def _process_tool_calls(
             # 如果是多模态消息，构建对应的content
             if isinstance(tool_result, ImgUrl):
                 # 将工具返回的图片URL转换为用户消息
-                tool_result_packet = {
+                image_content = {
                     "type": "image_url",
                     "image_url": {"url": tool_result.url, "detail": tool_result.detail},
                 }
@@ -719,7 +732,7 @@ def _process_tool_calls(
                             "type": "text",
                             "text": f"这是工具 '{tool_name}' 返回的图像：",
                         },
-                        tool_result_packet,
+                        image_content,
                     ],
                 }
                 current_messages.append(user_multimodal_message)
@@ -731,7 +744,7 @@ def _process_tool_calls(
                 mime_type = tool_result.get_mime_type()
                 data_url = f"data:{mime_type};base64,{base64_img}"
 
-                tool_result_packet = {
+                image_content = {
                     "type": "image_url",
                     "image_url": {"url": data_url, "detail": tool_result.detail},
                 }
@@ -755,7 +768,7 @@ def _process_tool_calls(
                             "type": "text",
                             "text": f"这是工具 '{tool_name}' 返回的图像文件：",
                         },
-                        tool_result_packet,
+                        image_content,
                     ],
                 }
                 current_messages.append(user_multimodal_message)
@@ -766,7 +779,7 @@ def _process_tool_calls(
                 text_part, img_part = tool_result
                 if isinstance(text_part, str) and isinstance(img_part, ImgUrl):
                     # 处理 Tuple[str, ImgUrl]
-                    tool_result_packet = {
+                    image_content = {
                         "type": "image_url",
                         "image_url": {"url": img_part.url, "detail": img_part.detail},
                     }
@@ -790,7 +803,7 @@ def _process_tool_calls(
                                 "type": "text",
                                 "text": f"这是工具 '{tool_name}' 返回的图像和说明：{text_part}",
                             },
-                            tool_result_packet,
+                            image_content,
                         ],
                     }
                     current_messages.append(user_multimodal_message)
@@ -802,7 +815,7 @@ def _process_tool_calls(
                     mime_type = img_part.get_mime_type()
                     data_url = f"data:{mime_type};base64,{base64_img}"
 
-                    tool_result_packet = {
+                    image_content = {
                         "type": "image_url",
                         "image_url": {"url": data_url, "detail": img_part.detail},
                     }
@@ -826,7 +839,7 @@ def _process_tool_calls(
                                 "type": "text",
                                 "text": f"这是工具 '{tool_name}' 返回的图像文件和说明：{text_part}",
                             },
-                            tool_result_packet,
+                            image_content,
                         ],
                     }
                     current_messages.append(user_multimodal_message)
@@ -834,44 +847,44 @@ def _process_tool_calls(
 
                 else:
                     # 元组格式不正确，按普通方式处理
-                    tool_result_packet = json.dumps(
+                    tool_result_content_json = json.dumps(
                         tool_result, ensure_ascii=False, indent=2
                     )
 
                     tool_message = {
                         "role": "tool",
                         "tool_call_id": tool_call_id,
-                        "content": tool_result_packet,
+                        "content": tool_result_content_json,
                     }
                     current_messages.append(tool_message)
-                    push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_packet}")
+                    push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_content_json}")
                     continue  # 跳过后续的tool消息处理
 
             elif isinstance(tool_result, (Text, str)):
-                tool_result_packet = json.dumps(
+                tool_result_content_json = json.dumps(
                     tool_result, ensure_ascii=False, indent=2
                 )
 
                 tool_message = {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
-                    "content": tool_result_packet,
+                    "content": tool_result_content_json,
                 }
             else:
                 # 处理其他JSON可序列化的类型（dict, list, int, float, bool, None等）
-                tool_result_packet = json.dumps(
+                tool_result_content_json = json.dumps(
                     tool_result, ensure_ascii=False, indent=2
                 )
 
                 tool_message = {
                     "role": "tool",
                     "tool_call_id": tool_call_id,
-                    "content": tool_result_packet,
+                    "content": tool_result_content_json,
                 }
 
             current_messages.append(tool_message)
 
-            push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_packet}")
+            push_debug(f"工具 '{tool_name}' 执行完成: {json.dumps(tool_result, ensure_ascii=False) if not isinstance(tool_result, (ImgUrl, ImgPath)) else 'image payload'}")
 
         except Exception as e:
             # 处理工具执行错误
@@ -943,7 +956,7 @@ def _accumulate_tool_calls_from_chunks(
         合并后的完整工具调用列表
     """
     # 使用字典来按index累积工具调用
-    accumulated_calls = {}
+    accumulated_calls: Dict[int, AccumulatedToolCall] = {}
 
     for chunk in tool_call_chunks:
         index = chunk.get("index")
@@ -954,11 +967,11 @@ def _accumulate_tool_calls_from_chunks(
             continue
 
         if index not in accumulated_calls:
-            accumulated_calls[index] = {
-                "id": None,
-                "type": None,
-                "function": {"name": None, "arguments": ""},
-            }
+            accumulated_calls[index] = AccumulatedToolCall(
+                id=None,
+                type=None,
+                function=ToolCallFunctionInfo(name=None, arguments=""),
+            )
 
         # 累积基本信息
         if chunk.get("id"):
@@ -969,22 +982,30 @@ def _accumulate_tool_calls_from_chunks(
         # 累积function信息
         if "function" in chunk:
             function_chunk = chunk["function"]
+            func_info = accumulated_calls[index]["function"]
             if function_chunk.get("name"):
-                accumulated_calls[index]["function"]["name"] = function_chunk["name"]
+                func_info["name"] = function_chunk["name"]
             if function_chunk.get("arguments"):
                 # 累积arguments字符串
-                accumulated_calls[index]["function"]["arguments"] += function_chunk[
-                    "arguments"
-                ]
+                func_info["arguments"] += function_chunk["arguments"]
 
     # 过滤出完整的工具调用（至少有id和function name）
-    complete_tool_calls = []
+    complete_tool_calls: List[Dict[str, Any]] = []
     for call in accumulated_calls.values():
+        # 只有在存在 id 和 function.name 时，才认为是完整的工具调用
         if call["id"] and call["function"]["name"]:
             # 设置默认type
             if not call["type"]:
                 call["type"] = "function"
-            complete_tool_calls.append(call)
+            # 由于返回类型是 List[Dict[str, Any]]，需要将 TypedDict 转成普通 dict
+            complete_tool_calls.append({
+                "id": call["id"],
+                "type": call["type"],
+                "function": {
+                    "name": call["function"]["name"],
+                    "arguments": call["function"]["arguments"],
+                },
+            })
 
     return complete_tool_calls
 
@@ -1002,7 +1023,7 @@ def _extract_tool_calls_from_stream_response(chunk: Any) -> List[Dict[str, Any]]
     Returns:
         工具调用片段列表，每个元素包含当前chunk的部分信息
     """
-    tool_call_chunks = []
+    tool_call_chunks: List[Dict[str, Any]] = []
 
     try:
         # 检查对象格式 (OpenAI API 格式)

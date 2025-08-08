@@ -165,3 +165,4 @@ examples/**/provider.json
 
 **/*log*
 **/*_logs*
+**/trace_*

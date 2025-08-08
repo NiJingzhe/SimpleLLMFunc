@@ -94,7 +94,7 @@ class LLMCallParams(NamedTuple):
 
     messages: List[Dict[str, Any]]
     tool_param: Optional[List[Dict[str, Any]]]  # 修正为正确的类型
-    tool_map: Dict[str, Callable]
+    tool_map: Dict[str, Callable[..., Any]]
     llm_kwargs: Dict[str, Any]
 
 
@@ -591,7 +591,7 @@ def _build_messages(
 
 def _prepare_tools_for_llm(
     toolkit: Optional[List[Union[Tool, Callable]]], func_name: str
-) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable]]:
+) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Any]]]:
     """
     处理工具准备，返回工具参数和工具映射
 
@@ -602,8 +602,8 @@ def _prepare_tools_for_llm(
     Returns:
         (tool_param, tool_map) 元组
     """
-    tool_param = None
-    tool_map = {}  # 工具名称到函数的映射
+    tool_param: Optional[List[Dict[str, Any]]] = None
+    tool_map: Dict[str, Callable[..., Any]] = {}  # 工具名称到函数的映射
 
     if toolkit:
         # 处理工具列表
@@ -745,8 +745,8 @@ def _build_prompts(
 
 
 def _prepare_tools(
-    toolkit: List[Union[Tool, Callable]], func_name: str
-) -> Tuple[List[Tool | Callable], Dict[str, Callable]]:
+    toolkit: List[Union[Tool, Callable[..., Any]]], func_name: str
+) -> Tuple[List[Union[Tool, Callable[..., Any]]], Dict[str, Callable[..., Any]]]:
     """
     准备工具列表和工具映射
 
@@ -762,8 +762,8 @@ def _prepare_tools(
     Returns:
         (tool_objects, tool_map) 元组，包含 Tool 对象列表和工具名称到函数的映射
     """
-    tool_objects = []
-    tool_map = {}
+    tool_objects: List[Union[Tool, Callable[..., Any]]] = []
+    tool_map: Dict[str, Callable[..., Any]] = {}
 
     for tool in toolkit:
         if isinstance(tool, Tool):
@@ -774,7 +774,8 @@ def _prepare_tools(
         elif callable(tool) and hasattr(tool, "_tool"):
             # 如果是被 @tool 装饰的函数，获取其 _tool 属性
             tool_obj = tool._tool  # type: ignore
-            tool_objects.append(tool_obj)
+            # 序列化时支持传入 callable，本处直接传入原函数以匹配序列化签名
+            tool_objects.append(tool)
             # 添加到工具映射（使用原始函数）
             tool_map[tool_obj.name] = tool
         else:
@@ -926,7 +927,7 @@ def _build_multimodal_messages(
         context.bound_args.arguments, context.type_hints
     )
 
-    messages = [
+    messages: List[Dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_content},
     ]
