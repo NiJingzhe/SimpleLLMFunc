@@ -14,7 +14,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.2.12.2 Latest)
+### 更新说明 (0.2.13 Latest)
 
 ### Look here: [Change Log](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)
 
@@ -598,7 +598,7 @@ LOG_LEVEL=DEBUG
   month = {June},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.2.12.2},
+  version = {0.2.13},
   year = {2025}
 }
 ```

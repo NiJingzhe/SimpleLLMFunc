@@ -40,6 +40,7 @@ def your_chat_function(message: str, history: List[Dict[str, str]] = []) -> Gene
 - **toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
 - **max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5
 - **stream**:  是否启用流式响应，默认为 False
+- **return_mode**: 返回模式，默认为 `"text"`，可选值为 `"text"` 和 `"raw"`，用于指定返回模式，现在可以返回原始的response或者text。这个设计是为了能够在Agent开发的时候，更好的支持tools调用信息的展示。
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
 ### 函数参数要求
@@ -57,7 +58,7 @@ List[Dict[str, str]]
 
 ### 返回值格式
 装饰器修改后的函数返回 `Generator[Tuple[str, List[Dict[str, str]]], None, None]`：
-- 第一个元素 `str`: 助手的响应内容（可能是部分内容，支持流式输出）
+- 第一个元素 `str`: 助手的响应内容（可能是部分内容，支持流式输出），如果`return_mode`为`"raw"`，则返回原始的response，是一个json对象，可以参考[OpenAI API Reference](https://platform.openai.com/docs/api-reference/chat/create#chat/create-response_format)，否则返回text。
 - 第二个元素 `List[Dict[str, str]]`: 更新后的对话历史记录（已过滤工具调用信息）
 
 需要说明的是无论流式还是非流返回，都是同样的格式，非流返回中的 `str` 可能是完整的响应内容，而流式返回则是每个`delta`中的内容。

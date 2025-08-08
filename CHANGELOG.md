@@ -1,8 +1,17 @@
 # Change log for SimpleLLMFunc
 
-## 0.2.12.2 版本更新说明(Latest)
+## 0.2.13 版本更新说明 (Latest)
+
+1. 在`llm_chat`和`async_llm_chat`装饰器中添加`return_mode`参数(`Literal["text", "raw"]`)，用于指定返回模式，现在可以返回原始的response或者text。这个设计是为了能够在Agent开发的时候，更好的支持tools调用信息的展示。
+
+2. 更好的代码类型标注
+
+-----
+
+## 0.2.12.2 版本更新说明
 
 1. 给框架包添加了 `py.typed` 文件，用于支持类型检查。
+
 -----
 
 ## 0.2.12.1 版本更新说明
