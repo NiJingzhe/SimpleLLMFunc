@@ -17,12 +17,14 @@ from typing import (
     Union,
     cast,
     get_type_hints,
+    Literal,
 )
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.llm_decorator.utils import (
     execute_llm,
     extract_content_from_stream_response,
+    extract_content_from_response,
     has_multimodal_content,
     build_multimodal_content,
 )
@@ -38,22 +40,28 @@ from SimpleLLMFunc.logger import (
 )
 from SimpleLLMFunc.tool import Tool
 
+# 类型别名定义
+MessageDict = Dict[str, Any]  # 表示消息字典
+HistoryList = List[MessageDict]  # 表示历史记录列表
+ToolkitList = List[Union[Tool, Callable]]  # 表示工具列表
+
 # 类型变量定义
 T = TypeVar("T")
 P = ParamSpec("P")
 
 # 常量定义
-HISTORY_PARAM_NAMES = ["history", "chat_history"]  # 历史记录参数名列表
-DEFAULT_MAX_TOOL_CALLS = 5  # 默认最大工具调用次数
+HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]  # 历史记录参数名列表
+DEFAULT_MAX_TOOL_CALLS: int = 5  # 默认最大工具调用次数
 
 
 def llm_chat(
     llm_interface: LLM_Interface,
-    toolkit: Optional[List[Union[Tool, Callable]]] = None,
+    toolkit: Optional[ToolkitList] = None,
     max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
     stream: bool = False,
-    **llm_kwargs,
-):
+    return_mode: Literal["text", "raw"] = "text",
+    **llm_kwargs: Any,
+) -> Callable[[Callable[P, Any]], Callable[P, Generator[Tuple[Any, HistoryList], None, None]]]:
     """
     LLM聊天装饰器，用于实现与大语言模型的对话功能，支持工具调用和历史记录管理。
 
@@ -93,6 +101,9 @@ def llm_chat(
         toolkit: 可选的工具列表，可以是Tool对象或被@tool装饰的函数
         max_tool_calls: 最大工具调用次数，防止无限循环
         stream: 是否使用流式响应
+        return_mode: 返回模式，可选值为 "text" 或 "raw"，默认值为 "text"，
+            "text" 模式下，返回的响应内容为字符串，历史记录为 List[Dict[str, str]]
+            "raw" 模式下，返回的响应内容为原始 OAI API 响应，历史记录为 List[Dict[str, str]]
         **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口
 
     Returns:
@@ -111,12 +122,12 @@ def llm_chat(
 
     def decorator(
         func: Callable[P, Any],
-    ) -> Callable[P, Generator[Tuple[str, List[Dict[str, str]]], None, None]]:
+    ) -> Callable[P, Generator[Tuple[Any, HistoryList], None, None]]:
         # 获取函数元信息
-        signature = inspect.signature(func)
-        type_hints = get_type_hints(func)
-        docstring = func.__doc__ or ""
-        func_name = func.__name__
+        signature: inspect.Signature = inspect.signature(func)
+        type_hints: Dict[str, Any] = get_type_hints(func)
+        docstring: str = func.__doc__ or ""
+        func_name: str = func.__name__
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -147,6 +158,7 @@ def llm_chat(
                         toolkit=toolkit,
                         max_tool_calls=max_tool_calls,
                         stream=stream,
+                        return_mode=return_mode,
                         use_log_context=False,  # 不在异步实现中使用日志上下文
                         **llm_kwargs,
                     ):
@@ -185,7 +197,7 @@ def llm_chat(
         wrapper.__signature__ = signature  # type: ignore
 
         return cast(
-            Callable[P, Generator[Tuple[str, List[Dict[str, str]]], None, None]],
+            Callable[P, Generator[Tuple[Any, HistoryList], None, None]],
             wrapper,
         )
 
@@ -194,11 +206,12 @@ def llm_chat(
 
 def async_llm_chat(
     llm_interface: LLM_Interface,
-    toolkit: Optional[List[Union[Tool, Callable]]] = None,
+    toolkit: Optional[ToolkitList] = None,
     max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
     stream: bool = False,
-    **llm_kwargs,
-):
+    return_mode: Literal["text", "raw"] = "text",
+    **llm_kwargs: Any,
+) -> Callable[[Callable[P, Any]], Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]]:
     """
     异步LLM聊天装饰器，用于实现与大语言模型的异步对话功能，支持工具调用和历史记录管理。
 
@@ -239,6 +252,9 @@ def async_llm_chat(
         toolkit: 可选的工具列表，可以是Tool对象或被@tool装饰的函数
         max_tool_calls: 最大工具调用次数，防止无限循环
         stream: 是否使用流式响应
+        return_mode: 返回模式，可选值为 "text" 或 "raw"，默认值为 "text"，
+            "text" 模式下，返回的响应内容为字符串，历史记录为 List[Dict[str, str]]
+            "raw" 模式下，返回的响应内容为原始 OAI API 响应，历史记录为 List[Dict[str, str]]
         **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口
 
     Returns:
@@ -258,18 +274,18 @@ def async_llm_chat(
 
     def decorator(
         func: Callable[P, Any],
-    ) -> Callable[P, AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]]:
+    ) -> Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]:
         # 获取函数元信息
-        signature = inspect.signature(func)
-        type_hints = get_type_hints(func)
-        docstring = func.__doc__ or ""
-        func_name = func.__name__
+        signature: inspect.Signature = inspect.signature(func)
+        type_hints: Dict[str, Any] = get_type_hints(func)
+        docstring: str = func.__doc__ or ""
+        func_name: str = func.__name__
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # 生成唯一的追踪ID
-            context_trace_id = get_current_trace_id()
-            current_trace_id = f"{func_name}_{uuid.uuid4()}"
+            context_trace_id: Optional[str] = get_current_trace_id()
+            current_trace_id: str = f"{func_name}_{uuid.uuid4()}"
             if context_trace_id:
                 current_trace_id += f"_{context_trace_id}"
 
@@ -291,6 +307,7 @@ def async_llm_chat(
                     toolkit=toolkit,
                     max_tool_calls=max_tool_calls,
                     stream=stream,
+                    return_mode=return_mode,
                     use_log_context=False,  # 不在异步实现中使用日志上下文
                     **llm_kwargs,
                 ):
@@ -303,7 +320,7 @@ def async_llm_chat(
         wrapper.__signature__ = signature  # type: ignore
 
         return cast(
-            Callable[P, AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]],
+            Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]],
             wrapper,
         )
 
@@ -315,15 +332,17 @@ async def _async_llm_chat_impl(
     signature: inspect.Signature,
     type_hints: Dict[str, Any],
     docstring: str,
-    args: tuple,
-    kwargs: dict,
+    args: Tuple[Any, ...],
+    kwargs: Dict[str, Any],
     llm_interface: LLM_Interface,
-    toolkit: Optional[List[Union[Tool, Callable]]],
+    toolkit: Optional[ToolkitList],
     max_tool_calls: int,
     stream: bool,
+    return_mode: Literal["text", "raw"] = "text",
     use_log_context: bool = True,
-    **llm_kwargs,
-) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
+    **llm_kwargs: Any,
+) -> AsyncGenerator[Tuple[Any, HistoryList], None]:
+    
     """
     共享的异步LLM聊天实现逻辑
 
@@ -345,28 +364,30 @@ async def _async_llm_chat_impl(
         (响应内容, 更新后的历史记录) 元组
     """
     # 绑定参数到函数签名
-    bound_args = signature.bind(*args, **kwargs)
+    bound_args: inspect.BoundArguments = signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
 
-    async def _execute_impl():
+    async def _execute_impl() -> AsyncGenerator[Tuple[Any, HistoryList], None]:
         # 1. 处理工具
+        tool_param_for_api: Optional[List[Dict[str, Any]]]
+        tool_map: Dict[str, Callable[..., Any]]
         tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
 
         # 2. 检查多模态内容
-        has_multimodal = has_multimodal_content(
+        has_multimodal: bool = has_multimodal_content(
             bound_args.arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
         )
 
         # 3. 构建用户消息
-        user_message_content = _build_user_message_content(
+        user_message_content: Union[str, List[Dict[str, Any]]] = _build_user_message_content(
             bound_args.arguments, type_hints, has_multimodal
         )
 
         # 4. 处理历史记录
-        custom_history = _extract_history_from_args(bound_args.arguments, func_name)
+        custom_history: Optional[HistoryList] = _extract_history_from_args(bound_args.arguments, func_name)
 
         # 5. 构建完整消息列表
-        current_messages = _build_messages(
+        current_messages: HistoryList = _build_messages(
             docstring,
             custom_history,
             user_message_content,
@@ -382,7 +403,7 @@ async def _async_llm_chat_impl(
         )
 
         # 7. 执行LLM调用并处理响应
-        complete_content = ""
+        complete_content: str = ""
         response_flow = execute_llm(
             llm_interface=llm_interface,
             messages=current_messages,
@@ -401,13 +422,22 @@ async def _async_llm_chat_impl(
                 location=get_location(),
             )
 
-            content = extract_content_from_stream_response(response, func_name)
-            complete_content += content
-            yield content, current_messages
+            if return_mode == "raw":
+                yield response, current_messages
+            else:
+                # 根据流式与否选择正确的内容抽取器
+                if stream:
+                    content = extract_content_from_stream_response(response, func_name)
+                else:
+                    content = extract_content_from_response(response, func_name) or ""
+                complete_content += content
+                yield content, current_messages
 
         # 9. 添加最终响应到历史记录
         # current_messages.append({"role": "assistant", "content": complete_content})
-        yield "", current_messages
+        if return_mode == "text":
+            # 仅在文本模式下保留一个空串以标识流结束
+            yield "", current_messages
 
     if use_log_context:
         # 生成唯一的追踪ID
@@ -448,8 +478,8 @@ async def _async_llm_chat_impl(
 
 
 def _process_tools(
-    toolkit: Optional[List[Union[Tool, Callable]]], func_name: str
-) -> Tuple[Optional[List], Dict]:
+    toolkit: Optional[ToolkitList], func_name: str
+) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Any]]]:
     """
     处理工具列表，返回API所需的工具参数和工具映射
 
@@ -463,8 +493,8 @@ def _process_tools(
     if not toolkit:
         return None, {}
 
-    tool_objects = []
-    tool_map = {}
+    tool_objects: List[Union[Tool, Callable[..., Any]]] = []
+    tool_map: Dict[str, Callable[..., Any]] = {}
 
     for tool in toolkit:
         if isinstance(tool, Tool):
@@ -486,7 +516,10 @@ def _process_tools(
                 location=get_location(),
             )
 
-    tool_param_for_api = Tool.serialize_tools(tool_objects) if tool_objects else None
+    # serialize_tools 接受 List[Tool | Callable[..., Any]]；此处 tool_objects 已满足要求
+    tool_param_for_api: Optional[List[Dict[str, Any]]] = (
+        Tool.serialize_tools(tool_objects) if tool_objects else None
+    )
 
     push_debug(
         f"LLM Chat '{func_name}' 加载了 {len(tool_objects)} 个工具",
@@ -498,7 +531,7 @@ def _process_tools(
 
 def _extract_history_from_args(
     arguments: Dict[str, Any], func_name: str
-) -> Optional[List[Dict]]:
+) -> Optional[HistoryList]:
     """
     从函数参数中提取历史记录
 
@@ -510,7 +543,7 @@ def _extract_history_from_args(
         历史记录列表或None
     """
     # 查找历史记录参数
-    history_param_name = None
+    history_param_name: Optional[str] = None
     for param_name in HISTORY_PARAM_NAMES:
         if param_name in arguments:
             history_param_name = param_name
@@ -524,7 +557,7 @@ def _extract_history_from_args(
         )
         return None
 
-    custom_history = arguments[history_param_name]
+    custom_history: Any = arguments[history_param_name]
 
     # 验证历史记录格式
     if not (
@@ -561,7 +594,7 @@ def _build_user_message_content(
         )
     else:
         # 构建传统文本消息，排除历史记录参数
-        message_parts = []
+        message_parts: List[str] = []
         for param_name, param_value in arguments.items():
             if param_name not in HISTORY_PARAM_NAMES:
                 message_parts.append(f"{param_name}: {param_value}")
@@ -570,11 +603,11 @@ def _build_user_message_content(
 
 def _build_messages(
     docstring: str,
-    custom_history: Optional[List[Dict]],
+    custom_history: Optional[HistoryList],
     user_message_content: Union[str, List[Dict[str, Any]]],
-    tool_objects: Optional[List],
+    tool_objects: Optional[List[Dict[str, Any]]],
     has_multimodal: bool,
-) -> List[Dict[str, Any]]:
+) -> HistoryList:
     """
     构建完整的消息列表
 
@@ -588,11 +621,11 @@ def _build_messages(
     Returns:
         完整的消息列表
     """
-    messages = []
+    messages: HistoryList = []
 
     # 1. 添加系统消息
     if docstring:
-        system_content = docstring
+        system_content: str = docstring
         if tool_objects:
             system_content += "\n\n你需要灵活使用以下工具：\n\t" + "\n\t".join(
                 (
@@ -600,10 +633,10 @@ def _build_messages(
                     if isinstance(tool, Tool)
                     else (
                         f"- {getattr(getattr(tool, '_tool'), 'name')}: {getattr(getattr(tool, '_tool'), 'description')}"
-                        if isinstance(tool, Callable) and hasattr(tool, "_tool")
+                        if callable(tool) and hasattr(tool, "_tool")
                         else f"- {tool}"
                     )
-                )  # 处理其他类型的工具
+                )
                 for tool in tool_objects
             )
         messages.append({"role": "system", "content": system_content})
@@ -622,10 +655,7 @@ def _build_messages(
 
     # 3. 添加当前用户消息
     if user_message_content:
-        if has_multimodal and isinstance(user_message_content, list):
-            user_msg = {"role": "user", "content": user_message_content}
-        else:
-            user_msg = {"role": "user", "content": user_message_content}
+        user_msg: MessageDict = {"role": "user", "content": user_message_content}
         messages.append(user_msg)
 
     return messages
