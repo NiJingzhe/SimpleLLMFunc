@@ -76,7 +76,7 @@ def analyze_image(
     Returns:
         图像分析结果的字符串描述
     """
-    pass
+    return ""
 
 
 def main():
