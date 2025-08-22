@@ -131,10 +131,67 @@ result = analyze_image(
 )
 ```
 
+### 动态模板参数示例
+
+```python
+from SimpleLLMFunc import llm_function
+
+# 万能的代码分析函数
+@llm_function(llm_interface=llm_interface)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+# 万能的文本处理函数
+@llm_function(llm_interface=llm_interface)
+def process_text(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+
+# 不同的调用方式，适应不同场景
+performance_analysis = analyze_code(
+    python_code,
+    _template_params={
+        'style': '详细',
+        'language': 'Python',
+        'focus': '性能优化'
+    }
+)
+
+code_review = analyze_code(
+    js_code,
+    _template_params={
+        'style': '简洁',
+        'language': 'JavaScript',
+        'focus': '代码规范'
+    }
+)
+
+# 同一个函数，不同角色
+edited_text = process_text(
+    text,
+    _template_params={
+        'role': '专业编辑',
+        'action': '润色',
+        'style': '学术'
+    }
+)
+
+translated_text = process_text(
+    text,
+    _template_params={
+        'role': '翻译专家',
+        'action': '翻译成英文',
+        'style': '商务'
+    }
+)
+```
+
 ## 核心特性
 
 - **装饰器驱动**: 使用 `@llm_function`、`@llm_chat` 及其异步版本装饰器轻松创建 LLM 驱动的功能。
 - **DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。
+- **动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。
 - **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
 - **异步支持**: 提供 `@async_llm_function` 和 `@async_llm_chat` 装饰器，支持原生异步调用。
 - **多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。

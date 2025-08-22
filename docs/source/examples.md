@@ -4,6 +4,89 @@
 
 ## 基础示例
 
+### 动态模板参数示例
+
+这个示例演示了如何使用 `_template_params` 让同一个函数适应不同的使用场景：
+
+```python
+from SimpleLLMFunc import llm_function
+from SimpleLLMFunc import OpenAICompatible
+
+# 创建LLM接口
+llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
+
+# 万能的代码分析函数
+@llm_function(llm_interface=llm_interface)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+# 万能的文本处理函数
+@llm_function(llm_interface=llm_interface)
+def process_text(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+
+# 使用示例
+if __name__ == "__main__":
+    python_code = """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""
+    
+    # 不同的分析方式
+    performance_result = analyze_code(
+        python_code,
+        _template_params={
+            'style': '详细',
+            'language': 'Python',
+            'focus': '性能优化'
+        }
+    )
+    
+    style_result = analyze_code(
+        python_code,
+        _template_params={
+            'style': '简洁',
+            'language': 'Python',
+            'focus': '代码规范'
+        }
+    )
+    
+    # 不同的文本处理角色
+    sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
+    
+    edited_result = process_text(
+        sample_text,
+        _template_params={
+            'role': '专业编辑',
+            'action': '润色',
+            'style': '学术'
+        }
+    )
+    
+    translated_result = process_text(
+        sample_text,
+        _template_params={
+            'role': '翻译专家',
+            'action': '翻译成英文',
+            'style': '商务'
+        }
+    )
+    
+    print("性能分析:", performance_result)
+    print("代码规范:", style_result)
+    print("编辑润色:", edited_result)
+    print("翻译结果:", translated_result)
+```
+
+这个示例展示了动态模板参数的核心优势：
+- **一个函数定义，多种使用场景**
+- **调用时动态指定角色和任务**
+- **代码复用性大大提高**
+
 ### 产品评论分析
 
 这个示例演示了如何使用 `@llm_function` 来创建一个产品评论分析功能。

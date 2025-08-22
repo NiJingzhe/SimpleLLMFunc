@@ -125,10 +125,16 @@ def llm_function(
     - 支持 Tool 对象或被 @tool 装饰的函数作为工具
 
     ## 自定义提示模板
-    自定义模板中必须包含以下占位符：
+    支持两种级别的模板自定义：
+
+    ### DocString模板参数
+    - 支持在函数的DocString中使用`{变量名}`占位符
+    - 通过函数调用时的`_template_params`参数传入变量值进行替换
+    - `_template_params`不会传递给LLM，仅用于模板处理
+    - 例如：DocString中写`"分析{language}代码"`，调用时传入_template_params={"language": "Python"}
 
     ### 系统提示模板 (system_prompt_template)
-    - `{function_description}`: 函数文档字符串内容
+    - `{function_description}`: 函数文档字符串内容（已应用template_params替换）
     - `{parameters_description}`: 函数参数及其类型的描述
     - `{return_type_description}`: 返回值类型的描述
 
@@ -169,6 +175,33 @@ def llm_function(
         ```
     示例2:
         ```python
+        # 使用动态DocString模板参数
+        @llm_function(llm_interface=my_llm)
+        def flexible_analyze(code: str) -> str:
+            \"\"\"使用{style}方式分析{language}代码，关注{focus}方面。\"\"\"
+            pass
+
+        # 不同的调用可以使用不同的模板参数
+        result1 = flexible_analyze(
+            code="function test() { console.log('hello'); }",
+            _template_params={
+                "style": "详细", 
+                "language": "JavaScript", 
+                "focus": "性能优化"
+            }
+        )
+        
+        result2 = flexible_analyze(
+            code="def greet(): print('hi')",
+            _template_params={
+                "style": "简洁", 
+                "language": "Python", 
+                "focus": "代码规范"
+            }
+        )
+        ```
+    示例3:
+        ```python
         # 使用自定义系统提示模板
         custom_system_template = \"\"\"
         你是一名专业的文本处理专家，请根据以下信息执行任务:
@@ -200,7 +233,7 @@ def llm_function(
         @wraps(func)
         def wrapper(*args, **kwargs):
             # ===== 第一步：准备函数调用 =====
-            context = _prepare_function_call(func, args, kwargs)
+            context, call_time_template_params = _prepare_function_call(func, args, kwargs)
 
             with log_context(
                 trace_id=context.trace_id,
@@ -226,6 +259,7 @@ def llm_function(
                     context=context,
                     system_prompt_template=system_prompt_template,
                     user_prompt_template=user_prompt_template,
+                    template_params=call_time_template_params,
                 )
 
                 # ===== 第三步：处理工具 =====
@@ -393,7 +427,7 @@ def async_llm_function(
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
             # ===== 第一步：准备函数调用 =====
-            context = _prepare_function_call(func, args, kwargs)
+            context, call_time_template_params = _prepare_function_call(func, args, kwargs)
 
             async with async_log_context(
                 trace_id=context.trace_id,
@@ -419,6 +453,7 @@ def async_llm_function(
                     context=context,
                     system_prompt_template=system_prompt_template,
                     user_prompt_template=user_prompt_template,
+                    template_params=call_time_template_params,
                 )
 
                 # ===== 第三步：处理工具 =====
@@ -502,9 +537,11 @@ DEFAULT_USER_PROMPT_TEMPLATE = """
 
 def _prepare_function_call(
     func: Callable, args: Tuple[Any, ...], kwargs: Dict[str, Any]
-) -> FunctionCallContext:
+) -> Tuple[FunctionCallContext, Optional[Dict[str, Any]]]:
     """
     准备函数调用，处理参数绑定和上下文创建
+    
+    同时提取并返回调用时传入的模板参数（如果有）
 
     Args:
         func: 被装饰的函数
@@ -512,8 +549,11 @@ def _prepare_function_call(
         kwargs: 关键字参数
 
     Returns:
-        FunctionCallContext: 函数调用上下文信息
+        (FunctionCallContext, 调用时的模板参数) 元组
     """
+    # 提取调用时的模板参数（如果存在）
+    call_time_template_params = kwargs.pop('_template_params', None)
+    
     # 获取函数的签名、类型提示和文档字符串
     signature = inspect.signature(func)
     type_hints = get_type_hints(func)
@@ -531,7 +571,7 @@ def _prepare_function_call(
     bound_args = signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
 
-    return FunctionCallContext(
+    context = FunctionCallContext(
         func_name=func_name,
         trace_id=current_trace_id,
         bound_args=bound_args,
@@ -540,12 +580,16 @@ def _prepare_function_call(
         return_type=return_type,
         docstring=docstring,
     )
+    
+    return context, call_time_template_params
+
 
 
 def _build_messages(
     context: FunctionCallContext,
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
+    template_params: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     构建发送给 LLM 的消息列表，支持多模态内容
@@ -554,6 +598,7 @@ def _build_messages(
         context: 函数调用上下文
         system_prompt_template: 自定义系统提示模板
         user_prompt_template: 自定义用户提示模板
+        template_params: DocString模板参数
 
     Returns:
         消息列表
@@ -566,7 +611,7 @@ def _build_messages(
     if has_multimodal:
         # 构建多模态消息
         messages = _build_multimodal_messages(
-            context, system_prompt_template, user_prompt_template
+            context, system_prompt_template, user_prompt_template, template_params
         )
     else:
         # 构建传统的文本消息
@@ -576,6 +621,7 @@ def _build_messages(
             type_hints=context.type_hints,
             custom_system_template=system_prompt_template,
             custom_user_template=user_prompt_template,
+            template_params=template_params,
         )
 
         messages = [
@@ -685,27 +731,45 @@ def _build_prompts(
     type_hints: Dict[str, Any],
     custom_system_template: Optional[str] = None,
     custom_user_template: Optional[str] = None,
+    template_params: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, str]:
     """
     构建发送给 LLM 的系统提示和用户提示
 
     流程:
-    1. 从类型提示中提取参数类型
-    2. 构建参数类型描述
-    3. 获取返回类型的详细描述
-    4. 使用模板格式化系统提示和用户提示
+    1. 使用template_params替换docstring中的占位符
+    2. 从类型提示中提取参数类型
+    3. 构建参数类型描述
+    4. 获取返回类型的详细描述
+    5. 使用模板格式化系统提示和用户提示
 
     Args:
-        func_name: 函数名
         docstring: 函数文档字符串
         arguments: 函数参数值
         type_hints: 类型提示
         custom_system_template: 自定义系统提示模板
         custom_user_template: 自定义用户提示模板
+        template_params: DocString模板参数
 
     Returns:
         (system_prompt, user_prompt) 元组
     """
+    # 第一步：处理DocString模板参数替换
+    processed_docstring = docstring
+    if template_params:
+        try:
+            processed_docstring = docstring.format(**template_params)
+        except KeyError as e:
+            push_warning(
+                f"DocString模板参数替换失败：缺少参数 {e}。使用原始DocString。",
+                location=get_location(),
+            )
+        except Exception as e:
+            push_warning(
+                f"DocString模板参数替换时出错：{str(e)}。使用原始DocString。",
+                location=get_location(),
+            )
+    
     # 移除返回类型提示，只保留参数类型
     param_type_hints = {k: v for k, v in type_hints.items() if k != "return"}
 
@@ -727,7 +791,7 @@ def _build_prompts(
 
     # 构建系统提示
     system_prompt = system_template.format(
-        function_description=docstring,
+        function_description=processed_docstring,
         parameters_description="\n".join(param_type_descriptions),
         return_type_description=return_type_description,
     )
@@ -901,6 +965,7 @@ def _build_multimodal_messages(
     context: FunctionCallContext,
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
+    template_params: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """
     构建多模态消息列表
@@ -909,6 +974,7 @@ def _build_multimodal_messages(
         context: 函数调用上下文
         system_prompt_template: 自定义系统提示模板
         user_prompt_template: 自定义用户提示模板
+        template_params: DocString模板参数
 
     Returns:
         消息列表
@@ -920,6 +986,7 @@ def _build_multimodal_messages(
         type_hints=context.type_hints,
         custom_system_template=system_prompt_template,
         custom_user_template=user_prompt_template,
+        template_params=template_params,
     )
 
     # 构建多模态用户消息内容

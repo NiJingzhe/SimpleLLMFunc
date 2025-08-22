@@ -175,7 +175,110 @@ python first_demo.py
 
 ## 第四步：进阶示例
 
-### 4.1 带工具调用的示例
+### 4.1 动态模板参数示例
+
+这个示例展示了如何使用 `_template_params` 让同一个函数适应不同的使用场景：
+
+```python
+from SimpleLLMFunc import llm_function, OpenAICompatible
+
+# 加载模型接口
+provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
+gpt_interface = provider_interfaces["openai"]["gpt-3.5-turbo"]
+
+# 万能的代码分析函数
+@llm_function(llm_interface=gpt_interface)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+# 万能的文本处理函数
+@llm_function(llm_interface=gpt_interface)
+def process_text(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+
+def main():
+    print("=== 动态模板参数 Demo ===")
+    
+    # 测试代码
+    python_code = """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""
+    
+    # 不同的分析方式
+    print("\n1. 代码分析 - 性能优化:")
+    try:
+        performance_result = analyze_code(
+            python_code,
+            _template_params={
+                'style': '详细',
+                'language': 'Python',
+                'focus': '性能优化'
+            }
+        )
+        print(performance_result)
+    except Exception as e:
+        print(f"分析失败: {e}")
+    
+    print("\n2. 代码分析 - 代码规范:")
+    try:
+        style_result = analyze_code(
+            python_code,
+            _template_params={
+                'style': '简洁',
+                'language': 'Python',
+                'focus': '代码规范'
+            }
+        )
+        print(style_result)
+    except Exception as e:
+        print(f"分析失败: {e}")
+    
+    # 不同的文本处理角色
+    sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
+    
+    print("\n3. 文本处理 - 编辑润色:")
+    try:
+        edited_result = process_text(
+            sample_text,
+            _template_params={
+                'role': '专业编辑',
+                'action': '润色',
+                'style': '学术'
+            }
+        )
+        print(edited_result)
+    except Exception as e:
+        print(f"处理失败: {e}")
+    
+    print("\n4. 文本处理 - 翻译转换:")
+    try:
+        translated_result = process_text(
+            sample_text,
+            _template_params={
+                'role': '翻译专家',
+                'action': '翻译成英文',
+                'style': '商务'
+            }
+        )
+        print(translated_result)
+    except Exception as e:
+        print(f"处理失败: {e}")
+
+if __name__ == "__main__":
+    main()
+```
+
+这个示例展示了动态模板参数的核心优势：
+- **一个函数定义，多种使用场景**
+- **调用时动态指定角色和任务**
+- **代码复用性大大提高**
+
+### 4.2 带工具调用的示例
 
 创建一个更复杂的示例，展示工具调用功能：
 
@@ -266,6 +369,22 @@ A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `t
 
 ### Q: 如何实现异步调用？
 A: 使用 `async_llm_function` 装饰器创建异步函数，并使用 `await` 调用。
+
+### Q: 什么是动态模板参数？
+A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString 中的占位符，让同一个函数适应不同的使用场景。
+
+### Q: 如何使用动态模板参数？
+A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如：
+```python
+@llm_function(llm_interface=llm)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+result = analyze_code(code, _template_params={
+    'style': '详细', 'language': 'Python', 'focus': '性能优化'
+})
+```
 
 ## 下一步
 
