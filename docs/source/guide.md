@@ -84,6 +84,38 @@ llm_interface = OpenAICompatible(
 - `user_prompt_template`：可选，用户提示模板；
 - 额外的关键字参数将直接传递给 LLM 接口。
 
+### 动态模板参数
+
+SimpleLLMFunc 支持在函数调用时通过 `_template_params` 参数动态设置 DocString 模板参数，让同一个函数适应不同的使用场景：
+
+```python
+@llm_function(llm_interface=llm_interface)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+# 不同的调用方式，使用不同的模板参数
+result1 = analyze_code(
+    python_code,
+    _template_params={
+        'style': '详细', 
+        'language': 'Python', 
+        'focus': '性能优化'
+    }
+)
+
+result2 = analyze_code(
+    js_code,
+    _template_params={
+        'style': '简洁', 
+        'language': 'JavaScript', 
+        'focus': '代码规范'
+    }
+)
+```
+
+这种方式让一个函数定义可以适应多种不同的应用场景，大大提高了代码的复用性。
+
 示例：
 
 ```python
@@ -236,3 +268,5 @@ async def async_chat_assistant(history: List[Dict[str, str]], message: str):
 6. **合理组合多个LLM函数**：将复杂任务拆分为多个子任务，由不同函数负责
 7. **使用日志**：利用日志系统记录函数调用和LLM交互的详细信息，便于后续分析和调试
 8. **尝试从日志中清洗出训练数据用于微调模型**：定期分析日志，提取有价值的对话示例，构建高质量的训练数据集
+9. **善用动态模板参数**：设计通用的函数，通过`_template_params`适应不同场景，提高代码复用性
+10. **模板参数命名规范**：使用语义化的参数名，如`role`、`style`、`focus`等，让代码更易理解

@@ -1,6 +1,10 @@
 # Change log for SimpleLLMFunc
 
-## 0.2.13 版本更新说明 (Latest)
+## 0.2.14 版本更新说明 (Latest)
+
+1. 新增动态模板参数功能：在`llm_function`和`async_llm_function`装饰器中支持通过`_template_params`参数动态设置DocString模板参数。这允许开发者创建一个函数但适应多种不同的使用场景，通过调用时传入不同的模板参数来改变函数的行为。
+
+## 0.2.13 版本更新说明 
 
 1. 在`llm_chat`和`async_llm_chat`装饰器中添加`return_mode`参数(`Literal["text", "raw"]`)，用于指定返回模式，现在可以返回原始的response或者text。这个设计是为了能够在Agent开发的时候，更好的支持tools调用信息的展示。
 

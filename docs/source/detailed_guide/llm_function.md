@@ -54,6 +54,50 @@ def your_function(param1: Type1, param2: Type2) -> ReturnType:
 #### 用户提示模板占位符
 - `{parameters}`: 格式化后的参数名称和值
 
+### 动态模板参数
+
+SimpleLLMFunc 支持在函数调用时通过 `_template_params` 参数动态设置 DocString 模板参数。这个功能让同一个函数可以适应不同的使用场景，大大提高了代码的复用性。
+
+#### 使用方法
+
+1. **在 DocString 中使用占位符**：
+```python
+@llm_function(llm_interface=llm)
+def flexible_function(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+```
+
+2. **调用时传入模板参数**：
+```python
+# 编辑角色
+result1 = flexible_function(
+    text,
+    _template_params={
+        'role': '专业编辑',
+        'action': '润色',
+        'style': '学术'
+    }
+)
+
+# 翻译角色
+result2 = flexible_function(
+    text,
+    _template_params={
+        'role': '翻译专家',
+        'action': '翻译',
+        'style': '商务'
+    }
+)
+```
+
+#### 核心特性
+
+- **动态角色切换**：同一个函数可以扮演不同的角色
+- **灵活任务适配**：根据调用上下文调整任务类型
+- **透明处理**：`_template_params` 不会传递给 LLM，仅用于模板处理
+- **错误处理**：当模板参数不完整时，系统会发出警告并使用原始 DocString
+
 ## 装饰器行为
 
 ### 数据流程
@@ -259,6 +303,80 @@ print(f"建议: {plan.message}")
 print(f"任务列表: {plan.tasks}")
 print(f"预估时间: {plan.estimated_time}天")
 ```
+
+### 示例 6: 动态模板参数
+
+这个示例展示了如何使用动态模板参数让同一个函数适应不同的使用场景：
+
+```python
+@llm_function(llm_interface=llm)
+def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+@llm_function(llm_interface=llm)
+def process_text(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+
+# 使用示例
+python_code = """
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+"""
+
+# 不同的分析方式
+performance_analysis = analyze_code(
+    python_code,
+    _template_params={
+        'style': '详细',
+        'language': 'Python',
+        'focus': '性能优化'
+    }
+)
+
+code_style_analysis = analyze_code(
+    python_code,
+    _template_params={
+        'style': '简洁',
+        'language': 'Python',
+        'focus': '代码规范'
+    }
+)
+
+# 不同的文本处理角色
+sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
+
+edited_text = process_text(
+    sample_text,
+    _template_params={
+        'role': '专业编辑',
+        'action': '润色',
+        'style': '学术'
+    }
+)
+
+translated_text = process_text(
+    sample_text,
+    _template_params={
+        'role': '翻译专家',
+        'action': '翻译成英文',
+        'style': '商务'
+    }
+)
+
+print("性能分析结果:", performance_analysis)
+print("代码规范分析:", code_style_analysis)
+print("编辑润色结果:", edited_text)
+print("翻译结果:", translated_text)
+```
+
+这个示例展示了动态模板参数的强大功能：
+- **一个函数，多种场景**：`analyze_code` 可以用于性能分析、规范检查等不同目的
+- **动态角色切换**：`process_text` 可以扮演编辑、翻译等不同角色
+- **灵活任务适配**：根据调用时的参数动态调整任务类型和输出风格
 
 ---
 
