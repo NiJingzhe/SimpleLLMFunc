@@ -43,8 +43,16 @@ from typing import (
 
 import uuid
 
-from SimpleLLMFunc.logger.logger import push_debug
-from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc.base.ReAct import execute_llm
+from SimpleLLMFunc.base.messages import build_multimodal_content
+from SimpleLLMFunc.base.post_process import (
+    extract_content_from_response,
+    process_response,
+)
+from SimpleLLMFunc.base.type_resolve import (
+    get_detailed_type_description,
+    has_multimodal_content,
+)
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import (
     app_log,
@@ -55,20 +63,11 @@ from SimpleLLMFunc.logger import (
     get_current_trace_id,
     async_log_context,
 )
-
-# 从utils模块导入工具函数
-from SimpleLLMFunc.llm_decorator.utils import (
-    execute_llm,
-    process_response,
-    get_detailed_type_description,
-    has_multimodal_content,
-    build_multimodal_content,
-)
-
+from SimpleLLMFunc.logger.logger import push_debug
+from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.utils import (
     get_last_item_of_async_generator,
 )
-from SimpleLLMFunc.llm_decorator.utils import extract_content_from_response
 
 # 定义一个类型变量，用于函数的返回类型
 T = TypeVar("T")

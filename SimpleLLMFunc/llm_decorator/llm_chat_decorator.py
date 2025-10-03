@@ -20,14 +20,14 @@ from typing import (
     Literal,
 )
 
-from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.llm_decorator.utils import (
-    execute_llm,
-    extract_content_from_stream_response,
+from SimpleLLMFunc.base.ReAct import execute_llm
+from SimpleLLMFunc.base.messages import build_multimodal_content
+from SimpleLLMFunc.base.post_process import (
     extract_content_from_response,
-    has_multimodal_content,
-    build_multimodal_content,
+    extract_content_from_stream_response,
 )
+from SimpleLLMFunc.base.type_resolve import has_multimodal_content
+from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import (
     app_log,
     async_log_context,
