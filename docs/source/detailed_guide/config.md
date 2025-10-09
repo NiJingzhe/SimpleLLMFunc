@@ -7,14 +7,7 @@
 ```bash
 # 日志相关配置
 
-# LOG_DIR：日志文件存放目录，默认为当前目录 `./`
-LOG_DIR=./logs
-
-# LOG_FILE：日志文件名，默认为 `agent.log`
-# 在LOG目录下还会有另一个log indices文件夹，里面存放按照trace id聚类的日志文件
-LOG_FILE=my_agent.log
-
-# LOG_LEVEL：会打印到控制台的志级别，默认为 `WARNING`
+# LOG_LEVEL：控制台日志级别，默认为 `WARNING`
 LOG_LEVEL=WARNING
 ```
 

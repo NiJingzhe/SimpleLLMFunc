@@ -60,8 +60,6 @@ cp env_template .env
 编辑 `.env` 文件，配置日志设置：
 
 ```bash
-LOG_DIR=./
-LOG_FILE=agent.log
 LOG_LEVEL=WARNING
 ```
 
@@ -103,7 +101,10 @@ LOG_LEVEL=WARNING
 
 创建一个名为 `first_demo.py` 的文件：
 
+> ⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 `async def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。
+
 ```python
+import asyncio
 from typing import List
 from pydantic import BaseModel, Field
 from SimpleLLMFunc import llm_function, OpenAICompatible
@@ -120,7 +121,7 @@ gpt_interface = provider_interfaces["openai"]["gpt-3.5-turbo"]
 
 # 创建 LLM 函数
 @llm_function(llm_interface=gpt_interface)
-def analyze_text(text: str) -> TextAnalysis:
+async def analyze_text(text: str) -> TextAnalysis:
     """分析给定文本的情感、关键词和摘要
     
     Args:
@@ -131,7 +132,7 @@ def analyze_text(text: str) -> TextAnalysis:
     """
     pass
 
-def main():
+async def main():
     # 测试文本
     test_text = """
     今天天气非常好，阳光明媚，温度适宜。我决定去公园散步，
@@ -144,7 +145,7 @@ def main():
     print("\n分析结果:")
     
     try:
-        result = analyze_text(test_text)
+        result = await analyze_text(test_text)
         print(f"情感: {result.sentiment}")
         print(f"关键词: {', '.join(result.keywords)}")
         print(f"摘要: {result.summary}")
@@ -152,7 +153,7 @@ def main():
         print(f"分析失败: {e}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
 
 ### 3.2 运行 Demo
@@ -180,6 +181,8 @@ python first_demo.py
 这个示例展示了如何使用 `_template_params` 让同一个函数适应不同的使用场景：
 
 ```python
+import asyncio
+
 from SimpleLLMFunc import llm_function, OpenAICompatible
 
 # 加载模型接口
@@ -188,17 +191,17 @@ gpt_interface = provider_interfaces["openai"]["gpt-3.5-turbo"]
 
 # 万能的代码分析函数
 @llm_function(llm_interface=gpt_interface)
-def analyze_code(code: str) -> str:
+async def analyze_code(code: str) -> str:
     """以{style}的方式分析{language}代码，重点关注{focus}。"""
     pass
 
 # 万能的文本处理函数
 @llm_function(llm_interface=gpt_interface)
-def process_text(text: str) -> str:
+async def process_text(text: str) -> str:
     """作为{role}，请{action}以下文本，输出风格为{style}。"""
     pass
 
-def main():
+async def main():
     print("=== 动态模板参数 Demo ===")
     
     # 测试代码
@@ -212,7 +215,7 @@ def fibonacci(n):
     # 不同的分析方式
     print("\n1. 代码分析 - 性能优化:")
     try:
-        performance_result = analyze_code(
+    performance_result = await analyze_code(
             python_code,
             _template_params={
                 'style': '详细',
@@ -226,7 +229,7 @@ def fibonacci(n):
     
     print("\n2. 代码分析 - 代码规范:")
     try:
-        style_result = analyze_code(
+    style_result = await analyze_code(
             python_code,
             _template_params={
                 'style': '简洁',
@@ -243,7 +246,7 @@ def fibonacci(n):
     
     print("\n3. 文本处理 - 编辑润色:")
     try:
-        edited_result = process_text(
+    edited_result = await process_text(
             sample_text,
             _template_params={
                 'role': '专业编辑',
@@ -257,7 +260,7 @@ def fibonacci(n):
     
     print("\n4. 文本处理 - 翻译转换:")
     try:
-        translated_result = process_text(
+    translated_result = await process_text(
             sample_text,
             _template_params={
                 'role': '翻译专家',
@@ -270,7 +273,7 @@ def fibonacci(n):
         print(f"处理失败: {e}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
 
 这个示例展示了动态模板参数的核心优势：
@@ -283,13 +286,14 @@ if __name__ == "__main__":
 创建一个更复杂的示例，展示工具调用功能：
 
 ```python
+import asyncio
 from typing import Dict
 from pydantic import BaseModel, Field
 from SimpleLLMFunc import llm_function, tool, OpenAICompatible
 
 # 定义工具
 @tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
+async def get_weather(city: str) -> Dict[str, str]:
     """获取指定城市的天气信息
     
     Args:
@@ -315,7 +319,7 @@ class TravelRecommendation(BaseModel):
 
 # 创建带工具调用的 LLM 函数
 @llm_function(llm_interface=gpt_interface, toolkit=[get_weather])
-def recommend_travel(preference: str) -> TravelRecommendation:
+async def recommend_travel(preference: str) -> TravelRecommendation:
     """根据用户偏好推荐旅游目的地和活动
     
     Args:
@@ -326,7 +330,7 @@ def recommend_travel(preference: str) -> TravelRecommendation:
     """
     pass
 
-def main():
+async def main():
     preference = "我喜欢温暖的气候，想要进行户外活动，最好是能看到美丽的风景"
     
     print("=== 旅游推荐 Demo ===")
@@ -334,7 +338,7 @@ def main():
     print("\n推荐结果:")
     
     try:
-        result = recommend_travel(preference)
+        result = await recommend_travel(preference)
         print(f"推荐城市: {result.city}")
         print(f"天气信息: {result.weather_info}")
         print(f"推荐活动: {', '.join(result.activities)}")
@@ -343,7 +347,7 @@ def main():
         print(f"推荐失败: {e}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 ```
 
 ## 第五步：查看日志
@@ -368,7 +372,7 @@ A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 
 A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `toolkit` 参数中传入工具列表。
 
 ### Q: 如何实现异步调用？
-A: 使用 `async_llm_function` 装饰器创建异步函数，并使用 `await` 调用。
+A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async def` 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。
 
 ### Q: 什么是动态模板参数？
 A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString 中的占位符，让同一个函数适应不同的使用场景。
@@ -377,13 +381,21 @@ A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数
 A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如：
 ```python
 @llm_function(llm_interface=llm)
-def analyze_code(code: str) -> str:
+async def analyze_code(code: str) -> str:
     """以{style}的方式分析{language}代码，重点关注{focus}。"""
     pass
 
-result = analyze_code(code, _template_params={
-    'style': '详细', 'language': 'Python', 'focus': '性能优化'
-})
+import asyncio
+
+
+async def main():
+    result = await analyze_code(code, _template_params={
+        'style': '详细', 'language': 'Python', 'focus': '性能优化'
+    })
+    print(result)
+
+
+asyncio.run(main())
 ```
 
 ## 下一步

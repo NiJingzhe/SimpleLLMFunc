@@ -1,7 +1,7 @@
 """
 异步 LLM Chat装饰器使用示例
 
-这个示例展示了如何使用 @async_llm_chat 装饰器来创建异步聊天功能。
+这个示例展示了如何使用 @llm_chat 装饰器来创建异步聊天功能。
 重点展示异步聊天的并发能力和流式响应。
 """
 
@@ -15,7 +15,7 @@ from rich.panel import Panel
 from rich.live import Live
 from rich.text import Text
 
-from SimpleLLMFunc import async_llm_chat
+from SimpleLLMFunc import llm_chat
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
 
 
@@ -29,7 +29,7 @@ VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(
 )["volc_engine"]["deepseek-v3-250324"]
 
 
-@async_llm_chat(llm_interface=VolcEngine_deepseek_v3_Interface, stream=True)
+@llm_chat(llm_interface=VolcEngine_deepseek_v3_Interface, stream=True)
 async def async_simple_chat(
     history: Optional[List[Dict[str, str]]] = None, message: str = ""
 ):
@@ -39,7 +39,7 @@ async def async_simple_chat(
     pass
 
 
-@async_llm_chat(llm_interface=VolcEngine_deepseek_v3_Interface, stream=False)
+@llm_chat(llm_interface=VolcEngine_deepseek_v3_Interface, stream=False)
 async def async_programming_assistant(
     history: Optional[List[Dict[str, str]]] = None, code: str = "", question: str = ""
 ):

@@ -2,6 +2,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import (
     Any,
+    Awaitable,
     Dict,
     List,
     Optional,
@@ -16,6 +17,7 @@ from typing import (
 import re
 import inspect
 import json
+import asyncio
 from pydantic import BaseModel
 
 from SimpleLLMFunc.logger.logger import push_error
@@ -46,13 +48,23 @@ class Parameter:
 class Tool(ABC):
     """
     抽象工具基类，可以通过两种方式创建：
-    1. 通过子类继承并实现run方法（支持向后兼容）
-    2. 通过@tool装饰器装饰一个函数（推荐方式）
+    1. 通过子类继承并实现异步 run 方法
+    2. 通过@tool装饰器装饰一个 async 函数（推荐方式）
     """
 
-    def __init__(self, name: str, description: str, func: Optional[Callable] = None):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        func: Optional[Callable[..., Awaitable[Any]]] = None,
+    ):
         self.name = name
         self.description = description
+        if func is not None and not inspect.iscoroutinefunction(func):
+            func_name = getattr(func, "__name__", repr(func))
+            raise TypeError(
+                f"Tool '{name}' 的实现必须是 async 函数，检测到同步函数: {func_name}"
+            )
         self.func = func
         self.parameters = self._extract_parameters() if func else []
 
@@ -137,16 +149,15 @@ class Tool(ABC):
 
         return param_descriptions
 
-    def run(self, *args, **kwargs):
+    async def run(self, *args, **kwargs):
         """
-        运行工具。如果提供了函数，则调用该函数；否则调用子类实现的run方法。
+        运行工具。所有工具实现必须为异步函数。
         """
         if self.func is not None:
-            return self.func(*args, **kwargs)
+            return await self.func(*args, **kwargs)
 
-        # 默认实现，子类应该重写这个方法
         raise NotImplementedError(
-            "Subclasses must implement this method or provide a function."
+            "Subclasses must implement an async run method or provide an async function."
         )
 
     def _is_optional_type(self, type_annotation: Type) -> bool:
@@ -276,7 +287,9 @@ class Tool(ABC):
         return tool_spec
 
     @staticmethod
-    def serialize_tools(tools: List[Tool | Callable]) -> List[Dict[str, Any]]:
+    def serialize_tools(
+        tools: List[Tool | Callable[..., Awaitable[Any]]]
+    ) -> List[Dict[str, Any]]:
         """
         将多个工具序列化为OpenAI工具列表
 
@@ -311,11 +324,15 @@ class Tool(ABC):
 T = TypeVar("T")
 
 
-def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[..., T]]:
+def tool(
+    name: str, description: str
+) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """
     工具装饰器，用于将函数转换为Tool对象。
 
     请务必好好写tool函数的DocString，因为这会被作为工具描述信息的一部分。
+
+    ⚠️ 被 @tool 装饰的函数必须定义为 `async def`，同步函数将会被拒绝。
 
     工具的描述信息是: `description + "\\n" + docstring`
 
@@ -360,8 +377,8 @@ def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[.
             lat: float = Field(..., description="纬度")
             lng: float = Field(..., description="经度")
 
-        @tool(name="generate_map", description="生成位置地图")
-        def generate_map(location: Location, zoom: int = 10) -> ImgPath:
+    @tool(name="generate_map", description="生成位置地图")
+    async def generate_map(location: Location, zoom: int = 10) -> ImgPath:
             '''
             根据位置信息生成地图图片
             
@@ -378,7 +395,11 @@ def tool(name: str, description: str) -> Callable[[Callable[..., T]], Callable[.
         ```
     """
 
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
+        if not inspect.iscoroutinefunction(func):
+            raise TypeError(
+                f"被 @tool 装饰的函数 '{func.__name__}' 必须是 async 函数"
+            )
         # 创建工具对象
         tool_obj = Tool(name=name, description=description, func=func)
 
@@ -402,7 +423,7 @@ if __name__ == "__main__":
 
     # 使用装饰器创建工具
     @tool(name="get_weather", description="获取指定位置的天气信息")
-    def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
+    async def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
         """
         获取指定位置的天气预报
 
@@ -423,7 +444,7 @@ if __name__ == "__main__":
 
     # 使用装饰器创建带有Optional参数的工具
     @tool(name="search_restaurants", description="搜索附近的餐厅")
-    def search_restaurants(
+    async def search_restaurants(
         location: Location,
         cuisine: Optional[str] = None,
         max_distance: Optional[float] = None,
@@ -456,48 +477,53 @@ if __name__ == "__main__":
             "restaurants": [{"name": "示例餐厅", "rating": 4.5, "distance": 0.5}],
         }
 
-    # 测试工具
-    print("\n装饰器方式 - 基础工具:")
-    print(
-        json.dumps(
-            getattr(get_weather, "_tool").to_openai_tool(), indent=2, ensure_ascii=False
+    async def main() -> None:
+        # 测试工具
+        print("\n装饰器方式 - 基础工具:")
+        print(
+            json.dumps(
+                getattr(get_weather, "_tool").to_openai_tool(),
+                indent=2,
+                ensure_ascii=False,
+            )
         )
-    )
 
-    print("\n装饰器方式 - 带Optional参数的工具:")
-    optional_tool_schema = getattr(search_restaurants, "_tool").to_openai_tool()
-    print(json.dumps(optional_tool_schema, indent=2, ensure_ascii=False))
+        print("\n装饰器方式 - 带Optional参数的工具:")
+        optional_tool_schema = getattr(search_restaurants, "_tool").to_openai_tool()
+        print(json.dumps(optional_tool_schema, indent=2, ensure_ascii=False))
 
-    # 验证Optional参数的序列化结果
-    print("\n=== Optional参数序列化验证 ===")
-    function_params = optional_tool_schema["function"]["parameters"]
-    required_params = function_params.get("required", [])
-    properties = function_params["properties"]
+        # 验证Optional参数的序列化结果
+        print("\n=== Optional参数序列化验证 ===")
+        function_params = optional_tool_schema["function"]["parameters"]
+        required_params = function_params.get("required", [])
+        properties = function_params["properties"]
 
-    print(f"必需参数: {required_params}")
-    print("参数详情:")
-    for param_name, param_schema in properties.items():
-        is_required = param_name in required_params
-        param_type = param_schema.get("type")
-        print(f"  {param_name}: 类型={param_type}, 必需={is_required}")
-        if isinstance(param_type, list) and "null" in param_type:
-            print("    -> 支持null值")
+        print(f"必需参数: {required_params}")
+        print("参数详情:")
+        for param_name, param_schema in properties.items():
+            is_required = param_name in required_params
+            param_type = param_schema.get("type")
+            print(f"  {param_name}: 类型={param_type}, 必需={is_required}")
+            if isinstance(param_type, list) and "null" in param_type:
+                print("    -> 支持null值")
 
-    # 也可以直接调用函数
-    location = Location(latitude=39.9, longitude=116.3)
-    result = get_weather(location, days=3)
-    print("\n基础函数调用结果:")
-    print(result)
+        # 也可以直接调用函数
+        location = Location(latitude=39.9, longitude=116.3)
+        result = await get_weather(location, days=3)
+        print("\n基础函数调用结果:")
+        print(result)
 
-    # 测试Optional参数函数调用
-    result_with_optional = search_restaurants(
-        location=location, cuisine="中式", max_distance=2.0
-    )
-    print("\n带Optional参数函数调用结果:")
-    print(result_with_optional)
+        # 测试Optional参数函数调用
+        result_with_optional = await search_restaurants(
+            location=location, cuisine="中式", max_distance=2.0
+        )
+        print("\n带Optional参数函数调用结果:")
+        print(result_with_optional)
 
-    # 测试完全不传Optional参数
-    result_without_optional = search_restaurants(location=location)
-    print("\n不传Optional参数函数调用结果:")
-    print(result_without_optional)
+        # 测试完全不传Optional参数
+        result_without_optional = await search_restaurants(location=location)
+        print("\n不传Optional参数函数调用结果:")
+        print(result_without_optional)
+
+    asyncio.run(main())
 

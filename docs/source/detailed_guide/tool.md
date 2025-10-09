@@ -43,18 +43,18 @@ from typing import Dict, List, Tuple, Any
 
 # 1. 基本类型返回
 @tool(name="calculate", description="执行数学计算")
-def calculate(expression: str) -> float:
+async def calculate(expression: str) -> float:
     """返回计算结果（浮点数）"""
     return eval(expression)
 
 @tool(name="get_status", description="获取系统状态")
-def get_status() -> str:
+async def get_status() -> str:
     """返回状态信息（字符串）"""
     return "系统运行正常"
 
 # 2. JSON 对象返回
 @tool(name="get_user_info", description="获取用户信息")
-def get_user_info(user_id: int) -> Dict[str, Any]:
+async def get_user_info(user_id: int) -> Dict[str, Any]:
     """返回用户信息（字典）"""
     return {
         "id": user_id,
@@ -64,7 +64,7 @@ def get_user_info(user_id: int) -> Dict[str, Any]:
     }
 
 @tool(name="search_results", description="搜索并返回结果列表")
-def search_results(query: str) -> List[Dict[str, str]]:
+async def search_results(query: str) -> List[Dict[str, str]]:
     """返回搜索结果（字典列表）"""
     return [
         {"title": "结果1", "url": "https://example1.com"},
@@ -73,20 +73,20 @@ def search_results(query: str) -> List[Dict[str, str]]:
 
 # 3. 多模态返回 - 单独图片
 @tool(name="get_chart", description="生成数据图表")
-def get_chart(data: List[float]) -> ImgPath:
+async def get_chart(data: List[float]) -> ImgPath:
     """返回图表图片（本地文件）"""
     # 在chart path下有一个对应的图片文件
     chart_path = "/path/to/generated/chart.png"
     return ImgPath(chart_path)
 
 @tool(name="fetch_image", description="获取网络图片")
-def fetch_image(image_url: str) -> ImgUrl:
+async def fetch_image(image_url: str) -> ImgUrl:
     """返回网络图片URL"""
     return ImgUrl(image_url)
 
 # 4. 多模态返回 - 文本+图片组合
 @tool(name="analyze_image", description="分析图片并生成报告")
-def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
+async def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
     """返回分析报告和标注后的图片"""
     analysis_text = "检测到3个对象：2个人、1辆汽车"
     annotated_image = ImgPath("/path/to/annotated_image.png")
@@ -108,7 +108,7 @@ def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 - 组合类型的元组必须是 `(str, ImgPath)` 或 `(str, ImgUrl)` 格式, 不能交换`str`和`ImgPath`/`ImgUrl`的顺序
 - 避免返回过大的数据结构，以免影响 LLM 处理效率
 
-**⚠️ 注意： 由于暂时还不支持异步Tool Call，所以`@tool`装饰器不能装饰异步函数，例如不能装饰`@async_llm_function`装饰的函数，但是可以装饰`@llm_function`装饰的函数**
+**⚠️ 注意：`@tool` 装饰器要求被装饰的函数本身定义为 `async def`，以便在异步执行链路中无缝协作。**
 
 ## 使用方法
 
@@ -120,7 +120,7 @@ def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 from SimpleLLMFunc.tool import tool
 
 @tool(name="工具名称", description="工具简短描述")
-def your_function(param1: Type1, param2: Type2 = default_value) -> ReturnType:
+async def your_function(param1: Type1, param2: Type2 = default_value) -> ReturnType:
     """
     详细的函数说明，这部分会被包含在工具描述中
     
@@ -264,7 +264,7 @@ from pydantic import BaseModel, Field
 
 # 示例1：基本数据类型
 @tool(name="calculate", description="执行数学计算")
-def calculate(expression: str) -> float:
+async def calculate(expression: str) -> float:
     """
     计算数学表达式的值
     
@@ -278,7 +278,7 @@ def calculate(expression: str) -> float:
 
 # 示例2：带可选参数
 @tool(name="search_web", description="搜索网络信息")
-def search_web(query: str, max_results: int = 10, language: str = "zh") -> List[Dict[str, str]]:
+async def search_web(query: str, max_results: int = 10, language: str = "zh") -> List[Dict[str, str]]:
     """
     在网络上搜索信息
     
@@ -303,7 +303,7 @@ class Location(BaseModel):
     name: Optional[str] = Field(None, description="位置名称")
 
 @tool(name="get_weather", description="获取天气信息")
-def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
+async def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
     """
     获取指定位置的天气预报
     
@@ -328,7 +328,7 @@ def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
 
 # 示例4：复杂数据处理
 @tool(name="analyze_data", description="分析数据集")
-def analyze_data(
+async def analyze_data(
     data: List[Dict[str, Any]], 
     analysis_type: str,
     include_charts: bool = False
@@ -360,7 +360,7 @@ from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
 from typing import Tuple
 
 @tool(name="generate_chart", description="生成数据图表")
-def generate_chart(data: List[float], chart_type: str = "bar") -> ImgPath:
+async def generate_chart(data: List[float], chart_type: str = "bar") -> ImgPath:
     """
     根据数据生成图表并保存为本地文件
     
@@ -390,7 +390,7 @@ def generate_chart(data: List[float], chart_type: str = "bar") -> ImgPath:
     return ImgPath(temp_file.name)
 
 @tool(name="fetch_web_image", description="获取网络图片")
-def fetch_web_image(image_url: str) -> ImgUrl:
+async def fetch_web_image(image_url: str) -> ImgUrl:
     """
     验证并返回网络图片URL
     
@@ -404,7 +404,7 @@ def fetch_web_image(image_url: str) -> ImgUrl:
     return ImgUrl(image_url, detail="high")
 
 @tool(name="analyze_image_with_report", description="分析图片并生成详细报告")
-def analyze_image_with_report(image_path: str) -> Tuple[str, ImgPath]:
+async def analyze_image_with_report(image_path: str) -> Tuple[str, ImgPath]:
     """
     分析图片内容并生成带标注的图片
     
@@ -429,7 +429,7 @@ def analyze_image_with_report(image_path: str) -> Tuple[str, ImgPath]:
     return (analysis_report.strip(), ImgPath(annotated_image_path))
 
 @tool(name="create_data_visualization", description="创建在线数据可视化")
-def create_data_visualization(dataset: Dict[str, Any]) -> Tuple[str, ImgUrl]:
+async def create_data_visualization(dataset: Dict[str, Any]) -> Tuple[str, ImgUrl]:
     """
     创建数据可视化并上传到云端
     
@@ -623,7 +623,7 @@ custom_tool = create_tool_from_config(tool_config)
 
 ```python
 @tool(name="multi_step_analysis", description="多步骤数据分析")
-def multi_step_analysis(data: List[Dict[str, Any]], steps: List[str]) -> Dict[str, Any]:
+async def multi_step_analysis(data: List[Dict[str, Any]], steps: List[str]) -> Dict[str, Any]:
     """
     执行多步骤数据分析流程
     
@@ -666,7 +666,7 @@ def multi_step_analysis(data: List[Dict[str, Any]], steps: List[str]) -> Dict[st
 ```python
 # ✅ 推荐：结构化返回，便于LLM理解
 @tool(name="search_products", description="搜索商品")
-def search_products(query: str) -> Dict[str, Any]:
+async def search_products(query: str) -> Dict[str, Any]:
     return {
         "total": 10,
         "products": [
@@ -678,7 +678,7 @@ def search_products(query: str) -> Dict[str, Any]:
 
 # ✅ 推荐：多模态组合返回
 @tool(name="generate_report", description="生成分析报告")
-def generate_report(data: List[Dict]) -> Tuple[str, ImgPath]:
+async def generate_report(data: List[Dict]) -> Tuple[str, ImgPath]:
     summary = f"分析了 {len(data)} 条记录，发现 3 个关键趋势"
     chart_path = ImgPath("/tmp/analysis_chart.png")
     return (summary, chart_path)
@@ -695,7 +695,7 @@ def bad_example() -> Dict:
 
 ```python
 @tool(name="safe_division", description="安全除法运算")
-def safe_division(a: float, b: float) -> Dict[str, Any]:
+async def safe_division(a: float, b: float) -> Dict[str, Any]:
     """
     安全的除法运算，包含错误处理
     
@@ -716,7 +716,7 @@ def safe_division(a: float, b: float) -> Dict[str, Any]:
     }
 
 @tool(name="robust_image_tool", description="鲁棒的图像处理工具")
-def robust_image_tool(image_path: str) -> Tuple[str, ImgPath]:
+async def robust_image_tool(image_path: str) -> Tuple[str, ImgPath]:
     """
     带错误处理的图像工具
     """

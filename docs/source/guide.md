@@ -24,16 +24,12 @@ SimpleLLMFunc 使用环境变量和 `.env` 文件进行配置。你可以在项�
 
 #### 日志相关配置
 
-- `LOG_DIR`：日志文件存放目录，默认为当前目录 `./`
-- `LOG_FILE`：日志文件名，默认为 `agent.log`
-- `LOG_LEVEL`：日志级别（DEBUG、INFO、WARNING、ERROR、CRITICAL 五级，详细程度依次递减）
+- `LOG_LEVEL`：控制台日志级别（DEBUG、INFO、WARNING、ERROR、CRITICAL 五级，详细程度依次递减）
 
 示例：
 
 ```
 # 日志相关配置
-LOG_DIR=./logs
-LOG_FILE=my_agent.log
 LOG_LEVEL=WARNING
 ```
 
@@ -74,7 +70,9 @@ llm_interface = OpenAICompatible(
 2. 定义函数，并添加使用 `@llm_function` 装饰器；
 3. 在函数的 docstring 中描述函数的功能、参数和返回值；
 4. 函数体留空，实际操作由 LLM 完成，返回的字符串由框架自动尝试解析为指定格式，若解析失败则抛出异常。
-5. 调用方法与普通 Python 函数相同。
+5. 在异步上下文中使用 `await` 调用函数。
+
+> 提示：`llm_function` 仅支持 `async def` 定义，记得在调用处使用 `await` 或 `asyncio.run`。
 
 `@llm_function` 装饰器的参数包括：
 
@@ -90,28 +88,33 @@ SimpleLLMFunc 支持在函数调用时通过 `_template_params` 参数动态设�
 
 ```python
 @llm_function(llm_interface=llm_interface)
-def analyze_code(code: str) -> str:
+async def analyze_code(code: str) -> str:
     """以{style}的方式分析{language}代码，重点关注{focus}。"""
-    pass
+    return ""
 
-# 不同的调用方式，使用不同的模板参数
-result1 = analyze_code(
-    python_code,
-    _template_params={
-        'style': '详细', 
-        'language': 'Python', 
-        'focus': '性能优化'
-    }
-)
 
-result2 = analyze_code(
-    js_code,
-    _template_params={
-        'style': '简洁', 
-        'language': 'JavaScript', 
-        'focus': '代码规范'
-    }
-)
+async def demo() -> None:
+    # 不同的调用方式，使用不同的模板参数
+    result1 = await analyze_code(
+        python_code,
+        _template_params={
+            "style": "详细",
+            "language": "Python",
+            "focus": "性能优化",
+        },
+    )
+
+    result2 = await analyze_code(
+        js_code,
+        _template_params={
+            "style": "简洁",
+            "language": "JavaScript",
+            "focus": "代码规范",
+        },
+    )
+
+
+# asyncio.run(demo())
 ```
 
 这种方式让一个函数定义可以适应多种不同的应用场景，大大提高了代码的复用性。
@@ -132,7 +135,7 @@ class ProductReview(BaseModel):
 
 # 创建 LLM 函数
 @llm_function(llm_interface=my_llm_interface)
-def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
+async def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
     """
     分析产品评论，提取关键信息并生成结构化评测报告
 
@@ -145,10 +148,16 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     """
     pass  # 函数体为空，实际执行由LLM完成
 
-# 使用函数
-result = analyze_product_review("无线耳机", "这款耳机音质不错，但电池续航较差...")
-print(f"评分: {result.rating}")
-print(f"优点: {', '.join(result.pros)}")
+# 使用函数（需在异步上下文中调用）
+async def run_demo() -> None:
+    result = await analyze_product_review(
+        "无线耳机", "这款耳机音质不错，但电池续航较差..."
+    )
+    print(f"评分: {result.rating}")
+    print(f"优点: {', '.join(result.pros)}")
+
+
+# asyncio.run(run_demo())
 ```
 
 ### 创建可供 LLM 函数使用的工具
@@ -159,6 +168,8 @@ print(f"优点: {', '.join(result.pros)}")
 
 1. 定义工具函数，并添加 `@tool` 装饰器；
 2. 撰写工具函数的 docstring，描述函数的功能、参数和返回值，返回值必须是可序列化的有语义的类型，建议是Pydantic Model或者基础类型；
+
+> 注意：工具函数也必须通过 `async def` 定义，以便与异步执行链路保持一致。
 
 `@tool` 装饰器的参数包括：
 
@@ -172,7 +183,7 @@ print(f"优点: {', '.join(result.pros)}")
 from SimpleLLMFunc import tool
 
 @tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
+async def get_weather(city: str) -> Dict[str, str]:
     """
     获取指定城市的天气信息
 
@@ -192,7 +203,7 @@ def get_weather(city: str) -> Dict[str, str]:
 
 ```python
 @llm_function(llm_interface=my_llm_interface, toolkit=[get_weather])
-def get_daily_recommendation(city: str) -> WeatherInfo:
+async def get_daily_recommendation(city: str) -> WeatherInfo:
     """
     获取指定城市的今日活动建议
 
@@ -205,24 +216,6 @@ def get_daily_recommendation(city: str) -> WeatherInfo:
     pass
 ```
 
-### 创建async的 LLM 函数
-如果需要创建异步的 LLM 函数，可以在函数定义前添加 `async` 关键字，并使用 `@async_llm_function` 装饰器。
-```python
-from SimpleLLMFunc import async_llm_function
-
-@async_llm_function(llm_interface=my_llm_interface)
-async def async_analyze_product_review(product_name: str, review_text: str) -> ProductReview:
-    """    分析产品评论，提取关键信息并生成结构化评测报告  
-    Args:
-        product_name: 产品名称
-        review_text: 用户评论文本
-    Returns:
-        包含评分、优缺点和总结的产品评测报告
-    """
-    pass  # 函数体为空，实际执行由LLM完成
-
-```
-
 ### 创建对话型应用
 
 使用 `@llm_chat` 装饰器以创建对话式应用，具体步骤如下：
@@ -230,33 +223,29 @@ async def async_analyze_product_review(product_name: str, review_text: str) -> P
 ```python
 from SimpleLLMFunc import llm_chat
 
+
 @llm_chat(llm_interface=my_llm_interface, toolkit=[get_weather])
-def chat_assistant(history: List[Dict[str, str]], message: str):
+async def chat_assistant(message: str, history: List[Dict[str, str]]):
     """
     你是一个友好的助手，可以回答用户问题并提供帮助。
     你可以使用工具来获取实时信息，例如天气状况。
     """
     pass
 
-# 使用对话函数
-history = []  # 初始化空的对话历史
-response, updated_history = next(chat_assistant("今天北京天气怎么样？", history))
-print(response)
-# 继续对话，传入更新后的历史记录
-next_response, updated_history = next(chat_assistant("那我应该穿什么衣服？", updated_history))
+
+async def run_chat() -> None:
+    history: List[Dict[str, str]] = []
+    async for response, history in chat_assistant(
+        message="今天北京天气怎么样？", history=history
+    ):
+        if response:
+            print(response)
+
+
+# asyncio.run(run_chat())
 ```
 
-### 创建异步的对话型应用
-如果需要创建异步的对话型应用，可以在函数定义前添加 `async` 关键字，并使用 `@async_llm_chat` 装饰器。
-```python
-from SimpleLLMFunc import async_llm_chat    
-@async_llm_chat(llm_interface=my_llm_interface, toolkit=[get_weather])
-async def async_chat_assistant(history: List[Dict[str, str]], message: str):
-    """你是一个友好的助手，可以回答用户问题并提供帮助。
-    你可以使用工具来获取实时信息，例如天气状况。
-    """
-    pass
-```
+> 调用 `llm_chat` 后会返回一个异步生成器，使用 `async for` 获取流式结果，并在每次迭代中更新对话历史。
 
 ## 最佳实践
 

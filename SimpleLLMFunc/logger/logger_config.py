@@ -10,8 +10,6 @@ class LoggerConfig(BaseSettings):
     )
 
     LOG_LEVEL: str = "DEBUG"
-    LOG_FILE: str = "agent.log"
-    LOG_DIR: str = "./"  # 默认为当前目录，避免使用相对路径
 
 
 @lru_cache

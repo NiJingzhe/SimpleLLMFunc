@@ -1,4 +1,3 @@
-import asyncio
 import inspect
 import json
 import uuid
@@ -6,6 +5,7 @@ from functools import wraps
 from typing import (
     Any,
     AsyncGenerator,
+    Awaitable,
     Callable,
     Dict,
     Generator,
@@ -43,7 +43,7 @@ from SimpleLLMFunc.tool import Tool
 # 类型别名定义
 MessageDict = Dict[str, Any]  # 表示消息字典
 HistoryList = List[MessageDict]  # 表示历史记录列表
-ToolkitList = List[Union[Tool, Callable]]  # 表示工具列表
+ToolkitList = List[Union[Tool, Callable[..., Awaitable[Any]]]]  # 表示工具列表
 
 # 类型变量定义
 T = TypeVar("T")
@@ -61,162 +61,11 @@ def llm_chat(
     stream: bool = False,
     return_mode: Literal["text", "raw"] = "text",
     **llm_kwargs: Any,
-) -> Callable[[Callable[P, Any]], Callable[P, Generator[Tuple[Any, HistoryList], None, None]]]:
-    """
-    LLM聊天装饰器，用于实现与大语言模型的对话功能，支持工具调用和历史记录管理。
-
-    这是同步版本的装饰器，内部使用 asyncio.run 来调用异步的 LLM 接口。
-    对于需要原生异步支持的场景，请使用 @async_llm_chat 装饰器。
-
-    ## 功能特性
-    - 自动管理对话历史记录
-    - 支持工具调用和函数执行
-    - 支持多模态内容（文本、图片URL、本地图片）
-    - 支持流式响应
-    - 自动过滤和清理历史记录
-
-    ## 参数传递规则
-    - 装饰器会将函数参数以 `参数名: 参数值` 的形式作为用户消息传递给LLM
-    - `history`/`chat_history` 参数作为特殊参数处理，不会包含在用户消息中
-    - 函数的文档字符串会作为系统提示传递给LLM
-
-    ## 历史记录格式要求
-    ```python
-    [
-        {"role": "user", "content": "用户消息"},
-        {"role": "assistant", "content": "助手回复"},
-        {"role": "system", "content": "系统消息"}
-    ]
-    ```
-
-    ## 返回值格式
-    ```python
-    Generator[Tuple[str, List[Dict[str, str]]], None, None]
-    ```
-    - `str`: 助手的响应内容
-    - `List[Dict[str, str]]`: 过滤后的对话历史记录（不含工具调用信息）
-
-    Args:
-        llm_interface: LLM接口实例，用于与大语言模型通信
-        toolkit: 可选的工具列表，可以是Tool对象或被@tool装饰的函数
-        max_tool_calls: 最大工具调用次数，防止无限循环
-        stream: 是否使用流式响应
-        return_mode: 返回模式，可选值为 "text" 或 "raw"，默认值为 "text"，
-            "text" 模式下，返回的响应内容为字符串，历史记录为 List[Dict[str, str]]
-            "raw" 模式下，返回的响应内容为原始 OAI API 响应，历史记录为 List[Dict[str, str]]
-        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口
-
-    Returns:
-        装饰后的函数，返回生成器，每次迭代返回(响应内容, 更新后的历史记录)
-
-    Example:
-        ```python
-        @llm_chat(llm_interface=my_llm)
-        def chat_with_llm(message: str, history: List[Dict[str, str]] = []):
-            '''系统提示信息'''
-            pass
-
-        response, updated_history = next(chat_with_llm("你好", history=[]))
-        ```
-    """
-
-    def decorator(
-        func: Callable[P, Any],
-    ) -> Callable[P, Generator[Tuple[Any, HistoryList], None, None]]:
-        # 获取函数元信息
-        signature: inspect.Signature = inspect.signature(func)
-        type_hints: Dict[str, Any] = get_type_hints(func)
-        docstring: str = func.__doc__ or ""
-        func_name: str = func.__name__
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            
-            # 生成唯一的追踪ID
-            context_trace_id = get_current_trace_id()
-            current_trace_id = f"{func_name}_{uuid.uuid4()}"
-            if context_trace_id:
-                current_trace_id += f"_{context_trace_id}"
-
-            # 使用同步的日志上下文
-            with log_context(
-                trace_id=current_trace_id,
-                function_name=func_name,
-                input_tokens=0,
-                output_tokens=0,
-            ):
-                # 使用内部异步函数处理实际逻辑
-                async def _async_chat_logic():
-                    async for result in _async_llm_chat_impl(
-                        func_name=func_name,
-                        signature=signature,
-                        type_hints=type_hints,
-                        docstring=docstring,
-                        args=args,
-                        kwargs=kwargs,
-                        llm_interface=llm_interface,
-                        toolkit=toolkit,
-                        max_tool_calls=max_tool_calls,
-                        stream=stream,
-                        return_mode=return_mode,
-                        use_log_context=False,  # 不在异步实现中使用日志上下文
-                        **llm_kwargs,
-                    ):
-                        yield result
-
-                # 将异步生成器转换为同步生成器
-                try:
-                    # 创建一个新的事件循环来处理整个异步生成器
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                    try:
-                        async_gen = _async_chat_logic()
-
-                        # 使用 run_until_complete 来逐个获取异步生成器的值
-                        while True:
-                            try:
-                                result = loop.run_until_complete(async_gen.__anext__())
-                                yield result
-                            except StopAsyncIteration:
-                                break
-                    finally:
-                        loop.close()
-
-                except Exception as e:
-                    push_error(
-                        f"LLM Chat '{func_name}' 执行出错: {str(e)}",
-                        location=get_location(),
-                    )
-                    raise
-
-        # 保留原始函数的元数据
-        wrapper.__name__ = func.__name__
-        wrapper.__doc__ = func.__doc__
-        wrapper.__annotations__ = func.__annotations__
-        wrapper.__signature__ = signature  # type: ignore
-
-        return cast(
-            Callable[P, Generator[Tuple[Any, HistoryList], None, None]],
-            wrapper,
-        )
-
-    return decorator
-
-
-def async_llm_chat(
-    llm_interface: LLM_Interface,
-    toolkit: Optional[ToolkitList] = None,
-    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
-    stream: bool = False,
-    return_mode: Literal["text", "raw"] = "text",
-    **llm_kwargs: Any,
 ) -> Callable[[Callable[P, Any]], Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]]:
     """
     异步LLM聊天装饰器，用于实现与大语言模型的异步对话功能，支持工具调用和历史记录管理。
 
-    这是原生异步版本的装饰器，提供完全的异步支持，返回 AsyncGenerator。
-    对于不需要异步的场景，请使用 @llm_chat 装饰器。
+    此装饰器仅提供原生异步支持，返回 AsyncGenerator。
 
     ## 功能特性
     - 自动管理对话历史记录
@@ -262,7 +111,7 @@ def async_llm_chat(
 
     Example:
         ```python
-        @async_llm_chat(llm_interface=my_llm)
+        @llm_chat(llm_interface=my_llm)
         async def chat_with_llm(message: str, history: List[Dict[str, str]] = []):
             '''系统提示信息'''
             pass
@@ -370,7 +219,7 @@ async def _async_llm_chat_impl(
     async def _execute_impl() -> AsyncGenerator[Tuple[Any, HistoryList], None]:
         # 1. 处理工具
         tool_param_for_api: Optional[List[Dict[str, Any]]]
-        tool_map: Dict[str, Callable[..., Any]]
+        tool_map: Dict[str, Callable[..., Awaitable[Any]]]
         tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
 
         # 2. 检查多模态内容
@@ -473,13 +322,15 @@ async def _async_llm_chat_impl(
             )
             raise
 
+async_llm_chat = llm_chat
+
 
 # ===== 核心辅助函数 =====
 
 
 def _process_tools(
     toolkit: Optional[ToolkitList], func_name: str
-) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Any]]]:
+) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Awaitable[Any]]]]:
     """
     处理工具列表，返回API所需的工具参数和工具映射
 
@@ -488,21 +339,29 @@ def _process_tools(
         func_name: 函数名，用于日志记录
 
     Returns:
-        (tool_param_for_api, tool_map): API工具参数和工具名称到函数的映射
+    (tool_param_for_api, tool_map): API工具参数和工具名称到函数的映射
     """
     if not toolkit:
         return None, {}
 
-    tool_objects: List[Union[Tool, Callable[..., Any]]] = []
-    tool_map: Dict[str, Callable[..., Any]] = {}
+    tool_objects: List[Union[Tool, Callable[..., Awaitable[Any]]]] = []
+    tool_map: Dict[str, Callable[..., Awaitable[Any]]] = {}
 
     for tool in toolkit:
         if isinstance(tool, Tool):
             # Tool对象直接添加
+            if not inspect.iscoroutinefunction(tool.run):
+                raise TypeError(
+                    f"LLM函数 '{func_name}': Tool '{tool.name}' 必须实现 async run 方法"
+                )
             tool_objects.append(tool)
             tool_map[tool.name] = tool.run
         elif callable(tool) and hasattr(tool, "_tool"):
             # @tool装饰的函数
+            if not inspect.iscoroutinefunction(tool):
+                raise TypeError(
+                    f"LLM函数 '{func_name}': 被 @tool 装饰的函数 '{tool.__name__}' 必须是 async 函数"
+                )
             tool_obj = getattr(tool, "_tool", None)
             assert isinstance(
                 tool_obj, Tool
@@ -516,7 +375,7 @@ def _process_tools(
                 location=get_location(),
             )
 
-    # serialize_tools 接受 List[Tool | Callable[..., Any]]；此处 tool_objects 已满足要求
+    # serialize_tools 接受 List[Tool | Callable[..., Awaitable[Any]]]；此处 tool_objects 已满足要求
     tool_param_for_api: Optional[List[Dict[str, Any]]] = (
         Tool.serialize_tools(tool_objects) if tool_objects else None
     )

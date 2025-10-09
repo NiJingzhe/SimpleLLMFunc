@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List, Optional, TypedDict
+from typing import Any, Awaitable, Callable, Dict, List, Optional, TypedDict
 
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
@@ -43,10 +43,10 @@ def is_valid_tool_result(result: Any) -> bool:
         return False
 
 
-def process_tool_calls(
+async def process_tool_calls(
     tool_calls: List[Dict[str, Any]],
     messages: List[Dict[str, Any]],
-    tool_map: Dict[str, Callable[..., Any]],
+    tool_map: Dict[str, Callable[..., Awaitable[Any]]],
 ) -> List[Dict[str, Any]]:
     """Execute tool calls and append results to the message history."""
 
@@ -75,7 +75,7 @@ def process_tool_calls(
 
             push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
             tool_func = tool_map[tool_name]
-            tool_result = tool_func(**arguments)
+            tool_result = await tool_func(**arguments)
 
             if not is_valid_tool_result(tool_result):
                 push_warning(

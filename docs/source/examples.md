@@ -2,6 +2,8 @@
 
 本章节提供了 SimpleLLMFunc 的实际使用示例，帮助你更好地理解框架的功能和用法。
 
+> ⚠️ 本章节中的所有装饰器示例（`@llm_function`、`@llm_chat`、`@tool`）均要求被装饰的函数使用 `async def` 定义，并在调用时通过 `await`（或 `asyncio.run`）执行。
+
 ## 基础示例
 
 ### 动态模板参数示例
@@ -9,26 +11,27 @@
 这个示例演示了如何使用 `_template_params` 让同一个函数适应不同的使用场景：
 
 ```python
-from SimpleLLMFunc import llm_function
-from SimpleLLMFunc import OpenAICompatible
+import asyncio
+
+from SimpleLLMFunc import OpenAICompatible, llm_function
 
 # 创建LLM接口
 llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
 
 # 万能的代码分析函数
 @llm_function(llm_interface=llm_interface)
-def analyze_code(code: str) -> str:
+async def analyze_code(code: str) -> str:
     """以{style}的方式分析{language}代码，重点关注{focus}。"""
     pass
 
 # 万能的文本处理函数
 @llm_function(llm_interface=llm_interface)
-def process_text(text: str) -> str:
+async def process_text(text: str) -> str:
     """作为{role}，请{action}以下文本，输出风格为{style}。"""
     pass
 
 # 使用示例
-if __name__ == "__main__":
+async def main():
     python_code = """
 def fibonacci(n):
     if n <= 1:
@@ -37,7 +40,7 @@ def fibonacci(n):
 """
     
     # 不同的分析方式
-    performance_result = analyze_code(
+    performance_result = await analyze_code(
         python_code,
         _template_params={
             'style': '详细',
@@ -46,7 +49,7 @@ def fibonacci(n):
         }
     )
     
-    style_result = analyze_code(
+    style_result = await analyze_code(
         python_code,
         _template_params={
             'style': '简洁',
@@ -58,7 +61,7 @@ def fibonacci(n):
     # 不同的文本处理角色
     sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
     
-    edited_result = process_text(
+    edited_result = await process_text(
         sample_text,
         _template_params={
             'role': '专业编辑',
@@ -67,7 +70,7 @@ def fibonacci(n):
         }
     )
     
-    translated_result = process_text(
+    translated_result = await process_text(
         sample_text,
         _template_params={
             'role': '翻译专家',
@@ -80,6 +83,10 @@ def fibonacci(n):
     print("代码规范:", style_result)
     print("编辑润色:", edited_result)
     print("翻译结果:", translated_result)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 这个示例展示了动态模板参数的核心优势：
@@ -92,11 +99,12 @@ def fibonacci(n):
 这个示例演示了如何使用 `@llm_function` 来创建一个产品评论分析功能。
 
 ```python
+import asyncio
 from typing import Dict, List
+
 from pydantic import BaseModel, Field
 
-from SimpleLLMFunc import llm_function
-from SimpleLLMFunc import OpenAICompatible
+from SimpleLLMFunc import OpenAICompatible, llm_function
 
 # 创建LLM接口
 llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
@@ -110,7 +118,7 @@ class ProductReview(BaseModel):
 
 # 创建LLM函数
 @llm_function(llm_interface=llm_interface)
-def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
+async def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
     """
     分析产品评论，提取关键信息并生成结构化评测报告
 
@@ -124,7 +132,9 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     pass
 
 # 使用函数
-if __name__ == "__main__":
+
+
+async def main():
     product_name = "XYZ无线耳机"
     review_text = """
     我买了这款XYZ无线耳机已经使用了一个月。音质非常不错，尤其是低音部分表现出色，
@@ -133,7 +143,7 @@ if __name__ == "__main__":
     总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
     """
     
-    result = analyze_product_review(product_name, review_text)
+    result = await analyze_product_review(product_name, review_text)
     
     print(f"产品评分: {result.rating}/5")
     print(f"产品优点:")
@@ -143,6 +153,10 @@ if __name__ == "__main__":
     for con in result.cons:
         print(f"  - {con}")
     print(f"总结: {result.summary}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 使用工具获取天气信息并给出建议
@@ -150,13 +164,16 @@ if __name__ == "__main__":
 这个示例演示了如何定义和使用工具，以及如何将工具集成到 LLM 函数中。
 
 ```python
+import asyncio
 from typing import Dict
+
 from pydantic import BaseModel, Field
+
 from SimpleLLMFunc import llm_function, tool
 
 # 定义工具函数
 @tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
+async def get_weather(city: str) -> Dict[str, str]:
     """
     获取指定城市的天气信息
 
@@ -179,7 +196,7 @@ class WeatherInfo(BaseModel):
 
 # 创建使用工具的LLM函数
 @llm_function(llm_interface=llm_interface, toolkit=[get_weather])
-def get_daily_recommendation(city: str) -> WeatherInfo:
+async def get_daily_recommendation(city: str) -> WeatherInfo:
     """
     通过get_weather工具获取天气信息，并给出推荐的活动
 
@@ -192,13 +209,19 @@ def get_daily_recommendation(city: str) -> WeatherInfo:
     pass
 
 # 使用函数
-if __name__ == "__main__":
-    result = get_daily_recommendation("北京")
+
+
+async def main():
+    result = await get_daily_recommendation("北京")
     print(f"城市: {result.city}")
     print(f"温度: {result.temperature}")
     print(f"湿度: {result.humidity}")
     print(f"天气状况: {result.condition}")
     print(f"推荐活动: {result.recommendation}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## 高级示例
@@ -208,19 +231,21 @@ if __name__ == "__main__":
 这个示例演示了如何使用 `@llm_chat` 装饰器创建一个具有对话能力的助手，以及如何管理对话历史。
 
 ```python
-from typing import List, Dict
-from SimpleLLMFunc import llm_chat, tool
+import asyncio
 import os
 import json
 from datetime import datetime
+from typing import Dict, List
+
+from SimpleLLMFunc import llm_chat, tool
 
 # 工具函数定义
 @tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
+async def get_weather(city: str) -> Dict[str, str]:
     return {"temperature": "25°C", "humidity": "60%", "condition": "Sunny"}
 
 @tool(name="search_information", description="搜索特定主题的信息")
-def search_information(query: str) -> str:
+async def search_information(query: str) -> str:
     # 模拟搜索功能
     return f"关于 '{query}' 的搜索结果: {...}"
 
@@ -252,7 +277,7 @@ def load_history(session_id: str = None, filepath: str = None) -> List[Dict[str,
 
 # 创建对话助手
 @llm_chat(llm_interface=llm_interface, toolkit=[get_weather, search_information])
-def chat_assistant(message: str, history: List[Dict[str, str]] = None):
+async def chat_assistant(message: str, history: List[Dict[str, str]] | None = None):
     """
     你是一个智能助手，可以回答用户的问题并提供帮助。
     你可以使用工具来获取实时信息，如天气状况和搜索结果。
@@ -261,7 +286,7 @@ def chat_assistant(message: str, history: List[Dict[str, str]] = None):
     pass
 
 # 交互式聊天示例
-def interactive_chat(session_id: str):
+async def interactive_chat(session_id: str):
     # 加载历史记录
     history = load_history(session_id=session_id)
     
@@ -270,18 +295,26 @@ def interactive_chat(session_id: str):
     
     while True:
         user_input = input("你: ")
-        if user_input.lower() == 'exit':
+        if user_input.lower() == "exit":
             break
-        
-        # 调用聊天函数
-        response, history = next(chat_assistant(user_input, history))
-        print(f"助手: {response}")
-        
-        # 保存历史记录
+
+        response_text = ""
+        new_history = history
+        async for chunk, updated_history in chat_assistant(user_input, history):
+            if chunk:
+                response_text += chunk
+            new_history = updated_history
+
+        history = new_history
+
+        if response_text:
+            print(f"助手: {response_text}")
+
         save_history(history, session_id)
 
+
 if __name__ == "__main__":
-    interactive_chat("user_12345")
+    asyncio.run(interactive_chat("user_12345"))
 ```
 
 ### 复杂问题解决流程
@@ -289,8 +322,11 @@ if __name__ == "__main__":
 这个示例展示了如何组合多个 LLM 函数来解决复杂问题，实现分步骤的推理和决策过程。
 
 ```python
-from typing import List, Dict, Any
+import asyncio
+from typing import Any, Dict, List
+
 from pydantic import BaseModel, Field
+
 from SimpleLLMFunc import llm_function
 
 # 步骤1：提取关键信息
@@ -300,7 +336,7 @@ class ProblemInfo(BaseModel):
     constraints: List[str] = Field(..., description="约束条件")
     
 @llm_function(llm_interface=llm_interface)
-def extract_problem_info(problem_description: str) -> ProblemInfo:
+async def extract_problem_info(problem_description: str) -> ProblemInfo:
     """
     从问题描述中提取关键信息，包括背景、关键点和约束条件
     
@@ -320,7 +356,7 @@ class SolutionOption(BaseModel):
     risk_level: str = Field(..., description="风险等级(低/中/高)")
 
 @llm_function(llm_interface=llm_interface)
-def generate_solution_options(problem_info: ProblemInfo) -> List[SolutionOption]:
+async def generate_solution_options(problem_info: ProblemInfo) -> List[SolutionOption]:
     """
     基于问题信息生成多个可能的解决方案选项
     
@@ -341,7 +377,7 @@ class DetailedSolution(BaseModel):
     success_metrics: List[str] = Field(..., description="成功指标")
 
 @llm_function(llm_interface=llm_interface)
-def select_and_detail_solution(
+async def select_and_detail_solution(
     problem_info: ProblemInfo, 
     solution_options: List[SolutionOption]
 ) -> DetailedSolution:
@@ -358,17 +394,17 @@ def select_and_detail_solution(
     pass
 
 # 使用组合函数流程
-def solve_complex_problem(problem_description: str) -> DetailedSolution:
+async def solve_complex_problem(problem_description: str) -> DetailedSolution:
     # 步骤1：提取问题信息
-    problem_info = extract_problem_info(problem_description)
+    problem_info = await extract_problem_info(problem_description)
     print("问题分析完成，提取了关键信息")
     
     # 步骤2：生成解决方案选项
-    solution_options = generate_solution_options(problem_info)
+    solution_options = await generate_solution_options(problem_info)
     print(f"生成了 {len(solution_options)} 个可能的解决方案")
     
     # 步骤3：选择和详细化最佳方案
-    detailed_solution = select_and_detail_solution(problem_info, solution_options)
+    detailed_solution = await select_and_detail_solution(problem_info, solution_options)
     print("最佳解决方案已选定并详细化")
     
     return detailed_solution
@@ -381,21 +417,24 @@ if __name__ == "__main__":
     主要销售电子产品和家居用品。客户反馈显示，送货延迟和客服响应慢是主要抱怨点。
     我们的预算有限，需要在3个月内看到明显改善。如何解决这个问题？
     """
-    
-    solution = solve_complex_problem(problem)
-    
-    print("\n最终解决方案:")
-    print(f"概述: {solution.solution_overview}\n")
-    print("实施步骤:")
-    for i, step in enumerate(solution.implementation_steps, 1):
-        print(f"{i}. {step}")
-    print("\n所需资源:")
-    for resource in solution.required_resources:
-        print(f"- {resource}")
-    print(f"\n时间线: {solution.timeline}")
-    print("\n成功指标:")
-    for metric in solution.success_metrics:
-        print(f"- {metric}")
+
+    async def main():
+        solution = await solve_complex_problem(problem)
+
+        print("\n最终解决方案:")
+        print(f"概述: {solution.solution_overview}\n")
+        print("实施步骤:")
+        for i, step in enumerate(solution.implementation_steps, 1):
+            print(f"{i}. {step}")
+        print("\n所需资源:")
+        for resource in solution.required_resources:
+            print(f"- {resource}")
+        print(f"\n时间线: {solution.timeline}")
+        print("\n成功指标:")
+        for metric in solution.success_metrics:
+            print(f"- {metric}")
+
+    asyncio.run(main())
 ```
 
 ## 实用工具示例
@@ -438,7 +477,7 @@ CUSTOM_USER_PROMPT = """
     system_prompt_template=CUSTOM_SYSTEM_PROMPT,
     user_prompt_template=CUSTOM_USER_PROMPT
 )
-def marketing_analysis(
+async def marketing_analysis(
     role: str = "市场分析师",
     specialty: str = "数字营销",
     sales_data: Dict[str, Any] = None,

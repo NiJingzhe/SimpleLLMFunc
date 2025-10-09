@@ -1,8 +1,8 @@
-from SimpleLLMFunc import llm_function, tool
-from SimpleLLMFunc.type import ImgPath
-from SimpleLLMFunc import OpenAICompatible
+import asyncio
 import os
-from typing import Optional
+
+from SimpleLLMFunc import OpenAICompatible, llm_function, tool
+from SimpleLLMFunc.type import ImgPath
 
 # 当前脚本文件所在的文件夹下的provider.json文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -14,8 +14,7 @@ gpt_4o = OpenAICompatible.load_from_json_file(provider_json_path)["dreamcatcher"
     name="get_image",
     description="Get an image from local path",
 )
-def get_image(image_path: str) -> tuple[str, ImgPath]:
-
+async def get_image(image_path: str) -> tuple[str, ImgPath]:
     """Get an image from the local file system.
 
     Args:
@@ -27,16 +26,17 @@ def get_image(image_path: str) -> tuple[str, ImgPath]:
         ImgPath: An object representing the image file with its path and detail level.
     """
 
-    return "仔细分析这张图的几何结构", ImgPath(image_path, detail='low')
+    return "仔细分析这张图的几何结构", ImgPath(image_path, detail="low")
+
 
 @llm_function(
-   llm_interface=gpt_4o,
-   toolkit=[get_image], 
-   timeout=600
+    llm_interface=gpt_4o,
+    toolkit=[get_image],
+    timeout=600,
 )
-def analyze_image(
+async def analyze_image(
     focus: str,
-    image_path: str
+    image_path: str,
 ) -> str:  # type: ignore
     """Analyze an image and provide a description.
 
@@ -48,8 +48,17 @@ def analyze_image(
         str: A description of the image analysis result.
     """
 
-if __name__ == "__main__":
-    # Example usage
+    return ""
+
+
+async def main() -> None:
     path = input("Enter the path to the image: ")
-    result = analyze_image("Analyze the image for objects, provide the simplest description possible", path)  # type: ignore
-    print(result)  # This will not execute as the function body is empty
+    result = await analyze_image(
+        "Analyze the image for objects, provide the simplest description possible",
+        path,
+    )
+    print(result)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

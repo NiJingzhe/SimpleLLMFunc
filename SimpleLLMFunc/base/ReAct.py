@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator, Callable, Dict, List
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import app_log, push_debug
@@ -28,7 +28,7 @@ async def execute_llm(
 	llm_interface: LLM_Interface,
 	messages: List[Dict[str, Any]],
 	tools: List[Dict[str, Any]] | None,
-	tool_map: Dict[str, Callable[..., Any]],
+	tool_map: Dict[str, Callable[..., Awaitable[Any]]],
 	max_tool_calls: int,
 	stream: bool = False,
 	**llm_kwargs,
@@ -111,7 +111,7 @@ async def execute_llm(
 
 	call_count += 1
 
-	current_messages = process_tool_calls(
+	current_messages = await process_tool_calls(
 		tool_calls=tool_calls,
 		messages=current_messages,
 		tool_map=tool_map,
@@ -196,7 +196,7 @@ async def execute_llm(
 			location=get_location(),
 		)
 
-		current_messages = process_tool_calls(
+		current_messages = await process_tool_calls(
 			tool_calls=tool_calls,
 			messages=current_messages,
 			tool_map=tool_map,

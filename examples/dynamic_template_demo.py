@@ -6,8 +6,10 @@
 一个函数定义，多种使用场景。
 """
 
-import sys
+import asyncio
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from SimpleLLMFunc import llm_function, app_log
@@ -27,18 +29,19 @@ except (FileNotFoundError, KeyError) as e:
 
 # 万能的代码分析函数
 @llm_function(llm_interface=llm_interface)  # type: ignore
-def analyze_code(code: str) -> str:
+async def analyze_code(code: str) -> str:
     """以{style}的方式分析{language}代码，重点关注{focus}。"""
     return ""
 
-# 万能的文本处理函数  
+
+# 万能的文本处理函数
 @llm_function(llm_interface=llm_interface)  # type: ignore
-def process_text(text: str) -> str:
+async def process_text(text: str) -> str:
     """作为{role}，请{action}以下文本，输出风格为{style}。"""
     return ""
 
 
-def main():
+async def main() -> None:
     """主函数演示"""
     if llm_interface is None:
         print("由于缺少LLM接口配置，仅展示函数定义。")
@@ -61,7 +64,7 @@ def fibonacci(n):
     
     try:
         print("   Python性能分析:")
-        result1 = analyze_code(
+        result1 = await analyze_code(
             python_code,
             _template_params={
                 'style': '详细', 
@@ -76,7 +79,7 @@ def fibonacci(n):
     try:
         print("   JavaScript规范检查:")
         js_code = "function test() { console.log('hello'); }"
-        result2 = analyze_code(
+        result2 = await analyze_code(
             js_code,
             _template_params={
                 'style': '简洁', 
@@ -95,7 +98,7 @@ def fibonacci(n):
     
     try:
         print("   编辑润色:")
-        result3 = process_text(
+        result3 = await process_text(
             sample_text,
             _template_params={
                 'role': '专业编辑', 
@@ -109,7 +112,7 @@ def fibonacci(n):
     
     try:
         print("   翻译转换:")
-        result4 = process_text(
+        result4 = await process_text(
             sample_text,
             _template_params={
                 'role': '翻译专家', 
@@ -136,4 +139,4 @@ def fibonacci(n):
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

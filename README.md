@@ -46,6 +46,8 @@
 
 Prompt会以DocString的形式存在，一方面强制你撰写良好的函数功能说明，让其他协作者对于函数功能一目了然，另一方面这就好像是用自然语言写了一段代码，功能描述就这样出现在了最合适的位置上，再也不用为了看一个函数的功能而到处跳转找到Prompt变量了。
 
+> ⚠️ 所有与 LLM 交互的装饰器（`@llm_function`、`@llm_chat`、`@tool` 等）现在仅支持装饰 `async def` 定义的异步函数；请在调用时使用 `await` 或通过 `asyncio.run` 在顶层启动协程。
+
 -----
 
 ## 安装和使用
@@ -65,8 +67,8 @@ pip install SimpleLLMFunc
 
 ## 特性
 
-- **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理（但是小模型有很大概率无法输出正确的json格式）
-- **异步支持**：提供 `async_llm_function` 和 `async_llm_chat` 装饰器，支持原生异步调用
+- **LLM函数装饰器**：简化LLM调用，支持类型安全的函数定义和返回值处理（仅支持装饰 `async def` 函数，小模型仍可能无法输出正确的 JSON）
+- **异步支持**：提供原生异步的 `llm_function` 和 `llm_chat` 装饰器，支持高并发调用
 - **多模态支持**：支持文本、图片URL和本地图片路径的多模态输入处理
 - **通用模型接口**：支持任何符合OpenAI API格式的模型服务，无需针对每个供应商开发专门实现
 - **API密钥管理**：自动化API密钥负载均衡，优化资源利用
@@ -90,6 +92,7 @@ SimpleLLMFunc的核心理念是 **"Everything is Function, Prompt is Code"**。�
 """
 使用LLM函数装饰器的示例
 """
+import asyncio
 from typing import List
 from pydantic import BaseModel, Field
 from SimpleLLMFunc import llm_function, OpenAICompatible, app_log
@@ -105,7 +108,7 @@ class ProductReview(BaseModel):
 @llm_function(
     llm_interface=OpenAICompatible.load_from_json_file("provider.json")["volc_engine"]["deepseek-v3-250324"]
 )
-def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
+async def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
     """你是一个专业的产品评测专家，需要客观公正地分析以下产品评论，并生成一份结构化的评测报告。
     
     报告应该包括：
@@ -130,7 +133,7 @@ def analyze_product_review(product_name: str, review_text: str) -> ProductReview
     """
     pass  # Prompt as Code, Code as Doc
 
-def main():
+async def main():
     
     app_log("开始运行示例代码")
     # 测试产品评测分析
@@ -144,7 +147,7 @@ def main():
     
     try:
         print("\n===== 产品评测分析 =====")
-        result = analyze_product_review(product_name, review_text)
+        result = await analyze_product_review(product_name, review_text)
         # result is directly a Pydantic model instance
         # no need to deserialize
         print(f"评分: {result.rating}/5")
@@ -159,7 +162,7 @@ def main():
         print(f"产品评测分析失败: {e}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 
 ```
 
@@ -191,27 +194,27 @@ Output:
 
 - ### 异步装饰器支持
 
-SimpleLLMFunc 提供了完整的异步支持，包括 `async_llm_function` 和 `async_llm_chat` 装饰器：
+`llm_function` 和 `llm_chat` 均原生支持 `async/await`，无需额外的别名装饰器：
 
 ```python
-from SimpleLLMFunc import async_llm_function, async_llm_chat
+from SimpleLLMFunc import llm_function, llm_chat
 
-# 异步LLM函数
-@async_llm_function(llm_interface=my_llm_interface)
+
+@llm_function(llm_interface=my_llm_interface)
 async def async_analyze_text(text: str) -> str:
     """异步分析文本内容"""
     pass
 
-# 异步对话函数
-@async_llm_chat(llm_interface=my_llm_interface, stream=True)
-async def async_chat(message: str, history: List[Dict[str, str]]) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
+
+@llm_chat(llm_interface=my_llm_interface, stream=True)
+async def async_chat(message: str, history: List[Dict[str, str]]):
     """异步对话功能，支持流式响应"""
     pass
 
-# 使用示例
+
 async def main():
     result = await async_analyze_text("需要分析的文本")
-    
+
     async for response, updated_history in async_chat("你好", []):
         print(response)
 ```
@@ -222,10 +225,10 @@ SimpleLLMFunc 支持多模态输入，可以处理文本、图片URL和本地图
 
 ```python
 from SimpleLLMFunc import llm_function
-from SimpleLLMFunc.type import Text, ImgUrl, ImgPath
+from SimpleLLMFunc.type import ImgPath, ImgUrl, Text
 
 @llm_function(llm_interface=my_llm_interface)
-def analyze_image(
+async def analyze_image(
     description: Text,           # 文本描述
     web_image: ImgUrl,          # 网络图片URL
     local_image: ImgPath        # 本地图片路径
@@ -242,18 +245,25 @@ def analyze_image(
     """
     pass
 
-# 使用示例
-result = analyze_image(
-    description=Text("请详细描述这两张图片的区别"),
-    web_image=ImgUrl("https://example.com/image.jpg"),
-    local_image=ImgPath("./reference.jpg")
-)
+import asyncio
+
+
+async def main():
+    result = await analyze_image(
+        description=Text("请详细描述这两张图片的区别"),
+        web_image=ImgUrl("https://example.com/image.jpg"),
+        local_image=ImgPath("./reference.jpg")
+    )
+    print(result)
+
+
+asyncio.run(main())
 ```
 
 ### 装饰器特性
 
 - **类型安全**：根据函数签名自动识别参数和返回类型
-- **异步支持**：提供 `async_llm_function` 和 `async_llm_chat` 装饰器，支持原生异步调用
+- **异步支持**：`llm_function` 和 `llm_chat` 均为原生异步实现，支持与 asyncio 生态无缝协作
 - **多模态处理**：支持 `Text`、`ImgUrl`、`ImgPath` 类型的多模态输入
 - **Pydantic集成**：支持Pydantic模型作为返回类型，确保结果符合预定义结构，对于能力较弱的模型有较大概率在自动重试后也无法输出正确的json格式
 - **提示词自动构建**：基于函数文档和类型标注自动构建提示词
@@ -276,7 +286,7 @@ deepseek_interface = provider_interfaces["volc_engine"]["deepseek-v3-250324"]
 
 # 在装饰器中使用
 @llm_function(llm_interface=deepseek_interface)
-def my_function():
+async def my_function():
     pass
 ```
 
@@ -309,32 +319,26 @@ SimpleLLMFunc包含强大的日志系统，融合了结构化日志、自动追�
 
 - 多级别日志支持（DEBUG, INFO, WARNING, ERROR, CRITICAL）
 - 自动记录代码位置和执行环境信息
-- JSON格式文件日志，便于程序化分析
 - 彩色控制台输出，提升可读性
+- 上下文感知：自动携带 trace_id、token 统计等自定义字段
 
 ### 2. 智能日志关联
 
-每个 LLM 函数调用会自动生成唯一的 `trace_id`，例如：`GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125`。这个ID会关联该调用产生的所有日志，包括：
+每个 LLM 函数调用会自动生成唯一的 `trace_id`，例如：`GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125`。这个 ID 会关联该调用产生的所有控制台日志，包括：
 
 - 函数调用的输入参数
-- LLM请求和响应内容
+- LLM 请求和响应摘要
 - 工具调用记录
 - 错误和警告信息
 - Token usage statistics
-- 执行时间和性能数据(Not Supported Yet)
+- 执行时间和性能数据（预留字段）
 
-### 3. 自动日志聚合
-
-所有日志会被自动整理到 `log_indices/trace_index.json`，按 trace_id 分类聚合。这意味着：
-
-- 可以轻松查看某次调用的完整执行流程
-- 方便进行问题诊断和性能分析
-- 有助于Prompt调优和工作流优化
+日志不会再写入本地文件或索引系统，所有信息都直接输出到控制台，便于在容器化、无服务器等环境中收集。
 
 ### 日志使用示例
 
 ```python
-from SimpleLLMFunc.logger import app_log, push_error, search_logs_by_trace_id, log_context
+from SimpleLLMFunc.logger import app_log, push_error, log_context
 
 # 1. 基础日志记录
 app_log("开始处理请求", trace_id="request_123")
@@ -342,22 +346,19 @@ push_error("发生错误", trace_id="request_123", exc_info=True)
 
 # 2. 使用上下文管理器自动关联日志
 with log_context(trace_id="task_456", function_name="analyze_text"):
-    app_log("开始分析文本")  # 自动继承上下文的trace_id
+    app_log("开始分析文本")  # 自动继承上下文的 trace_id
     try:
         # 执行操作...
         app_log("分析完成")
-    except Exception as e:
-        push_error("分析失败", exc_info=True)  # 同样自动继承trace_id
-
-# 3. 查看某次调用的所有相关日志
-logs = search_logs_by_trace_id("GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125")
+    except Exception:
+        push_error("分析失败", exc_info=True)  # 同样自动继承 trace_id
 ```
 
 后续计划加入更多功能：
 
-- LLM函数调用的性能指标面板
+- LLM 函数调用的性能指标面板
 - 交互式日志分析工具
-- 自动化Prompt优化建议
+- 自动化 Prompt 优化建议
 
 ## 工具系统
 
@@ -366,6 +367,8 @@ SimpleLLMFunc实现了可扩展的工具系统，使LLM能够与外部环境交�
 ### 函数装饰器方式（推荐）
 
 使用`@tool`装饰器将普通Python函数转换为工具，非常简洁直观，对于参数的描述一部分可以来源于`Pydantic Model`的`description`字段，函数入参的`description`则来自DocString。你需要在DocString中包含`Args:`或者`Parameters:`字样，然后每一行写一个`[param name]: [description]`，正如你在下面的例子中看到的这样。
+
+> 注意：`@tool` 装饰器仅支持装饰 `async def` 定义的函数，以和框架的异步执行链路保持一致。
 
 ```python
 from pydantic import BaseModel, Field
@@ -378,7 +381,7 @@ class Location(BaseModel):
 
 # 使用装饰器创建工具
 @tool(name="get_weather", description="获取指定位置的天气信息")
-def get_weather(location: Location, days: int = 1) -> dict:
+async def get_weather(location: Location, days: int = 1) -> dict:
     """
     获取指定位置的天气预报
     
@@ -411,7 +414,7 @@ from SimpleLLMFunc.tool import tool
 from SimpleLLMFunc.type import ImgPath, ImgUrl
 
 @tool(name="generate_chart", description="根据数据生成图表")
-def generate_chart(data: str, chart_type: str = "bar") -> ImgPath:
+async def generate_chart(data: str, chart_type: str = "bar") -> ImgPath:
     """
     根据提供的数据生成图表
     
@@ -428,7 +431,7 @@ def generate_chart(data: str, chart_type: str = "bar") -> ImgPath:
     return ImgPath(chart_path)
 
 @tool(name="search_web_image", description="搜索网络图片")
-def search_web_image(query: str) -> ImgUrl:
+async def search_web_image(query: str) -> ImgUrl:
     """
     搜索网络图片
     
@@ -571,8 +574,6 @@ SimpleLLMFunc使用分层配置系统：
 
 ```bash
 # 日志相关配置
-LOG_DIR=./logs
-LOG_FILE=agent.log
 LOG_LEVEL=DEBUG
 ```
 
