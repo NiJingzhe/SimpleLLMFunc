@@ -1,4 +1,13 @@
-"""Core execution pipeline handling LLM and tool-call orchestration."""
+"""Core execution pipeline handling LLM and tool-call orchestration.
+
+This module implements the ReAct (Reasoning and Acting) pattern for orchestrating
+LLM calls with tool usage. It manages:
+1. Initial LLM invocation with or without streaming
+2. Tool call extraction and execution
+3. Iterative LLM-tool interaction loops
+4. Message history management and context preservation
+5. Maximum tool call limit enforcement
+"""
 
 from __future__ import annotations
 
@@ -33,7 +42,27 @@ async def execute_llm(
 	stream: bool = False,
 	**llm_kwargs,
 ) -> AsyncGenerator[Any, None]:
-	"""Execute LLM calls and orchestrate iterative tool usage."""
+	"""Execute LLM calls and orchestrate iterative tool usage.
+	
+	Implements the ReAct (Reasoning and Acting) pattern by:
+	1. Making an initial LLM call (streaming or non-streaming)
+	2. Extracting tool calls from the response
+	3. Executing the requested tools via tool_map
+	4. Feeding tool results back to the LLM
+	5. Repeating steps 2-4 until no more tools are called or max_tool_calls is reached
+	
+	Args:
+		llm_interface: The LLM service interface for making chat requests.
+		messages: Initial message history to send to the LLM.
+		tools: Optional list of tool definitions available to the LLM.
+		tool_map: Mapping of tool names to their async callable implementations.
+		max_tool_calls: Maximum number of tool call iterations before forcing termination.
+		stream: Whether to stream responses or return complete responses.
+		**llm_kwargs: Additional keyword arguments to pass to the LLM interface.
+	
+	Yields:
+		Responses from the LLM (either complete responses or stream chunks).
+	"""
 
 	func_name = get_current_context_attribute("function_name") or "Unknown Function"
 
@@ -41,14 +70,13 @@ async def execute_llm(
 	call_count = 0
 
 	push_debug(
-		f"LLM 函数 '{func_name}' 将要发起初始请求，消息数: {len(current_messages)}",
+		f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
 		location=get_location(),
 	)
 
+	# Phase 1: Initial LLM call
 	if stream:
-		push_debug(f"LLM 函数 '{func_name}' 使用流式响应", location=get_location())
-		push_debug(f"LLM 函数 '{func_name}' 初始流式响应开始", location=get_location())
-
+		# Handle streaming response
 		content = ""
 		tool_call_chunks: List[Dict[str, Any]] = []
 
@@ -63,16 +91,11 @@ async def execute_llm(
 
 		tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
 	else:
-		push_debug(f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location())
+		# Handle non-streaming response
 		initial_response = await llm_interface.chat(
 			messages=current_messages,
 			tools=tools,
 			**llm_kwargs,
-		)
-
-		push_debug(
-			f"LLM 函数 '{func_name}' 初始响应: {initial_response}",
-			location=get_location(),
 		)
 
 		content = extract_content_from_response(initial_response, func_name)
@@ -80,10 +103,11 @@ async def execute_llm(
 		yield initial_response
 
 	push_debug(
-		f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
+		f"LLM 函数 '{func_name}' 初始响应已获取，工具调用数: {len(tool_calls)}",
 		location=get_location(),
 	)
 
+	# Append assistant response to message history
 	if content.strip() != "":
 		assistant_message = build_assistant_response_message(content)
 		current_messages.append(assistant_message)
@@ -92,20 +116,16 @@ async def execute_llm(
 		assistant_tool_call_message = build_assistant_tool_message(tool_calls)
 		current_messages.append(assistant_tool_call_message)
 	else:
-		push_debug("未发现工具调用，直接返回结果", location=get_location())
+		# No tool calls, return final result
 		app_log(
-			f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+			f"LLM 函数 '{func_name}' 完成执行",
 			location=get_location(),
 		)
 		return
 
+	# Phase 2: Tool calling loop
 	push_debug(
-		f"LLM 函数 '{func_name}' 抽取工具后构建的完整消息: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
-		location=get_location(),
-	)
-
-	push_debug(
-		f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用，开始执行工具",
+		f"LLM 函数 '{func_name}' 开始执行 {len(tool_calls)} 个工具调用",
 		location=get_location(),
 	)
 
@@ -118,18 +138,14 @@ async def execute_llm(
 	)
 
 	while call_count < max_tool_calls:
+		# Phase 3: Iterative LLM-tool interaction
 		push_debug(
-			f"LLM 函数 '{func_name}' 工具调用循环: 第 {call_count}/{max_tool_calls} 次返回工具响应",
+			f"LLM 函数 '{func_name}' 工具调用循环 (次数: {call_count})",
 			location=get_location(),
 		)
 
 		if stream:
-			push_debug(f"LLM 函数 '{func_name}' 使用流式响应", location=get_location())
-			push_debug(
-				f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM流式响应开始",
-				location=get_location(),
-			)
-
+			# Handle streaming response after tool calls
 			content = ""
 			tool_call_chunks = []
 			async for chunk in llm_interface.chat_stream(
@@ -144,29 +160,18 @@ async def execute_llm(
 				yield chunk
 			tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
 		else:
-			push_debug(
-				f"LLM 函数 '{func_name}' 使用非流式响应", location=get_location()
-			)
+			# Handle non-streaming response after tool calls
 			response = await llm_interface.chat(
 				messages=current_messages,
 				tools=tools,
 				**llm_kwargs,
 			)
 
-			push_debug(
-				f"LLM 函数 '{func_name}' 第 {call_count} 次工具调用返回后，LLM，响应: {response}",
-				location=get_location(),
-			)
-
 			content = extract_content_from_response(response, func_name)
 			tool_calls = extract_tool_calls(response)
 			yield response
 
-		push_debug(
-			f"LLM 函数 '{func_name}' 初始响应中抽取的content是: {content}",
-			location=get_location(),
-		)
-
+		# Append new assistant response to message history
 		if content.strip() != "":
 			assistant_message = build_assistant_response_message(content)
 			current_messages.append(assistant_message)
@@ -175,24 +180,21 @@ async def execute_llm(
 			assistant_tool_call_message = build_assistant_tool_message(tool_calls)
 			current_messages.append(assistant_tool_call_message)
 
-		push_debug(
-			f"LLM 函数 '{func_name}' 抽取工具后构建的完整消息: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
-			location=get_location(),
-		)
-
 		if len(tool_calls) == 0:
+			# No more tool calls, exit loop
 			push_debug(
-				f"LLM 函数 '{func_name}' 没有更多工具调用，返回最终响应",
+				f"LLM 函数 '{func_name}' 无更多工具调用，返回最终结果",
 				location=get_location(),
 			)
 			app_log(
-				f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+				f"LLM 函数 '{func_name}' 完成执行",
 				location=get_location(),
 			)
 			return
 
+		# Continue with next iteration of tool calls
 		push_debug(
-			f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个新的工具调用",
+			f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用",
 			location=get_location(),
 		)
 
@@ -204,8 +206,9 @@ async def execute_llm(
 
 		call_count += 1
 
+	# Phase 4: Handle max_tool_calls limit reached
 	push_debug(
-		f"LLM 函数 '{func_name}' 达到最大工具调用次数 ({max_tool_calls})，强制结束并获取最终响应",
+		f"LLM 函数 '{func_name}' 达到最大工具调用次数限制 ({max_tool_calls})",
 		location=get_location(),
 	)
 
@@ -215,7 +218,7 @@ async def execute_llm(
 	)
 
 	app_log(
-		f"LLM 函数 '{func_name}' 本次调用的完整messages: {json.dumps(current_messages, ensure_ascii=False, indent=2)}",
+		f"LLM 函数 '{func_name}' 完成执行",
 		location=get_location(),
 	)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Awaitable, Callable, Dict, List, Optional, TypedDict
 
@@ -43,257 +44,238 @@ def is_valid_tool_result(result: Any) -> bool:
         return False
 
 
-async def process_tool_calls(
-    tool_calls: List[Dict[str, Any]],
-    messages: List[Dict[str, Any]],
+async def _execute_single_tool_call(
+    tool_call: Dict[str, Any],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
-) -> List[Dict[str, Any]]:
-    """Execute tool calls and append results to the message history."""
+) -> tuple[int, List[Dict[str, Any]]]:
+    """Execute a single tool call and return its results.
+    
+    Returns:
+        Tuple of (original_index, list_of_messages_to_append)
+    """
+    
+    tool_call_id = tool_call.get("id")
+    function_call = tool_call.get("function", {})
+    tool_name = function_call.get("name")
+    arguments_str = function_call.get("arguments", "{}")
+    messages_to_append: List[Dict[str, Any]] = []
 
-    current_messages = messages
+    if tool_name not in tool_map:
+        push_error(f"工具 '{tool_name}' 不在可用工具列表中")
+        tool_error_message = {
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": json.dumps(
+                {"error": f"找不到工具 '{tool_name}'"}, ensure_ascii=False, indent=2
+            ),
+        }
+        messages_to_append.append(tool_error_message)
+        return (id(tool_call), messages_to_append)
 
-    for tool_call in tool_calls:
-        tool_call_id = tool_call.get("id")
-        function_call = tool_call.get("function", {})
-        tool_name = function_call.get("name")
-        arguments_str = function_call.get("arguments", "{}")
+    try:
+        arguments = json.loads(arguments_str)
 
-        if tool_name not in tool_map:
-            push_error(f"工具 '{tool_name}' 不在可用工具列表中")
-            tool_error_message = {
+        push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
+        tool_func = tool_map[tool_name]
+        tool_result = await tool_func(**arguments)
+
+        if not is_valid_tool_result(tool_result):
+            push_warning(
+                f"工具 '{tool_name}' 返回了不支持的格式: {type(tool_result)}。支持的返回格式包括: str, JSON可序列化对象, ImgPath, ImgUrl, Tuple[str, ImgPath], Tuple[str, ImgUrl]",
+                location=get_location(),
+            )
+            tool_result_content_json: str = json.dumps(
+                str(tool_result), ensure_ascii=False, indent=2
+            )
+            tool_message = {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps(
-                    {"error": f"找不到工具 '{tool_name}'"}, ensure_ascii=False, indent=2
-                ),
+                "content": tool_result_content_json,
             }
-            current_messages.append(tool_error_message)
-            continue
+            messages_to_append.append(tool_message)
+            return (id(tool_call), messages_to_append)
 
-        try:
-            arguments = json.loads(arguments_str)
+        if isinstance(tool_result, ImgUrl):
+            image_content = {
+                "type": "image_url",
+                "image_url": {
+                    "url": tool_result.url,
+                    "detail": tool_result.detail,
+                },
+            }
 
-            push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
-            tool_func = tool_map[tool_name]
-            tool_result = await tool_func(**arguments)
+            user_multimodal_message = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"这是工具 '{tool_name}' 返回的图像：",
+                    },
+                    image_content,
+                ],
+            }
+            messages_to_append.append(user_multimodal_message)
+            return (id(tool_call), messages_to_append)
 
-            if not is_valid_tool_result(tool_result):
-                push_warning(
-                    f"工具 '{tool_name}' 返回了不支持的格式: {type(tool_result)}。支持的返回格式包括: str, JSON可序列化对象, ImgPath, ImgUrl, Tuple[str, ImgPath], Tuple[str, ImgUrl]",
-                    location=get_location(),
-                )
-                tool_result_content_json: str = json.dumps(
-                    str(tool_result), ensure_ascii=False, indent=2
-                )
-                tool_message = {
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": tool_result_content_json,
-                }
-                current_messages.append(tool_message)
-                continue
+        if isinstance(tool_result, ImgPath):
+            base64_img = tool_result.to_base64()
+            mime_type = tool_result.get_mime_type()
+            data_url = f"data:{mime_type};base64,{base64_img}"
 
-            from SimpleLLMFunc.base.messages import (
-                create_image_path_content,
-                create_image_url_content,
-                create_text_content,
-            )
+            image_content = {
+                "type": "image_url",
+                "image_url": {
+                    "url": data_url,
+                    "detail": tool_result.detail,
+                },
+            }
 
-            if isinstance(tool_result, ImgUrl):
+            user_multimodal_message = {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"这是工具 '{tool_name}' 返回的图像文件：",
+                    },
+                    image_content,
+                ],
+            }
+            messages_to_append.append(user_multimodal_message)
+            return (id(tool_call), messages_to_append)
+
+        if isinstance(tool_result, tuple) and len(tool_result) == 2:
+            text_part, img_part = tool_result
+            if isinstance(text_part, str) and isinstance(img_part, ImgUrl):
                 image_content = {
                     "type": "image_url",
                     "image_url": {
-                        "url": tool_result.url,
-                        "detail": tool_result.detail,
+                        "url": img_part.url,
+                        "detail": img_part.detail,
                     },
                 }
-
-                if (
-                    current_messages
-                    and current_messages[-1].get("role") == "assistant"
-                    and current_messages[-1].get("tool_calls")
-                ):
-                    current_messages[-1] = {
-                        "role": "assistant",
-                        "content": f"我将会通过工具 '{tool_name}' 获取目标的图像",
-                    }
 
                 user_multimodal_message = {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": f"这是工具 '{tool_name}' 返回的图像：",
+                            "text": f"这是工具 '{tool_name}' 返回的图像和说明：{text_part}",
                         },
                         image_content,
                     ],
                 }
-                current_messages.append(user_multimodal_message)
-                continue
+                messages_to_append.append(user_multimodal_message)
+                return (id(tool_call), messages_to_append)
 
-            if isinstance(tool_result, ImgPath):
-                base64_img = tool_result.to_base64()
-                mime_type = tool_result.get_mime_type()
+            if isinstance(text_part, str) and isinstance(img_part, ImgPath):
+                base64_img = img_part.to_base64()
+                mime_type = img_part.get_mime_type()
                 data_url = f"data:{mime_type};base64,{base64_img}"
 
                 image_content = {
                     "type": "image_url",
                     "image_url": {
                         "url": data_url,
-                        "detail": tool_result.detail,
+                        "detail": img_part.detail,
                     },
                 }
-
-                if (
-                    current_messages
-                    and current_messages[-1].get("role") == "assistant"
-                    and current_messages[-1].get("tool_calls")
-                ):
-                    current_messages[-1] = {
-                        "role": "assistant",
-                        "content": f"我将要调用工具 '{tool_name}' 获取图像文件",
-                    }
 
                 user_multimodal_message = {
                     "role": "user",
                     "content": [
                         {
                             "type": "text",
-                            "text": f"这是工具 '{tool_name}' 返回的图像文件：",
+                            "text": f"这是工具 '{tool_name}' 返回的图像文件和说明：{text_part}",
                         },
                         image_content,
                     ],
                 }
-                current_messages.append(user_multimodal_message)
-                continue
+                messages_to_append.append(user_multimodal_message)
+                return (id(tool_call), messages_to_append)
 
-            if isinstance(tool_result, tuple) and len(tool_result) == 2:
-                text_part, img_part = tool_result
-                if isinstance(text_part, str) and isinstance(img_part, ImgUrl):
-                    image_content = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": img_part.url,
-                            "detail": img_part.detail,
-                        },
-                    }
-
-                    if (
-                        current_messages
-                        and current_messages[-1].get("role") == "assistant"
-                        and current_messages[-1].get("tool_calls")
-                    ):
-                        current_messages[-1] = {
-                            "role": "assistant",
-                            "content": f"我将会通过工具 '{tool_name}' 获取目标的图像，并提供说明文本",
-                        }
-
-                    user_multimodal_message = {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"这是工具 '{tool_name}' 返回的图像和说明：{text_part}",
-                            },
-                            image_content,
-                        ],
-                    }
-                    current_messages.append(user_multimodal_message)
-                    continue
-
-                if isinstance(text_part, str) and isinstance(img_part, ImgPath):
-                    base64_img = img_part.to_base64()
-                    mime_type = img_part.get_mime_type()
-                    data_url = f"data:{mime_type};base64,{base64_img}"
-
-                    image_content = {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": data_url,
-                            "detail": img_part.detail,
-                        },
-                    }
-
-                    if (
-                        current_messages
-                        and current_messages[-1].get("role") == "assistant"
-                        and current_messages[-1].get("tool_calls")
-                    ):
-                        current_messages[-1] = {
-                            "role": "assistant",
-                            "content": f"我将要调用工具 '{tool_name}' 获取图像文件，并提供说明文本",
-                        }
-
-                    user_multimodal_message = {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"这是工具 '{tool_name}' 返回的图像文件和说明：{text_part}",
-                            },
-                            image_content,
-                        ],
-                    }
-                    current_messages.append(user_multimodal_message)
-                    continue
-
-                tool_result_content_json = json.dumps(
-                    tool_result, ensure_ascii=False, indent=2
-                )
-                tool_message = {
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": tool_result_content_json,
-                }
-                current_messages.append(tool_message)
-                push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_content_json}")
-                continue
-
-            if isinstance(tool_result, (Text, str)):
-                tool_result_content_json = json.dumps(
-                    tool_result, ensure_ascii=False, indent=2
-                )
-
-                tool_message = {
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": tool_result_content_json,
-                }
-            else:
-                tool_result_content_json = json.dumps(
-                    tool_result, ensure_ascii=False, indent=2
-                )
-
-                tool_message = {
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": tool_result_content_json,
-                }
-
-            current_messages.append(tool_message)
-
-            if isinstance(tool_result, (ImgUrl, ImgPath)):
-                push_debug(
-                    f"工具 '{tool_name}' 执行完成: image payload",
-                    location=get_location(),
-                )
-            else:
-                push_debug(
-                    f"工具 '{tool_name}' 执行完成: {json.dumps(tool_result, ensure_ascii=False)}"
-                )
-
-        except Exception as exc:
-            error_message = f"工具 '{tool_name}' 以参数 {arguments_str} 在执行或结果解析中出错，错误: {str(exc)}"
-            push_error(error_message)
-
-            tool_error_message = {
+            tool_result_content_json = json.dumps(
+                tool_result, ensure_ascii=False, indent=2
+            )
+            tool_message = {
                 "role": "tool",
                 "tool_call_id": tool_call_id,
-                "content": json.dumps(
-                    {"error": error_message}, ensure_ascii=False, indent=2
-                ),
+                "content": tool_result_content_json,
             }
-            current_messages.append(tool_error_message)
+            messages_to_append.append(tool_message)
+            push_debug(f"工具 '{tool_name}' 执行完成: {tool_result_content_json}")
+            return (id(tool_call), messages_to_append)
+
+        if isinstance(tool_result, (Text, str)):
+            tool_result_content_json = json.dumps(
+                tool_result, ensure_ascii=False, indent=2
+            )
+
+            tool_message = {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": tool_result_content_json,
+            }
+        else:
+            tool_result_content_json = json.dumps(
+                tool_result, ensure_ascii=False, indent=2
+            )
+
+            tool_message = {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": tool_result_content_json,
+            }
+
+        messages_to_append.append(tool_message)
+
+        if isinstance(tool_result, (ImgUrl, ImgPath)):
+            push_debug(
+                f"工具 '{tool_name}' 执行完成: image payload",
+                location=get_location(),
+            )
+        else:
+            push_debug(
+                f"工具 '{tool_name}' 执行完成: {json.dumps(tool_result, ensure_ascii=False)}"
+            )
+
+    except Exception as exc:
+        error_message = f"工具 '{tool_name}' 以参数 {arguments_str} 在执行或结果解析中出错，错误: {str(exc)}"
+        push_error(error_message)
+
+        tool_error_message = {
+            "role": "tool",
+            "tool_call_id": tool_call_id,
+            "content": json.dumps(
+                {"error": error_message}, ensure_ascii=False, indent=2
+            ),
+        }
+        messages_to_append.append(tool_error_message)
+
+    return (id(tool_call), messages_to_append)
+
+
+async def process_tool_calls(
+    tool_calls: List[Dict[str, Any]],
+    messages: List[Dict[str, Any]],
+    tool_map: Dict[str, Callable[..., Awaitable[Any]]],
+) -> List[Dict[str, Any]]:
+    """Execute tool calls concurrently and append results to the message history.
+    
+    All tool calls are executed in parallel using structured concurrency with asyncio.gather(),
+    then results are appended to messages in the original order.
+    """
+
+    if not tool_calls:
+        return messages
+
+    # Execute all tool calls concurrently
+    tasks = [_execute_single_tool_call(tool_call, tool_map) for tool_call in tool_calls]
+    results = await asyncio.gather(*tasks)
+
+    # Append results in original order
+    current_messages = messages
+    for _, messages_to_append in results:
+        current_messages.extend(messages_to_append)
 
     return current_messages
 

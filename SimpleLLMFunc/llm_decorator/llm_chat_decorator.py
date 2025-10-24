@@ -8,7 +8,6 @@ from typing import (
     Awaitable,
     Callable,
     Dict,
-    Generator,
     List,
     Optional,
     ParamSpec,
@@ -39,19 +38,20 @@ from SimpleLLMFunc.logger import (
     push_warning,
 )
 from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc.llm_decorator.utils import process_tools
 
-# 类型别名定义
-MessageDict = Dict[str, Any]  # 表示消息字典
-HistoryList = List[MessageDict]  # 表示历史记录列表
-ToolkitList = List[Union[Tool, Callable[..., Awaitable[Any]]]]  # 表示工具列表
+# Type aliases
+MessageDict = Dict[str, Any]  # Dictionary representing a message
+HistoryList = List[MessageDict]  # List of message dictionaries representing conversation history
+ToolkitList = List[Union[Tool, Callable[..., Awaitable[Any]]]]  # List of Tool objects or async functions
 
-# 类型变量定义
+# Type variables
 T = TypeVar("T")
 P = ParamSpec("P")
 
-# 常量定义
-HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]  # 历史记录参数名列表
-DEFAULT_MAX_TOOL_CALLS: int = 5  # 默认最大工具调用次数
+# Constants
+HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]  # Valid parameter names for conversation history
+DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls to prevent infinite loops
 
 
 def llm_chat(
@@ -61,70 +61,74 @@ def llm_chat(
     stream: bool = False,
     return_mode: Literal["text", "raw"] = "text",
     **llm_kwargs: Any,
-) -> Callable[[Callable[P, Any]], Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]]:
+) -> Callable[
+    [Union[Callable[P, Any], Callable[P, Awaitable[Any]]]],
+    Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]
+]:
     """
-    异步LLM聊天装饰器，用于实现与大语言模型的异步对话功能，支持工具调用和历史记录管理。
+    Async LLM chat decorator for implementing asynchronous conversational interactions with 
+    large language models, with support for tool calling and conversation history management.
 
-    此装饰器仅提供原生异步支持，返回 AsyncGenerator。
+    This decorator provides native async support and returns an AsyncGenerator.
 
-    ## 功能特性
-    - 自动管理对话历史记录
-    - 支持工具调用和函数执行
-    - 支持多模态内容（文本、图片URL、本地图片）
-    - 支持流式响应
-    - 自动过滤和清理历史记录
-    - 原生异步支持，无阻塞执行
+    ## Features
+    - Automatic conversation history management
+    - Tool calling and function execution support
+    - Multimodal content support (text, image URLs, local images)
+    - Streaming response support
+    - Automatic history filtering and cleanup
+    - Native async support with non-blocking execution
 
-    ## 参数传递规则
-    - 装饰器会将函数参数以 `参数名: 参数值` 的形式作为用户消息传递给LLM
-    - `history`/`chat_history` 参数作为特殊参数处理，不会包含在用户消息中
-    - 函数的文档字符串会作为系统提示传递给LLM
+    ## Parameter Passing Rules
+    - Decorator passes function parameters as `param_name: param_value` format to the LLM as user messages
+    - `history`/`chat_history` parameters are treated specially and excluded from user messages
+    - Function docstring is passed to the LLM as system prompt
 
-    ## 历史记录格式要求
+    ## Conversation History Format
     ```python
     [
-        {"role": "user", "content": "用户消息"},
-        {"role": "assistant", "content": "助手回复"},
-        {"role": "system", "content": "系统消息"}
+        {"role": "user", "content": "user message"},
+        {"role": "assistant", "content": "assistant response"},
+        {"role": "system", "content": "system message"}
     ]
     ```
 
-    ## 返回值格式
+    ## Return Value Format
     ```python
     AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]
     ```
-    - `str`: 助手的响应内容
-    - `List[Dict[str, str]]`: 过滤后的对话历史记录（不含工具调用信息）
+    - `str`: Assistant's response content
+    - `List[Dict[str, str]]`: Filtered conversation history (excluding tool call information)
 
     Args:
-        llm_interface: LLM接口实例，用于与大语言模型通信
-        toolkit: 可选的工具列表，可以是Tool对象或被@tool装饰的函数
-        max_tool_calls: 最大工具调用次数，防止无限循环
-        stream: 是否使用流式响应
-        return_mode: 返回模式，可选值为 "text" 或 "raw"，默认值为 "text"，
-            "text" 模式下，返回的响应内容为字符串，历史记录为 List[Dict[str, str]]
-            "raw" 模式下，返回的响应内容为原始 OAI API 响应，历史记录为 List[Dict[str, str]]
-        **llm_kwargs: 额外的关键字参数，将直接传递给LLM接口
+        llm_interface: LLM interface instance for communicating with the language model
+        toolkit: Optional list of tools, can be Tool objects or functions decorated with @tool
+        max_tool_calls: Maximum number of tool calls to prevent infinite loops
+        stream: Whether to use streaming responses
+        return_mode: Return mode, either "text" or "raw" (default: "text")
+            - "text" mode: returns response as string, history as List[Dict[str, str]]
+            - "raw" mode: returns raw OAI API response, history as List[Dict[str, str]]
+        **llm_kwargs: Additional keyword arguments passed directly to the LLM interface
 
     Returns:
-        装饰后的函数，返回异步生成器，每次迭代返回(响应内容, 更新后的历史记录)
+        Decorated async generator function that yields (response_content, updated_history) tuples
 
     Example:
         ```python
         @llm_chat(llm_interface=my_llm)
         async def chat_with_llm(message: str, history: List[Dict[str, str]] = []):
-            '''系统提示信息'''
+            '''System prompt information'''
             pass
 
-        async for response, updated_history in chat_with_llm("你好", history=[]):
+        async for response, updated_history in chat_with_llm("Hello", history=[]):
             print(response)
         ```
     """
 
     def decorator(
-        func: Callable[P, Any],
+        func: Union[Callable[P, Any], Callable[P, Awaitable[Any]]],
     ) -> Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]:
-        # 获取函数元信息
+        # Extract function metadata
         signature: inspect.Signature = inspect.signature(func)
         type_hints: Dict[str, Any] = get_type_hints(func)
         docstring: str = func.__doc__ or ""
@@ -132,13 +136,13 @@ def llm_chat(
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # 生成唯一的追踪ID
+            # Generate unique trace ID for request tracking
             context_trace_id: Optional[str] = get_current_trace_id()
             current_trace_id: str = f"{func_name}_{uuid.uuid4()}"
             if context_trace_id:
                 current_trace_id += f"_{context_trace_id}"
 
-            # 使用异步的日志上下文
+            # Use async logging context
             async with async_log_context(
                 trace_id=current_trace_id,
                 function_name=func_name,
@@ -157,12 +161,12 @@ def llm_chat(
                     max_tool_calls=max_tool_calls,
                     stream=stream,
                     return_mode=return_mode,
-                    use_log_context=False,  # 不在异步实现中使用日志上下文
+                    use_log_context=False,  # Log context already set in wrapper
                     **llm_kwargs,
                 ):
                     yield result
 
-        # 保留原始函数的元数据
+        # Preserve original function metadata
         wrapper.__name__ = func.__name__
         wrapper.__doc__ = func.__doc__
         wrapper.__annotations__ = func.__annotations__
@@ -193,49 +197,53 @@ async def _async_llm_chat_impl(
 ) -> AsyncGenerator[Tuple[Any, HistoryList], None]:
     
     """
-    共享的异步LLM聊天实现逻辑
+    Shared async LLM chat implementation logic.
+
+    Handles the core workflow of extracting arguments, building messages, 
+    processing tools, and streaming responses from the LLM.
 
     Args:
-        func_name: 函数名称
-        signature: 函数签名
-        type_hints: 类型提示
-        docstring: 文档字符串
-        args: 位置参数
-        kwargs: 关键字参数
-        llm_interface: LLM接口
-        toolkit: 工具列表
-        max_tool_calls: 最大工具调用次数
-        stream: 是否流式响应
-        use_log_context: 是否使用异步日志上下文
-        **llm_kwargs: 额外的LLM参数
+        func_name: Name of the decorated function
+        signature: Function signature for parameter binding
+        type_hints: Type hints for the function parameters
+        docstring: Function docstring to be used as system prompt
+        args: Positional arguments passed to the function
+        kwargs: Keyword arguments passed to the function
+        llm_interface: LLM interface instance for API calls
+        toolkit: List of available tools for the LLM to call
+        max_tool_calls: Maximum number of tool calls to prevent infinite loops
+        stream: Whether to stream responses from the LLM
+        return_mode: Response format ("text" or "raw")
+        use_log_context: Whether to wrap execution in async logging context
+        **llm_kwargs: Additional LLM interface parameters
 
     Yields:
-        (响应内容, 更新后的历史记录) 元组
+        Tuples of (response_content, updated_conversation_history)
     """
-    # 绑定参数到函数签名
+    # Bind arguments to function signature with defaults applied
     bound_args: inspect.BoundArguments = signature.bind(*args, **kwargs)
     bound_args.apply_defaults()
 
     async def _execute_impl() -> AsyncGenerator[Tuple[Any, HistoryList], None]:
-        # 1. 处理工具
+        # Step 1: Process and validate tools
         tool_param_for_api: Optional[List[Dict[str, Any]]]
         tool_map: Dict[str, Callable[..., Awaitable[Any]]]
         tool_param_for_api, tool_map = _process_tools(toolkit, func_name)
 
-        # 2. 检查多模态内容
+        # Step 2: Check for multimodal content in arguments
         has_multimodal: bool = has_multimodal_content(
             bound_args.arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
         )
 
-        # 3. 构建用户消息
+        # Step 3: Build user message content (text or multimodal)
         user_message_content: Union[str, List[Dict[str, Any]]] = _build_user_message_content(
             bound_args.arguments, type_hints, has_multimodal
         )
 
-        # 4. 处理历史记录
+        # Step 4: Extract and validate conversation history from arguments
         custom_history: Optional[HistoryList] = _extract_history_from_args(bound_args.arguments, func_name)
 
-        # 5. 构建完整消息列表
+        # Step 5: Construct complete message list (system + history + user message)
         current_messages: HistoryList = _build_messages(
             docstring,
             custom_history,
@@ -244,14 +252,14 @@ async def _async_llm_chat_impl(
             has_multimodal,
         )
 
-        # 6. 记录调试信息
+        # Step 6: Log debug information about prepared messages
         push_debug(
-            f"LLM Chat '{func_name}' 将使用以下消息执行:"
+            f"LLM Chat '{func_name}' will execute with messages:"
             f"\n{json.dumps(current_messages, ensure_ascii=False, indent=2)}",
             location=get_location(),
         )
 
-        # 7. 执行LLM调用并处理响应
+        # Step 7: Execute LLM call and begin response streaming
         complete_content: str = ""
         response_flow = execute_llm(
             llm_interface=llm_interface,
@@ -263,18 +271,19 @@ async def _async_llm_chat_impl(
             **llm_kwargs,
         )
 
-        # 8. 处理响应流（异步迭代）
+        # Step 8: Process response stream (async iteration over LLM responses)
         async for response in response_flow:
             app_log(
-                f"LLM Chat '{func_name}' 收到响应:"
+                f"LLM Chat '{func_name}' received response:"
                 f"\n{json.dumps(response, default=str, ensure_ascii=False, indent=2)}",
                 location=get_location(),
             )
 
             if return_mode == "raw":
+                # Return raw API response
                 yield response, current_messages
             else:
-                # 根据流式与否选择正确的内容抽取器
+                # Extract content based on stream mode
                 if stream:
                     content = extract_content_from_stream_response(response, func_name)
                 else:
@@ -282,14 +291,13 @@ async def _async_llm_chat_impl(
                 complete_content += content
                 yield content, current_messages
 
-        # 9. 添加最终响应到历史记录
-        # current_messages.append({"role": "assistant", "content": complete_content})
+        # Step 9: Emit final empty content to signal stream completion
         if return_mode == "text":
-            # 仅在文本模式下保留一个空串以标识流结束
+            # Emit empty string to indicate end of stream in text mode
             yield "", current_messages
 
     if use_log_context:
-        # 生成唯一的追踪ID
+        # Generate unique trace ID for request tracking
         context_trace_id = get_current_trace_id()
         current_trace_id = f"{func_name}_{uuid.uuid4()}"
         if context_trace_id:
@@ -306,18 +314,18 @@ async def _async_llm_chat_impl(
                     yield result
             except Exception as e:
                 push_error(
-                    f"LLM Chat '{func_name}' 执行出错: {str(e)}",
+                    f"LLM Chat '{func_name}' execution failed: {str(e)}",
                     location=get_location(),
                 )
                 raise
     else:
-        # 不使用日志上下文，直接执行
+        # Execute without additional logging context
         try:
             async for result in _execute_impl():
                 yield result
         except Exception as e:
             push_error(
-                f"LLM Chat '{func_name}' 执行出错: {str(e)}",
+                f"LLM Chat '{func_name}' execution failed: {str(e)}",
                 location=get_location(),
             )
             raise
@@ -325,83 +333,46 @@ async def _async_llm_chat_impl(
 async_llm_chat = llm_chat
 
 
-# ===== 核心辅助函数 =====
+# ===== Core Helper Functions =====
 
 
 def _process_tools(
     toolkit: Optional[ToolkitList], func_name: str
 ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Awaitable[Any]]]]:
     """
-    处理工具列表，返回API所需的工具参数和工具映射
+    Process and validate tool list, returning API-ready tool parameters and tool mapping.
+    
+    Wrapper around the process_tools utility function.
 
     Args:
-        toolkit: 工具列表
-        func_name: 函数名，用于日志记录
+        toolkit: List of Tool objects or async callable functions
+        func_name: Function name for logging and error messages
 
     Returns:
-    (tool_param_for_api, tool_map): API工具参数和工具名称到函数的映射
+        Tuple of (tool_param_for_api, tool_map):
+            - tool_param_for_api: Tool definitions formatted for LLM API
+            - tool_map: Mapping from tool names to callable implementations
     """
-    if not toolkit:
-        return None, {}
-
-    tool_objects: List[Union[Tool, Callable[..., Awaitable[Any]]]] = []
-    tool_map: Dict[str, Callable[..., Awaitable[Any]]] = {}
-
-    for tool in toolkit:
-        if isinstance(tool, Tool):
-            # Tool对象直接添加
-            if not inspect.iscoroutinefunction(tool.run):
-                raise TypeError(
-                    f"LLM函数 '{func_name}': Tool '{tool.name}' 必须实现 async run 方法"
-                )
-            tool_objects.append(tool)
-            tool_map[tool.name] = tool.run
-        elif callable(tool) and hasattr(tool, "_tool"):
-            # @tool装饰的函数
-            if not inspect.iscoroutinefunction(tool):
-                raise TypeError(
-                    f"LLM函数 '{func_name}': 被 @tool 装饰的函数 '{tool.__name__}' 必须是 async 函数"
-                )
-            tool_obj = getattr(tool, "_tool", None)
-            assert isinstance(
-                tool_obj, Tool
-            ), "这一定是一个Tool对象，不会是None！是None我赤石"
-            tool_objects.append(tool_obj)
-            tool_map[tool_obj.name] = tool_obj.run
-        else:
-            push_warning(
-                f"LLM函数 '{func_name}': 不支持的工具类型 {type(tool)}，"
-                "工具必须是Tool对象或被@tool装饰的函数",
-                location=get_location(),
-            )
-
-    # serialize_tools 接受 List[Tool | Callable[..., Awaitable[Any]]]；此处 tool_objects 已满足要求
-    tool_param_for_api: Optional[List[Dict[str, Any]]] = (
-        Tool.serialize_tools(tool_objects) if tool_objects else None
-    )
-
-    push_debug(
-        f"LLM Chat '{func_name}' 加载了 {len(tool_objects)} 个工具",
-        location=get_location(),
-    )
-
-    return tool_param_for_api, tool_map
+    return process_tools(toolkit, func_name)
 
 
 def _extract_history_from_args(
     arguments: Dict[str, Any], func_name: str
 ) -> Optional[HistoryList]:
     """
-    从函数参数中提取历史记录
+    Extract and validate conversation history from function arguments.
+
+    Looks for parameters named 'history' or 'chat_history' and validates 
+    that they conform to the expected format.
 
     Args:
-        arguments: 函数参数字典
-        func_name: 函数名，用于日志记录
+        arguments: Dictionary of function arguments and their values
+        func_name: Function name for logging and error messages
 
     Returns:
-        历史记录列表或None
+        Conversation history list if found and valid, None otherwise
     """
-    # 查找历史记录参数
+    # Find history parameter by name
     history_param_name: Optional[str] = None
     for param_name in HISTORY_PARAM_NAMES:
         if param_name in arguments:
@@ -410,22 +381,22 @@ def _extract_history_from_args(
 
     if not history_param_name:
         push_warning(
-            f"LLM Chat '{func_name}' 缺少历史记录参数"
-            f"（参数名应为 {HISTORY_PARAM_NAMES} 之一），将不传递历史记录",
+            f"LLM Chat '{func_name}' missing history parameter "
+            f"(parameter name should be one of {HISTORY_PARAM_NAMES}). History will not be passed.",
             location=get_location(),
         )
         return None
 
     custom_history: Any = arguments[history_param_name]
 
-    # 验证历史记录格式
+    # Validate history format
     if not (
         isinstance(custom_history, list)
         and all(isinstance(item, dict) for item in custom_history)
     ):
         push_warning(
-            f"LLM Chat '{func_name}' 历史记录参数应为 List[Dict[str, str]] 类型，"
-            "将不传递历史记录",
+            f"LLM Chat '{func_name}' history parameter should be List[Dict[str, str]] type. "
+            "History will not be passed.",
             location=get_location(),
         )
         return None
@@ -437,22 +408,25 @@ def _build_user_message_content(
     arguments: Dict[str, Any], type_hints: Dict[str, Any], has_multimodal: bool
 ) -> Union[str, List[Dict[str, Any]]]:
     """
-    构建用户消息内容
+    Build user message content from function arguments.
+
+    Creates either plain text message or multimodal content list depending 
+    on the presence of multimodal elements (images, etc.).
 
     Args:
-        arguments: 函数参数字典
-        type_hints: 类型提示字典
-        has_multimodal: 是否包含多模态内容
+        arguments: Dictionary of function arguments and their values
+        type_hints: Type hints for the function parameters
+        has_multimodal: Whether multimodal content is present in arguments
 
     Returns:
-        用户消息内容（文本或多模态内容列表）
+        User message content as string (text mode) or list of dicts (multimodal mode)
     """
     if has_multimodal:
         return build_multimodal_content(
             arguments, type_hints, exclude_params=HISTORY_PARAM_NAMES
         )
     else:
-        # 构建传统文本消息，排除历史记录参数
+        # Build traditional text message, excluding history parameters
         message_parts: List[str] = []
         for param_name, param_value in arguments.items():
             if param_name not in HISTORY_PARAM_NAMES:
@@ -468,25 +442,28 @@ def _build_messages(
     has_multimodal: bool,
 ) -> HistoryList:
     """
-    构建完整的消息列表
+    Build complete message list for LLM API call.
+
+    Constructs the full message list including system message (from docstring),
+    conversation history, and the current user message.
 
     Args:
-        docstring: 函数文档字符串
-        custom_history: 用户提供的历史记录
-        user_message_content: 用户消息内容
-        tool_objects: 工具列表
-        has_multimodal: 是否为多模态消息
+        docstring: Function docstring to be used as system prompt
+        custom_history: Conversation history provided by the user
+        user_message_content: Current user message content (text or multimodal)
+        tool_objects: Available tools for the LLM to call
+        has_multimodal: Whether the message contains multimodal content
 
     Returns:
-        完整的消息列表
+        Complete message list ready for LLM API
     """
     messages: HistoryList = []
 
-    # 1. 添加系统消息
+    # Step 1: Add system message from docstring
     if docstring:
         system_content: str = docstring
         if tool_objects:
-            system_content += "\n\n你需要灵活使用以下工具：\n\t" + "\n\t".join(
+            system_content += "\n\nYou can use the following tools flexibly:\n\t" + "\n\t".join(
                 (
                     f"- {tool.name}: {tool.description}"
                     if isinstance(tool, Tool)
@@ -500,7 +477,7 @@ def _build_messages(
             )
         messages.append({"role": "system", "content": system_content})
 
-    # 2. 添加历史记录
+    # Step 2: Add conversation history (excluding system messages)
     if custom_history:
         for msg in custom_history:
             if isinstance(msg, dict) and "role" in msg and "content" in msg:
@@ -508,11 +485,11 @@ def _build_messages(
                     messages.append(msg)
             else:
                 push_warning(
-                    f"跳过格式不正确的历史记录项: {msg}",
+                    f"Skipping malformed history item: {msg}",
                     location=get_location(),
                 )
 
-    # 3. 添加当前用户消息
+    # Step 3: Add current user message
     if user_message_content:
         user_msg: MessageDict = {"role": "user", "content": user_message_content}
         messages.append(user_msg)
