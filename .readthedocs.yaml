@@ -6,12 +6,12 @@ build:
     python: "3.11"
   commands:
     - pip install -r docs/requirements.txt
+    - cd docs && sphinx-build -b html -c . source _build/html
 
 sphinx:
-  configuration: docs/source/conf.py
+  configuration: docs/conf.py
   builder: html
   fail_on_warning: false
 
 formats:
   - htmlzip
-  - pdf
