@@ -19,7 +19,7 @@ class APIKeyPool:
     
     def __init__(self, api_keys: List[str], provider_id: str) -> None:
         # 如果已经初始化，跳过初始化过程
-        if hasattr(self, 'initialized') and self.initialized:
+        if hasattr(self, 'initialized') and self.initialized:   # type: ignore
             return
 
         if len(api_keys) == 0 or api_keys is None:

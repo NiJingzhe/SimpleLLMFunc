@@ -2,9 +2,10 @@ from __future__ import annotations
 import json
 import os
 import asyncio
-from typing import Optional, Dict, Literal, Iterable, Any, AsyncGenerator
-
+from typing import Optional, Dict, Literal, Iterable, Any, AsyncGenerator, override, Coroutine
 from openai import AsyncOpenAI
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from openai.types.chat.chat_completion import ChatCompletion
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.interface.token_bucket import rate_limit_manager
@@ -242,9 +243,7 @@ class OpenAICompatible(LLM_Interface):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
-
         self.model_name = model_name
-
         self.key_pool = api_key_pool
 
         # 创建令牌桶，使用provider和model作为唯一标识
@@ -264,7 +263,7 @@ class OpenAICompatible(LLM_Interface):
         # 如果当前客户端的API密钥不匹配，或者客户端为None，创建新的客户端
         if (
             not hasattr(self, "_current_key")
-            or self._current_key != key
+            or self._current_key != key # type: ignore
             or not hasattr(self, "client")
             or self.client is None
         ):
@@ -293,6 +292,7 @@ class OpenAICompatible(LLM_Interface):
             finally:
                 self.client = None
 
+    @override
     async def chat(
         self,
         trace_id: str = get_current_trace_id(),
@@ -306,7 +306,7 @@ class OpenAICompatible(LLM_Interface):
         timeout: Optional[int] = 30,
         *args,
         **kwargs,
-    ) -> Dict[Any, Any]:
+    ) -> ChatCompletion:
         """执行非流式LLM对话请求
 
         Args:
@@ -342,7 +342,7 @@ class OpenAICompatible(LLM_Interface):
                     f"OpenAICompatible::chat: {self.model_name} request with API key: {key}, and message: {data}",
                     location=get_location(),
                 )
-                response: Dict[Any, Any] = await client.chat.completions.create(  # type: ignore
+                response: ChatCompletion = await client.chat.completions.create(  # type: ignore
                     messages=messages,  # type: ignore
                     model=self.model_name,
                     stream=stream,
@@ -389,8 +389,10 @@ class OpenAICompatible(LLM_Interface):
                     )
                     raise e  # 达到最大重试次数后抛出异常
                 await asyncio.sleep(self.retry_delay)  # 重试前等待一段时间
-        return {}  # 添加默认返回以满足类型检查，实际上这行代码永远不会执行
+        return ChatCompletion(id="", choices=[], created=0, model="", object='chat.completion', usage=None)  # 添加默认返回以满足类型检查，实际上这行代码永远不会执行
 
+
+    @override
     async def chat_stream(
         self,
         trace_id: str = get_current_trace_id(),
@@ -404,7 +406,7 @@ class OpenAICompatible(LLM_Interface):
         timeout: Optional[int] = 30,
         *args,
         **kwargs,
-    ) -> AsyncGenerator[Dict[Any, Any], None]:
+    ) -> AsyncGenerator[ChatCompletionChunk, None]:
         """执行流式LLM对话请求
 
         Args:
