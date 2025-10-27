@@ -37,8 +37,8 @@ SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 AP
 #### 返回类型示例
 
 ```python
-from SimpleLLMFunc.tool import tool
-from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+from SimpleLLMFunc import tool
+from SimpleLLMFunc.llm_decorator import ImgUrl, ImgPath
 from typing import Dict, List, Tuple, Any
 
 # 1. 基本类型返回
@@ -117,7 +117,7 @@ async def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 #### 方式一：装饰器方式（推荐）
 
 ```python
-from SimpleLLMFunc.tool import tool
+from SimpleLLMFunc import tool
 
 @tool(name="工具名称", description="工具简短描述")
 async def your_function(param1: Type1, param2: Type2 = default_value) -> ReturnType:
@@ -138,7 +138,7 @@ async def your_function(param1: Type1, param2: Type2 = default_value) -> ReturnT
 #### 方式二：继承方式（兼容旧版本）
 
 ```python
-from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc import Tool
 
 class YourTool(Tool):
     def __init__(self):
@@ -258,7 +258,7 @@ def example_function(param1: str, param2: int = 10):
 ### 装饰器方式示例
 
 ```python
-from SimpleLLMFunc.tool import tool
+from SimpleLLMFunc import tool
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 
@@ -356,7 +356,7 @@ async def analyze_data(
     return result
 
 # 示例5：多模态返回类型
-from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+from SimpleLLMFunc import ImgUrl, ImgPath
 from typing import Tuple
 
 @tool(name="generate_chart", description="生成数据图表")
@@ -456,9 +456,9 @@ async def create_data_visualization(dataset: Dict[str, Any]) -> Tuple[str, ImgUr
 ### 继承方式示例
 
 ```python
-from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc import Tool
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 class WebSearchTool(Tool):
     """网络搜索工具的继承实现方式"""
@@ -527,22 +527,19 @@ class APICallTool(Tool):
 ### 工具使用示例
 
 ```python
-from SimpleLLMFunc.llm_decorator import llm_function, llm_chat
-from SimpleLLMFunc.interface import OpenAICompatible
+import asyncio
+from SimpleLLMFunc import llm_function, llm_chat, OpenAICompatible
 
-# 初始化 LLM
-llm = OpenAICompatible(
-    api_key="your-api-key",
-    base_url="https://api.openai.com/v1",
-    model="gpt-3.5-turbo"
-)
+# 初始化 LLM（从配置文件加载）
+models = OpenAICompatible.load_from_json_file("provider.json")
+llm = models["openai"]["gpt-3.5-turbo"]
 
 # 在 llm_function 中使用工具
 @llm_function(
     llm_interface=llm,
     toolkit=[calculate, search_web, get_weather]
 )
-def intelligent_assistant(query: str) -> str:
+async def intelligent_assistant(query: str) -> str:
     """
     智能助手，可以进行计算、搜索和查询天气。
     根据用户查询的内容，选择合适的工具来提供准确的答案。
@@ -554,27 +551,28 @@ def intelligent_assistant(query: str) -> str:
     llm_interface=llm,
     toolkit=[calculate, search_web, get_weather, analyze_data]
 )
-def chat_with_tools(message: str, history: List[Dict[str, str]] = []):
+async def chat_with_tools(message: str, history: List[Dict[str, str]] | None = None):
     """
     支持工具调用的聊天助手。
     可以执行计算、搜索网络、查询天气和分析数据。
     """
-    pass
+    yield "", history or []
 
 # 使用示例
-if __name__ == "__main__":
+async def main():
     # 使用 llm_function
-    result = intelligent_assistant("帮我计算 25 * 4 + 18 的结果")
+    result = await intelligent_assistant("帮我计算 25 * 4 + 18 的结果")
     print(f"计算结果: {result}")
-    
+
     # 使用 llm_chat
     history = []
-    for response, updated_history in chat_with_tools("北京今天天气怎么样？", history):
+    async for response, updated_history in chat_with_tools("北京今天天气怎么样？", history):
         if response:
             print(response, end="")
-        else:
-            history = updated_history
-            break
+        history = updated_history
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ### 高级用法
@@ -582,7 +580,7 @@ if __name__ == "__main__":
 #### 工具序列化和检查
 
 ```python
-from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc import Tool
 import json
 
 # 创建工具列表
@@ -601,12 +599,12 @@ for tool_spec in openai_tools:
 ```python
 def create_tool_from_config(config: Dict[str, Any]):
     """根据配置动态创建工具"""
-    
+
     @tool(name=config["name"], description=config["description"])
-    def dynamic_tool(**kwargs):
+    async def dynamic_tool(**kwargs):
         # 根据配置执行相应逻辑
         return config["handler"](kwargs)
-    
+
     return dynamic_tool
 
 # 配置示例
@@ -734,7 +732,7 @@ async def robust_image_tool(image_path: str) -> Tuple[str, ImgPath]:
 #### 多模态类型详细说明
 
 ```python
-from SimpleLLMFunc.llm_decorator.multimodal_types import ImgUrl, ImgPath
+from SimpleLLMFunc import ImgUrl, ImgPath
 
 # ImgPath 使用示例
 img_local = ImgPath(

@@ -22,7 +22,7 @@
 ### 基本语法
 
 ```python
-from SimpleLLMFunc.llm_decorator import llm_function
+from SimpleLLMFunc import llm_function
 
 @llm_function(
     llm_interface=llm_interface,
@@ -148,24 +148,11 @@ result1, result2 = asyncio.run(main())
 
 ```python
 import asyncio
-
-from SimpleLLMFunc.llm_decorator import llm_function
-from SimpleLLMFunc.interface import OpenAICompatible
+from SimpleLLMFunc import llm_function, OpenAICompatible
 
 # 初始化 LLM 接口（推荐方式：从配置文件加载）
-llm = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
-
-# 或者直接创建接口
-# from SimpleLLMFunc.interface import APIKeyPool
-# key_pool = APIKeyPool(
-#     api_keys=["your-api-key-1", "your-api-key-2"],
-#     provider_id="openai_gpt-3.5-turbo"
-# )
-# llm = OpenAICompatible(
-#     api_key_pool=key_pool,
-#     model_name="gpt-3.5-turbo",
-#     base_url="https://api.openai.com/v1"
-# )
+models = OpenAICompatible.load_from_json_file("provider.json")
+llm = models["openai"]["gpt-3.5-turbo"]
 
 @llm_function(llm_interface=llm)
 async def summarize_text(text: str, max_words: int = 100) -> str:
@@ -216,8 +203,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
+from SimpleLLMFunc import tool, llm_function, OpenAICompatible
 
-from SimpleLLMFunc.tool import tool
+# 加载模型接口
+models = OpenAICompatible.load_from_json_file("provider.json")
+llm = models["openai"]["gpt-3.5-turbo"]
 
 @tool
 async def search_web(query: str) -> str:
@@ -445,15 +435,11 @@ asyncio.run(main())
 
 ```python
 import asyncio
-from SimpleLLMFunc.llm_decorator import llm_function
-from SimpleLLMFunc.interface import OpenAICompatible
+from SimpleLLMFunc import llm_function, OpenAICompatible
 
-
-llm = OpenAICompatible(
-    api_key="your-api-key",
-    base_url="https://api.openai.com/v1",
-    model="gpt-3.5-turbo"
-)
+# 从配置文件加载
+models = OpenAICompatible.load_from_json_file("provider.json")
+llm = models["openai"]["gpt-3.5-turbo"]
 
 
 @llm_function(llm_interface=llm)
@@ -563,7 +549,7 @@ asyncio.run(process_multiple_urls())
 ```python
 async def robust_llm_call():
     try:
-    result = await your_llm_function("input")
+        result = await your_llm_function("input")
         return result
     except Exception as e:
         print(f"LLM 调用失败: {e}")

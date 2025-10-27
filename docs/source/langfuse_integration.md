@@ -36,29 +36,44 @@ pip install langfuse
 export LANGFUSE_PUBLIC_KEY="your_public_key"
 export LANGFUSE_SECRET_KEY="your_secret_key"
 export LANGFUSE_HOST="https://cloud.langfuse.com"  # 可选
-export LANGFUSE_ENABLED="true"  # 可选
+export LANGFUSE_ENABLED="True"  # 可选
 ```
 
-### 4. 初始化观测器
+### 4. 初始化观测系统
+
+SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse：
 
 ```python
-from SimpleLLMFunc import configure_langfuse_from_env
+# 只需设置环境变量，框架会自动处理 Langfuse 连接
+# 不需要手动初始化观测器
 
-# 从环境变量自动配置
-observer = configure_langfuse_from_env()
+from SimpleLLMFunc import llm_function
+
+llm = ...  # 你的 LLM 接口实例
+
+@llm_function(llm_interface=llm)
+async def my_function(text: str) -> str:
+    """功能描述"""
+    pass
+
+# 所有调用都会自动追踪到 Langfuse（如果已配置）
+result = await my_function("test")
 ```
 
-或者直接在代码中配置：
+如需手动获取 Langfuse 客户端或配置信息，可使用以下方式：
 
 ```python
-from SimpleLLMFunc import configure_langfuse
+from SimpleLLMFunc.observability import langfuse_config, get_langfuse_client
 
-observer = configure_langfuse(
-    public_key="your_public_key",
-    secret_key="your_secret_key",
-    host="https://cloud.langfuse.com",
-    enabled=True
-)
+# 获取配置对象
+config = langfuse_config
+print(f"Langfuse 已启用: {config.enabled}")
+
+# 获取 Langfuse 客户端（用于高级场景）
+client = get_langfuse_client()
+if client:
+    # 手动追踪其他操作
+    pass
 ```
 
 ## 使用示例
@@ -66,21 +81,23 @@ observer = configure_langfuse(
 ### 基本 LLM 函数追踪
 
 ```python
-from SimpleLLMFunc import llm_function, configure_langfuse_from_env, OpenAI_Interface
-
-# 配置观测器
-configure_langfuse_from_env()
+import asyncio
+from SimpleLLMFunc import llm_function, OpenAICompatible
 
 # 配置 LLM 接口
-llm = OpenAI_Interface(api_key="your_api_key")
+llm = OpenAICompatible.load_from_json_file("provider.json")["openai"]["gpt-3.5-turbo"]
 
 @llm_function(llm_interface=llm)
 async def analyze_text(text: str) -> str:
     """分析文本内容并提供摘要"""
     pass
 
-# 使用函数 - 自动追踪到 Langfuse
-result = await analyze_text("这是一段需要分析的文本...")
+# 使用函数 - 自动追踪到 Langfuse（如果已配置环境变量）
+async def main():
+    result = await analyze_text("这是一段需要分析的文本...")
+    print(result)
+
+asyncio.run(main())
 ```
 
 ### 带工具调用的追踪
@@ -180,17 +197,23 @@ Function Call (Span)
 | `LANGFUSE_HOST` | Langfuse 服务器地址 | `https://cloud.langfuse.com` | 否 |
 | `LANGFUSE_ENABLED` | 是否启用观测 | `true` | 否 |
 
-### 代码配置
+### 高级配置
+
+如需自定义 Langfuse 配置（例如在生产环境动态设置密钥），可在启动应用前修改环境变量：
 
 ```python
-from SimpleLLMFunc.observability import LangfuseObserver
+import os
 
-observer = LangfuseObserver(
-    public_key="your_public_key",
-    secret_key="your_secret_key",
-    host="https://cloud.langfuse.com",
-    enabled=True
-)
+# 在导入 SimpleLLMFunc 之前设置环境变量
+os.environ["LANGFUSE_PUBLIC_KEY"] = "your_public_key"
+os.environ["LANGFUSE_SECRET_KEY"] = "your_secret_key"
+os.environ["LANGFUSE_HOST"] = "https://cloud.langfuse.com"
+os.environ["LANGFUSE_ENABLED"] = "true"
+
+# 然后导入并使用 SimpleLLMFunc
+from SimpleLLMFunc import llm_function
+
+# ... 后续代码 ...
 ```
 
 ## 最佳实践

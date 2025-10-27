@@ -69,31 +69,34 @@ LOG_LEVEL=WARNING
 
 ```json
 {
-    "openai": [
-        {
-            "model_name": "gpt-3.5-turbo",
-            "api_keys": ["your-openai-api-key"],
-            "base_url": "https://api.openai.com/v1"
-        }
-    ],
-    "volc_engine": [
-        {
-            "model_name": "deepseek-v3-250324",
-            "api_keys": ["your-volc-engine-api-key"],
-            "base_url": "https://ark.cn-beijing.volces.com/api/v3/",
-            "max_retries": 3,
-            "retry_delay": 1
-        }
-    ]
+  "openai": {
+    "gpt-3.5-turbo": {
+      "api_keys": ["your-openai-api-key"],
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-3.5-turbo"
+    },
+    "gpt-4": {
+      "api_keys": ["your-openai-api-key"],
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4"
+    }
+  },
+  "deepseek": {
+    "deepseek-chat": {
+      "api_keys": ["your-deepseek-api-key"],
+      "base_url": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat"
+    }
+  }
 }
 ```
 
 **重要提示：**
-- 请将 `openai` 和 `volc_engine` 替换为您的实际模型提供商
-- 请将 `model_name` 替换为您的实际模型名称
-- 请将 `your-openai-api-key` 和 `your-volc-engine-api-key` 替换为您的实际 API 密钥
+- 请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥
+- 请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥
 - 支持多个 API 密钥，系统会自动进行负载均衡
 - 可以配置多个不同的模型提供商
+- 配置文件使用嵌套结构：`provider -> model_name -> 配置参数`
 
 ## 第三步：创建第一个 Demo
 
@@ -115,9 +118,9 @@ class TextAnalysis(BaseModel):
     keywords: List[str] = Field(..., description="提取的关键词列表")
     summary: str = Field(..., description="文本摘要")
 
-# 加载模型接口
-provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
-gpt_interface = provider_interfaces["openai"]["gpt-3.5-turbo"]
+# 加载模型接口（从 provider.json 配置文件）
+models = OpenAICompatible.load_from_json_file("provider.json")
+gpt_interface = models["openai"]["gpt-3.5-turbo"]
 
 # 创建 LLM 函数
 @llm_function(llm_interface=gpt_interface)
@@ -182,12 +185,11 @@ python first_demo.py
 
 ```python
 import asyncio
-
 from SimpleLLMFunc import llm_function, OpenAICompatible
 
 # 加载模型接口
-provider_interfaces = OpenAICompatible.load_from_json_file("provider.json")
-gpt_interface = provider_interfaces["openai"]["gpt-3.5-turbo"]
+models = OpenAICompatible.load_from_json_file("provider.json")
+gpt_interface = models["openai"]["gpt-3.5-turbo"]
 
 # 万能的代码分析函数
 @llm_function(llm_interface=gpt_interface)
@@ -203,7 +205,7 @@ async def process_text(text: str) -> str:
 
 async def main():
     print("=== 动态模板参数 Demo ===")
-    
+
     # 测试代码
     python_code = """
 def fibonacci(n):
@@ -211,11 +213,11 @@ def fibonacci(n):
         return n
     return fibonacci(n-1) + fibonacci(n-2)
 """
-    
+
     # 不同的分析方式
     print("\n1. 代码分析 - 性能优化:")
     try:
-    performance_result = await analyze_code(
+        performance_result = await analyze_code(
             python_code,
             _template_params={
                 'style': '详细',
@@ -226,10 +228,10 @@ def fibonacci(n):
         print(performance_result)
     except Exception as e:
         print(f"分析失败: {e}")
-    
+
     print("\n2. 代码分析 - 代码规范:")
     try:
-    style_result = await analyze_code(
+        style_result = await analyze_code(
             python_code,
             _template_params={
                 'style': '简洁',
@@ -240,13 +242,13 @@ def fibonacci(n):
         print(style_result)
     except Exception as e:
         print(f"分析失败: {e}")
-    
+
     # 不同的文本处理角色
     sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
-    
+
     print("\n3. 文本处理 - 编辑润色:")
     try:
-    edited_result = await process_text(
+        edited_result = await process_text(
             sample_text,
             _template_params={
                 'role': '专业编辑',
@@ -257,10 +259,10 @@ def fibonacci(n):
         print(edited_result)
     except Exception as e:
         print(f"处理失败: {e}")
-    
+
     print("\n4. 文本处理 - 翻译转换:")
     try:
-    translated_result = await process_text(
+        translated_result = await process_text(
             sample_text,
             _template_params={
                 'role': '翻译专家',
@@ -287,18 +289,22 @@ if __name__ == "__main__":
 
 ```python
 import asyncio
-from typing import Dict
+from typing import Dict, List
 from pydantic import BaseModel, Field
 from SimpleLLMFunc import llm_function, tool, OpenAICompatible
+
+# 加载模型接口
+models = OpenAICompatible.load_from_json_file("provider.json")
+gpt_interface = models["openai"]["gpt-3.5-turbo"]
 
 # 定义工具
 @tool(name="get_weather", description="获取指定城市的天气信息")
 async def get_weather(city: str) -> Dict[str, str]:
     """获取指定城市的天气信息
-    
+
     Args:
         city: 城市名称
-        
+
     Returns:
         包含温度、湿度和天气状况的字典
     """

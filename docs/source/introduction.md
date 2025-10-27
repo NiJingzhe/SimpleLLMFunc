@@ -246,27 +246,45 @@ SimpleLLMFunc/
 ├── __init__.py                     # 包初始化文件
 ├── config.py                       # 全局配置
 ├── utils.py                        # 通用工具函数
-├── interface/                      # LLM 接口
+├── interface/                      # LLM 接口层
 │   ├── __init__.py                 # 包初始化文件
-│   ├── llm_interface.py            # LLM 接口抽象类
-│   ├── key_pool.py                 # API 密钥池
-│   ├── openai_compatible.py        # OpenAI 兼容接口实现
-│   └── token_bucket.py             # 流量控制令牌桶实现
-├── llm_decorator/                  # LLM装饰器
+│   ├── llm_interface.py            # LLM 接口抽象基类
+│   ├── key_pool.py                 # API 密钥负载均衡管理
+│   ├── openai_compatible.py        # OpenAI 兼容实现
+│   └── token_bucket.py             # 令牌桶流量控制
+├── llm_decorator/                  # LLM 装饰器模块
 │   ├── __init__.py                 # 包初始化文件
-│   ├── llm_function_decorator.py   # 函数装饰器
-│   ├── llm_chat_decorator.py       # 对话装饰器
-│   ├── multimodal_types.py         # 多模态类型定义
-│   └── utils.py                    # 装饰器工具函数
-├── logger/                         # 日志系统
-│   ├── __init__.py                 # 包初始化文件
-│   ├── logger.py                   # 日志核心功能
-│   └── logger_config.py            # 日志配置
+│   ├── llm_function_decorator.py   # @llm_function 装饰器实现
+│   ├── llm_chat_decorator.py       # @llm_chat 装饰器实现
+│   ├── multimodal_types.py         # 多模态类型（Text, ImgUrl, ImgPath）
+│   └── utils/                      # 装饰器工具函数包
+│       ├── __init__.py
+│       └── tools.py                # 工具处理、序列化等
+├── base/                           # 核心执行引擎
+│   ├── __init__.py
+│   ├── ReAct.py                    # ReAct 引擎与工具调用协调
+│   ├── messages.py                 # 消息构建与多模态处理
+│   ├── post_process.py             # 响应解析与类型转换
+│   ├── type_resolve.py             # 类型解析
+│   └── tool_call.py                # 工具调用执行与序列化
+├── logger/                         # 日志与可观测性系统
+│   ├── __init__.py
+│   ├── logger.py                   # 日志 API 导出
+│   ├── core.py                     # 日志系统核心实现
+│   ├── logger_config.py            # 日志配置管理
+│   ├── context_manager.py          # 上下文与 trace_id 管理
+│   ├── formatters.py               # 日志格式化器
+│   ├── types.py                    # 日志类型定义
+│   └── utils.py                    # 日志工具函数
 ├── tool/                           # 工具系统
-│   ├── __init__.py                 # 包初始化文件
-│   └── tool.py                     # 工具定义和装饰器
-└── type/                           # 类型定义
-    └── __init__.py                 # 多模态类型导出
+│   ├── __init__.py
+│   └── tool.py                     # @tool 装饰器与 Tool 基类
+├── observability/                  # 可观测性集成
+│   ├── __init__.py
+│   ├── langfuse_client.py          # Langfuse 客户端
+│   └── langfuse_config.py          # Langfuse 配置管理
+└── type/                           # 多模态类型导出
+    └── __init__.py                 # Text, ImgUrl, ImgPath 等类型
 ```
 
 ### 模块介绍

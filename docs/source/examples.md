@@ -1,501 +1,198 @@
 # 示例代码
 
-本章节提供了 SimpleLLMFunc 的实际使用示例，帮助你更好地理解框架的功能和用法。
+本章节收集了 SimpleLLMFunc 框架的各种使用示例。这些示例展示了框架的核心功能和最佳实践。
 
-> ⚠️ 本章节中的所有装饰器示例（`@llm_function`、`@llm_chat`、`@tool`）均要求被装饰的函数使用 `async def` 定义，并在调用时通过 `await`（或 `asyncio.run`）执行。
+> ⚠️ **重要提示**：本框架中的所有装饰器（`@llm_function`、`@llm_chat`、`@tool`）均要求被装饰的函数使用 `async def` 定义，并在调用时通过 `await`（或 `asyncio.run`）执行。
 
 ## 基础示例
 
-### 动态模板参数示例
+### llm_function 基础使用
 
-这个示例演示了如何使用 `_template_params` 让同一个函数适应不同的使用场景：
+**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
 
-```python
-import asyncio
-
-from SimpleLLMFunc import OpenAICompatible, llm_function
-
-# 创建LLM接口
-llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
-
-# 万能的代码分析函数
-@llm_function(llm_interface=llm_interface)
-async def analyze_code(code: str) -> str:
-    """以{style}的方式分析{language}代码，重点关注{focus}。"""
-    pass
-
-# 万能的文本处理函数
-@llm_function(llm_interface=llm_interface)
-async def process_text(text: str) -> str:
-    """作为{role}，请{action}以下文本，输出风格为{style}。"""
-    pass
-
-# 使用示例
-async def main():
-    python_code = """
-def fibonacci(n):
-    if n <= 1:
-        return n
-    return fibonacci(n-1) + fibonacci(n-2)
-"""
-    
-    # 不同的分析方式
-    performance_result = await analyze_code(
-        python_code,
-        _template_params={
-            'style': '详细',
-            'language': 'Python',
-            'focus': '性能优化'
-        }
-    )
-    
-    style_result = await analyze_code(
-        python_code,
-        _template_params={
-            'style': '简洁',
-            'language': 'Python',
-            'focus': '代码规范'
-        }
-    )
-    
-    # 不同的文本处理角色
-    sample_text = "人工智能技术正在快速发展，对各行各业产生深远影响。"
-    
-    edited_result = await process_text(
-        sample_text,
-        _template_params={
-            'role': '专业编辑',
-            'action': '润色',
-            'style': '学术'
-        }
-    )
-    
-    translated_result = await process_text(
-        sample_text,
-        _template_params={
-            'role': '翻译专家',
-            'action': '翻译成英文',
-            'style': '商务'
-        }
-    )
-    
-    print("性能分析:", performance_result)
-    print("代码规范:", style_result)
-    print("编辑润色:", edited_result)
-    print("翻译结果:", translated_result)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-这个示例展示了动态模板参数的核心优势：
-- **一个函数定义，多种使用场景**
-- **调用时动态指定角色和任务**
-- **代码复用性大大提高**
+这个例子展示了如何使用 `@llm_function` 装饰器创建 LLM 驱动的函数：
+- 基本的文本分析
+- 动态模板参数的使用
+- 结构化输出（Pydantic 模型）
+- 类型安全的返回值处理
 
 ### 产品评论分析
 
-这个示例演示了如何使用 `@llm_function` 来创建一个产品评论分析功能。
+**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
 
-```python
-import asyncio
-from typing import Dict, List
+演示如何使用 `@llm_function` 进行产品评论分析：
+- 定义 Pydantic 模型作为返回类型
+- 自动解析 LLM 的结构化输出
+- 处理复杂的返回格式
 
-from pydantic import BaseModel, Field
+### 天气信息查询与建议
 
-from SimpleLLMFunc import OpenAICompatible, llm_function
+**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
 
-# 创建LLM接口
-llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider_name"]["model_name"]
-
-# 定义返回类型模型
-class ProductReview(BaseModel):
-    rating: int = Field(..., description="产品评分，1-5分")
-    pros: List[str] = Field(..., description="产品优点列表")
-    cons: List[str] = Field(..., description="产品缺点列表")
-    summary: str = Field(..., description="评价总结")
-
-# 创建LLM函数
-@llm_function(llm_interface=llm_interface)
-async def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
-    """
-    分析产品评论，提取关键信息并生成结构化评测报告
-
-    Args:
-        product_name: 产品名称
-        review_text: 用户评论文本
-
-    Returns:
-        包含评分、优缺点和总结的产品评测报告
-    """
-    pass
-
-# 使用函数
-
-
-async def main():
-    product_name = "XYZ无线耳机"
-    review_text = """
-    我买了这款XYZ无线耳机已经使用了一个月。音质非常不错，尤其是低音部分表现出色，
-    佩戴也很舒适，可以长时间使用不感到疲劳。电池续航能力也很强，充满电后可以使用约8小时。
-    不过连接偶尔会有些不稳定，有时候会突然断开。另外，触控操作不够灵敏，经常需要点击多次才能响应。
-    总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
-    """
-    
-    result = await analyze_product_review(product_name, review_text)
-    
-    print(f"产品评分: {result.rating}/5")
-    print(f"产品优点:")
-    for pro in result.pros:
-        print(f"  - {pro}")
-    print(f"产品缺点:")
-    for con in result.cons:
-        print(f"  - {con}")
-    print(f"总结: {result.summary}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-### 使用工具获取天气信息并给出建议
-
-这个示例演示了如何定义和使用工具，以及如何将工具集成到 LLM 函数中。
-
-```python
-import asyncio
-from typing import Dict
-
-from pydantic import BaseModel, Field
-
-from SimpleLLMFunc import llm_function, tool
-
-# 定义工具函数
-@tool(name="get_weather", description="获取指定城市的天气信息")
-async def get_weather(city: str) -> Dict[str, str]:
-    """
-    获取指定城市的天气信息
-
-    Args:
-        city: 城市名称
-
-    Returns:
-        包含温度、湿度和天气状况的字典
-    """
-    # 这里是模拟数据，实际应用中可以调用真实的天气API
-    return {"temperature": "32°C", "humidity": "80%", "condition": "Raining"}
-
-# 定义结构化输出模型
-class WeatherInfo(BaseModel):
-    city: str = Field(..., description="城市名称")
-    temperature: str = Field(..., description="当前温度")
-    humidity: str = Field(..., description="当前湿度")
-    condition: str = Field(..., description="天气状况")
-    recommendation: str = Field(..., description="推荐的活动")
-
-# 创建使用工具的LLM函数
-@llm_function(llm_interface=llm_interface, toolkit=[get_weather])
-async def get_daily_recommendation(city: str) -> WeatherInfo:
-    """
-    通过get_weather工具获取天气信息，并给出推荐的活动
-
-    Args:
-        city: 城市名称
-
-    Returns:
-        WeatherInfo对象，包含温度、湿度、天气状况和活动建议
-    """
-    pass
-
-# 使用函数
-
-
-async def main():
-    result = await get_daily_recommendation("北京")
-    print(f"城市: {result.city}")
-    print(f"温度: {result.temperature}")
-    print(f"湿度: {result.humidity}")
-    print(f"天气状况: {result.condition}")
-    print(f"推荐活动: {result.recommendation}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+展示工具集成的基础示例：
+- 定义 `@tool` 装饰器的工具函数
+- 在 `@llm_function` 中使用工具
+- 处理 LLM 的工具调用
 
 ## 高级示例
 
-### 对话助手
+### llm_chat 聊天应用
 
-这个示例演示了如何使用 `@llm_chat` 装饰器创建一个具有对话能力的助手，以及如何管理对话历史。
+**文件**: [examples/llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
 
-```python
-import asyncio
-import os
-import json
-from datetime import datetime
-from typing import Dict, List
+展示如何使用 `@llm_chat` 装饰器构建对话应用：
+- 多轮对话的历史管理
+- 流式响应的处理
+- 工具在对话中的应用
+- 对话会话的保存和加载
 
-from SimpleLLMFunc import llm_chat, tool
+### 并行工具调用
 
-# 工具函数定义
-@tool(name="get_weather", description="获取指定城市的天气信息")
-async def get_weather(city: str) -> Dict[str, str]:
-    return {"temperature": "25°C", "humidity": "60%", "condition": "Sunny"}
+**文件**: [examples/parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)
 
-@tool(name="search_information", description="搜索特定主题的信息")
-async def search_information(query: str) -> str:
-    # 模拟搜索功能
-    return f"关于 '{query}' 的搜索结果: {...}"
+演示高级的工具调用特性：
+- 多个工具的并行执行
+- 工具调用的优化和性能
+- 大规模工具集的管理
 
-# 历史记录管理函数
-def save_history(history: List[Dict[str, str]], session_id: str) -> str:
-    # 创建历史记录目录
-    history_dir = os.path.join(os.getcwd(), "chat_history")
-    os.makedirs(history_dir, exist_ok=True)
+### 多模态内容处理
 
-    # 格式化文件名
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{session_id}_{timestamp}.json"
-    filepath = os.path.join(history_dir, filename)
+**文件**: [examples/multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)
 
-    # 保存历史记录
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(
-            {"session_id": session_id, "timestamp": timestamp, "history": history},
-            f,
-            ensure_ascii=False,
-            indent=2,
-        )
-    return filepath
+展示多模态功能的使用：
+- 图片 URL (`ImgUrl`) 的处理
+- 本地图片路径 (`ImgPath`) 的处理
+- 文本和图片的混合输入输出
 
-def load_history(session_id: str = None, filepath: str = None) -> List[Dict[str, str]]:
-    # 历史记录加载逻辑
-    # ...省略具体实现...
-    return []  # 返回加载的历史记录或空列表
+## 供应商配置示例
 
-# 创建对话助手
-@llm_chat(llm_interface=llm_interface, toolkit=[get_weather, search_information])
-async def chat_assistant(message: str, history: List[Dict[str, str]] | None = None):
-    """
-    你是一个智能助手，可以回答用户的问题并提供帮助。
-    你可以使用工具来获取实时信息，如天气状况和搜索结果。
-    请保持友好、专业的态度，并尽可能提供准确、有用的信息。
-    """
-    pass
+### Provider 配置文件
 
-# 交互式聊天示例
-async def interactive_chat(session_id: str):
-    # 加载历史记录
-    history = load_history(session_id=session_id)
-    
-    print("====== 聊天助手 ======")
-    print("输入 'exit' 退出对话")
-    
-    while True:
-        user_input = input("你: ")
-        if user_input.lower() == "exit":
-            break
+**文件**: [examples/provider.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider.json)
 
-        response_text = ""
-        new_history = history
-        async for chunk, updated_history in chat_assistant(user_input, history):
-            if chunk:
-                response_text += chunk
-            new_history = updated_history
+示范 provider.json 的完整配置结构：
+- OpenAI 模型配置
+- 其他供应商的配置方式
+- API 密钥和速率限制设置
 
-        history = new_history
+### Provider 模板
 
-        if response_text:
-            print(f"助手: {response_text}")
+**文件**: [examples/provider_template.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider_template.json)
 
-        save_history(history, session_id)
+提供了一个可复用的配置模板：
+- 预配置的常见 LLM 供应商
+- 最佳实践的参数设置
+- 多个 API 密钥的配置方式
 
+## 按功能分类的示例
 
-if __name__ == "__main__":
-    asyncio.run(interactive_chat("user_12345"))
+### 文本处理
+- **文本分类**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+- **文本摘要**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+- **情感分析**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+
+### 工具调用
+- **单个工具调用**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+- **多工具并行调用**: 见 [parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)
+
+### 对话与 Agent
+- **基础聊天**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
+- **带工具的聊天**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
+- **多会话并发**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
+
+### 多模态处理
+- **图片分析**: 见 [multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)
+- **混合输入输出**: 见 [multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)
+
+## 快速运行示例
+
+### 前置要求
+1. 安装 SimpleLLMFunc: `pip install SimpleLLMFunc`
+2. 配置 API 密钥（见 [快速开始](quickstart.md)）
+3. 创建或编辑 `provider.json` 文件
+
+### 运行方式
+
+```bash
+# 进入 examples 目录
+cd examples
+
+# 运行基础 LLM 函数示例
+python llm_function_example.py
+
+# 运行聊天示例
+python llm_chat_example.py
+
+# 运行并行工具调用示例
+python parallel_toolcall_example.py
+
+# 运行多模态示例
+python multi_modality_toolcall.py
 ```
 
-### 复杂问题解决流程
+## 完整的 Examples 目录
 
-这个示例展示了如何组合多个 LLM 函数来解决复杂问题，实现分步骤的推理和决策过程。
+所有示例代码都位于仓库的 `examples/` 目录中：
 
-```python
-import asyncio
-from typing import Any, Dict, List
+**仓库链接**: https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples
 
-from pydantic import BaseModel, Field
+在该目录中你可以找到：
+- 各种装饰器的使用示例
+- 不同 LLM 供应商的配置示例
+- 最佳实践的参考实现
+- 环境变量配置的示例
 
-from SimpleLLMFunc import llm_function
+## 学习路径建议
 
-# 步骤1：提取关键信息
-class ProblemInfo(BaseModel):
-    context: str = Field(..., description="问题背景")
-    key_points: List[str] = Field(..., description="关键点列表")
-    constraints: List[str] = Field(..., description="约束条件")
-    
-@llm_function(llm_interface=llm_interface)
-async def extract_problem_info(problem_description: str) -> ProblemInfo:
-    """
-    从问题描述中提取关键信息，包括背景、关键点和约束条件
-    
-    Args:
-        problem_description: 详细的问题描述
-        
-    Returns:
-        结构化的问题信息
-    """
-    pass
+### 初级用户
+1. 阅读 [快速开始](quickstart.md) 文档
+2. 运行 `llm_function_example.py`
+3. 修改示例代码，尝试自己的 Prompt
 
-# 步骤2：生成解决方案选项
-class SolutionOption(BaseModel):
-    approach: str = Field(..., description="解决方案概述")
-    pros: List[str] = Field(..., description="优势")
-    cons: List[str] = Field(..., description="劣势")
-    risk_level: str = Field(..., description="风险等级(低/中/高)")
+### 中级用户
+1. 学习 [llm_chat 装饰器文档](detailed_guide/llm_chat.md)
+2. 运行 `llm_chat_example.py`
+3. 尝试 `parallel_toolcall_example.py`
 
-@llm_function(llm_interface=llm_interface)
-async def generate_solution_options(problem_info: ProblemInfo) -> List[SolutionOption]:
-    """
-    基于问题信息生成多个可能的解决方案选项
-    
-    Args:
-        problem_info: 结构化的问题信息
-        
-    Returns:
-        可能的解决方案列表，每个方案包含概述、优缺点和风险评估
-    """
-    pass
+### 高级用户
+1. 阅读 [LLM 接口层文档](detailed_guide/llm_interface.md)
+2. 学习多模态处理：`multi_modality_toolcall.py`
+3. 自定义 LLM 接口和工具系统
 
-# 步骤3：选择和详细化最佳方案
-class DetailedSolution(BaseModel):
-    solution_overview: str = Field(..., description="解决方案概述")
-    implementation_steps: List[str] = Field(..., description="实施步骤")
-    required_resources: List[str] = Field(..., description="所需资源")
-    timeline: str = Field(..., description="预估时间线")
-    success_metrics: List[str] = Field(..., description="成功指标")
+## 常见问题
 
-@llm_function(llm_interface=llm_interface)
-async def select_and_detail_solution(
-    problem_info: ProblemInfo, 
-    solution_options: List[SolutionOption]
-) -> DetailedSolution:
-    """
-    从多个方案中选择最佳解决方案，并提供详细的实施计划
-    
-    Args:
-        problem_info: 结构化的问题信息
-        solution_options: 可能的解决方案列表
-        
-    Returns:
-        详细的解决方案实施计划
-    """
-    pass
+### Q: 示例代码在哪里？
+A: 所有示例代码都在 GitHub 仓库的 `examples/` 目录中。你可以直接查看或下载运行。
 
-# 使用组合函数流程
-async def solve_complex_problem(problem_description: str) -> DetailedSolution:
-    # 步骤1：提取问题信息
-    problem_info = await extract_problem_info(problem_description)
-    print("问题分析完成，提取了关键信息")
-    
-    # 步骤2：生成解决方案选项
-    solution_options = await generate_solution_options(problem_info)
-    print(f"生成了 {len(solution_options)} 个可能的解决方案")
-    
-    # 步骤3：选择和详细化最佳方案
-    detailed_solution = await select_and_detail_solution(problem_info, solution_options)
-    print("最佳解决方案已选定并详细化")
-    
-    return detailed_solution
+### Q: 如何修改示例代码？
+A:
+1. 克隆仓库：`git clone https://github.com/NiJingzhe/SimpleLLMFunc.git`
+2. 编辑 `examples/` 目录中的文件
+3. 运行修改后的代码
 
-# 执行示例
-if __name__ == "__main__":
-    problem = """
-    我们公司是一家中型电商企业，目前面临客户流失率上升的问题。
-    过去6个月，流失率从5%上升到12%。我们有约50,000名活跃客户，
-    主要销售电子产品和家居用品。客户反馈显示，送货延迟和客服响应慢是主要抱怨点。
-    我们的预算有限，需要在3个月内看到明显改善。如何解决这个问题？
-    """
+### Q: 示例是否支持所有 LLM 供应商？
+A: 示例代码使用 `provider.json` 配置，支持任何兼容 OpenAI API 的供应商。参考 `provider_template.json` 配置你的供应商。
 
-    async def main():
-        solution = await solve_complex_problem(problem)
+### Q: 我遇到了问题，该怎么办？
+A:
+1. 检查 [快速开始](quickstart.md) 中的配置部分
+2. 查看详细的 [使用指南](guide.md)
+3. 在 GitHub 提交 Issue：https://github.com/NiJingzhe/SimpleLLMFunc/issues
 
-        print("\n最终解决方案:")
-        print(f"概述: {solution.solution_overview}\n")
-        print("实施步骤:")
-        for i, step in enumerate(solution.implementation_steps, 1):
-            print(f"{i}. {step}")
-        print("\n所需资源:")
-        for resource in solution.required_resources:
-            print(f"- {resource}")
-        print(f"\n时间线: {solution.timeline}")
-        print("\n成功指标:")
-        for metric in solution.success_metrics:
-            print(f"- {metric}")
+## 贡献新示例
 
-    asyncio.run(main())
-```
+如果你想为项目贡献新的示例代码：
 
-## 实用工具示例
+1. Fork 仓库
+2. 在 `examples/` 目录中创建新文件
+3. 遵循现有示例的代码风格和注释
+4. 提交 Pull Request
 
-### 自定义提示模板
+详细信息见 [贡献指南](contributing.md)。
 
-这个示例演示了如何使用自定义提示模板来控制 LLM 的行为和输出风格。
+## 相关资源
 
-```python
-from SimpleLLMFunc import llm_function
-
-# 自定义系统提示模板
-CUSTOM_SYSTEM_PROMPT = """
-你是一个专业的{role}，擅长{specialty}。你的任务是：
-
-{function_description}
-
-请根据以下参数进行分析：
-{parameters_description}
-
-你需要输出：
-{return_type_description}
-
-请保持专业、简洁的风格，直接给出高质量的分析结果。
-"""
-
-# 自定义用户提示模板
-CUSTOM_USER_PROMPT = """
-请分析以下数据：
-{parameters}
-
-要求：
-1. 分析必须基于数据
-2. 给出明确的结论
-3. 提供可行的建议
-"""
-
-@llm_function(
-    llm_interface=llm_interface,
-    system_prompt_template=CUSTOM_SYSTEM_PROMPT,
-    user_prompt_template=CUSTOM_USER_PROMPT
-)
-async def marketing_analysis(
-    role: str = "市场分析师",
-    specialty: str = "数字营销",
-    sales_data: Dict[str, Any] = None,
-    target_audience: str = "",
-    campaign_history: List[Dict[str, Any]] = None
-) -> MarketingReport:
-    """
-    分析销售数据和营销活动历史，提供市场策略建议
-    
-    Args:
-        role: 分析角色
-        specialty: 专业领域
-        sales_data: 销售数据
-        target_audience: 目标受众描述
-        campaign_history: 过去营销活动的历史记录
-        
-    Returns:
-        市场分析报告，包含趋势分析、效果评估和建议
-    """
-    pass
-```
+- **官方仓库**: https://github.com/NiJingzhe/SimpleLLMFunc
+- **完整文档**: https://simplellmfunc.readthedocs.io/
+- **发布日志**: https://github.com/NiJingzhe/SimpleLLMFunc/releases
+- **问题反馈**: https://github.com/NiJingzhe/SimpleLLMFunc/issues
