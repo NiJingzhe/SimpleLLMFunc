@@ -399,21 +399,28 @@ async def my_function(text: str) -> str:
 
 ```json
 {
-    "deepseek": {
-        "v3-turbo": {
-            "api_keys": ["sk-your-api-key"],
+    "deepseek": [
+        {
+            "model_name": "deepseek-v3.2",
+            "api_keys": ["sk-your-api-key-1", "sk-your-api-key-2"],
             "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
-            "rate_limit": 100
+            "max_retries": 5,
+            "retry_delay": 1.0,
+            "rate_limit_capacity": 10,
+            "rate_limit_refill_rate": 1.0
         }
-    },
-    "openai": {
-        "gpt-4": {
+    ],
+    "openai": [
+        {
+            "model_name": "gpt-4",
             "api_keys": ["sk-your-api-key"],
             "base_url": "https://api.openai.com/v1",
-            "model": "gpt-4"
+            "max_retries": 5,
+            "retry_delay": 1.0,
+            "rate_limit_capacity": 10,
+            "rate_limit_refill_rate": 1.0
         }
-    }
+    ]
 }
 ```
 
