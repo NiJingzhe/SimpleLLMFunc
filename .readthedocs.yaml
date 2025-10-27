@@ -13,5 +13,11 @@ sphinx:
   builder: html
   fail_on_warning: false
 
+# 多语言支持
 formats:
   - htmlzip
+
+# 语言配置
+python:
+  install:
+    - requirements: docs/requirements.txt

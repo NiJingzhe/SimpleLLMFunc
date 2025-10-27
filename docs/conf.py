@@ -31,7 +31,7 @@ gettext_compact = False
 
 # 语言显示名称映射
 languages = {
-    'zh': '中文（简体）',
+    'zh_CN': '中文（简体）',
     'en': 'English',
 }
 
@@ -40,8 +40,11 @@ source_suffix = [ '.md', '.rst' ]
 master_doc = 'index'
 
 # ReadTheDocs 环境检测
-import os
 is_readthedocs = os.environ.get('READTHEDOCS') == 'True'
+
+# 如果在ReadTheDocs环境中，使用环境变量设置的语言
+if is_readthedocs:
+    language = os.environ.get('READTHEDOCS_LANGUAGE', 'en')
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
