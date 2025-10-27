@@ -6,7 +6,7 @@ build:
     python: "3.11"
   commands:
     - pip install -r docs/requirements.txt
-    - cd docs && sphinx-build -b html -c . source _build/html
+    - cd docs && sphinx-build -b html -c . source $READTHEDOCS_OUTPUT/html
 
 sphinx:
   configuration: docs/conf.py
