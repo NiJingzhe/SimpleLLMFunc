@@ -158,13 +158,11 @@ msgstr "Usability (learning curve)"
 
 #: ../../source/introduction.md
 msgid "✅"
-msgstr "The exam will be held on the 15th of December."
+msgstr "✅"
 
 #: ../../source/introduction.md
 msgid "❌"
-msgstr ""
-"I need the text to translate. Please provide the text you want to translate "
-"from Chinese to English."
+msgstr "❌"
 
 #: ../../source/introduction.md
 msgid "直观性"
@@ -172,7 +170,7 @@ msgstr "Intuition"
 
 #: ../../source/introduction.md
 msgid "⭕️"
-msgstr "circle"
+msgstr "⭕️"
 
 #: ../../source/introduction.md
 msgid "灵活性"

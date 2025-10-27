@@ -37,6 +37,10 @@ msgid "    示例代码"
 msgstr ""
 
 #: ../../source/index.md:5
+msgid "    Langfuse集成"
+msgstr ""
+
+#: ../../source/index.md:5
 msgid "    贡献指南"
 msgstr ""
 

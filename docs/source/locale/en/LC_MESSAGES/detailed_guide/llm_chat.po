@@ -132,10 +132,7 @@ msgid "**llm_interface** (必需): LLM 接口实例，用于与大语言模型�
 msgstr "llm_interface (required): LLM interface instance, used for communication with the large language model"
 #: ../../source/detailed_guide/llm_chat.md:55
 msgid "**toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数"
-msgstr ""
-"Here's the translation of \"toolkit\" from Chinese to English:\n"
-"\n"
-"toolkit"
+msgstr "Toolkit (optional): List of tools, can be Tool objects or functions decorated with @tool"
 
 #: ../../source/detailed_guide/llm_chat.md:56
 msgid "**max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5"
@@ -145,21 +142,11 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:57
 msgid "**stream** (可选): 是否启用流式模式，默认为 True"
-msgstr ""
-"The provided `text` parameter has an invalid value. The `text` parameter is "
-"expected to be a string representing the text to translate, but it is "
-"currently set to \"**stream** (可选): 是否启用流式模式，默认为 True\", which seems to be a"
-" description of a parameter rather than actual text to translate. Please "
-"provide a valid text string for the `text` parameter."
+msgstr "Stream (optional): Whether to enable streaming mode, defaults to True"
 
 #: ../../source/detailed_guide/llm_chat.md:58
 msgid "**return_mode** (可选): 返回模式，可选值为 \"text\"（默认）或 \"raw\""
-msgstr ""
-"The provided text \"return_mode (可选): 返回模式，可选值为 \"text\"（默认）或 \"raw\"\" is in Chinese and needs to be translated to English.\n"
-"\n"
-"- **text**: \"return_mode (optional): return mode, optional values are \"text\" (default) or \"raw\"\"\n"
-"- **source_lang**: Chinese\n"
-"- **target_lang**: English"
+msgstr "Return Mode (optional): Return mode, optional values are \"text\" (default) or \"raw\""
 
 #: ../../source/detailed_guide/llm_chat.md:59
 msgid "****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）"
@@ -186,7 +173,7 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:66
 msgid "`updated_history` (List[Dict[str, str]]): 更新后的对话历史"
-msgstr "updated_history"
+msgstr "Updated History (List[Dict[str, str]]): Updated conversation history"
 
 #: ../../source/detailed_guide/llm_chat.md:68
 msgid "使用示例"

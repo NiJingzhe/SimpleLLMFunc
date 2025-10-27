@@ -99,8 +99,7 @@ msgstr ""
 #: ../../source/detailed_guide/tool.md:19
 msgid "**可选参数**: 支持带默认值的可选参数"
 msgstr ""
-"The text \"可选参数: 支持带默认值的可选参数\" translates to \"Optional parameters: Supports"
-" optional parameters with default values\"."
+"**Optional parameters**: Supports optional parameters with default values."
 
 #: ../../source/detailed_guide/tool.md:20
 msgid "**复杂嵌套**: 支持嵌套的容器类型和复杂对象"
@@ -120,7 +119,7 @@ msgstr "supported return types"
 
 #: ../../source/detailed_guide/tool.md:25
 msgid "工具函数可以返回多种数据格式，系统会自动处理这些返回值并将其传递给 LLM："
-msgstr "工具函数可返回多种数据格式，系统会自动处理这些返回值并将其传递给 LLM："
+msgstr "Tool functions can return multiple data formats, and the system will automatically process these return values and pass them to the LLM:"
 
 #: ../../source/detailed_guide/tool.md:27
 msgid "基本返回类型"
@@ -128,7 +127,7 @@ msgstr "Basic return type"
 
 #: ../../source/detailed_guide/tool.md:28
 msgid "**字符串 (`str`)**: 直接作为文本内容返回给 LLM"
-msgstr "字符串 (`str`)**: 直接作为文本内容返回给 LLM"
+msgstr "**`str`**: Directly return to LLM as text content"
 
 #: ../../source/detailed_guide/tool.md:29
 msgid "**JSON 可序列化对象**: 包括 `dict`, `list`, `int`, `float`, `bool`, `None`"

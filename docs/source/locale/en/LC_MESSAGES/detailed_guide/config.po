@@ -61,7 +61,7 @@ msgstr "Optional values"
 
 #: ../../source/detailed_guide/config.md
 msgid "默认值"
-msgstr "默认值"
+msgstr "Default Value"
 
 #: ../../source/detailed_guide/config.md
 msgid "`LOG_LEVEL`"
@@ -77,7 +77,7 @@ msgstr "`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`"
 
 #: ../../source/detailed_guide/config.md
 msgid "`WARNING`"
-msgstr "警告"
+msgstr "Warning"
 
 #: ../../source/detailed_guide/config.md:27
 msgid "环境变量优先级"
@@ -175,7 +175,7 @@ msgstr "base_url"
 
 #: ../../source/detailed_guide/config.md
 msgid "字符串"
-msgstr "字符串"
+msgstr "String"
 
 #: ../../source/detailed_guide/config.md
 msgid "API 服务器地址"
@@ -190,7 +190,7 @@ msgstr ""
 
 #: ../../source/detailed_guide/config.md
 msgid "`model`"
-msgstr "模型"
+msgstr "Model"
 
 #: ../../source/detailed_guide/config.md
 msgid "模型名称，与提供商对应"

@@ -44,6 +44,11 @@ msgstr "Contribution Guide"
 msgid "目录："
 msgstr "Directory:"
 
+
+#: ../../source/index.md:5
+msgid "    Langfuse Intergation"
+msgstr ""
+
 #: ../../source/index.md:1
 msgid "SimpleLLMFunc documentation"
 msgstr "SimpleLLMFunc Documentation"
