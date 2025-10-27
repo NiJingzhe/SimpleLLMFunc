@@ -7,24 +7,11 @@ build:
   commands:
     - pip install -r docs/requirements.txt
 
-# Sphinx 配置
 sphinx:
   configuration: docs/source/conf.py
   builder: html
   fail_on_warning: false
 
-# Python 依赖安装
-python:
-  version: "3.10"
-  install:
-    - method: pip
-      path: .
-    - requirements: docs/requirements.txt
-
-# 多语言项目配置
-# 定义不同语言版本，ReadTheDocs 会为每个语言创建独立的文档网站
-languages:
-  - code: en
-    name: English
-  - code: zh_CN
-    name: 中文（简体）
+formats:
+  - htmlzip
+  - pdf
