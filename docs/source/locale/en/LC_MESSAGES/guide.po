@@ -23,8 +23,7 @@ msgstr ""
 #: ../../source/guide.md:7
 msgid "配置与环境"
 msgstr ""
-"{'translated_text': 'Configuration and environment', 'confidence_score': "
-"0.98}"
+"Configuration and Environment"
 
 #: ../../source/guide.md:7
 msgid "LLM 接口层"
@@ -197,7 +196,7 @@ msgstr ""
 
 #: ../../source/guide.md:58
 msgid "📖 按功能模块查找"
-msgstr "{'translation': '📖 Look up by functional module', 'confidence': 0.98}"
+msgstr "📖 Look up by functional module"
 
 #: ../../source/guide.md:7
 msgid "功能"
@@ -205,7 +204,7 @@ msgstr "functionality"
 
 #: ../../source/guide.md:7
 msgid "文档"
-msgstr "{'translation': 'document', 'confidence': 0.96}"
+msgstr "document"
 
 #: ../../source/guide.md:7
 msgid "说明"
@@ -213,7 +212,7 @@ msgstr "explanation"
 
 #: ../../source/guide.md:7
 msgid "基础配置"
-msgstr "{\"translation\": \"Basic configuration\", \"confidence_score\": 0.98}"
+msgstr "Basic Configuration"
 
 #: ../../source/guide.md:7
 msgid "[配置与环境](detailed_guide/config.md)"
@@ -237,7 +236,7 @@ msgstr "Stateless functions, text processing, data transformation"
 
 #: ../../source/guide.md:7
 msgid "对话应用"
-msgstr "{\"translation\": \"Conversation application\", \"confidence\": 0.95}"
+msgstr "Conversation Application"
 
 #: ../../source/guide.md:7
 msgid "[llm_chat 装饰器](detailed_guide/llm_chat.md)"
@@ -245,10 +244,7 @@ msgstr "[llm_chat decorator](detailed_guide/llm_chat.md)"
 
 #: ../../source/guide.md:7
 msgid "多轮对话、历史管理、流式响应"
-msgstr ""
-"{'translation': 'Multiround dialogue, history management, streaming "
-"response', 'confidence_score': 0.95}"
-
+msgstr "Multiround dialogue, history management, streaming response"
 #: ../../source/guide.md:7
 msgid "工具集成"
 msgstr "Tool integration"
@@ -263,7 +259,7 @@ msgstr "Tool definition, invocation, multimodal return"
 
 #: ../../source/guide.md:7
 msgid "系统设计"
-msgstr "{'translation': 'System Design', 'confidence_score': 0.95}"
+msgstr "System Design"
 
 #: ../../source/guide.md:7
 msgid "[LLM 接口层](detailed_guide/llm_interface.md)"
@@ -331,10 +327,7 @@ msgstr ""
 #: ../../source/guide.md:78
 msgid "🔗 其他资源"
 msgstr ""
-"{\n"
-"\"translated_text\": \"Other resources\",\n"
-"\"confidence_score\": 0.95\n"
-"}"
+"Other Resources"
 
 #: ../../source/guide.md:80
 msgid "[项目介绍](introduction.md) - 了解 SimpleLLMFunc 的设计理念"

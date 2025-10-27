@@ -41,8 +41,7 @@ msgstr ""
 #: ../../source/detailed_guide/config.md:7
 msgid "环境变量配置"
 msgstr ""
-"{\"translation\": \"Environment variable configuration\", "
-"\"confidence_score\": 0.98}"
+"Environment Variable Configuration"
 
 #: ../../source/detailed_guide/config.md:21
 msgid "支持的环境变量"
@@ -109,7 +108,7 @@ msgstr "Configuration in `.env` file"
 
 #: ../../source/detailed_guide/config.md:34
 msgid "框架默认值"
-msgstr "{'translation': 'framework default value', 'confidence': 0.98}"
+msgstr "framework default value"
 
 #: ../../source/detailed_guide/config.md:36
 msgid "`provider.json` 文件"
@@ -132,8 +131,7 @@ msgstr "Configuration file structure"
 #: ../../source/detailed_guide/config.md:42
 msgid "provider.json 使用嵌套结构：`提供商 -> 模型名 -> 配置参数`"
 msgstr ""
-"{\"translation\": \"provider.json uses a nested structure: `provider -> "
-"model_name -> configuration_parameters`\", \"confidence_score\": 0.95}"
+"provider.json uses a nested structure: `provider -> model_name -> configuration_parameters`"
 
 #: ../../source/detailed_guide/config.md:91
 msgid "配置参数说明"
@@ -153,7 +151,7 @@ msgstr "Example: 1.0"
 
 #: ../../source/detailed_guide/config.md
 msgid "`api_keys`"
-msgstr "{\"translation\": \"api keys\", \"confidence\": 0.9}"
+msgstr "API Keys"
 
 #: ../../source/detailed_guide/config.md
 msgid "数组"
@@ -208,7 +206,7 @@ msgstr "`max_retries`"
 
 #: ../../source/detailed_guide/config.md
 msgid "数字"
-msgstr "{\"translation\": \"Digital\", \"confidence\": 0.98}"
+msgstr "Digital"
 
 #: ../../source/detailed_guide/config.md
 msgid "最大重试次数，默认 3"
@@ -225,10 +223,7 @@ msgstr "`retry_delay`"
 #: ../../source/detailed_guide/config.md
 msgid "浮点数"
 msgstr ""
-"{\n"
-"    \"translation\": \"Floating point number\",\n"
-"    \"confidence_score\": 0.98\n"
-"}"
+"Floating Point Number"
 
 #: ../../source/detailed_guide/config.md
 msgid "重试延迟（秒），默认 1.0"
@@ -241,15 +236,11 @@ msgstr "1.0"
 #: ../../source/detailed_guide/config.md
 msgid "`rate_limit_capacity`"
 msgstr ""
-"```json\n"
-"{\"translation\": \"rate_limit_capacity\", \"confidence\": 0.9}\n"
-"```"
+"rate_limit_capacity"
 
 #: ../../source/detailed_guide/config.md
 msgid "令牌桶容量，默认 10"
-msgstr ""
-"{'translation': 'Token bucket capacity, default 10', 'confidence': 0.95}"
-
+msgstr "Token bucket capacity, default 10"
 #: ../../source/detailed_guide/config.md
 msgid "`20`"
 msgstr "20"
@@ -268,7 +259,7 @@ msgstr "3.0"
 
 #: ../../source/detailed_guide/config.md:103
 msgid "加载和使用"
-msgstr "{\"translation\": \"Loading and Usage\", \"confidence\": 0.9}"
+msgstr "Loading and Usage"
 
 #: ../../source/detailed_guide/config.md:105
 msgid "然后你可以使用这个json文件来加载所有的接口，例如："

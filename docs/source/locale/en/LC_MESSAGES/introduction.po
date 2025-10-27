@@ -24,8 +24,7 @@ msgstr ""
 msgid ""
 "![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)"
 msgstr ""
-"Error: Invalid input. The 'text' parameter cannot be a URL or an image. "
-"Please provide valid text to translate."
+"![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)"
 
 #: ../../source/introduction.md:1
 msgid "cover"
@@ -33,7 +32,7 @@ msgstr "cover"
 
 #: ../../source/introduction.md:3
 msgid "项目介绍"
-msgstr "{'translation': 'Project Introduction', 'confidence': 0.98}"
+msgstr "Project Introduction"
 
 #: ../../source/introduction.md:5
 msgid "SimpleLLMFunc 是什么?"
@@ -139,7 +138,7 @@ msgstr ""
 
 #: ../../source/introduction.md
 msgid "特性"
-msgstr "{'translation': 'feature', 'confidence': 0.98}"
+msgstr "feature"
 
 #: ../../source/introduction.md
 msgid "SimpleLLMFunc"
@@ -177,11 +176,11 @@ msgstr "circle"
 
 #: ../../source/introduction.md
 msgid "灵活性"
-msgstr "{'translation': 'flexibility', 'confidence': 0.99}"
+msgstr "flexibility"
 
 #: ../../source/introduction.md
 msgid "开发速度"
-msgstr "{\"translation\": \"Development speed\", \"confidence_score\": 0.98}"
+msgstr "Development Speed"
 
 #: ../../source/introduction.md
 msgid "调试性"
@@ -189,15 +188,15 @@ msgstr "debug"
 
 #: ../../source/introduction.md
 msgid "异步支持"
-msgstr "{\"translation\": \"asynchronous support\", \"confidence_score\": 0.98}"
+msgstr "Asynchronous Support"
 
 #: ../../source/introduction.md
 msgid "多模态支持"
-msgstr "{\"translation\": \"Multimodal support\", \"confidence\": 0.98}"
+msgstr "Multimodal Support"
 
 #: ../../source/introduction.md
 msgid "流量控制"
-msgstr "{\"translation\": \"Traffic control\", \"confidence\": 0.95}"
+msgstr "Traffic Control"
 
 #: ../../source/introduction.md
 msgid "类型安全"
@@ -214,18 +213,12 @@ msgstr "✅🌟"
 #: ../../source/introduction.md
 msgid "社区与生态系统"
 msgstr ""
-"{\n"
-"    \"translation\": \"Community and Ecosystem\",\n"
-"    \"confidence_score\": 0.99\n"
-"}"
+"Community and Ecosystem"
 
 #: ../../source/introduction.md:44
 msgid "样例展示"
 msgstr ""
-"{\n"
-"                                            \"translation\": \"Example display\",\n"
-"                                            \"confidence_score\": 0.99\n"
-"                                        }"
+"Example Display"
 
 #: ../../source/introduction.md:46
 msgid "下面是一个简单的示例，展示了 SimpleLLMFunc 的基本用法："
@@ -247,7 +240,7 @@ msgstr "Asynchronous Support Example"
 
 #: ../../source/introduction.md:126
 msgid "多模态支持示例"
-msgstr "{\"translation\": \"Multimodal support example\", \"confidence\": 0.98}"
+msgstr "Multimodal Support Example"
 
 #: ../../source/introduction.md:160
 msgid "动态模板参数示例"
@@ -396,7 +389,7 @@ msgstr ""
 
 #: ../../source/introduction.md:310
 msgid "日志系统"
-msgstr "{\"translation\": \"Log system\", \"confidence\": 0.98}"
+msgstr "Log System"
 
 #: ../../source/introduction.md:312
 msgid ""
@@ -414,7 +407,7 @@ msgstr ""
 
 #: ../../source/introduction.md:314
 msgid "工具系统"
-msgstr "{'translation': 'Tool system', 'confidence_score': 0.99}"
+msgstr "Tool system"
 
 #: ../../source/introduction.md:316
 msgid ""
@@ -430,10 +423,7 @@ msgstr ""
 #: ../../source/introduction.md:318
 msgid "适用人群"
 msgstr ""
-"{\n"
-"\"translation\": \"Target users\",\n"
-"\"confidence_score\": 0.95\n"
-"}"
+"Target Users"
 
 #: ../../source/introduction.md:320
 msgid "SimpleLLMFunc 特别适合以下朋友："

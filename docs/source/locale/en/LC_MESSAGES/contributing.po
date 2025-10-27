@@ -54,9 +54,7 @@ msgstr ""
 #: ../../source/contributing.md:11
 msgid "使用清晰的标题描述问题"
 msgstr ""
-"{\n"
-"\"translated_text\": \"Describe the problem with a clear title\", \"confidence_score\": 0.99\n"
-"}"
+"Describe the problem with a clear title"
 
 #: ../../source/contributing.md:12
 msgid "提供详细的问题描述或功能请求"
@@ -74,16 +72,11 @@ msgstr "If possible, include code examples or screenshots"
 #: ../../source/contributing.md:16
 msgid "提交代码更改(Pull Request)"
 msgstr ""
-"```json\n"
-"{\n"
-"  \"translation\": \"Submit code changes (Pull Request)\",\n"
-"  \"confidence_score\": 0.95\n"
-"}\n"
-"```"
+"Submit code changes (Pull Request)"
 
 #: ../../source/contributing.md:18
 msgid "Fork 项目仓库"
-msgstr "{'translation': 'Fork project warehouse', 'confidence': 0.85}"
+msgstr "Fork project warehouse"
 
 #: ../../source/contributing.md:19
 msgid "创建你的功能分支 (`git checkout -b feature/amazing-feature`)"
@@ -100,15 +93,12 @@ msgstr "Push to the branch (`git push origin feature/amazing-feature`)"
 
 #: ../../source/contributing.md:22
 msgid "提交 Pull Request"
-msgstr "{\"translation\": \"Submit Pull Request\", \"confidence\": 0.9}"
+msgstr "Submit Pull Request"
 
 #: ../../source/contributing.md:24
 msgid "开发流程"
 msgstr ""
-"{\n"
-"\"translation\": \"Development process\",\n"
-"\"confidence_score\": 0.95\n"
-"}"
+"Development Process"
 
 #: ../../source/contributing.md:26
 msgid "确保你已经设置好开发环境（见下文）"
@@ -133,9 +123,7 @@ msgstr "Follow the project's code style and conventions"
 #: ../../source/contributing.md:32
 msgid "开发环境设置"
 msgstr ""
-"```json\n"
-"{\"translation\": \"Development environment setup\", \"confidence\": 0.99}\n"
-"```"
+"Development Environment Setup"
 
 #: ../../source/contributing.md:34
 msgid "依赖项"
@@ -156,18 +144,12 @@ msgstr "Install development dependencies"
 #: ../../source/contributing.md:55
 msgid "代码规范"
 msgstr ""
-"{\n"
-"    \"translation\": \"Code standards\",\n"
-"    \"confidence_score\": \"\"\n"
-"}"
+"Code Standards"
 
 #: ../../source/contributing.md:57
 msgid "代码风格"
 msgstr ""
-"{\n"
-"  \"translated_text\": \"Code style\",\n"
-"  \"confidence_score\": 0.9 \n"
-"}"
+"Code Style"
 
 #: ../../source/contributing.md:59
 msgid ""
@@ -191,10 +173,7 @@ msgstr ""
 #: ../../source/contributing.md:69
 msgid "文档"
 msgstr ""
-"{\n"
-"  \"translated_text\": \"document\",\n"
-"  \"confidence_score\": 0.95\n"
-"}"
+"Documentation"
 
 #: ../../source/contributing.md:71
 msgid "所有公共 API 都应该有清晰的文档字符串"
@@ -215,7 +194,7 @@ msgstr "When updating features, please also update the related documentation"
 
 #: ../../source/contributing.md:87
 msgid "行为准则"
-msgstr "{\"translation\": \"code of conduct\", \"confidence_score\": 0.98}"
+msgstr "Code of Conduct"
 
 #: ../../source/contributing.md:89
 msgid "请尊重所有项目参与者，保持友好的交流环境。任何形式的骚扰或冒犯行为都是不可接受的。"
@@ -239,7 +218,7 @@ msgstr "Ask a question on GitHub Issues"
 #: ../../source/contributing.md:96
 msgid "联系项目维护者"
 msgstr ""
-"{'translation': 'Contact project maintainer', 'confidence_score': 0.94}"
+"Contact project maintainer"
 
 #: ../../source/contributing.md:98
 msgid "再次感谢你对 SimpleLLMFunc 的贡献！"

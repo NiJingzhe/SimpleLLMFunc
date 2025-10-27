@@ -66,10 +66,7 @@ msgstr ""
 #: ../../source/examples.md:14
 msgid "基本的文本分析"
 msgstr ""
-"{\n"
-"            \"translation\": \"Basic text analysis\",\n"
-"            \"confidence_score\": 0.98\n"
-"        }"
+"Basic Text Analysis"
 
 #: ../../source/examples.md:15
 msgid "动态模板参数的使用"
@@ -159,10 +156,7 @@ msgstr "Application of tools in dialogue"
 
 #: ../../source/examples.md:47
 msgid "对话会话的保存和加载"
-msgstr ""
-"{'translation': 'Saving and loading conversation sessions', "
-"'confidence_score': 0.98}"
-
+msgstr "Saving and loading conversation sessions"
 #: ../../source/examples.md:49
 msgid "并行工具调用"
 msgstr "Parallel tool call"
@@ -247,10 +241,7 @@ msgstr "OpenAI model configuration"
 
 #: ../../source/examples.md:75
 msgid "其他供应商的配置方式"
-msgstr ""
-"{'translation': 'Configuration method of other suppliers', 'confidence': "
-"0.9}"
-
+msgstr "Configuration method of other suppliers"
 #: ../../source/examples.md:76
 msgid "API 密钥和速率限制设置"
 msgstr "API key and rate limit settings"
@@ -277,9 +268,7 @@ msgstr "Pre-configured common LLM providers"
 
 #: ../../source/examples.md:84
 msgid "最佳实践的参数设置"
-msgstr ""
-"{'translation': 'Best practice parameter settings', 'confidence_score': 0.9}"
-
+msgstr "Best practice parameter settings"
 #: ../../source/examples.md:85
 msgid "多个 API 密钥的配置方式"
 msgstr "Multiple API key configuration methods"
@@ -291,10 +280,7 @@ msgstr "Examples Classified by Function"
 #: ../../source/examples.md:89
 msgid "文本处理"
 msgstr ""
-"{\n"
-"  \"translation\": \"Text processing\",\n"
-"  \"confidence_score\": 0.99\n"
-"}"
+"Text Processing"
 
 #: ../../source/examples.md:90
 msgid ""
@@ -507,9 +493,7 @@ msgstr "Learning multimodal processing: `multi_modality_toolcall.py`"
 
 #: ../../source/examples.md:160
 msgid "自定义 LLM 接口和工具系统"
-msgstr ""
-"{'translation': 'Custom LLM Interface and Tool System', 'confidence': 0.9}"
-
+msgstr "Custom LLM Interface and Tool System"
 #: ../../source/examples.md:162
 msgid "常见问题"
 msgstr "Frequently Asked Questions"

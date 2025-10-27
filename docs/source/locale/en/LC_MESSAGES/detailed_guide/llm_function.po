@@ -237,10 +237,7 @@ msgstr "Decorator behavior"
 #: ../../source/detailed_guide/llm_function.md:117
 msgid "数据流程"
 msgstr ""
-"{\n"
-"    \"translation\": \"Data flow\",\n"
-"    \"confidence_score\": 0.98\n"
-"}"
+"Data Flow"
 
 #: ../../source/detailed_guide/llm_function.md:119
 msgid "**函数调用捕获**: 当用户调用被装饰的函数时，装饰器捕获所有实际参数"
@@ -344,8 +341,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_function.md:145
 msgid "支持追踪 ID，便于调试复杂的调用链"
 msgstr ""
-"{\"translation\": \"Supports tracking IDs, facilitating the debugging of "
-"complex call chains\", \"confidence_score\": 0.95}"
+"Supports tracking IDs, facilitating the debugging of complex call chains"
 
 #: ../../source/detailed_guide/llm_function.md:146
 msgid "分级日志（调试、信息、警告、错误）"
@@ -353,7 +349,7 @@ msgstr "Hierarchical logging (debug, info, warning, error)"
 
 #: ../../source/detailed_guide/llm_function.md:148
 msgid "示例"
-msgstr "{\"translation\": \"Example\", \"confidence_score\": 0.99}"
+msgstr "Example"
 
 #: ../../source/detailed_guide/llm_function.md:150
 msgid "示例 1: 基本文本处理"
@@ -449,10 +445,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_function.md:549
 msgid "最佳实践"
 msgstr ""
-"{\n"
-"  \"translation\": \"Best practices\",\n"
-"  \"confidence_score\": 0.99\n"
-"}"
+"Best Practices"
 
 #: ../../source/detailed_guide/llm_function.md:551
 msgid "1. 错误处理"

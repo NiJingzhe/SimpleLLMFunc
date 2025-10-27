@@ -33,7 +33,7 @@ msgstr ""
 
 #: ../../source/langfuse_integration.md:5
 msgid "功能特性"
-msgstr "{'translation': 'Features', 'confidence_score': 0.99}"
+msgstr "Features"
 
 #: ../../source/langfuse_integration.md:7
 msgid "**LLM 生成追踪**: 自动记录所有 LLM 调用的输入、输出、模型参数和使用统计"
@@ -66,9 +66,7 @@ msgstr ""
 #: ../../source/langfuse_integration.md:13
 msgid "安装和配置"
 msgstr ""
-"```json\n"
-"{\"translation\": \"Installation and configuration\", \"confidence_score\": 0.95}\n"
-"```"
+"Installation and Configuration"
 
 #: ../../source/langfuse_integration.md:15
 msgid "1. 安装 Langfuse"
@@ -88,7 +86,7 @@ msgstr "Visit [Langfuse](https://langfuse.com) and register an account"
 
 #: ../../source/langfuse_integration.md:30
 msgid "创建新项目"
-msgstr "{'translation': 'Create new project', 'confidence': 0.96}"
+msgstr "Create new project"
 
 #: ../../source/langfuse_integration.md:31
 msgid "获取项目的 Public Key 和 Secret Key"
@@ -101,8 +99,7 @@ msgstr "3. Configure environment variables"
 #: ../../source/langfuse_integration.md:42
 msgid "4. 初始化观测系统"
 msgstr ""
-"{\"translation\": \"4. Initialize observation system\", "
-"\"confidence_score\": 0.95}"
+"4. Initialize observation system"
 
 #: ../../source/langfuse_integration.md:44
 msgid "SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse："
@@ -135,7 +132,7 @@ msgstr "Chat conversation tracking"
 
 #: ../../source/langfuse_integration.md:149
 msgid "追踪数据结构"
-msgstr "{'translation': 'tracking data structure', 'confidence_score': 0.98}"
+msgstr "tracking data structure"
 
 #: ../../source/langfuse_integration.md:151
 msgid "Generation 追踪"
@@ -191,15 +188,15 @@ msgstr "Hierarchical structure"
 
 #: ../../source/langfuse_integration.md:189
 msgid "配置选项"
-msgstr "{\"translation\": \"Configuration options\", \"confidence_score\": 0.98}"
+msgstr "Configuration Options"
 
 #: ../../source/langfuse_integration.md:191
 msgid "环境变量"
-msgstr "{'translation': 'environment variable', 'confidence_score': 0.95}"
+msgstr "environment variable"
 
 #: ../../source/langfuse_integration.md
 msgid "变量名"
-msgstr "{\"translation\": \"variable name\", \"confidence\": 0.98}"
+msgstr "Variable Name"
 
 #: ../../source/langfuse_integration.md
 msgid "描述"
@@ -281,10 +278,7 @@ msgstr ""
 #: ../../source/langfuse_integration.md:219
 msgid "最佳实践"
 msgstr ""
-"{\n"
-"    \"translation\": \"Best practice\",\n"
-"    \"confidence_score\": 0.98\n"
-"}"
+"Best Practice"
 
 #: ../../source/langfuse_integration.md:221
 msgid "1. 环境分离"
@@ -322,10 +316,7 @@ msgstr "You can temporarily disable observation with `LANGFUSE_ENABLED=false`"
 #: ../../source/langfuse_integration.md:250
 msgid "4. 数据隐私"
 msgstr ""
-"{\n"
-"\"translation\": \"4. Data Privacy\",\n"
-"\"confidence_score\": 0.98\n"
-"}"
+"4. Data Privacy"
 
 #: ../../source/langfuse_integration.md:252
 msgid "确保敏感数据在发送到 Langfuse 前已脱敏"
@@ -353,10 +344,7 @@ msgstr "Observer not available"
 #: ../../source/langfuse_integration.md:263
 msgid "检查环境变量是否正确设置"
 msgstr ""
-"{\n"
-"  \"translation\": \"Check if environment variables are set correctly\",\n"
-"  \"confidence_score\": 0.98\n"
-"}"
+"Check if environment variables are set correctly"
 
 #: ../../source/langfuse_integration.md:264
 msgid "确认 Langfuse 包已安装"
@@ -364,7 +352,7 @@ msgstr "Confirm that the Langfuse package is installed"
 
 #: ../../source/langfuse_integration.md:266
 msgid "**连接失败**"
-msgstr "{\"translation\": \"Connection failed\", \"confidence_score\": 0.99}"
+msgstr "Connection Failed"
 
 #: ../../source/langfuse_integration.md:270
 msgid "检查网络连接"
@@ -396,7 +384,7 @@ msgstr "Waiting for data synchronization (usually a few seconds)"
 
 #: ../../source/langfuse_integration.md:279
 msgid "调试模式"
-msgstr "{'translation': 'Debug mode', 'confidence': 0.96}"
+msgstr "Debug mode"
 
 #: ../../source/langfuse_integration.md:291
 msgid "示例项目"
@@ -410,7 +398,7 @@ msgstr ""
 
 #: ../../source/langfuse_integration.md:295
 msgid "相关链接"
-msgstr "{\"translation\": \"Related links\", \"confidence_score\": 0.98}"
+msgstr "Related Links"
 
 #: ../../source/langfuse_integration.md:297
 msgid "[Langfuse 官方文档](https://langfuse.com/docs)"

@@ -26,7 +26,7 @@ msgstr "Tool"
 
 #: ../../source/detailed_guide/tool.md:3
 msgid "实现功能"
-msgstr "{'translation': 'Implement function', 'confidence': 0.98}"
+msgstr "Implement function"
 
 #: ../../source/detailed_guide/tool.md:5
 msgid ""
@@ -177,8 +177,7 @@ msgstr "return type example"
 #: ../../source/detailed_guide/tool.md:96
 msgid "返回类型处理机制"
 msgstr ""
-"{\"translation\": \"Return type processing mechanism\", "
-"\"confidence_score\": 0.95}"
+"Return Type Processing Mechanism"
 
 #: ../../source/detailed_guide/tool.md:98
 msgid "**基本类型**: 直接序列化为 JSON 字符串传递给 LLM"
@@ -249,10 +248,7 @@ msgstr "Usage"
 #: ../../source/detailed_guide/tool.md:115
 msgid "基本语法"
 msgstr ""
-"{\n"
-"  \"translation\": \"Basic grammar\",\n"
-"  \"confidence_score\": 0.98\n"
-"}"
+"Basic Grammar"
 
 #: ../../source/detailed_guide/tool.md:117
 msgid "方式一：装饰器方式（推荐）"
@@ -449,7 +445,7 @@ msgstr "Select appropriate return type"
 
 #: ../../source/detailed_guide/tool.md:657
 msgid "**文本输出优先**: 如果工具主要产生文本结果，使用 `str` 或结构化的 `Dict`"
-msgstr "{\"translation\": \"Text output first\", \"confidence_score\": 0.95}"
+msgstr "Text Output First"
 
 #: ../../source/detailed_guide/tool.md:658
 msgid "**结构化数据**: 复杂数据使用 `Dict` 或 `List`，便于 LLM 理解和处理"
@@ -476,17 +472,11 @@ msgstr "Performance optimization suggestions"
 #: ../../source/detailed_guide/tool.md:692
 msgid "错误处理模式"
 msgstr ""
-"{\n"
-"  \"translation\": \"Error handling mode\",\n"
-"  \"confidence_score\": 0.98\n"
-"}"
+"Error Handling Mode"
 
 #: ../../source/detailed_guide/tool.md:732
 msgid "多模态类型详细说明"
-msgstr ""
-"{'translation': 'Detailed explanation of multimodal types', 'confidence': "
-"0.9}"
-
+msgstr "Detailed explanation of multimodal types"
 #: ../../source/detailed_guide/tool.md:763
 msgid ""
 "工具系统提供了强大而灵活的扩展机制，让 LLM 能够调用各种外部功能。通过装饰器方式，开发者可以轻松地将现有函数转换为 LLM "

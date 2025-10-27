@@ -121,10 +121,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_chat.md:28
 msgid "基本语法"
 msgstr ""
-"{\n"
-"  \"translation\": \"Basic grammar\",\n"
-"  \"confidence_score\": 0.98\n"
-"}"
+"Basic Grammar"
 
 #: ../../source/detailed_guide/llm_chat.md:52
 msgid "参数说明"
@@ -132,10 +129,7 @@ msgstr "parameter description"
 
 #: ../../source/detailed_guide/llm_chat.md:54
 msgid "**llm_interface** (必需): LLM 接口实例，用于与大语言模型通信"
-msgstr ""
-"{'translation': 'llm_interface (required): LLM interface instance, used for "
-"communication with the large language model', 'confidence_score': 0.95}"
-
+msgstr "llm_interface (required): LLM interface instance, used for communication with the large language model"
 #: ../../source/detailed_guide/llm_chat.md:55
 msgid "**toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数"
 msgstr ""
@@ -176,10 +170,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_chat.md:61
 msgid "返回值"
 msgstr ""
-"{\n"
-"\"translation\": \"Return value\",\n"
-"\"confidence_score\": 0.9\n"
-"}"
+"Return Value"
 
 #: ../../source/detailed_guide/llm_chat.md:63
 msgid "`llm_chat` 装饰的函数返回一个异步生成器，每次迭代返回："
@@ -239,7 +230,7 @@ msgstr "`return_mode` parameter controls the data type of the returned data:"
 
 #: ../../source/detailed_guide/llm_chat.md:263
 msgid "并发聊天会话"
-msgstr "{'translation': 'Concurrent chat session', 'confidence_score': 0.95}"
+msgstr "Concurrent chat session"
 
 #: ../../source/detailed_guide/llm_chat.md:265
 msgid "使用 `asyncio.gather` 处理多个并发的聊天会话："
@@ -247,7 +238,7 @@ msgstr "Using `asyncio.gather` to handle multiple concurrent chat sessions:"
 
 #: ../../source/detailed_guide/llm_chat.md:306
 msgid "最佳实践"
-msgstr "{\"translation\": \"Best Practices\", \"confidence_score\": 0.98}"
+msgstr "Best Practices"
 
 #: ../../source/detailed_guide/llm_chat.md:308
 msgid "1. 错误处理"
@@ -255,7 +246,7 @@ msgstr "1. Error handling"
 
 #: ../../source/detailed_guide/llm_chat.md:322
 msgid "2. 超时控制"
-msgstr "{\"translation\": \"2. Timeout Control\", \"confidence\": 0.98}"
+msgstr "2. Timeout Control"
 
 #: ../../source/detailed_guide/llm_chat.md:337
 msgid "3. 历史记录限制"
@@ -272,7 +263,7 @@ msgstr "4. Logging and Debugging"
 
 #: ../../source/detailed_guide/llm_chat.md:381
 msgid "常见问题"
-msgstr "{\"translation\": \"FAQ\", \"detail\": {\"confidence\": 0.98}}"
+msgstr "FAQ"
 
 #: ../../source/detailed_guide/llm_chat.md:383
 msgid "Q: 如何保存和恢复对话历史？"

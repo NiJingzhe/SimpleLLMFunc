@@ -26,7 +26,7 @@ extensions = [
 language = os.environ.get('SPHINX_LANGUAGE', 'en')
 
 # 国际化配置
-locale_dirs = ['source/locale/']
+locale_dirs = ['locale/']
 gettext_compact = False
 
 # 语言显示名称映射

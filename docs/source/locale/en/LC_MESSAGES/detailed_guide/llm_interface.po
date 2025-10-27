@@ -45,8 +45,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_interface.md:9
 msgid "**LLM_Interface** - 抽象基类，定义标准接口规范"
 msgstr ""
-"{'translated_text': 'LLM_Interface - Abstract base class, defining standard "
-"interface specifications', 'confidence_score': 0.95}"
+"LLM_Interface - Abstract base class, defining standard interface specifications"
 
 #: ../../source/detailed_guide/llm_interface.md:10
 msgid "**APIKeyPool** - API 密钥池，实现负载均衡"
@@ -125,7 +124,7 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_interface.md:77
 msgid "接口定义"
-msgstr "{\"translation\": \"Interface definition\", \"confidence\": 0.98}"
+msgstr "Interface Definition"
 
 #: ../../source/detailed_guide/llm_interface.md:132
 msgid "OpenAICompatible 实现"
@@ -155,7 +154,7 @@ msgstr "400: Bad Request. The source language (Chinese) is not supported."
 
 #: ../../source/detailed_guide/llm_interface.md:141
 msgid "火山引擎 Ark"
-msgstr "{\"translation\": \"Volcano Engine Ark\", \"confidence\": 0.95}"
+msgstr "Volcano Engine Ark"
 
 #: ../../source/detailed_guide/llm_interface.md:142
 msgid "百度千帆"
@@ -171,7 +170,7 @@ msgstr "Any service compatible with the OpenAI API"
 
 #: ../../source/detailed_guide/llm_interface.md:146
 msgid "创建接口"
-msgstr "{\"translation\": \"Create interface\", \"confidence\": 0.98}"
+msgstr "Create Interface"
 
 #: ../../source/detailed_guide/llm_interface.md:148
 msgid "方式 1: 从配置文件加载（推荐）"
@@ -299,7 +298,7 @@ msgstr "Thread safety: Unified lock protects all operations"
 
 #: ../../source/detailed_guide/llm_interface.md:269
 msgid "配置参数"
-msgstr "{\"translation\": \"Configuration parameters\", \"confidence\": 0.98}"
+msgstr "Configuration Parameters"
 
 #: ../../source/detailed_guide/llm_interface.md
 msgid "参数"
@@ -319,7 +318,7 @@ msgstr "Recommended value"
 
 #: ../../source/detailed_guide/llm_interface.md
 msgid "`capacity`"
-msgstr "{\"translation\": \"容量\", \"confidence_score\": 0.98}"
+msgstr "Capacity"
 
 #: ../../source/detailed_guide/llm_interface.md
 msgid "int"
@@ -338,9 +337,7 @@ msgstr "10-50"
 #: ../../source/detailed_guide/llm_interface.md
 msgid "`refill_rate`"
 msgstr ""
-"```json\n"
-"{\"translation\": \"refill_rate\", \"confidence_score\": 0.9}\n"
-"```"
+"refill_rate"
 
 #: ../../source/detailed_guide/llm_interface.md
 msgid "float"
@@ -396,7 +393,7 @@ msgstr "Troubleshooting"
 
 #: ../../source/detailed_guide/llm_interface.md:420
 msgid "常见问题"
-msgstr "{'translation': 'FAQ', 'confidence': 0.98}"
+msgstr "FAQ"
 
 #: ../../source/detailed_guide/llm_interface.md:422
 msgid "**\"Rate limit exceeded\" 错误**"
@@ -412,7 +409,7 @@ msgstr "Check if the rate limit in the configuration matches the API limit"
 
 #: ../../source/detailed_guide/llm_interface.md:426
 msgid "**密钥持续失败**"
-msgstr "{'translation': 'Key repeatedly fails', 'confidence_score': 0.95}"
+msgstr "Key repeatedly fails"
 
 #: ../../source/detailed_guide/llm_interface.md:427
 msgid "检查 API 密钥是否有效且有足够配额"
@@ -438,7 +435,7 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_interface.md:434
 msgid "调试技巧"
-msgstr "{\"translation\": \"Debugging skills\", \"confidence_score\": 0.95}"
+msgstr "Debugging Skills"
 
 #: ../../source/detailed_guide/llm_interface.md:447
 msgid "总结"

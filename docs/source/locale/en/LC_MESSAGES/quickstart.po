@@ -177,8 +177,7 @@ msgstr ""
 #: ../../source/quickstart.md:282
 msgid "**一个函数定义，多种使用场景**"
 msgstr ""
-"{\"translation\": \"A function definition, multiple use cases\", "
-"\"confidence\": 0.95}"
+"A function definition, multiple use cases"
 
 #: ../../source/quickstart.md:283
 msgid "**调用时动态指定角色和任务**"
@@ -209,8 +208,7 @@ msgstr ""
 #: ../../source/quickstart.md:363
 msgid "查看控制台输出的彩色日志"
 msgstr ""
-"{\"translated_text\": \"View colored logs output to the console\", "
-"\"confidence_score\": 0.95}"
+"View colored logs output to the console"
 
 #: ../../source/quickstart.md:364
 msgid "检查 `./agent.log` 文件中的详细日志"
@@ -324,15 +322,9 @@ msgstr "Try to create your own LLM application"
 #: ../../source/quickstart.md:414
 msgid "参与社区讨论和贡献"
 msgstr ""
-"{\n"
-"    \"translation\": \"Participate in community discussions and contributions\",\n"
-"    \"confidence_score\": 0.98\n"
-"}"
+"Participate in community discussions and contributions"
 
 #: ../../source/quickstart.md:416
 msgid "祝您使用愉快！"
 msgstr ""
-"{\n"
-"  \"translation\": \"We hope you enjoy your use!\",\n"
-"  \"confidence_score\": 0.97\n"
-"}"
+"We hope you enjoy your use!"

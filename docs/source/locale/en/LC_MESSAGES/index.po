@@ -46,7 +46,7 @@ msgstr "Directory:"
 
 #: ../../source/index.md:1
 msgid "SimpleLLMFunc documentation"
-msgstr "SimpleLLMFunc文档"
+msgstr "SimpleLLMFunc Documentation"
 
 #: ../../source/index.md:3
 msgid "SimpleLLMFunc 是一个轻量级、可配置的 LLM 应用开发框架。"
