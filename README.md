@@ -4,6 +4,12 @@
 <h2 style="font-size:2em;">LLM as Function, Prompt as Code</h2>
 </center>
 
+<div align="center">
+  <a href="README_EN.md" style="font-size: 1.2em; font-weight: bold; color: #007acc; text-decoration: none; border: 2px solid #007acc; padding: 8px 16px; border-radius: 6px; background: linear-gradient(135deg, #f0f8ff, #e6f3ff);">
+    📖 English Version README Available
+  </a>
+</div>
+
 ----
 
 ![Github Stars](https://img.shields.io/github/stars/NiJingzhe/SimpleLLMFunc.svg?style=social)
@@ -21,7 +27,9 @@
 
 ### 📚 完整文档
 
-阅读详细文档：[中文文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html)
+阅读详细文档：[中文文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html) 
+
+> 💡 **多语言支持**: 本项目同时提供中文和英文文档，点击上方链接切换语言版本
 
 -----
 
@@ -792,10 +800,11 @@ python examples/parallel_toolcall_example.py
 
 ## 📖 更多资源
 
-- 📚 [完整文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html)
+- 📚 [完整文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html) | [English Docs](https://simplellmfunc.readthedocs.io/en/latest/introduction.html)
 - 🔄 [更新日志](CHANGELOG.md)
 - 🔗 [GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc)
 - 🤖 [SimpleManus (Agent 框架)](https://github.com/NiJingzhe/SimpleManus)
+- 🌍 [English README](README_EN.md)
 
 ## Star History
 
