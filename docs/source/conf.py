@@ -21,7 +21,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = []
+exclude_patterns = []   # type: ignore
 
 # 国际化配置
 locale_dirs = ['../locale/']   # 翻译文件目录

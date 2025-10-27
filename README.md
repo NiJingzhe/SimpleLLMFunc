@@ -5,8 +5,8 @@
 </center>
 
 <div align="center">
-  <a href="README_EN.md" style="font-size: 1.2em; font-weight: bold; color: #007acc; text-decoration: none; border: 2px solid #007acc; padding: 8px 16px; border-radius: 6px; background: linear-gradient(135deg, #f0f8ff, #e6f3ff);">
-    📖 English Version README Available
+  <a href="README_ZH.md" style="font-size: 1.2em; font-weight: bold; color: #007acc; text-decoration: none; border: 2px solid #007acc; padding: 8px 16px; border-radius: 6px; background: linear-gradient(135deg, #f0f8ff, #e6f3ff);">
+    📖 中文版 README 可用
   </a>
 </div>
 
@@ -21,69 +21,66 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.2.14 Latest)
+### Update Notes (0.3.0 Latest)
 
-查看 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** 了解所有版本改进
+Check **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for all version improvements
 
-### 📚 完整文档
+### 📚 Complete Documentation
 
-阅读详细文档：[中文文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html) 
+> Read detailed documentation: [Chinese Docs](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html) | [English Docs](https://simplellmfunc.readthedocs.io/en/latest/introduction.html)
+-----
 
-> 💡 **多语言支持**: 本项目同时提供中文和英文文档，点击上方链接切换语言版本
+## 💡 Project Introduction
+
+**SimpleLLMFunc** is a lightweight yet comprehensive LLM/Agent application development framework. Its core philosophy is:
+
+### 🎯 Core Design Philosophy
+
+- **"LLM as Function"** - Treat LLM calls as ordinary Python function calls
+- **"Prompt as Code"** - Prompts are directly written in function DocStrings, clear at a glance
+- **"Code as Doc"** - Function definitions serve as complete documentation
+
+Through simple decorators, you can integrate LLM capabilities into Python applications with minimal code and the most intuitive approach.
+
+### 🤔 Problems Solved
+
+If you've encountered these dilemmas in LLM development:
+
+1. **Over-abstraction** - Low-code frameworks introduce too much abstraction for custom functionality, making code difficult to understand and maintain
+2. **Lack of type safety** - Workflow frameworks lack type hints, leading to errors in complex flows and uncertainty about return formats
+3. **Steep learning curve** - Frameworks like LangChain have cumbersome documentation, requiring extensive reading just to implement simple requirements
+4. **Flow limitations** - Many frameworks only support DAG (Directed Acyclic Graph), unable to build complex logic with loops or branches
+5. **Code duplication** - Without frameworks, you have to manually write API call code, repeating the same work every time, with prompts scattered throughout the code
+6. **Insufficient observability** - Lack of complete log tracking and performance monitoring capabilities
+
+**SimpleLLMFunc** is designed specifically to solve these pain points.
+
+### ✨ Core Advantages
+
+- ✅ **Code as Documentation** - Prompts in function DocStrings, clear at a glance
+- ✅ **Type Safety** - Python type annotations + Pydantic models, enjoy IDE code completion and type checking
+- ✅ **Extremely Simple** - Only one decorator needed, automatically handles API calls, message building, response parsing
+- ✅ **Complete Freedom** - Function-based design, supports arbitrary flow control logic (loops, branches, recursion, etc.)
+- ✅ **Async Native** - Full async support, naturally adapts to high-concurrency scenarios, no additional configuration needed
+- ✅ **Complete Features** - Built-in tool system, multimodal support, API key management, traffic control, structured logging, observability integration
+- ✅ **Provider Agnostic** - OpenAI-compatible adaptation, easily switch between multiple model vendors
+- ✅ **Easy to Extend** - Modular design, supports custom LLM interfaces and tools
+
+> ⚠️ **Important** - All LLM interaction decorators (`@llm_function`, `@llm_chat`, `@tool`, etc.) support decorating both sync and async functions, but all returned results are async functions. Please call them using `await` or `asyncio.run()`.
 
 -----
 
-## 💡 项目介绍
+## 🚀 Quick Start
 
-**SimpleLLMFunc** 是一个轻量但完备的 LLM/Agent 应用开发框架。它的核心理念是：
+### Installation
 
-### 🎯 核心设计理念
-
-- **"LLM as Function"** - 将 LLM 调用视为普通的 Python 函数调用
-- **"Prompt as Code"** - Prompt 直接作为函数的 DocString，一目了然
-- **"Code as Doc"** - 函数定义同时就是完整的文档
-
-通过简单的装饰器，你可以用最少的代码和最直观的方式集成 LLM 能力到 Python 应用中。
-
-### 🤔 解决的问题
-
-如果你在 LLM 开发中遇到过以下困境：
-
-1. **抽象过度** - 低代码框架为了自定义功能引入过多抽象，代码变得难以理解和维护
-2. **缺乏类型安全** - Workflow 框架没有类型提示，导致复杂流程中容易出错，不知道上一步的返回格式
-3. **学习曲线陡峭** - LangChain 等框架文档繁琐，仅仅实现一个简单需求也要阅读大量内容
-4. **流程限制** - 许多框架只支持 DAG（有向无环图），无法构建有循环或分支的复杂逻辑
-5. **代码重复** - 不用框架就得手写 API 调用代码，每次都要重复编写，Prompt 散落在代码各处
-6. **可观测性不足** - 缺乏完整的日志跟踪和性能监控能力
-
-**SimpleLLMFunc** 正是为了解决这些痛点而设计的。
-
-### ✨ 核心优势
-
-- ✅ **代码即文档** - Prompt 在函数 DocString 中，一眼看清楚
-- ✅ **类型安全** - Python 类型标注 + Pydantic 模型，享受 IDE 代码补全和类型检查
-- ✅ **极简易用** - 仅需一个装饰器，自动处理 API 调用、消息构建、响应解析
-- ✅ **完全自由** - 基于函数的设计，支持任意流程控制逻辑（循环、分支、递归等）
-- ✅ **异步原生** - 全异步支持，天然适配高并发场景，无需额外配置
-- ✅ **功能完整** - 内置工具系统、多模态支持、API 密钥管理、流量控制、结构化日志、可观测性集成
-- ✅ **提供商无关** - OpenAI-compatible 适配，轻松切换多个模型供应商
-- ✅ **易于扩展** - 模块化设计，支持自定义 LLM 接口和工具
-
-> ⚠️ **重要** - 所有与 LLM 交互的装饰器（`@llm_function`、`@llm_chat`、`@tool` 等）支持装饰sync和async函数，但是返回的结果全部都是async函数，使用时请通过 `await` 或 `asyncio.run()` 调用。
-
------
-
-## 🚀 快速开始
-
-### 安装
-
-**方式 1：PyPI（推荐）**
+**Method 1: PyPI (Recommended)**
 
 ```bash
 pip install SimpleLLMFunc
 ```
 
-**方式 2：源码安装**
+**Method 2: Source Installation**
 
 ```bash
 git clone https://github.com/NiJingzhe/SimpleLLMFunc.git
@@ -91,194 +88,193 @@ cd SimpleLLMFunc
 poetry install
 ```
 
-### 初始化配置
+### Initial Configuration
 
-1. 复制配置模板：
+1. Copy configuration template:
 
 ```bash
 cp env_template .env
 ```
 
-2. 在 `.env` 中配置 API 密钥和其他参数，推荐配置 `LOG_DIR` 和 `LANGFUSE_BASE_URL`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_PUBLIC_KEY`，用于配置日志和Langfuse的追踪。
+2. Configure API keys and other parameters in `.env`. It's recommended to configure `LOG_DIR` and `LANGFUSE_BASE_URL`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` for logging and Langfuse tracking.
 
-3. 查看 `examples/provider_template.json` 了解如何配置多个 LLM 供应商
+3. Check `examples/provider_template.json` to understand how to configure multiple LLM providers
 
-### 一个简单例子
+### A Simple Example
 
 ```python
 import asyncio
 from SimpleLLMFunc import llm_function, OpenAICompatible
 
-# 从配置文件加载 LLM 接口
+# Load LLM interface from configuration file
 llm = OpenAICompatible.load_from_json_file("provider.json")["your_provider"]["model"]
 
 @llm_function(llm_interface=llm)
 async def classify_sentiment(text: str) -> str:
     """
-    分析文本的情感倾向。
+    Analyze the sentiment tendency of text.
 
     Args:
-        text: 要分析的文本
+        text: Text to analyze
 
     Returns:
-        情感分类，可为 'positive', 'negative', 或 'neutral'
+        Sentiment classification, can be 'positive', 'negative', or 'neutral'
     """
     pass  # Prompt as Code!
 
 async def main():
-    result = await classify_sentiment("这个产品太棒了！")
-    print(f"情感分类: {result}")
+    result = await classify_sentiment("This product is amazing!")
+    print(f"Sentiment classification: {result}")
 
 asyncio.run(main())
 ```
 
-## ✨ 核心特性
+## ✨ Core Features
 
-| 特性 | 说明 |
-|------|------|
-| **@llm_function 装饰器** | 将任何异步函数转化为 LLM 驱动函数，自动处理 Prompt 构建、API 调用和响应解析 |
-| **@llm_chat 装饰器** | 构建对话型 Agent，支持流式响应和工具调用 |
-| **@tool 装饰器** | 将异步函数注册为 LLM 可用工具，支持多模态返回（图片、文本等） |
-| **类型安全** | Python 类型标注 + Pydantic 模型确保类型正确，享受 IDE 代码补全 |
-| **异步原生** | 全异步设计，原生支持 asyncio，天然适配高并发场景 |
-| **多模态支持** | 支持 `Text`、`ImgUrl`、`ImgPath` 多模态输入输出 |
-| **OpenAI 兼容** | 支持任何兼容 OpenAI API 的模型服务（OpenAI、Deepseek、Claude、LocalLLM 等） |
-| **API 密钥管理** | 自动负载均衡多个 API 密钥，优化资源利用 |
-| **流量控制** | 令牌桶算法实现智能流量平滑，防止速率限制 |
-| **结构化日志** | 完整的 trace_id 追踪，自动记录请求/响应/工具调用 |
-| **可观测性集成** | 集成 Langfuse，完整的 LLM 可观测性支持 |
-| **灵活配置** | JSON 格式的 provider 配置，轻松管理多个模型和供应商 |
+| Feature | Description |
+|---------|-------------|
+| **@llm_function decorator** | Transform any async function into an LLM-driven function, automatically handles Prompt building, API calls, and response parsing |
+| **@llm_chat decorator** | Build conversational Agents, supports streaming responses and tool calls |
+| **@tool decorator** | Register async functions as LLM-available tools, supports multimodal returns (images, text, etc.) |
+| **Type Safety** | Python type annotations + Pydantic models ensure type correctness, enjoy IDE code completion |
+| **Async Native** | Fully async design, native asyncio support, naturally adapts to high-concurrency scenarios |
+| **Multimodal Support** | Supports `Text`, `ImgUrl`, `ImgPath` multimodal input/output |
+| **OpenAI Compatible** | Supports any OpenAI API-compatible model service (OpenAI, Deepseek, Claude, LocalLLM, etc.) |
+| **API Key Management** | Automatic load balancing of multiple API keys, optimize resource utilization |
+| **Traffic Control** | Token bucket algorithm implements intelligent traffic smoothing, prevents rate limiting |
+| **Structured Logging** | Complete trace_id tracking, automatically records requests/responses/tool calls |
+| **Observability Integration** | Integrated Langfuse, complete LLM observability support |
+| **Flexible Configuration** | JSON format provider configuration, easily manage multiple models and vendors |
 
-## 📖 详细指南
+## 📖 Detailed Guide
 
-### 1. LLM 函数装饰器 - "Prompt As Code"
+### 1. LLM Function Decorator - "Prompt As Code"
 
-SimpleLLMFunc 的核心理念就是 **"Prompt as Code, Code as Doc"**。通过将 Prompt 直接编写在函数 DocString 中，实现：
+The core philosophy of SimpleLLMFunc is **"Prompt as Code, Code as Doc"**. By writing Prompts directly in function DocStrings, it achieves:
 
-| 优势 | 说明 |
-|------|------|
-| **代码可读性** | Prompt 与函数紧密结合，无需到处查找 Prompt 变量 |
-| **类型安全** | 类型标注 + Pydantic 模型保证输入输出正确性 |
-| **IDE 支持** | 完整的代码补全和类型检查 |
-| **自文档化** | DocString 既是函数文档，也是 LLM 的 Prompt |
+| Advantage | Description |
+|-----------|-------------|
+| **Code Readability** | Prompts are tightly integrated with functions, no need to search for Prompt variables everywhere |
+| **Type Safety** | Type annotations + Pydantic models ensure input/output correctness |
+| **IDE Support** | Complete code completion and type checking |
+| **Self-documenting** | DocString serves as both function documentation and LLM Prompt |
 
-#### @llm_function - 无状态函数
+#### @llm_function - Stateless Functions
 
 ```python
 """
-使用LLM函数装饰器的示例
+Example using LLM function decorator
 """
 import asyncio
 from typing import List
 from pydantic import BaseModel, Field
 from SimpleLLMFunc import llm_function, OpenAICompatible, app_log
 
-# 定义一个Pydantic模型作为返回类型
+# Define a Pydantic model as return type
 class ProductReview(BaseModel):
-    rating: int = Field(..., description="产品评分，1-5分")
-    pros: List[str] = Field(..., description="产品优点列表")
-    cons: List[str] = Field(..., description="产品缺点列表")
-    summary: str = Field(..., description="评价总结")
+    rating: int = Field(..., description="Product rating, 1-5 points")
+    pros: List[str] = Field(..., description="List of product advantages")
+    cons: List[str] = Field(..., description="List of product disadvantages")
+    summary: str = Field(..., description="Review summary")
 
-# 使用装饰器创建一个LLM函数
+# Use decorator to create an LLM function
 @llm_function(
     llm_interface=OpenAICompatible.load_from_json_file("provider.json")["volc_engine"]["deepseek-v3-250324"]
 )
 async def analyze_product_review(product_name: str, review_text: str) -> ProductReview:
-    """你是一个专业的产品评测专家，需要客观公正地分析以下产品评论，并生成一份结构化的评测报告。
+    """You are a professional product review expert who needs to objectively analyze the following product review and generate a structured review report.
     
-    报告应该包括：
-    1. 产品总体评分（1-5分）
-    2. 产品的主要优点列表
-    3. 产品的主要缺点列表
-    4. 总结性评价
+    The report should include:
+    1. Overall product rating (1-5 points)
+    2. List of main product advantages
+    3. List of main product disadvantages
+    4. Summary evaluation
     
-    评分规则：
-    - 5分：完美，几乎没有缺点
-    - 4分：优秀，优点明显大于缺点
-    - 3分：一般，优缺点基本持平
-    - 2分：较差，缺点明显大于优点
-    - 1分：很差，几乎没有优点
+    Rating rules:
+    - 5 points: Perfect, almost no disadvantages
+    - 4 points: Excellent, advantages clearly outweigh disadvantages
+    - 3 points: Average, advantages and disadvantages are basically equal
+    - 2 points: Poor, disadvantages clearly outweigh advantages
+    - 1 point: Very poor, almost no advantages
     
     Args:
-        product_name: 要评测的产品名称
-        review_text: 用户对产品的评论内容
+        product_name: Name of the product to review
+        review_text: User's review content of the product
         
     Returns:
-        一个结构化的ProductReview对象，包含评分、优点列表、缺点列表和总结
+        A structured ProductReview object containing rating, advantages list, disadvantages list, and summary
     """
     pass  # Prompt as Code, Code as Doc
 
 async def main():
     
-    app_log("开始运行示例代码")
-    # 测试产品评测分析
-    product_name = "XYZ无线耳机"
+    app_log("Starting example code")
+    # Test product review analysis
+    product_name = "XYZ Wireless Headphones"
     review_text = """
-    我买了这款XYZ无线耳机已经使用了一个月。音质非常不错，尤其是低音部分表现出色，
-    佩戴也很舒适，可以长时间使用不感到疲劳。电池续航能力也很强，充满电后可以使用约8小时。
-    不过连接偶尔会有些不稳定，有时候会突然断开。另外，触控操作不够灵敏，经常需要点击多次才能响应。
-    总的来说，这款耳机性价比很高，适合日常使用，但如果你需要用于专业音频工作可能还不够。
+    I've been using these XYZ wireless headphones for a month. The sound quality is very good, especially the bass performance is excellent,
+    and they're comfortable to wear, can be used for long periods without fatigue. The battery life is also strong, can last about 8 hours after full charge.
+    However, the connection is occasionally unstable, sometimes suddenly disconnects. Also, the touch controls are not sensitive enough, often need to click multiple times to respond.
+    Overall, these headphones have great value for money, suitable for daily use, but if you need them for professional audio work, they might not be enough.
     """
     
     try:
-        print("\n===== 产品评测分析 =====")
+        print("\n===== Product Review Analysis =====")
         result = await analyze_product_review(product_name, review_text)
         # result is directly a Pydantic model instance
         # no need to deserialize
-        print(f"评分: {result.rating}/5")
-        print("优点:")
+        print(f"Rating: {result.rating}/5")
+        print("Advantages:")
         for pro in result.pros:
             print(f"- {pro}")
-        print("缺点:")
+        print("Disadvantages:")
         for con in result.cons:
             print(f"- {con}")
-        print(f"总结: {result.summary}")
+        print(f"Summary: {result.summary}")
     except Exception as e:
-        print(f"产品评测分析失败: {e}")
+        print(f"Product review analysis failed: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 ```
 
 Output:
 
 ```text
-===== 产品评测分析 =====
-评分: 4/5
-优点:
-- 音质非常不错，尤其是低音部分表现出色
-- 佩戴也很舒适，可以长时间使用不感到疲劳
-- 电池续航能力也很强，充满电后可以使用约8小时
-- 性价比很高，适合日常使用
-缺点:
-- 连接偶尔会有些不稳定，有时候会突然断开
-- 触控操作不够灵敏，经常需要点击多次才能响应
-- 如果需要用于专业音频工作可能还不够
-总结: 音质和续航表现优秀，佩戴舒适，但连接稳定性不足，触控操作不够灵敏，适合日常使用，但不适合专业音频工作。
+===== Product Review Analysis =====
+Rating: 4/5
+Advantages:
+- Very good sound quality, especially excellent bass performance
+- Comfortable to wear, can be used for long periods without fatigue
+- Strong battery life, can last about 8 hours after full charge
+- Great value for money, suitable for daily use
+Disadvantages:
+- Connection occasionally unstable, sometimes suddenly disconnects
+- Touch controls not sensitive enough, often need to click multiple times to respond
+- Might not be enough for professional audio work
+Summary: Excellent sound quality and battery life, comfortable to wear, but insufficient connection stability and touch control sensitivity, suitable for daily use but not for professional audio work.
 ```
 
-**关键点：**
-- ✅ 只需声明函数、类型和 DocString，装饰器自动处理其他
-- ✅ 直接返回 Pydantic 对象，无需手动反序列化
-- ✅ 支持复杂嵌套的 Pydantic 模型
-- ✅ 小模型可能无法输出正确的 JSON，框架会自动重试
+**Key Points:**
+- ✅ Only need to declare function, types, and DocString, decorator handles the rest automatically
+- ✅ Directly returns Pydantic object, no manual deserialization needed
+- ✅ Supports complex nested Pydantic models
+- ✅ Small models may not output correct JSON, framework will automatically retry
 
-#### @llm_chat - 对话与 Agent
+#### @llm_chat - Conversations and Agents
 
-同样支持创建**对话类函数**和 **Agent 系统**。llm_chat 支持：
+Also supports creating **conversational functions** and **Agent systems**. llm_chat supports:
 
-- 多轮对话历史管理
-- 实时流式响应
-- LLM 工具调用和自动执行
-- 灵活的返回模式（文本或原始响应）
+- Multi-turn conversation history management
+- Real-time streaming responses
+- LLM tool calls and automatic execution
+- Flexible return modes (text or raw response)
 
-如果你想构建完整的 Agent 框架，可以参考我们的姊妹项目 [SimpleManus](https://github.com/NiJingzhe/SimpleManus)。
+If you want to build a complete Agent framework, you can refer to our sister project [SimpleManus](https://github.com/NiJingzhe/SimpleManus).
 
-#### 异步原生设计
+#### Async Native Design
 
-`llm_function` 和 `llm_chat` 均为原生异步设计，无需额外配置：
+Both `llm_function` and `llm_chat` are natively async designed, no additional configuration needed:
 
 ```python
 from SimpleLLMFunc import llm_function, llm_chat
@@ -286,26 +282,26 @@ from SimpleLLMFunc import llm_function, llm_chat
 
 @llm_function(llm_interface=my_llm_interface)
 async def async_analyze_text(text: str) -> str:
-    """异步分析文本内容"""
+    """Async text content analysis"""
     pass
 
 
 @llm_chat(llm_interface=my_llm_interface, stream=True)
 async def async_chat(message: str, history: List[Dict[str, str]]):
-    """异步对话功能，支持流式响应"""
+    """Async chat functionality, supports streaming responses"""
     pass
 
 
 async def main():
-    result = await async_analyze_text("需要分析的文本")
+    result = await async_analyze_text("Text to analyze")
 
-    async for response, updated_history in async_chat("你好", []):
+    async for response, updated_history in async_chat("Hello", []):
         print(response)
 ```
 
-#### 多模态支持
+#### Multimodal Support
 
-SimpleLLMFunc 支持多种模态的输入和输出，让 LLM 可以处理文本、图片等多种内容：
+SimpleLLMFunc supports multiple modalities of input and output, allowing LLMs to process text, images, and other content:
 
 ```python
 from SimpleLLMFunc import llm_function
@@ -313,19 +309,19 @@ from SimpleLLMFunc.type import ImgPath, ImgUrl, Text
 
 @llm_function(llm_interface=my_llm_interface)
 async def analyze_image(
-    description: Text,           # 文本描述
-    web_image: ImgUrl,          # 网络图片URL
-    local_image: ImgPath        # 本地图片路径
+    description: Text,           # Text description
+    web_image: ImgUrl,          # Web image URL
+    local_image: ImgPath        # Local image path
 ) -> str:
-    """分析图像并根据描述提供详细说明
+    """Analyze images and provide detailed explanations based on descriptions
     
     Args:
-        description: 对图像分析的具体要求
-        web_image: 要分析的网络图片URL
-        local_image: 要对比的本地参考图片路径
+        description: Specific requirements for image analysis
+        web_image: Web image URL to analyze
+        local_image: Local reference image path for comparison
         
     Returns:
-        详细的图像分析结果
+        Detailed image analysis results
     """
     pass
 
@@ -334,7 +330,7 @@ import asyncio
 
 async def main():
     result = await analyze_image(
-        description=Text("请详细描述这两张图片的区别"),
+        description=Text("Please describe the differences between these two images in detail"),
         web_image=ImgUrl("https://example.com/image.jpg"),
         local_image=ImgPath("./reference.jpg")
     )
@@ -344,49 +340,49 @@ async def main():
 asyncio.run(main())
 ```
 
-#### 装饰器参数和高级特性
+#### Decorator Parameters and Advanced Features
 
-@llm_function 和 @llm_chat 支持丰富的配置参数：
+@llm_function and @llm_chat support rich configuration parameters:
 
 ```python
 @llm_function(
-    llm_interface=llm_interface,          # LLM 接口实例
-    toolkit=[tool1, tool2],                # 工具列表
-    _template_params={                     # 动态 Prompt 模板参数
-        "language": "中文",
-        "style": "专业"
+    llm_interface=llm_interface,          # LLM interface instance
+    toolkit=[tool1, tool2],                # Tool list
+    _template_params={                     # Dynamic Prompt template parameters
+        "language": "English",
+        "style": "Professional"
     },
-    retry_on_exception=True,               # 异常时自动重试
-    timeout=60                              # 超时设置
+    retry_on_exception=True,               # Auto retry on exception
+    timeout=60                              # Timeout setting
 )
 async def my_function(param: str) -> str:
-    """支持 {language} 的 {style} 分析"""
+    """Supports {language} {style} analysis"""
     pass
 ```
 
-### 2. LLM 供应商接口
+### 2. LLM Provider Interface
 
-SimpleLLMFunc 提供了灵活的 LLM 接口支持：
+SimpleLLMFunc provides flexible LLM interface support:
 
-**支持的供应商（通过 OpenAI Compatible 适配）：**
-- ✅ OpenAI (GPT-4, GPT-3.5 等)
+**Supported Providers (via OpenAI Compatible adaptation):**
+- ✅ OpenAI (GPT-4, GPT-3.5, etc.)
 - ✅ Deepseek
 - ✅ Anthropic Claude
-- ✅ 火山引擎 Ark
-- ✅ 百度千帆
-- ✅ 本地 LLM (Ollama, vLLM 等)
-- ✅ 任何兼容 OpenAI API 的服务
+- ✅ Volc Engine Ark
+- ✅ Baidu Qianfan
+- ✅ Local LLM (Ollama, vLLM, etc.)
+- ✅ Any OpenAI API-compatible service
 
-#### 快速接入示例
+#### Quick Integration Example
 
 ```python
 from SimpleLLMFunc import OpenAICompatible
 
-# 方式 1：从 JSON 配置文件加载
+# Method 1: Load from JSON configuration file
 provider_config = OpenAICompatible.load_from_json_file("provider.json")
 llm = provider_config["deepseek"]["v3-turbo"]
 
-# 方式 2：直接创建
+# Method 2: Direct creation
 llm = OpenAICompatible(
     api_key="sk-xxx",
     base_url="https://api.deepseek.com/v1",
@@ -395,11 +391,11 @@ llm = OpenAICompatible(
 
 @llm_function(llm_interface=llm)
 async def my_function(text: str) -> str:
-    """处理文本"""
+    """Process text"""
     pass
 ```
 
-#### provider.json 配置文件
+#### provider.json Configuration File
 
 ```json
 {
@@ -421,153 +417,153 @@ async def my_function(text: str) -> str:
 }
 ```
 
-#### 自定义 LLM 接口
+#### Custom LLM Interface
 
-可以通过继承 `LLM_Interface` 基类实现完全自定义的 LLM 接口：
+You can implement completely custom LLM interfaces by inheriting from the `LLM_Interface` base class:
 
 ```python
 from SimpleLLMFunc.interface import LLM_Interface
 
 class CustomLLMInterface(LLM_Interface):
     async def call_llm(self, messages, **kwargs):
-        # 实现自己的 LLM 调用逻辑
+        # Implement your own LLM calling logic
         pass
 ```
 
-### 3. 日志与可观测性系统
+### 3. Logging and Observability System
 
-SimpleLLMFunc 包含完整的日志追踪和可观测性能力，帮助你深入了解 LLM 应用的运行状况。
+SimpleLLMFunc includes complete log tracking and observability capabilities to help you gain deep insights into LLM application performance.
 
-#### 核心特性
+#### Core Features
 
-| 特性 | 说明 |
-|------|------|
-| **Trace ID 自动追踪** | 每次调用自动生成唯一 trace_id，关联所有相关日志 |
-| **结构化日志** | 支持多级别日志（DEBUG, INFO, WARNING, ERROR, CRITICAL） |
-| **上下文传播** | 异步环境下自动保留上下文，trace_id 自动关联 |
-| **彩色输出** | 控制台美化输出，提升可读性 |
-| **文件持久化** | 自动写入本地日志文件，支持轮换和归档 |
-| **Langfuse 集成** | 开箱即用的可观测性集成，可视化 LLM 调用链路 |
+| Feature | Description |
+|---------|-------------|
+| **Trace ID Auto Tracking** | Each call automatically generates a unique trace_id, associating all related logs |
+| **Structured Logging** | Supports multiple log levels (DEBUG, INFO, WARNING, ERROR, CRITICAL) |
+| **Context Propagation** | Automatically preserves context in async environments, trace_id automatically associated |
+| **Colored Output** | Beautified console output, improves readability |
+| **File Persistence** | Automatically writes to local log files, supports rotation and archiving |
+| **Langfuse Integration** | Out-of-the-box observability integration, visualizes LLM call chains |
 
-#### Trace 示例
+#### Trace Example
 
 ```
-GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125  <- 自动生成的 trace_id
-├── 函数调用输入参数
-├── LLM 请求内容
-├── Token 使用统计
-├── 工具调用（如果有）
-├── LLM 响应内容
-└── 执行时间和性能指标
+GLaDos_c790a5cc-e629-4cbd-b454-ab102c42d125  <- Auto-generated trace_id
+├── Function call input parameters
+├── LLM request content
+├── Token usage statistics
+├── Tool calls (if any)
+├── LLM response content
+└── Execution time and performance metrics
 ```
 
-#### 日志使用示例
+#### Logging Usage Example
 
 ```python
 from SimpleLLMFunc.logger import app_log, push_error, log_context
 
-# 1. 基础日志记录
-app_log("开始处理请求", trace_id="request_123")
-push_error("发生错误", trace_id="request_123", exc_info=True)
+# 1. Basic logging
+app_log("Starting request processing", trace_id="request_123")
+push_error("Error occurred", trace_id="request_123", exc_info=True)
 
-# 2. 使用上下文管理器自动关联日志
+# 2. Use context manager to automatically associate logs
 with log_context(trace_id="task_456", function_name="analyze_text"):
-    app_log("开始分析文本")  # 自动继承上下文的 trace_id
+    app_log("Starting text analysis")  # Automatically inherits context trace_id
     try:
-        # 执行操作...
-        app_log("分析完成")
+        # Execute operations...
+        app_log("Analysis completed")
     except Exception:
-        push_error("分析失败", exc_info=True)  # 同样自动继承 trace_id
+        push_error("Analysis failed", exc_info=True)  # Also automatically inherits trace_id
 ```
 
-### 4. 工具系统 - 让 LLM 与环境交互
+### 4. Tool System - Let LLMs Interact with Environment
 
-SimpleLLMFunc 实现了完整的工具系统，让 LLM 可以调用外部函数和 API。工具支持两种定义方式。
+SimpleLLMFunc implements a complete tool system, allowing LLMs to call external functions and APIs. Tools support two definition methods.
 
-#### @tool 装饰器方式（推荐）
+#### @tool Decorator Method (Recommended)
 
-最简洁的方式：用 `@tool` 装饰器将异步函数注册为 LLM 可用工具。
+The most concise way: use the `@tool` decorator to register async functions as LLM-available tools.
 
-> ⚠️ `@tool` 装饰器仅支持装饰 `async def` 定义的函数
+> ⚠️ The `@tool` decorator only supports decorating functions defined with `async def`
 
 ```python
 from pydantic import BaseModel, Field
 from SimpleLLMFunc.tool import tool
 
-# 定义复杂参数的Pydantic模型
+# Define Pydantic model for complex parameters
 class Location(BaseModel):
-    latitude: float = Field(..., description="纬度")
-    longitude: float = Field(..., description="经度")
+    latitude: float = Field(..., description="Latitude")
+    longitude: float = Field(..., description="Longitude")
 
-# 使用装饰器创建工具
-@tool(name="get_weather", description="获取指定位置的天气信息")
+# Use decorator to create tool
+@tool(name="get_weather", description="Get weather information for specified location")
 async def get_weather(location: Location, days: int = 1) -> dict:
     """
-    获取指定位置的天气预报
+    Get weather forecast for specified location
     
     Args:
-        location: 位置信息，包含经纬度
-        days: 预报天数，默认为1天
+        location: Location information, including latitude and longitude
+        days: Forecast days, default is 1 day
         
     Returns:
-        天气预报信息
+        Weather forecast information
     """
-    # 实际实现会调用天气API
+    # Actual implementation would call weather API
     return {
         "location": f"{location.latitude},{location.longitude}",
-        "forecast": [{"day": i, "temp": 25, "condition": "晴朗"} for i in range(days)]
+        "forecast": [{"day": i, "temp": 25, "condition": "Sunny"} for i in range(days)]
     }
 ```
 
-**优势：**
-- ✅ 简洁直观，自动从函数签名提取参数信息
-- ✅ 支持 Python 原生类型和 Pydantic 模型
-- ✅ 装饰后仍可直接调用，便于单元测试
-- ✅ 支持多模态返回（文本、图片等）
-- ✅ 可叠加使用：一个函数可以同时被 `@llm_function` 和 `@tool` 装饰
+**Advantages:**
+- ✅ Concise and intuitive, automatically extracts parameter information from function signature
+- ✅ Supports Python native types and Pydantic models
+- ✅ Can still be called directly after decoration, convenient for unit testing
+- ✅ Supports multimodal returns (text, images, etc.)
+- ✅ Can be stacked: one function can be decorated with both `@llm_function` and `@tool`
 
-#### 多模态工具示例
+#### Multimodal Tool Example
 
 ```python
 from SimpleLLMFunc.tool import tool
 from SimpleLLMFunc.type import ImgPath, ImgUrl
 
-@tool(name="generate_chart", description="根据数据生成图表")
+@tool(name="generate_chart", description="Generate charts based on data")
 async def generate_chart(data: str, chart_type: str = "bar") -> ImgPath:
     """
-    根据提供的数据生成图表
+    Generate charts based on provided data
     
     Args:
-        data: CSV格式的数据
-        chart_type: 图表类型，默认为柱状图
+        data: CSV format data
+        chart_type: Chart type, default is bar chart
         
     Returns:
-        生成的图表文件路径
+        Generated chart file path
     """
-    # 实际实现会生成图表并保存到本地
+    # Actual implementation would generate chart and save locally
     chart_path = "./generated_chart.png"
-    # ... 图表生成逻辑
+    # ... Chart generation logic
     return ImgPath(chart_path)
 
-@tool(name="search_web_image", description="搜索网络图片")
+@tool(name="search_web_image", description="Search web images")
 async def search_web_image(query: str) -> ImgUrl:
     """
-    搜索网络图片
+    Search web images
     
     Args:
-        query: 搜索关键词
+        query: Search keywords
         
     Returns:
-        找到的图片URL
+        Found image URL
     """
-    # 实际实现会调用图片搜索API
+    # Actual implementation would call image search API
     image_url = "https://example.com/search_result.jpg"
     return ImgUrl(image_url)
 ```
 
-#### 类继承方式（兼容）
+#### Class Inheritance Method (Compatible)
 
-也可以通过继承 `Tool` 基类定义工具（用于复杂逻辑或特殊需求）：
+You can also define tools by inheriting from the `Tool` base class (for complex logic or special requirements):
 
 ```python
 from SimpleLLMFunc.tool import Tool
@@ -576,18 +572,18 @@ class WebSearchTool(Tool):
     def __init__(self):
         super().__init__(
             name="web_search",
-            description="在互联网上搜索信息"
+            description="Search information on the internet"
         )
 
     async def run(self, query: str, max_results: int = 5) -> dict:
-        """执行网络搜索"""
-        # 实现搜索逻辑
+        """Execute web search"""
+        # Implement search logic
         return {"results": [...]}
 ```
 
-#### 工具集成到 LLM 函数
+#### Tool Integration into LLM Functions
 
-所有工具都可以传递给 `@llm_function` 或 `@llm_chat`：
+All tools can be passed to `@llm_function` or `@llm_chat`:
 
 ```python
 @llm_function(
@@ -596,215 +592,214 @@ class WebSearchTool(Tool):
 )
 async def answer_question(question: str) -> str:
     """
-    回答用户问题，必要时使用工具。
+    Answer user questions, use tools when necessary.
 
     Args:
-        question: 用户的问题
+        question: User's question
 
     Returns:
-        答案
+        Answer
     """
     pass
 ```
 
-### 5. API 密钥管理和流量控制
+### 5. API Key Management and Traffic Control
 
-SimpleLLMFunc 提供了生产级别的密钥和流量管理能力。
+SimpleLLMFunc provides production-level key and traffic management capabilities.
 
-#### API 密钥负载均衡
+#### API Key Load Balancing
 
-- 支持多个 API 密钥配置
-- 自动选择负载最低的密钥
-- 使用小根堆算法，高效选取最优密钥
-- 自动跟踪每个密钥的使用情况
+- Supports multiple API key configurations
+- Automatically selects the key with lowest load
+- Uses min-heap algorithm for efficient optimal key selection
+- Automatically tracks usage for each key
 
-#### 流量控制
+#### Traffic Control
 
-- 令牌桶算法实现流量平滑
-- 防止 API 速率限制
-- 支持突发流量缓冲
-- 可在 `provider.json` 中配置每个模型的速率限制参数
+- Token bucket algorithm implements traffic smoothing
+- Prevents API rate limiting
+- Supports burst traffic buffering
+- Can configure rate limiting parameters for each model in `provider.json`
 
-例如，在 provider.json 中配置：
+For example, configure in provider.json:
 
 ```json
 {
     "model_config": {
-        "rate_limit": 100,      // 每分钟最多 100 次请求
-        "burst": 10              // 突发请求最多 10 次
+        "rate_limit": 100,      // Maximum 100 requests per minute
+        "burst": 10              // Maximum 10 burst requests
     }
 }
 ```
 
-### 7. 项目结构和模块组织
+### 7. Project Structure and Module Organization
 
-SimpleLLMFunc 采用模块化设计，结构清晰易于维护：
+SimpleLLMFunc adopts modular design with clear structure, easy to maintain:
 
-#### 核心模块
+#### Core Modules
 
 ```
 SimpleLLMFunc/
 ├── SimpleLLMFunc/
-│   ├── llm_decorator/         # LLM 装饰器模块
-│   │   ├── llm_function_decorator.py    # @llm_function 实现
-│   │   ├── llm_chat_decorator.py        # @llm_chat 实现
-│   │   └── utils.py                     # 装饰器工具
-│   ├── tool/                  # 工具系统
-│   │   └── tool.py            # @tool 装饰器和 Tool 基类
-│   ├── interface/             # LLM 接口层
-│   │   ├── llm_interface.py   # 抽象基类
-│   │   ├── openai_compatible.py    # OpenAI 兼容实现
-│   │   ├── key_pool.py        # API 密钥管理
-│   │   └── token_bucket.py    # 流量控制
-│   ├── base/                  # 核心执行引擎
-│   │   ├── ReAct.py           # ReAct 引擎和工具调用
-│   │   ├── messages.py        # 消息构建
-│   │   ├── post_process.py    # 响应解析和类型转换
-│   │   └── type_resolve.py    # 类型解析
-│   ├── logger/                # 日志和可观测性
-│   │   ├── logger.py          # 日志 API
-│   │   ├── logger_config.py   # 日志配置
-│   │   └── context_manager.py # 上下文管理
-│   ├── observability/         # 可观测性集成
-│   │   └── langfuse_client.py # Langfuse 集成
-│   ├── type/                  # 多模态类型
-│   │   └── __init__.py        # Text, ImgUrl, ImgPath 等
-│   ├── config.py              # 全局配置
-│   └── __init__.py            # 包初始化和 API 导出
-├── examples/                  # 使用示例
-│   ├── llm_function_example.py      # 基础示例
-│   ├── llm_chat_example.py          # 对话示例
-│   ├── parallel_toolcall_example.py # 并发示例
-│   ├── multi_modality_toolcall.py   # 多模态示例
-│   ├── provider.json          # 供应商配置示例
-│   └── provider_template.json # 配置模板
-├── pyproject.toml             # Poetry 配置
-├── README.md                  # 项目文档（你在这里）
-├── CHANGELOG.md               # 更新日志
-└── env_template               # 环境变量模板
+│   ├── llm_decorator/         # LLM decorator module
+│   │   ├── llm_function_decorator.py    # @llm_function implementation
+│   │   ├── llm_chat_decorator.py        # @llm_chat implementation
+│   │   └── utils.py                     # Decorator utilities
+│   ├── tool/                  # Tool system
+│   │   └── tool.py            # @tool decorator and Tool base class
+│   ├── interface/             # LLM interface layer
+│   │   ├── llm_interface.py   # Abstract base class
+│   │   ├── openai_compatible.py    # OpenAI compatible implementation
+│   │   ├── key_pool.py        # API key management
+│   │   └── token_bucket.py    # Traffic control
+│   ├── base/                  # Core execution engine
+│   │   ├── ReAct.py           # ReAct engine and tool calls
+│   │   ├── messages.py        # Message building
+│   │   ├── post_process.py    # Response parsing and type conversion
+│   │   └── type_resolve.py    # Type resolution
+│   ├── logger/                # Logging and observability
+│   │   ├── logger.py          # Logging API
+│   │   ├── logger_config.py   # Logging configuration
+│   │   └── context_manager.py # Context management
+│   ├── observability/         # Observability integration
+│   │   └── langfuse_client.py # Langfuse integration
+│   ├── type/                  # Multimodal types
+│   │   └── __init__.py        # Text, ImgUrl, ImgPath, etc.
+│   ├── config.py              # Global configuration
+│   └── __init__.py            # Package initialization and API exports
+├── examples/                  # Usage examples
+│   ├── llm_function_example.py      # Basic examples
+│   ├── llm_chat_example.py          # Chat examples
+│   ├── parallel_toolcall_example.py # Concurrency examples
+│   ├── multi_modality_toolcall.py   # Multimodal examples
+│   ├── provider.json          # Provider configuration examples
+│   └── provider_template.json # Configuration template
+├── pyproject.toml             # Poetry configuration
+├── README.md                  # Project documentation (you are here)
+├── CHANGELOG.md               # Changelog
+└── env_template               # Environment variable template
 ```
 
-#### 模块职责说明
+#### Module Responsibility Description
 
-| 模块 | 职责 |
-|------|------|
-| **llm_decorator** | 提供 @llm_function 和 @llm_chat 装饰器 |
-| **tool** | 工具系统，@tool 装饰器和 Tool 基类 |
-| **interface** | LLM 接口抽象和 OpenAI 兼容实现 |
-| **base** | ReAct 引擎、消息处理、类型转换 |
-| **logger** | 结构化日志、trace_id 追踪 |
-| **observability** | Langfuse 集成，完整 LLM 可观测性 |
-| **type** | 多模态类型定义（Text、ImgUrl、ImgPath）|
-| **config** | 全局配置和环境变量管理 |
+| Module | Responsibility |
+|--------|----------------|
+| **llm_decorator** | Provides @llm_function and @llm_chat decorators |
+| **tool** | Tool system, @tool decorator and Tool base class |
+| **interface** | LLM interface abstraction and OpenAI compatible implementation |
+| **base** | ReAct engine, message processing, type conversion |
+| **logger** | Structured logging, trace_id tracking |
+| **observability** | Langfuse integration, complete LLM observability |
+| **type** | Multimodal type definitions (Text, ImgUrl, ImgPath) |
+| **config** | Global configuration and environment variable management |
 
-### 配置和环境变量
+### Configuration and Environment Variables
 
-SimpleLLMFunc 支持灵活的配置：
+SimpleLLMFunc supports flexible configuration:
 
-**优先级（从高到低）：**
-1. 程序中直接配置
-2. 环境变量
-3. `.env` 文件
+**Priority (from high to low):**
+1. Direct configuration in program
+2. Environment variables
+3. `.env` file
 
-**常见配置：**
+**Common Configuration:**
 
 ```bash
-# .env 文件示例
-LOG_DIR=./logs                          # 日志目录（可选）
-LOG_LEVEL=INFO                          # 日志级别, 只控制控制台日志的输出，不会影响文件日志的输出
-LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse 公钥（可选）
-LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse 密钥（可选）
+# .env file example
+LOG_DIR=./logs                          # Log directory (optional)
+LOG_LEVEL=INFO                          # Log level, only controls console log output, doesn't affect file log output
+LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse public key (optional)
+LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse secret key (optional)
 ```
 
-## 🎯 常见使用场景
+## 🎯 Common Use Cases
 
-SimpleLLMFunc 适用于各种 LLM 应用开发场景：
+SimpleLLMFunc is suitable for various LLM application development scenarios:
 
-### 数据处理和分析
+### Data Processing and Analysis
 
 ```python
 @llm_function(llm_interface=llm)
 async def extract_entities(text: str) -> Dict[str, List[str]]:
-    """从文本中提取命名实体（人物、地点、组织等）"""
+    """Extract named entities (people, places, organizations, etc.) from text"""
     pass
 
-# 使用
-entities = await extract_entities("张三在北京的Apple公司工作")
-# 返回: {"person": ["张三"], "location": ["北京"], "organization": ["Apple"]}
+# Usage
+entities = await extract_entities("John works at Apple in Beijing")
+# Returns: {"person": ["John"], "location": ["Beijing"], "organization": ["Apple"]}
 ```
 
-### 智能 Agent 和对话
+### Intelligent Agents and Conversations
 
 ```python
 @llm_chat(llm_interface=llm, toolkit=[search_tool, calculator_tool])
 async def agent(user_message: str, history: List[Dict]) -> str:
-    """智能助手，可以搜索信息和做数学计算"""
+    """Intelligent assistant that can search information and do math calculations"""
     pass
 
-# 使用
-response = await agent("明天北京天气怎样？并计算如果温度降 5 度是多少", [])
+# Usage
+response = await agent("What's the weather like in Beijing tomorrow? And calculate what temperature it would be if it drops 5 degrees", [])
 ```
 
-### 批量数据处理
+### Batch Data Processing
 
 ```python
 import asyncio
 
 @llm_function(llm_interface=llm)
 async def classify_text(text: str) -> str:
-    """分类文本"""
+    """Classify text"""
     pass
 
-# 批量处理，充分利用异步
-texts = ["文本1", "文本2", "文本3", ...]
+# Batch processing, fully utilize async
+texts = ["Text 1", "Text 2", "Text 3", ...]
 results = await asyncio.gather(*[classify_text(t) for t in texts])
 ```
 
-### 多模态内容处理
+### Multimodal Content Processing
 
 ```python
 from SimpleLLMFunc.type import ImgPath, ImgUrl
 
 @llm_function(llm_interface=llm)
 async def analyze_images(local_img: ImgPath, web_img: ImgUrl) -> str:
-    """对比分析两张图片"""
+    """Compare and analyze two images"""
     pass
 ```
 
-## 📚 运行示例代码
+## 📚 Running Example Code
 
-项目包含丰富的示例，快速上手：
+The project includes rich examples for quick start:
 
 ```bash
-# 安装依赖
+# Install dependencies
 pip install SimpleLLMFunc
 
-# 设置 API 密钥
+# Set up API keys
 cp env_template .env
-# 编辑 .env 文件，填入你的 API 密钥
+# Edit .env file, enter your API keys
 
-# 运行示例
+# Run examples
 python examples/llm_function_example.py
 python examples/llm_chat_example.py
 python examples/parallel_toolcall_example.py
 ```
 
-## 🤝 贡献指南
+## 🤝 Contributing Guide
 
-欢迎提交 Issue 和 Pull Request！
+Welcome to submit Issues and Pull Requests!
 
-- 🐛 **Bug Report** - 在 [GitHub Issues](https://github.com/NiJingzhe/SimpleLLMFunc/issues) 报告问题
-- ✨ **功能建议** - 欢迎讨论新功能
-- 📝 **文档完善** - 帮助改进文档
-- 💡 **示例代码** - 分享你的使用案例
+- 🐛 **Bug Report** - Report issues in [GitHub Issues](https://github.com/NiJingzhe/SimpleLLMFunc/issues)
+- ✨ **Feature Suggestions** - Welcome to discuss new features
+- 📝 **Documentation Improvement** - Help improve documentation
+- 💡 **Example Code** - Share your use cases
 
-## 📖 更多资源
+## 📖 More Resources
 
-- 📚 [完整文档](https://simplellmfunc.readthedocs.io/zh-cn/latest/introduction.html) | [English Docs](https://simplellmfunc.readthedocs.io/en/latest/introduction.html)
-- 🔄 [更新日志](CHANGELOG.md)
-- 🔗 [GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc)
-- 🤖 [SimpleManus (Agent 框架)](https://github.com/NiJingzhe/SimpleManus)
-- 🌍 [English README](README_EN.md)
+- 📚 [Complete Documentation](https://simplellmfunc.readthedocs.io/en/latest/introduction.html)
+- 🔄 [Changelog](CHANGELOG.md)
+- 🔗 [GitHub Repository](https://github.com/NiJingzhe/SimpleLLMFunc)
+- 🤖 [SimpleManus (Agent Framework)](https://github.com/NiJingzhe/SimpleManus)
 
 ## Star History
 
@@ -818,7 +813,7 @@ python examples/parallel_toolcall_example.py
 
 ## Citation
 
-如果您在研究或项目中使用了SimpleLLMFunc，请引用以下信息：
+If you have used SimpleLLMFunc in your research or projects, please cite the following information:
 
 ```bibtex
 @software{ni2025simplellmfunc,
@@ -831,6 +826,6 @@ python examples/parallel_toolcall_example.py
 }
 ```
 
-## 许可证
+## License
 
 MIT
