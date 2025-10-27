@@ -1,6 +1,6 @@
 # Change log for SimpleLLMFunc
 
-## 0.3.0 Release Notes (Latest)
+## 0.3.1 Release Notes (Latest)
 
 1. Added dynamic template parameter support: The `llm_function` decorator now supports passing `_template_params` to dynamically set DocString template parameters. This allows developers to create a single function that can adapt to various use cases, changing its behavior by passing different template parameters at call time.
 
