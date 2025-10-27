@@ -10,6 +10,7 @@ class LoggerConfig(BaseSettings):
     )
 
     LOG_LEVEL: str = "DEBUG"
+    LOG_DIR: str = "logs"
 
 
 @lru_cache
