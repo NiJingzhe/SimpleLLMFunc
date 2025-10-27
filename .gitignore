@@ -164,7 +164,3 @@ examples/**/provider.json
 
 
 .DS_Store
-
-**/*log*
-**/*_logs*
-**/trace_*
