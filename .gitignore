@@ -65,8 +65,8 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/build/
-docs/locale/
 docs/gettext/
+# Note: docs/locale/ is intentionally NOT ignored - translation files must be committed to Git for ReadTheDocs
 
 # PyBuilder
 target/

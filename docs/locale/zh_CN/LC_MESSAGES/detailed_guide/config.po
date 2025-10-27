@@ -1,0 +1,262 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/detailed_guide/config.md:1
+msgid "配置文件说明"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:3
+msgid "`.env` 文件"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:5
+msgid ""
+"`.env` 文件用于存储环境变量，在本框架中主要用于配置日志相关设置。你可以在你项目最终的 `WORKING DIR` 下创建一个 `.env`"
+" 文件，或者直接在环境变量中设置这些值。"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:7
+msgid "环境变量配置"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:21
+msgid "支持的环境变量"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "环境变量"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "说明"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "可选值"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "默认值"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`LOG_LEVEL`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "日志级别"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`WARNING`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:27
+msgid "环境变量优先级"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:29
+msgid ""
+"注意，直接 `export` 环境变量会覆盖 `.env` 文件中的设置，因此如果你在运行时设置了环境变量，这些设置将优先于 `.env` "
+"文件中的配置。"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:31
+msgid "优先级顺序（从高到低）："
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:32
+msgid "运行时设置的环境变量 (如 `export LOG_LEVEL=DEBUG`)"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:33
+msgid "`.env` 文件中的配置"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:34
+msgid "框架默认值"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:36
+msgid "`provider.json` 文件"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:38
+msgid ""
+"`provider.json` 文件用于配置 LLM 接口的相关信息，包括 API 密钥、提供商信息、模型名称等。你可以在项目根目录创建一个 "
+"`provider.json` 文件，内容示例如下："
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:40
+msgid "配置文件结构"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:42
+msgid "provider.json 使用嵌套结构：`提供商 -> 模型名 -> 配置参数`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:91
+msgid "配置参数说明"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "参数"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "类型"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "示例"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`api_keys`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "数组"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "API 密钥列表，支持多个密钥用于负载均衡"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`[\"key1\", \"key2\"]`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`base_url`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "字符串"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "API 服务器地址"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`https://api.openai.com/v1`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`model`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "模型名称，与提供商对应"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`gpt-3.5-turbo`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`max_retries`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "数字"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "最大重试次数，默认 3"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`5`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`retry_delay`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "浮点数"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "重试延迟（秒），默认 1.0"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`1.0`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`rate_limit_capacity`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "令牌桶容量，默认 10"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`20`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`rate_limit_refill_rate`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "令牌补充速率（tokens/秒），默认 1.0"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md
+msgid "`3.0`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:103
+msgid "加载和使用"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:105
+msgid "然后你可以使用这个json文件来加载所有的接口，例如："
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:128
+msgid "最佳实践"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:130
+msgid "**多个 API 密钥**: 为了实现负载均衡和高可用性，建议为每个模型配置多个 API 密钥"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:131
+msgid ""
+"**不同模型的限流策略**: 根据不同的 API 限制配置不同的 `rate_limit_capacity` 和 "
+"`rate_limit_refill_rate`"
+msgstr ""
+
+#: ../../source/detailed_guide/config.md:132
+msgid "**环境区分**: 可以为开发环境和生产环境配置不同的 `max_retries` 和 `retry_delay`"
+msgstr ""
+

@@ -1,0 +1,378 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/langfuse_integration.md:1
+msgid "Langfuse 集成指南"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:3
+msgid "SimpleLLMFunc 框架已集成 Langfuse 可观测性平台，支持对 LLM 生成和工具调用进行全面追踪。"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:5
+msgid "功能特性"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:7
+msgid "**LLM 生成追踪**: 自动记录所有 LLM 调用的输入、输出、模型参数和使用统计"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:8
+msgid "**工具调用观测**: 追踪工具调用的参数、执行结果和性能指标"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:9
+msgid "**嵌套跨度支持**: 支持复杂的多层调用链追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:10
+msgid "**流式响应支持**: 兼容流式和非流式 LLM 响应"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:11
+msgid "**优雅降级**: 在 Langfuse 不可用时自动禁用，不影响核心功能"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:13
+msgid "安装和配置"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:15
+msgid "1. 安装 Langfuse"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:17
+msgid "Langfuse 已包含在框架依赖中："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:27
+msgid "2. 获取 Langfuse 凭据"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:29
+msgid "访问 [Langfuse](https://langfuse.com) 并注册账户"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:30
+msgid "创建新项目"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:31
+msgid "获取项目的 Public Key 和 Secret Key"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:33
+msgid "3. 配置环境变量"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:42
+msgid "4. 初始化观测系统"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:44
+msgid "SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:63
+msgid "如需手动获取 Langfuse 客户端或配置信息，可使用以下方式："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:79
+msgid "使用示例"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:81
+msgid "基本 LLM 函数追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:103
+msgid "带工具调用的追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:127
+msgid "聊天对话追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:149
+msgid "追踪数据结构"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:151
+msgid "Generation 追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:153
+msgid "每个 LLM 调用会创建一个 Generation 观测，包含："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:155
+msgid "**输入**: 发送给 LLM 的消息列表"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:156
+msgid "**输出**: LLM 的响应内容和工具调用"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:157
+msgid "**模型信息**: 模型名称和参数"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:158
+msgid "**使用统计**: Token 使用量和成本信息"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:159
+msgid "**元数据**: 流式模式、可用工具数量等"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:161
+msgid "Tool 追踪"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:163
+msgid "每个工具调用会创建一个 Tool 观测，包含："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:165
+msgid "**输入**: 工具调用的参数"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:166
+msgid "**输出**: 工具执行的结果"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:167
+msgid "**元数据**: 工具调用 ID、执行时间等"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:169
+msgid "层级结构"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:189
+msgid "配置选项"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:191
+msgid "环境变量"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "变量名"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "描述"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "默认值"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "必需"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`LANGFUSE_PUBLIC_KEY`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "Langfuse 公钥"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "-"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "是"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`LANGFUSE_SECRET_KEY`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "Langfuse 私钥"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`LANGFUSE_HOST`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "Langfuse 服务器地址"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`https://cloud.langfuse.com`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "否"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`LANGFUSE_ENABLED`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "是否启用观测"
+msgstr ""
+
+#: ../../source/langfuse_integration.md
+msgid "`true`"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:200
+msgid "高级配置"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:202
+msgid "如需自定义 Langfuse 配置（例如在生产环境动态设置密钥），可在启动应用前修改环境变量："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:219
+msgid "最佳实践"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:221
+msgid "1. 环境分离"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:233
+msgid "2. 错误处理"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:235
+msgid "框架会自动处理 Langfuse 相关错误，但建议监控日志："
+msgstr ""
+
+#: ../../source/langfuse_integration.md:244
+msgid "3. 性能考虑"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:246
+msgid "Langfuse 调用是异步的，不会阻塞主要业务逻辑"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:247
+msgid "在高并发场景下，考虑设置合适的 Langfuse 客户端配置"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:248
+msgid "可以通过 `LANGFUSE_ENABLED=false` 临时禁用观测"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:250
+msgid "4. 数据隐私"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:252
+msgid "确保敏感数据在发送到 Langfuse 前已脱敏"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:253
+msgid "考虑使用自托管的 Langfuse 实例处理敏感数据"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:255
+msgid "故障排除"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:257
+msgid "常见问题"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:259
+msgid "**观测器未启用**"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:263
+msgid "检查环境变量是否正确设置"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:264
+msgid "确认 Langfuse 包已安装"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:266
+msgid "**连接失败**"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:270
+msgid "检查网络连接"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:271
+msgid "验证 API 密钥是否正确"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:272
+msgid "确认 LANGFUSE_HOST 设置正确"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:274
+msgid "**数据未显示**"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:275
+msgid "检查 Langfuse 仪表板的项目设置"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:276
+msgid "确认使用的是正确的项目密钥"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:277
+msgid "等待数据同步（通常几秒钟）"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:279
+msgid "调试模式"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:291
+msgid "示例项目"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:293
+msgid "查看 `examples/langfuse_integration_example.py` 获取完整的使用示例。"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:295
+msgid "相关链接"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:297
+msgid "[Langfuse 官方文档](https://langfuse.com/docs)"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:298
+msgid "[SimpleLLMFunc 文档](../README.md)"
+msgstr ""
+
+#: ../../source/langfuse_integration.md:299
+msgid "[API 参考](./api_reference.md)"
+msgstr ""
+

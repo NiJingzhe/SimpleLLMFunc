@@ -20,3 +20,11 @@ python:
     - method: pip
       path: .
     - requirements: docs/requirements.txt
+
+# 多语言项目配置
+# 定义不同语言版本，ReadTheDocs 会为每个语言创建独立的文档网站
+languages:
+  - code: en
+    name: English
+  - code: zh_CN
+    name: 中文（简体）
