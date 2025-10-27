@@ -1,0 +1,331 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/guide.md:7
+msgid "配置与环境"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "LLM 接口层"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "llm_function 装饰器"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "llm_chat 装饰器"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "工具系统"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "核心功能"
+msgstr ""
+
+#: ../../source/guide.md:1
+msgid "使用指南"
+msgstr ""
+
+#: ../../source/guide.md:3
+msgid "本指南提供了 SimpleLLMFunc 框架各个功能模块的详细文档。请根据你的需求选择相应的文档进行阅读。"
+msgstr ""
+
+#: ../../source/guide.md:5
+msgid "📚 详细文档导航"
+msgstr ""
+
+#: ../../source/guide.md:18
+msgid "🎯 按使用场景查找文档"
+msgstr ""
+
+#: ../../source/guide.md:20
+msgid "我想要快速上手"
+msgstr ""
+
+#: ../../source/guide.md:21
+msgid "👉 [快速开始](quickstart.md) - 5分钟内运行你的第一个示例"
+msgstr ""
+
+#: ../../source/guide.md:23
+msgid "我想要配置 API 和环境"
+msgstr ""
+
+#: ../../source/guide.md:24
+msgid "👉 [配置与环境](detailed_guide/config.md) - 学习如何设置 provider.json 和环境变量"
+msgstr ""
+
+#: ../../source/guide.md:26
+msgid "我想要创建 LLM 函数"
+msgstr ""
+
+#: ../../source/guide.md:27
+msgid "👉 [llm_function 装饰器](detailed_guide/llm_function.md) - 创建无状态的 LLM 驱动函数"
+msgstr ""
+
+#: ../../source/guide.md:29
+msgid "我想要构建聊天应用"
+msgstr ""
+
+#: ../../source/guide.md:30
+msgid "👉 [llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建多轮对话和 Agent 应用"
+msgstr ""
+
+#: ../../source/guide.md:32
+msgid "我想要整合工具/API"
+msgstr ""
+
+#: ../../source/guide.md:33
+msgid "👉 [工具系统](detailed_guide/tool.md) - 让 LLM 调用外部函数和 API"
+msgstr ""
+
+#: ../../source/guide.md:35
+msgid "我想要理解接口设计"
+msgstr ""
+
+#: ../../source/guide.md:36
+msgid "👉 [LLM 接口层](detailed_guide/llm_interface.md) - 了解密钥管理和流量控制"
+msgstr ""
+
+#: ../../source/guide.md:38
+msgid "我想要查看代码示例"
+msgstr ""
+
+#: ../../source/guide.md:39
+msgid "👉 [示例代码](examples.md) - 浏览各种使用场景的完整示例"
+msgstr ""
+
+#: ../../source/guide.md:41
+msgid "🚀 推荐学习路径"
+msgstr ""
+
+#: ../../source/guide.md:43
+msgid "初级用户（刚开始使用）"
+msgstr ""
+
+#: ../../source/guide.md:44
+msgid "[快速开始](quickstart.md) - 环境配置和第一个示例"
+msgstr ""
+
+#: ../../source/guide.md:45
+msgid "[llm_function 装饰器](detailed_guide/llm_function.md) - 基础功能"
+msgstr ""
+
+#: ../../source/guide.md:46
+msgid "[示例代码](examples.md) - 学习实际用法"
+msgstr ""
+
+#: ../../source/guide.md:48
+msgid "中级用户（已掌握基础）"
+msgstr ""
+
+#: ../../source/guide.md:49
+msgid "[llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建交互应用"
+msgstr ""
+
+#: ../../source/guide.md:50
+msgid "[工具系统](detailed_guide/tool.md) - 整合外部能力"
+msgstr ""
+
+#: ../../source/guide.md:51
+msgid "[配置与环境](detailed_guide/config.md) - 优化配置"
+msgstr ""
+
+#: ../../source/guide.md:53
+msgid "高级用户（深入理解框架）"
+msgstr ""
+
+#: ../../source/guide.md:54
+msgid "[LLM 接口层](detailed_guide/llm_interface.md) - 密钥管理和流量控制"
+msgstr ""
+
+#: ../../source/guide.md:55
+msgid "自定义 LLM 接口和工具"
+msgstr ""
+
+#: ../../source/guide.md:56
+msgid "[示例代码](examples.md) - 生产级别的实现参考"
+msgstr ""
+
+#: ../../source/guide.md:58
+msgid "📖 按功能模块查找"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "功能"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "文档"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "说明"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "基础配置"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[配置与环境](detailed_guide/config.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "API 密钥、环境变量、provider.json"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "简单任务"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[llm_function 装饰器](detailed_guide/llm_function.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "无状态函数、文本处理、数据转换"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "对话应用"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[llm_chat 装饰器](detailed_guide/llm_chat.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "多轮对话、历史管理、流式响应"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "工具集成"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[工具系统](detailed_guide/tool.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "工具定义、调用、多模态返回"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "系统设计"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[LLM 接口层](detailed_guide/llm_interface.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "接口抽象、密钥池、流量控制"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "实战示例"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "[示例代码](examples.md)"
+msgstr ""
+
+#: ../../source/guide.md:7
+msgid "各种场景的完整代码"
+msgstr ""
+
+#: ../../source/guide.md:69
+msgid "❓ 常见问题速查"
+msgstr ""
+
+#: ../../source/guide.md:71
+msgid "**如何配置 API 密钥？** → [配置与环境](detailed_guide/config.md)"
+msgstr ""
+
+#: ../../source/guide.md:72
+msgid "**装饰器支持同步函数吗？** → [llm_function 装饰器](detailed_guide/llm_function.md#重要说明)"
+msgstr ""
+
+#: ../../source/guide.md:73
+msgid "**如何做多轮对话？** → [llm_chat 装饰器](detailed_guide/llm_chat.md)"
+msgstr ""
+
+#: ../../source/guide.md:74
+msgid "**如何让 LLM 调用函数？** → [工具系统](detailed_guide/tool.md)"
+msgstr ""
+
+#: ../../source/guide.md:75
+msgid ""
+"**支持哪些 LLM 提供商？** → [LLM "
+"接口层](detailed_guide/llm_interface.md#openaicompatible-实现)"
+msgstr ""
+
+#: ../../source/guide.md:76
+msgid "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md#故障排除)"
+msgstr ""
+
+#: ../../source/guide.md:78
+msgid "🔗 其他资源"
+msgstr ""
+
+#: ../../source/guide.md:80
+msgid "[项目介绍](introduction.md) - 了解 SimpleLLMFunc 的设计理念"
+msgstr ""
+
+#: ../../source/guide.md:81
+msgid "[示例代码](examples.md) - 各种场景的完整代码示例"
+msgstr ""
+
+#: ../../source/guide.md:82
+msgid "[贡献指南](contributing.md) - 如何为项目做出贡献"
+msgstr ""
+
+#: ../../source/guide.md:83
+msgid "[GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc) - 源代码和问题追踪"
+msgstr ""
+
+#: ../../source/guide.md:85
+msgid "💡 提示"
+msgstr ""
+
+#: ../../source/guide.md:87
+msgid "每个文档都包含完整的代码示例，可以直接复制使用"
+msgstr ""
+
+#: ../../source/guide.md:88
+msgid "使用浏览器的搜索功能（Ctrl+F）快速定位内容"
+msgstr ""
+
+#: ../../source/guide.md:89
+msgid "遇到问题时，先查看对应文档的\"故障排除\"或\"常见问题\"部分"
+msgstr ""
+
+#: ../../source/guide.md:90
+msgid ""
+"所有示例代码都位于 "
+"[examples/](https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples)"
+" 目录"
+msgstr ""
+

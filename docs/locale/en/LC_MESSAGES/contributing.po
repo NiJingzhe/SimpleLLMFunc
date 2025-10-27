@@ -1,0 +1,197 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/contributing.md:1
+msgid "贡献指南"
+msgstr ""
+
+#: ../../source/contributing.md:3
+msgid "感谢你对 SimpleLLMFunc 项目的兴趣！我们欢迎并鼓励社区贡献，无论是修复错误、改进文档，还是添加新功能。"
+msgstr ""
+
+#: ../../source/contributing.md:5
+msgid "如何贡献"
+msgstr ""
+
+#: ../../source/contributing.md:7
+msgid "提交问题(Issue)"
+msgstr ""
+
+#: ../../source/contributing.md:9
+msgid ""
+"如果你发现了问题或有新功能建议，请先在 [GitHub "
+"Issues](https://github.com/NiJingzhe/SimpleLLMFunc/issues) "
+"页面搜索相关内容，以确保你的问题或建议尚未被提出。如果没有相关内容，你可以创建一个新的 Issue，请务必："
+msgstr ""
+
+#: ../../source/contributing.md:11
+msgid "使用清晰的标题描述问题"
+msgstr ""
+
+#: ../../source/contributing.md:12
+msgid "提供详细的问题描述或功能请求"
+msgstr ""
+
+#: ../../source/contributing.md:13
+msgid "如果是 bug，请提供复现步骤和环境信息"
+msgstr ""
+
+#: ../../source/contributing.md:14
+msgid "如果可能，包含代码示例或截图"
+msgstr ""
+
+#: ../../source/contributing.md:16
+msgid "提交代码更改(Pull Request)"
+msgstr ""
+
+#: ../../source/contributing.md:18
+msgid "Fork 项目仓库"
+msgstr ""
+
+#: ../../source/contributing.md:19
+msgid "创建你的功能分支 (`git checkout -b feature/amazing-feature`)"
+msgstr ""
+
+#: ../../source/contributing.md:20
+msgid "提交你的更改 (`git commit -m 'Add some amazing feature'`)"
+msgstr ""
+
+#: ../../source/contributing.md:21
+msgid "推送到分支 (`git push origin feature/amazing-feature`)"
+msgstr ""
+
+#: ../../source/contributing.md:22
+msgid "提交 Pull Request"
+msgstr ""
+
+#: ../../source/contributing.md:24
+msgid "开发流程"
+msgstr ""
+
+#: ../../source/contributing.md:26
+msgid "确保你已经设置好开发环境（见下文）"
+msgstr ""
+
+#: ../../source/contributing.md:27
+msgid "在开始工作前，请先同步最新的代码"
+msgstr ""
+
+#: ../../source/contributing.md:28
+msgid "为你的功能或修复编写测试用例"
+msgstr ""
+
+#: ../../source/contributing.md:29
+msgid "确保所有测试都通过"
+msgstr ""
+
+#: ../../source/contributing.md:30
+msgid "遵循项目的代码风格和约定"
+msgstr ""
+
+#: ../../source/contributing.md:32
+msgid "开发环境设置"
+msgstr ""
+
+#: ../../source/contributing.md:34
+msgid "依赖项"
+msgstr ""
+
+#: ../../source/contributing.md:36
+msgid "Python 3.10 或更高版本"
+msgstr ""
+
+#: ../../source/contributing.md:37
+msgid "Poetry (推荐的依赖管理工具)"
+msgstr ""
+
+#: ../../source/contributing.md:39
+msgid "安装开发依赖"
+msgstr ""
+
+#: ../../source/contributing.md:55
+msgid "代码规范"
+msgstr ""
+
+#: ../../source/contributing.md:57
+msgid "代码风格"
+msgstr ""
+
+#: ../../source/contributing.md:59
+msgid ""
+"我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python "
+"代码风格指南，使用 [Black](https://github.com/psf/black) 格式化器自动化格式化过程："
+msgstr ""
+
+#: ../../source/contributing.md:65
+msgid "类型注解"
+msgstr ""
+
+#: ../../source/contributing.md:67
+msgid "我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 Pylint 检查类型。"
+msgstr ""
+
+#: ../../source/contributing.md:69
+msgid "文档"
+msgstr ""
+
+#: ../../source/contributing.md:71
+msgid "所有公共 API 都应该有清晰的文档字符串"
+msgstr ""
+
+#: ../../source/contributing.md:72
+msgid ""
+"文档注释应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob"
+"/gh-pages/pyguide.md#38-comments-and-docstrings)"
+msgstr ""
+
+#: ../../source/contributing.md:73
+msgid "更新功能时，请同时更新相关文档"
+msgstr ""
+
+#: ../../source/contributing.md:87
+msgid "行为准则"
+msgstr ""
+
+#: ../../source/contributing.md:89
+msgid "请尊重所有项目参与者，保持友好的交流环境。任何形式的骚扰或冒犯行为都是不可接受的。"
+msgstr ""
+
+#: ../../source/contributing.md:91
+msgid "获取帮助"
+msgstr ""
+
+#: ../../source/contributing.md:93
+msgid "如果你在贡献过程中需要帮助，可以："
+msgstr ""
+
+#: ../../source/contributing.md:95
+msgid "在 GitHub Issues 中提问"
+msgstr ""
+
+#: ../../source/contributing.md:96
+msgid "联系项目维护者"
+msgstr ""
+
+#: ../../source/contributing.md:98
+msgid "再次感谢你对 SimpleLLMFunc 的贡献！"
+msgstr ""
+
