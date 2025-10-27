@@ -39,6 +39,7 @@ from SimpleLLMFunc.logger import (
 )
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.llm_decorator.utils import process_tools
+from SimpleLLMFunc.observability.langfuse_client import langfuse_client
 
 # Type aliases
 MessageDict = Dict[str, Any]  # Dictionary representing a message
@@ -142,6 +143,10 @@ def llm_chat(
             if context_trace_id:
                 current_trace_id += f"_{context_trace_id}"
 
+            # Bind arguments to function signature with defaults applied
+            bound_args: inspect.BoundArguments = signature.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+
             # Use async logging context
             async with async_log_context(
                 trace_id=current_trace_id,
@@ -149,22 +154,59 @@ def llm_chat(
                 input_tokens=0,
                 output_tokens=0,
             ):
-                async for result in _async_llm_chat_impl(
-                    func_name=func_name,
-                    signature=signature,
-                    type_hints=type_hints,
-                    docstring=docstring,
-                    args=args,
-                    kwargs=kwargs,
-                    llm_interface=llm_interface,
-                    toolkit=toolkit,
-                    max_tool_calls=max_tool_calls,
-                    stream=stream,
-                    return_mode=return_mode,
-                    use_log_context=False,  # Log context already set in wrapper
-                    **llm_kwargs,
-                ):
-                    yield result
+                # 创建 Langfuse parent span 用于追踪整个聊天函数调用
+                with langfuse_client.start_as_current_observation(
+                    as_type="span",
+                    name=f"{func_name}_chat_call",
+                    input=bound_args.arguments,
+                    metadata={
+                        "function_name": func_name,
+                        "trace_id": current_trace_id,
+                        "tools_available": len(toolkit) if toolkit else 0,
+                        "max_tool_calls": max_tool_calls,
+                        "stream": stream,
+                        "return_mode": return_mode,
+                    },
+                ) as chat_span:
+                    try:
+                        # 收集所有响应内容用于 span 输出更新
+                        collected_responses = []
+                        final_history = None
+                        
+                        async for result in _async_llm_chat_impl(
+                            func_name=func_name,
+                            signature=signature,
+                            type_hints=type_hints,
+                            docstring=docstring,
+                            args=args,
+                            kwargs=kwargs,
+                            llm_interface=llm_interface,
+                            toolkit=toolkit,
+                            max_tool_calls=max_tool_calls,
+                            stream=stream,
+                            return_mode=return_mode,
+                            use_log_context=False,  # Log context already set in wrapper
+                            **llm_kwargs,
+                        ):
+                            response_content, history = result
+                            collected_responses.append(response_content)
+                            final_history = history
+                            yield result
+                        
+                        # 更新 span 输出信息
+                        chat_span.update(
+                            output={
+                                "responses": collected_responses,
+                                "final_history": final_history,
+                                "total_responses": len(collected_responses),
+                            },
+                        )
+                    except Exception as exc:
+                        # 更新 span 错误信息
+                        chat_span.update(
+                            output={"error": str(exc)},
+                        )
+                        raise
 
         # Preserve original function metadata
         wrapper.__name__ = func.__name__

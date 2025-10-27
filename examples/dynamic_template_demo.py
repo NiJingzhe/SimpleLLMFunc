@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from SimpleLLMFunc import llm_function, app_log
 from SimpleLLMFunc import OpenAICompatible
+from SimpleLLMFunc.observability import flush_all_observations
 
 # 加载LLM接口配置
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -64,7 +65,7 @@ def fibonacci(n):
     
     try:
         print("   Python性能分析:")
-        result1 = await analyze_code(
+        result1: str = await analyze_code(
             python_code,
             _template_params={
                 'style': '详细', 
@@ -79,7 +80,7 @@ def fibonacci(n):
     try:
         print("   JavaScript规范检查:")
         js_code = "function test() { console.log('hello'); }"
-        result2 = await analyze_code(
+        result2: str = await analyze_code(
             js_code,
             _template_params={
                 'style': '简洁', 
@@ -98,7 +99,7 @@ def fibonacci(n):
     
     try:
         print("   编辑润色:")
-        result3 = await process_text(
+        result3: str = await process_text(
             sample_text,
             _template_params={
                 'role': '专业编辑', 
@@ -112,7 +113,7 @@ def fibonacci(n):
     
     try:
         print("   翻译转换:")
-        result4 = await process_text(
+        result4: str = await process_text(
             sample_text,
             _template_params={
                 'role': '翻译专家', 
@@ -140,3 +141,4 @@ def fibonacci(n):
 
 if __name__ == "__main__":
     asyncio.run(main())
+    flush_all_observations()

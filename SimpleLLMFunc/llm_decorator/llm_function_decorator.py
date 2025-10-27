@@ -66,6 +66,7 @@ from SimpleLLMFunc.logger import (
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.utils import get_last_item_of_async_generator
 from SimpleLLMFunc.llm_decorator.utils import process_tools
+from SimpleLLMFunc.observability.langfuse_client import langfuse_client
 
 T = TypeVar("T")
 
@@ -208,29 +209,51 @@ def llm_function(
                     llm_kwargs=llm_kwargs,
                 )
 
-                try:
-                    # Execute LLM call with retry logic
-                    final_response = await _execute_llm_with_retry_async(
-                        llm_interface=llm_interface,
-                        context=context,
-                        llm_params=llm_params,
-                        max_tool_calls=max_tool_calls,
-                    )
-                    # Convert response to specified return type
-                    result = _process_final_response(final_response, context.return_type)
-                    return result
-                except Exception as exc:
-                    push_error(
-                        f"Async LLM function '{context.func_name}' execution failed: {str(exc)}",
-                        location=get_location(),
-                    )
-                    raise
+                # 创建 Langfuse parent span 用于追踪整个函数调用
+                with langfuse_client.start_as_current_observation(
+                    as_type="span",
+                    name=f"{context.func_name}_function_call",
+                    input=context.bound_args.arguments,
+                    metadata={
+                        "function_name": context.func_name,
+                        "trace_id": context.trace_id,
+                        "tools_available": len(toolkit) if toolkit else 0,
+                        "max_tool_calls": max_tool_calls,
+                    },
+                ) as function_span:
+                    try:
+                        # Execute LLM call with retry logic
+                        final_response = await _execute_llm_with_retry_async(
+                            llm_interface=llm_interface,
+                            context=context,
+                            llm_params=llm_params,
+                            max_tool_calls=max_tool_calls,
+                        )
+                        # Convert response to specified return type
+                        result = _process_final_response(final_response, context.return_type)
+                        
+                        # 更新 span 输出信息
+                        function_span.update(
+                            output={"result": result, "return_type": str(context.return_type)},
+                        )
+                        
+                        return result
+                    except Exception as exc:
+                        # 更新 span 错误信息
+                        function_span.update(
+                            output={"error": str(exc)},
+                        )
+                        push_error(
+                            f"Async LLM function '{context.func_name}' execution failed: {str(exc)}",
+                            location=get_location(),
+                        )
+                        raise
 
         # Preserve original function metadata
         async_wrapper.__name__ = func_name
         async_wrapper.__doc__ = docstring
         async_wrapper.__annotations__ = func.__annotations__
-        async_wrapper.__signature__ = signature  # type: ignore[misc]
+        setattr(async_wrapper, '__signature__', signature) 
 
         return cast(Callable[..., Awaitable[T]], async_wrapper)
 

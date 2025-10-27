@@ -29,11 +29,11 @@ async def get_image(image_path: str) -> tuple[str, ImgPath]:
     return "仔细分析这张图的几何结构", ImgPath(image_path, detail="low")
 
 
-@llm_function(
+@llm_function(  # type: ignore
     llm_interface=gpt_4o,
     toolkit=[get_image],
     timeout=600,
-)
+)  
 async def analyze_image(
     focus: str,
     image_path: str,
@@ -53,7 +53,7 @@ async def analyze_image(
 
 async def main() -> None:
     path = input("Enter the path to the image: ")
-    result = await analyze_image(
+    result: str = await analyze_image(
         "Analyze the image for objects, provide the simplest description possible",
         path,
     )

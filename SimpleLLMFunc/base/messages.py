@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
@@ -25,6 +28,33 @@ def build_assistant_response_message(content: str) -> Dict[str, Any]:
         "role": "assistant",
         "content": content,
     }
+
+
+def extract_usage_from_response(
+    response: Union[ChatCompletion, ChatCompletionChunk, None],
+) -> Dict[str, int] | None:
+    """从LLM响应中提取用量信息。
+
+    Args:
+        response: OpenAI API的ChatCompletion或ChatCompletionChunk响应对象
+
+    Returns:
+        包含用量信息的字典 {"input": int, "output": int, "total": int}，
+        如果无法提取则返回None
+    """
+    if response is None:
+        return None
+
+    try:
+        if hasattr(response, "usage") and response.usage:
+            return {
+                "input": getattr(response.usage, "prompt_tokens", 0),
+                "output": getattr(response.usage, "completion_tokens", 0),
+                "total": getattr(response.usage, "total_tokens", 0),
+            }
+    except (AttributeError, TypeError):
+        pass
+    return None
 
 
 def build_multimodal_content(
@@ -179,6 +209,7 @@ def create_image_path_content(value: Any, param_name: str) -> Dict[str, Any]:
 __all__ = [
     "build_assistant_tool_message",
     "build_assistant_response_message",
+    "extract_usage_from_response",
     "build_multimodal_content",
     "parse_multimodal_parameter",
     "create_text_content",

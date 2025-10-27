@@ -16,8 +16,6 @@ from typing import (
 )
 import re
 import inspect
-import json
-import asyncio
 from pydantic import BaseModel
 
 from SimpleLLMFunc.logger.logger import push_error
@@ -282,7 +280,7 @@ class Tool(ABC):
 
         # 只有在有必需参数时才添加required字段
         if required_params:
-            tool_spec["function"]["parameters"]["required"] = required_params
+            tool_spec["function"]["parameters"]["required"] = required_params  # type: ignore
 
         return tool_spec
 
@@ -409,121 +407,3 @@ def tool(
         return func
 
     return decorator
-
-
-# 测试代码
-# 测试代码
-if __name__ == "__main__":
-    from pydantic import BaseModel, Field
-
-    # 示例Pydantic模型
-    class Location(BaseModel):
-        latitude: float = Field(..., description="纬度")
-        longitude: float = Field(..., description="经度")
-
-    # 使用装饰器创建工具
-    @tool(name="get_weather", description="获取指定位置的天气信息")
-    async def get_weather(location: Location, days: int = 1) -> Dict[str, Any]:
-        """
-        获取指定位置的天气预报
-
-        Args:
-            location: 位置信息，包含经纬度
-            days: 预报天数，默认为1天
-
-        Returns:
-            天气预报信息
-        """
-        # 实际实现会调用天气API
-        return {
-            "location": f"{location.latitude},{location.longitude}",
-            "forecast": [
-                {"day": i, "temp": 25, "condition": "晴朗"} for i in range(days)
-            ],
-        }
-
-    # 使用装饰器创建带有Optional参数的工具
-    @tool(name="search_restaurants", description="搜索附近的餐厅")
-    async def search_restaurants(
-        location: Location,
-        cuisine: Optional[str] = None,
-        max_distance: Optional[float] = None,
-        price_range: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """
-        搜索指定位置附近的餐厅
-
-        Args:
-            location: 位置信息，包含经纬度
-            cuisine: 菜系类型，如中式、日式等，可选
-            max_distance: 最大搜索距离（公里），可选
-            price_range: 价格范围（1-4星级），可选
-
-        Returns:
-            餐厅搜索结果
-        """
-        # 实际实现会调用餐厅搜索API
-        filters = {}
-        if cuisine:
-            filters["cuisine"] = cuisine
-        if max_distance:
-            filters["max_distance"] = max_distance
-        if price_range:
-            filters["price_range"] = price_range
-
-        return {
-            "location": f"{location.latitude},{location.longitude}",
-            "filters": filters,
-            "restaurants": [{"name": "示例餐厅", "rating": 4.5, "distance": 0.5}],
-        }
-
-    async def main() -> None:
-        # 测试工具
-        print("\n装饰器方式 - 基础工具:")
-        print(
-            json.dumps(
-                getattr(get_weather, "_tool").to_openai_tool(),
-                indent=2,
-                ensure_ascii=False,
-            )
-        )
-
-        print("\n装饰器方式 - 带Optional参数的工具:")
-        optional_tool_schema = getattr(search_restaurants, "_tool").to_openai_tool()
-        print(json.dumps(optional_tool_schema, indent=2, ensure_ascii=False))
-
-        # 验证Optional参数的序列化结果
-        print("\n=== Optional参数序列化验证 ===")
-        function_params = optional_tool_schema["function"]["parameters"]
-        required_params = function_params.get("required", [])
-        properties = function_params["properties"]
-
-        print(f"必需参数: {required_params}")
-        print("参数详情:")
-        for param_name, param_schema in properties.items():
-            is_required = param_name in required_params
-            param_type = param_schema.get("type")
-            print(f"  {param_name}: 类型={param_type}, 必需={is_required}")
-            if isinstance(param_type, list) and "null" in param_type:
-                print("    -> 支持null值")
-
-        # 也可以直接调用函数
-        location = Location(latitude=39.9, longitude=116.3)
-        result = await get_weather(location, days=3)
-        print("\n基础函数调用结果:")
-        print(result)
-
-        # 测试Optional参数函数调用
-        result_with_optional = await search_restaurants(
-            location=location, cuisine="中式", max_distance=2.0
-        )
-        print("\n带Optional参数函数调用结果:")
-        print(result_with_optional)
-
-        # 测试完全不传Optional参数
-        result_without_optional = await search_restaurants(location=location)
-        print("\n不传Optional参数函数调用结果:")
-        print(result_without_optional)
-
-    asyncio.run(main())
-

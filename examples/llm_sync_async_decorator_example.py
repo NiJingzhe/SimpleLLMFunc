@@ -47,43 +47,46 @@ class SentimentResult(BaseModel):
 
 
 # 方式 1: 使用 sync 原始函数（新方式！）
-@llm_function(llm_interface=llm_interface)
+@llm_function(llm_interface=llm_interface)  # type: ignore
 def analyze_sentiment_sync(text: str) -> SentimentResult:
     """
     分析输入文本的情感倾向。
 
     返回包含情感标签、置信度和分析理由的结构化数据。
     """
-    ...  # 函数体不会被执行，使用 ... 作为占位符
+    # This return would never be executed because the function is decorated with llm_function
+    return SentimentResult(text=text, sentiment="positive", confidence=0.95, reason="这是一个测试")
 
 
 # 方式 2: 使用 async 原始函数（传统方式）
-@llm_function(llm_interface=llm_interface)
+@llm_function(llm_interface=llm_interface)  # type: ignore
 async def analyze_sentiment_async(text: str) -> SentimentResult:
     """
     分析输入文本的情感倾向。
 
     返回包含情感标签、置信度和分析理由的结构化数据。
     """
-    ...  # 函数体不会被执行，使用 ... 作为占位符
+    # This return would never be executed because the function is decorated with llm_function
+    return SentimentResult(text=text, sentiment="positive", confidence=0.95, reason="这是一个测试")
 
 
 # ===== llm_chat 装饰器：同时支持 sync 和 async =====
 
 
 # 方式 1: 使用 sync 原始函数（新方式！）
-@llm_chat(llm_interface=llm_interface, stream=False)
+@llm_chat(llm_interface=llm_interface, stream=False)  # type: ignore
 def simple_qa_sync(history: Optional[List[Dict[str, str]]] = None, question: str = ""):
     """
     一个简单的 QA 助手。我可以回答关于各种主题的问题。
     
     请注意：这是一个 sync 原始函数，但装饰后返回的是 async 函数。
     """
-    ...
+    # This return would never be executed because the function is decorated with llm_chat
+    return "这是一个测试"
 
 
 # 方式 2: 使用 async 原始函数（传统方式）
-@llm_chat(llm_interface=llm_interface, stream=True)
+@llm_chat(llm_interface=llm_interface, stream=True)  # type: ignore
 async def streaming_chat_async(
     history: Optional[List[Dict[str, str]]] = None, message: str = ""
 ):
@@ -92,7 +95,8 @@ async def streaming_chat_async(
     
     注意：这是一个 async 原始函数，装饰后返回的也是 async 函数。
     """
-    ...
+    # This return would never be executed because the function is decorated with llm_chat
+    return "这是一个测试"
 
 
 # ===== 测试函数 =====
@@ -242,7 +246,7 @@ async def concurrent_examples():
                 return f"[sync] {text[:20]}... → {result.sentiment}"
             else:
                 result = await analyze_sentiment_async(text)
-                return f"[async] {text[:20]}... → {result.sentiment}"
+                return f"[async] {text[:20]}... → {result.sentiment}"  # type: ignore
         except Exception as e:
             return f"Error: {str(e)[:50]}"
 
