@@ -3,7 +3,8 @@ from typing import Optional, Dict, Iterable, Literal, Any, AsyncGenerator
 
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.logger import get_current_trace_id
-
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
+from openai.types.chat.chat_completion import ChatCompletion
 
 class LLM_Interface(ABC):
 
@@ -13,6 +14,7 @@ class LLM_Interface(ABC):
     ):
         self.input_token_count = 0
         self.output_token_count = 0
+        self.model_name = model_name
 
     @abstractmethod
     async def chat(
@@ -23,8 +25,10 @@ class LLM_Interface(ABC):
         timeout: Optional[int] = None,
         *args,
         **kwargs,
-    ) -> Dict[Any, Any]:
+    ) -> ChatCompletion:
+
         pass
+
 
     @abstractmethod
     async def chat_stream(
@@ -35,7 +39,7 @@ class LLM_Interface(ABC):
         timeout: Optional[int] = None,
         *args,
         **kwargs,
-    ) -> AsyncGenerator[Dict[Any, Any], None]:
-        # 空的异步生成器，永远不会产生任何值
+    ) -> AsyncGenerator[ChatCompletionChunk, None]:
+    
         if False:
-            yield {}
+            yield ChatCompletionChunk(id="", created=0, model="", object="chat.completion.chunk", choices=[])

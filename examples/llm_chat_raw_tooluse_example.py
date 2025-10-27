@@ -1,5 +1,5 @@
 """
-展示在 return_mode="raw" 下，@async_llm_chat 透传底层原始响应，
+展示在 return_mode="raw" 下，@llm_chat 透传底层原始响应，
 从而实时解析到工具调用（tool_calls / delta.tool_calls）。
 
 运行前准备：请在 examples/provider.json 中配置兼容的提供方与模型。
@@ -12,7 +12,7 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from SimpleLLMFunc import tool
-from SimpleLLMFunc.llm_decorator import async_llm_chat
+from SimpleLLMFunc.llm_decorator import llm_chat
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
 
 
@@ -28,7 +28,7 @@ VolcEngine_deepseek_v3_Interface = OpenAICompatible.load_from_json_file(
 
 # ============ 定义一个简单工具 ============
 @tool(name="get_weather", description="获取指定城市的天气信息")
-def get_weather(city: str) -> Dict[str, str]:
+async def get_weather(city: str) -> Dict[str, str]:
     """
     获取城市天气。
 
@@ -42,7 +42,7 @@ def get_weather(city: str) -> Dict[str, str]:
 
 
 # ============ 原始响应透传：流式示例 ============
-@async_llm_chat(
+@llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
     toolkit=[get_weather],
     stream=True,
@@ -57,7 +57,7 @@ async def chat_stream_raw(history: Optional[List[Dict[str, Any]]] = None, query:
 
 
 # ============ 原始响应透传：非流式示例 ============
-@async_llm_chat(
+@llm_chat(
     llm_interface=VolcEngine_deepseek_v3_Interface,
     toolkit=[get_weather],
     stream=False,

@@ -35,7 +35,7 @@ class TokenBucket:
             refill_rate: 令牌补充速率（令牌数/秒）
         """
         # 如果已经初始化，跳过初始化过程
-        if hasattr(self, "initialized") and self.initialized:
+        if hasattr(self, "initialized") and self.initialized: # type: ignore
             return
 
         self.bucket_id = bucket_id

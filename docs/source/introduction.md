@@ -17,7 +17,7 @@ SimpleLLMFunc 是一个轻量级的大语言模型（Large Language Model, LLM�
 
 SimpleLLMFunc 旨在解决这些问题，使得开发者可以：
 
-- 装饰器驱动：提供 `@(async_)llm_function`、`@(async_)llm_chat` 等装饰器，支持同步和异步调用。
+- 装饰器驱动：提供 `@llm_function`、`@llm_chat` 等装饰器，所有装饰器仅支持异步函数 (`async def`) 并原生适配异步调用。
 - Prompt 即逻辑：Prompt 就是代码，是这个函数的逻辑实现。
 - 类型安全：支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
 - 多模态支持：支持文本、图片 URL 和本地图片路径的混合输入，创新性地支持工具的多模态返回。
@@ -45,10 +45,15 @@ SimpleLLMFunc 旨在解决这些问题，使得开发者可以：
 
 下面是一个简单的示例，展示了 SimpleLLMFunc 的基本用法：
 
+> ⚠️ SimpleLLMFunc 中的 `@llm_function`、`@llm_chat`、`@tool` 等装饰器只能装饰 `async def` 定义的函数，请在异步上下文中通过 `await` 调用。
+
 ```python
-from SimpleLLMFunc import llm_function, OpenAICompatible
-from pydantic import BaseModel, Field
+import asyncio
 from typing import List
+
+from pydantic import BaseModel, Field
+
+from SimpleLLMFunc import llm_function, OpenAICompatible
 
 # 定义返回类型
 class ProductAnalysis(BaseModel):
@@ -61,7 +66,7 @@ llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider"
 
 # 创建 LLM 函数
 @llm_function(llm_interface=llm_interface)
-def analyze_product(product_name: str, review: str) -> ProductAnalysis:
+async def analyze_product(product_name: str, review: str) -> ProductAnalysis:
     """
     分析产品评论，提取优缺点并给出评分。
     
@@ -75,43 +80,59 @@ def analyze_product(product_name: str, review: str) -> ProductAnalysis:
     pass  # Prompt as Code, Code as Doc
 
 # 使用函数
-result = analyze_product("无线耳机", "音质不错但连接不稳定")
-print(f"优点: {result.pros}")
-print(f"缺点: {result.cons}") 
-print(f"评分: {result.rating}/5")
+
+
+async def main():
+    result = await analyze_product("无线耳机", "音质不错但连接不稳定")
+    print(f"优点: {result.pros}")
+    print(f"缺点: {result.cons}")
+    print(f"评分: {result.rating}/5")
+
+
+asyncio.run(main())
 ```
 
 ### 异步支持示例
 
 ```python
-from SimpleLLMFunc import async_llm_function
+import asyncio
 
-@async_llm_function(llm_interface=llm_interface)
+from SimpleLLMFunc import llm_function
+
+
+@llm_function(llm_interface=llm_interface)
 async def async_translate(text: str, target_language: str) -> str:
     """
-    异步翻译文本到目标语言
-    
+    将输入文本翻译为目标语言。
+
     Args:
         text: 要翻译的文本
         target_language: 目标语言
-        
+
     Returns:
         翻译结果
     """
     pass
 
-# 异步调用
-result = await async_translate("Hello world", "中文")
+
+async def main():
+    result = await async_translate("Hello world", "中文")
+    print(result)
+
+
+asyncio.run(main())
 ```
 
 ### 多模态支持示例
 
 ```python
+import asyncio
+
 from SimpleLLMFunc import llm_function
 from SimpleLLMFunc.type import Text, ImgPath
 
 @llm_function(llm_interface=llm_interface)
-def analyze_image(description: Text, image: ImgPath) -> str:
+async def analyze_image(description: Text, image: ImgPath) -> str:
     """
     分析图像内容
     
@@ -125,18 +146,90 @@ def analyze_image(description: Text, image: ImgPath) -> str:
     pass
 
 # 使用多模态输入
-result = analyze_image(
-    description=Text("描述这张图片中的主要内容"),
-    image=ImgPath("./photo.jpg")
-)
+async def run():
+    result = await analyze_image(
+        description=Text("描述这张图片中的主要内容"),
+        image=ImgPath("./photo.jpg")
+    )
+    print(result)
+
+
+asyncio.run(run())
+```
+
+### 动态模板参数示例
+
+```python
+import asyncio
+
+from SimpleLLMFunc import llm_function
+
+# 万能的代码分析函数
+@llm_function(llm_interface=llm_interface)
+async def analyze_code(code: str) -> str:
+    """以{style}的方式分析{language}代码，重点关注{focus}。"""
+    pass
+
+
+# 万能的文本处理函数
+@llm_function(llm_interface=llm_interface)
+async def process_text(text: str) -> str:
+    """作为{role}，请{action}以下文本，输出风格为{style}。"""
+    pass
+
+
+async def main():
+    # 不同的调用方式，适应不同场景
+    performance_analysis = await analyze_code(
+        python_code,
+        _template_params={
+            'style': '详细',
+            'language': 'Python',
+            'focus': '性能优化'
+        }
+    )
+
+    code_review = await analyze_code(
+        js_code,
+        _template_params={
+            'style': '简洁',
+            'language': 'JavaScript',
+            'focus': '代码规范'
+        }
+    )
+
+    # 同一个函数，不同角色
+    edited_text = await process_text(
+        text,
+        _template_params={
+            'role': '专业编辑',
+            'action': '润色',
+            'style': '学术'
+        }
+    )
+
+    translated_text = await process_text(
+        text,
+        _template_params={
+            'role': '翻译专家',
+            'action': '翻译成英文',
+            'style': '商务'
+        }
+    )
+
+    print(performance_analysis, code_review, edited_text, translated_text)
+
+
+asyncio.run(main())
 ```
 
 ## 核心特性
 
-- **装饰器驱动**: 使用 `@llm_function`、`@llm_chat` 及其异步版本装饰器轻松创建 LLM 驱动的功能。
+- **装饰器驱动**: 使用 `@llm_function`、`@llm_chat` 构建 LLM 驱动的功能，均为原生异步实现。
 - **DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。
+- **动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。
 - **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
-- **异步支持**: 提供 `@async_llm_function` 和 `@async_llm_chat` 装饰器，支持原生异步调用。
+- **异步支持**: `@llm_function` 与 `@llm_chat` 原生支持异步调用，无需额外别名。
 - **多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。
 - **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。
 - **API 密钥管理**: 智能负载均衡多个 API 密钥。
@@ -153,27 +246,45 @@ SimpleLLMFunc/
 ├── __init__.py                     # 包初始化文件
 ├── config.py                       # 全局配置
 ├── utils.py                        # 通用工具函数
-├── interface/                      # LLM 接口
+├── interface/                      # LLM 接口层
 │   ├── __init__.py                 # 包初始化文件
-│   ├── llm_interface.py            # LLM 接口抽象类
-│   ├── key_pool.py                 # API 密钥池
-│   ├── openai_compatible.py        # OpenAI 兼容接口实现
-│   └── token_bucket.py             # 流量控制令牌桶实现
-├── llm_decorator/                  # LLM装饰器
+│   ├── llm_interface.py            # LLM 接口抽象基类
+│   ├── key_pool.py                 # API 密钥负载均衡管理
+│   ├── openai_compatible.py        # OpenAI 兼容实现
+│   └── token_bucket.py             # 令牌桶流量控制
+├── llm_decorator/                  # LLM 装饰器模块
 │   ├── __init__.py                 # 包初始化文件
-│   ├── llm_function_decorator.py   # 函数装饰器
-│   ├── llm_chat_decorator.py       # 对话装饰器
-│   ├── multimodal_types.py         # 多模态类型定义
-│   └── utils.py                    # 装饰器工具函数
-├── logger/                         # 日志系统
-│   ├── __init__.py                 # 包初始化文件
-│   ├── logger.py                   # 日志核心功能
-│   └── logger_config.py            # 日志配置
+│   ├── llm_function_decorator.py   # @llm_function 装饰器实现
+│   ├── llm_chat_decorator.py       # @llm_chat 装饰器实现
+│   ├── multimodal_types.py         # 多模态类型（Text, ImgUrl, ImgPath）
+│   └── utils/                      # 装饰器工具函数包
+│       ├── __init__.py
+│       └── tools.py                # 工具处理、序列化等
+├── base/                           # 核心执行引擎
+│   ├── __init__.py
+│   ├── ReAct.py                    # ReAct 引擎与工具调用协调
+│   ├── messages.py                 # 消息构建与多模态处理
+│   ├── post_process.py             # 响应解析与类型转换
+│   ├── type_resolve.py             # 类型解析
+│   └── tool_call.py                # 工具调用执行与序列化
+├── logger/                         # 日志与可观测性系统
+│   ├── __init__.py
+│   ├── logger.py                   # 日志 API 导出
+│   ├── core.py                     # 日志系统核心实现
+│   ├── logger_config.py            # 日志配置管理
+│   ├── context_manager.py          # 上下文与 trace_id 管理
+│   ├── formatters.py               # 日志格式化器
+│   ├── types.py                    # 日志类型定义
+│   └── utils.py                    # 日志工具函数
 ├── tool/                           # 工具系统
-│   ├── __init__.py                 # 包初始化文件
-│   └── tool.py                     # 工具定义和装饰器
-└── type/                           # 类型定义
-    └── __init__.py                 # 多模态类型导出
+│   ├── __init__.py
+│   └── tool.py                     # @tool 装饰器与 Tool 基类
+├── observability/                  # 可观测性集成
+│   ├── __init__.py
+│   ├── langfuse_client.py          # Langfuse 客户端
+│   └── langfuse_config.py          # Langfuse 配置管理
+└── type/                           # 多模态类型导出
+    └── __init__.py                 # Text, ImgUrl, ImgPath 等类型
 ```
 
 ### 模块介绍
@@ -188,8 +299,7 @@ SimpleLLMFunc/
 
 - `@llm_function`: 用于创建无状态的 LLM 功能，适合单次查询和转换任务
 - `@llm_chat`: 用于创建对话式 LLM 功能，支持历史记录管理和多轮交互
-- `@async_llm_function`: `@llm_function` 的异步版本，支持原生异步调用
-- `@async_llm_chat`: `@llm_chat` 的异步版本，支持原生异步对话
+  
 
 该模块还包含 `multimodal_types.py`，定义了 `Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图像的混合输入。
 
