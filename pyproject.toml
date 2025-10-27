@@ -16,10 +16,14 @@ httpx = { extras = ["socks"], version = "^0.28.1" }
 rich = "^14.0.0"
 nest-asyncio = "^1.6.0"
 langfuse = "^3.6.1"
+tqdm = "^4.67.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.0"
 pytest-mock = "^3.14.1"
+polib = "^1.2.0"
+types-polib = "^1.2.0.20250401"
+types-tqdm = "^4.67.0.20250809"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

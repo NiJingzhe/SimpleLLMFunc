@@ -7,34 +7,37 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-10-27 17:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
-"Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/contributing.md:1
 msgid "贡献指南"
-msgstr ""
+msgstr "Contribution Guide"
 
 #: ../../source/contributing.md:3
 msgid "感谢你对 SimpleLLMFunc 项目的兴趣！我们欢迎并鼓励社区贡献，无论是修复错误、改进文档，还是添加新功能。"
 msgstr ""
+"Thank you for your interest in the SimpleLLMFunc project! We welcome and "
+"encourage community contributions, whether it's fixing bugs, improving "
+"documentation, or adding new features."
 
 #: ../../source/contributing.md:5
 msgid "如何贡献"
-msgstr ""
+msgstr "How to contribute"
 
 #: ../../source/contributing.md:7
 msgid "提交问题(Issue)"
-msgstr ""
+msgstr "Submit an issue"
 
 #: ../../source/contributing.md:9
 msgid ""
@@ -42,156 +45,202 @@ msgid ""
 "Issues](https://github.com/NiJingzhe/SimpleLLMFunc/issues) "
 "页面搜索相关内容，以确保你的问题或建议尚未被提出。如果没有相关内容，你可以创建一个新的 Issue，请务必："
 msgstr ""
+"If you find a problem or have a new feature suggestion, please first search "
+"for relevant content on the [GitHub "
+"Issues](https://github.com/NiJingzhe/SimpleLLMFunc/issues) page to ensure "
+"that your issue or suggestion has not already been raised. If there is no "
+"relevant content, you can create a new issue, please be sure to:"
 
 #: ../../source/contributing.md:11
 msgid "使用清晰的标题描述问题"
 msgstr ""
+"{\n"
+"\"translated_text\": \"Describe the problem with a clear title\", \"confidence_score\": 0.99\n"
+"}"
 
 #: ../../source/contributing.md:12
 msgid "提供详细的问题描述或功能请求"
-msgstr ""
+msgstr "Please provide a detailed problem description or feature request."
 
 #: ../../source/contributing.md:13
 msgid "如果是 bug，请提供复现步骤和环境信息"
 msgstr ""
+"If it's a bug, please provide reproduction steps and environment information"
 
 #: ../../source/contributing.md:14
 msgid "如果可能，包含代码示例或截图"
-msgstr ""
+msgstr "If possible, include code examples or screenshots"
 
 #: ../../source/contributing.md:16
 msgid "提交代码更改(Pull Request)"
 msgstr ""
+"```json\n"
+"{\n"
+"  \"translation\": \"Submit code changes (Pull Request)\",\n"
+"  \"confidence_score\": 0.95\n"
+"}\n"
+"```"
 
 #: ../../source/contributing.md:18
 msgid "Fork 项目仓库"
-msgstr ""
+msgstr "{'translation': 'Fork project warehouse', 'confidence': 0.85}"
 
 #: ../../source/contributing.md:19
 msgid "创建你的功能分支 (`git checkout -b feature/amazing-feature`)"
 msgstr ""
+"Create your feature branch (`git checkout -b feature/amazing-feature`)"
 
 #: ../../source/contributing.md:20
 msgid "提交你的更改 (`git commit -m 'Add some amazing feature'`)"
-msgstr ""
+msgstr "Submit your changes (`git commit -m 'Add some amazing feature'`)"
 
 #: ../../source/contributing.md:21
 msgid "推送到分支 (`git push origin feature/amazing-feature`)"
-msgstr ""
+msgstr "Push to the branch (`git push origin feature/amazing-feature`)"
 
 #: ../../source/contributing.md:22
 msgid "提交 Pull Request"
-msgstr ""
+msgstr "{\"translation\": \"Submit Pull Request\", \"confidence\": 0.9}"
 
 #: ../../source/contributing.md:24
 msgid "开发流程"
 msgstr ""
+"{\n"
+"\"translation\": \"Development process\",\n"
+"\"confidence_score\": 0.95\n"
+"}"
 
 #: ../../source/contributing.md:26
 msgid "确保你已经设置好开发环境（见下文）"
-msgstr ""
+msgstr "Make sure you have set up the development environment (see below)"
 
 #: ../../source/contributing.md:27
 msgid "在开始工作前，请先同步最新的代码"
-msgstr ""
+msgstr "Before starting work, please synchronize the latest code"
 
 #: ../../source/contributing.md:28
 msgid "为你的功能或修复编写测试用例"
-msgstr ""
+msgstr "Write test cases for your features or fixes"
 
 #: ../../source/contributing.md:29
 msgid "确保所有测试都通过"
-msgstr ""
+msgstr "Ensure all tests pass"
 
 #: ../../source/contributing.md:30
 msgid "遵循项目的代码风格和约定"
-msgstr ""
+msgstr "Follow the project's code style and conventions"
 
 #: ../../source/contributing.md:32
 msgid "开发环境设置"
 msgstr ""
+"```json\n"
+"{\"translation\": \"Development environment setup\", \"confidence\": 0.99}\n"
+"```"
 
 #: ../../source/contributing.md:34
 msgid "依赖项"
-msgstr ""
+msgstr "Dependency"
 
 #: ../../source/contributing.md:36
 msgid "Python 3.10 或更高版本"
-msgstr ""
+msgstr "Python 3.10 or later versions"
 
 #: ../../source/contributing.md:37
 msgid "Poetry (推荐的依赖管理工具)"
-msgstr ""
+msgstr "Poetry (Recommended dependency management tool)"
 
 #: ../../source/contributing.md:39
 msgid "安装开发依赖"
-msgstr ""
+msgstr "Install development dependencies"
 
 #: ../../source/contributing.md:55
 msgid "代码规范"
 msgstr ""
+"{\n"
+"    \"translation\": \"Code standards\",\n"
+"    \"confidence_score\": \"\"\n"
+"}"
 
 #: ../../source/contributing.md:57
 msgid "代码风格"
 msgstr ""
+"{\n"
+"  \"translated_text\": \"Code style\",\n"
+"  \"confidence_score\": 0.9 \n"
+"}"
 
 #: ../../source/contributing.md:59
 msgid ""
-"我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python "
-"代码风格指南，使用 [Black](https://github.com/psf/black) 格式化器自动化格式化过程："
+"我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python 代码风格指南，使用 "
+"[Black](https://github.com/psf/black) 格式化器自动化格式化过程："
 msgstr ""
+"We use [PEP 8](https://www.python.org/dev/peps/pep-0008/) as the Python code"
+" style guide and [Black](https://github.com/psf/black) formatter to automate"
+" the formatting process:"
 
 #: ../../source/contributing.md:65
 msgid "类型注解"
-msgstr ""
+msgstr "Type annotation"
 
 #: ../../source/contributing.md:67
 msgid "我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 Pylint 检查类型。"
 msgstr ""
+"We encourage the use of type annotations to improve code readability and "
+"safety. Pylint can be used to check types."
 
 #: ../../source/contributing.md:69
 msgid "文档"
 msgstr ""
+"{\n"
+"  \"translated_text\": \"document\",\n"
+"  \"confidence_score\": 0.95\n"
+"}"
 
 #: ../../source/contributing.md:71
 msgid "所有公共 API 都应该有清晰的文档字符串"
-msgstr ""
+msgstr "All public APIs should have clear docstrings"
 
 #: ../../source/contributing.md:72
 msgid ""
-"文档注释应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob"
-"/gh-pages/pyguide.md#38-comments-and-docstrings)"
+"文档注释应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob/gh-"
+"pages/pyguide.md#38-comments-and-docstrings)"
 msgstr ""
+"Document comments should follow the [Google Python Style "
+"Guide](https://github.com/google/styleguide/blob/gh-"
+"pages/pyguide.md#38-comments-and-docstrings)"
 
 #: ../../source/contributing.md:73
 msgid "更新功能时，请同时更新相关文档"
-msgstr ""
+msgstr "When updating features, please also update the related documentation"
 
 #: ../../source/contributing.md:87
 msgid "行为准则"
-msgstr ""
+msgstr "{\"translation\": \"code of conduct\", \"confidence_score\": 0.98}"
 
 #: ../../source/contributing.md:89
 msgid "请尊重所有项目参与者，保持友好的交流环境。任何形式的骚扰或冒犯行为都是不可接受的。"
 msgstr ""
+"Please respect all project participants and maintain a friendly "
+"communication environment. Any form of harassment or offensive behavior is "
+"unacceptable."
 
 #: ../../source/contributing.md:91
 msgid "获取帮助"
-msgstr ""
+msgstr "get help"
 
 #: ../../source/contributing.md:93
 msgid "如果你在贡献过程中需要帮助，可以："
-msgstr ""
+msgstr "If you need help during your contribution, you can:"
 
 #: ../../source/contributing.md:95
 msgid "在 GitHub Issues 中提问"
-msgstr ""
+msgstr "Ask a question on GitHub Issues"
 
 #: ../../source/contributing.md:96
 msgid "联系项目维护者"
 msgstr ""
+"{'translation': 'Contact project maintainer', 'confidence_score': 0.94}"
 
 #: ../../source/contributing.md:98
 msgid "再次感谢你对 SimpleLLMFunc 的贡献！"
-msgstr ""
-
+msgstr "Thank you again for your contribution to SimpleLLMFunc!"

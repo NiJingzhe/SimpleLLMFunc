@@ -6,6 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+from pydoc import source_synopsis
+import sys
+
 project = 'SimpleLLMFunc'
 copyright = '2025, Nijingzhe'
 author = 'Nijingzhe'
@@ -15,44 +19,26 @@ author = 'Nijingzhe'
 
 extensions = [
     'myst_parser',
-    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
 ]
 
-templates_path = ['_templates']
-exclude_patterns = []   # type: ignore
 
+language = os.environ.get('SPHINX_LANGUAGE', 'en')
 # 国际化配置
 # locale_dirs：指定翻译文件（.po）的目录位置
-locale_dirs = ['../locale/']
+locale_dirs = ['source/locale/']
 # gettext_compact：False 表示为每个文件创建单独的 .po 文件
 gettext_compact = False
-# 指定需要翻译的目标
-gettext_additional_targets = [
-    'index',
-    'introduction',
-    'quickstart',
-    'guide',
-    'examples',
-    'contributing',
-    'langfuse_integration',
-    'detailed_guide/config',
-    'detailed_guide/llm_chat',
-    'detailed_guide/llm_function',
-    'detailed_guide/llm_interface',
-    'detailed_guide/tool',
-]
-
-# 支持的语言
-# 默认语言设置为中文
-language = 'zh_CN'
-
 # 语言显示名称映射
 languages = {
     'zh_CN': '中文（简体）',
     'en': 'English',
 }
+
+
+source_suffix = [ '.md', '.rst' ]
+master_doc = 'index'
 
 # ReadTheDocs 环境检测
 import os
@@ -62,7 +48,6 @@ is_readthedocs = os.environ.get('READTHEDOCS') == 'True'
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
 
 # HTML主题选项
 html_theme_options = {
@@ -101,3 +86,5 @@ html_context = {
 if is_readthedocs:
     # ReadTheDocs 会自动处理多语言构建
     pass
+
+

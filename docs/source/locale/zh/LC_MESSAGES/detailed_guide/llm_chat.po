@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"POT-Creation-Date: 2025-10-27 19:36+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -87,7 +87,9 @@ msgid "装饰器用法"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:26
-msgid "⚠️ **重要说明**：`llm_chat` 只能装饰 `async def` 定义的异步函数，调用时需要在异步上下文中使用 `await`。"
+msgid ""
+"⚠️ **重要说明**：`llm_chat` 可以装饰 `async def` 定义的异步函数，也可以装饰 `def` "
+"定义的同步函数，但是返回的结果一定是一个 `async` 函数。如果要使用这个函数，要使用`await`或者`asyncio.run()`来执行。"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:28
@@ -225,4 +227,7 @@ msgstr ""
 #: ../../source/detailed_guide/llm_chat.md:435
 msgid "通过这些示例和最佳实践，你可以构建功能强大的对话应用。`llm_chat` 装饰器提供了简洁而强大的方式来实现复杂的对话逻辑。"
 msgstr ""
+
+#~ msgid "⚠️ **重要说明**：`llm_chat` 只能装饰 `async def` 定义的异步函数，调用时需要在异步上下文中使用 `await`。"
+#~ msgstr ""
 

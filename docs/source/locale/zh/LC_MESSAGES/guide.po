@@ -9,12 +9,12 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"POT-Creation-Date: 2025-10-27 19:37+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
-"Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -265,7 +265,9 @@ msgid "**如何配置 API 密钥？** → [配置与环境](detailed_guide/confi
 msgstr ""
 
 #: ../../source/guide.md:72
-msgid "**装饰器支持同步函数吗？** → [llm_function 装饰器](detailed_guide/llm_function.md#重要说明)"
+msgid ""
+"**装饰器支持同步函数吗？** → [llm_function 装饰器 - "
+"重要说明](detailed_guide/llm_function.md)"
 msgstr ""
 
 #: ../../source/guide.md:73
@@ -278,12 +280,12 @@ msgstr ""
 
 #: ../../source/guide.md:75
 msgid ""
-"**支持哪些 LLM 提供商？** → [LLM "
-"接口层](detailed_guide/llm_interface.md#openaicompatible-实现)"
+"**支持哪些 LLM 提供商？** → [LLM 接口层 - OpenAICompatible "
+"实现](detailed_guide/llm_interface.md)"
 msgstr ""
 
 #: ../../source/guide.md:76
-msgid "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md#故障排除)"
+msgid "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md)"
 msgstr ""
 
 #: ../../source/guide.md:78
@@ -328,4 +330,17 @@ msgid ""
 "[examples/](https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples)"
 " 目录"
 msgstr ""
+
+#~ msgid ""
+#~ "**装饰器支持同步函数吗？** → [llm_function "
+#~ "装饰器](detailed_guide/llm_function.md#重要说明)"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "**支持哪些 LLM 提供商？** → [LLM "
+#~ "接口层](detailed_guide/llm_interface.md#openaicompatible-实现)"
+#~ msgstr ""
+
+#~ msgid "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md#故障排除)"
+#~ msgstr ""
 

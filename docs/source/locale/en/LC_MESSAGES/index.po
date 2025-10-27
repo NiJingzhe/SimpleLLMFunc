@@ -7,48 +7,49 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-10-27 17:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
-"Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/index.md:5
 msgid "    项目介绍"
-msgstr ""
+msgstr "Project Introduction"
 
 #: ../../source/index.md:5
 msgid "    快速开始"
-msgstr ""
+msgstr "{'translation': 'Quick start', 'confidence': 0.99}"
 
 #: ../../source/index.md:5
 msgid "    使用指南"
-msgstr ""
+msgstr "User Guide"
 
 #: ../../source/index.md:5
 msgid "    示例代码"
-msgstr ""
+msgstr "Example code"
 
 #: ../../source/index.md:5
 msgid "    贡献指南"
-msgstr ""
+msgstr "Contribution Guide"
 
 #: ../../source/index.md:5
 msgid "目录："
-msgstr ""
+msgstr "Directory:"
 
 #: ../../source/index.md:1
 msgid "SimpleLLMFunc documentation"
-msgstr ""
+msgstr "SimpleLLMFunc文档"
 
 #: ../../source/index.md:3
 msgid "SimpleLLMFunc 是一个轻量级、可配置的 LLM 应用开发框架。"
 msgstr ""
-
+"SimpleLLMFunc is a lightweight, configurable LLM application development "
+"framework."

@@ -295,5 +295,3 @@ logging.getLogger("langfuse").setLevel(logging.DEBUG)
 ## 相关链接
 
 - [Langfuse 官方文档](https://langfuse.com/docs)
-- [SimpleLLMFunc 文档](../README.md)
-- [API 参考](./api_reference.md)

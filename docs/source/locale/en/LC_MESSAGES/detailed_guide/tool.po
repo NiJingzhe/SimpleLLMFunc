@@ -7,414 +7,525 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-10-27 17:51+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: en\n"
-"Language-Team: en <LL@li.org>\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/detailed_guide/tool.md:1
 msgid "Tool 工具系统"
-msgstr ""
+msgstr "Tool"
 
 #: ../../source/detailed_guide/tool.md:3
 msgid "实现功能"
-msgstr ""
+msgstr "{'translation': 'Implement function', 'confidence': 0.98}"
 
 #: ../../source/detailed_guide/tool.md:5
 msgid ""
 "SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 API 的能力，让 LLM "
 "能够执行计算、查询数据、调用服务等操作。工具系统支持两种创建方式，并能自动将 Python 函数转换为 LLM 可理解的工具描述格式。"
 msgstr ""
+"SimpleLLMFunc's tool system provides large language models with the ability "
+"to call external functions and APIs, enabling LLMs to perform operations "
+"such as calculations, data queries, and service calls. The tool system "
+"supports two creation methods and can automatically convert Python functions"
+" into a tool description format that LLMs can understand."
 
 #: ../../source/detailed_guide/tool.md:7
 msgid "核心功能特性"
-msgstr ""
+msgstr "Core functional features"
 
 #: ../../source/detailed_guide/tool.md:8
 msgid "**智能类型推断**: 自动从函数签名中提取参数类型和描述信息"
 msgstr ""
+"**Intelligent Type Inference**: Automatically extract parameter types and "
+"description information from function signatures"
 
 #: ../../source/detailed_guide/tool.md:9
 msgid "**文档字符串解析**: 支持从 docstring 中解析参数描述"
 msgstr ""
+"**Docstring Parsing**: Support parsing parameter descriptions from "
+"docstrings"
 
 #: ../../source/detailed_guide/tool.md:10
 msgid "**JSON Schema 生成**: 自动生成符合 OpenAI Function Calling API 的工具描述"
 msgstr ""
+"**JSON Schema Generation**: Automatically generate tool descriptions that "
+"comply with the OpenAI Function Calling API"
 
 #: ../../source/detailed_guide/tool.md:11
 msgid "**类型安全**: 支持基本类型、容器类型、Pydantic 模型等多种类型"
 msgstr ""
+"**Type Safety**: Supports basic types, container types, Pydantic models, and"
+" other types"
 
 #: ../../source/detailed_guide/tool.md:12
 msgid "**灵活创建**: 支持装饰器和继承两种创建方式"
 msgstr ""
+"**Flexible Creation**: Supports two creation methods: decorators and "
+"inheritance"
 
 #: ../../source/detailed_guide/tool.md:13
 msgid "**批量序列化**: 支持将多个工具一次性序列化为 API 格式"
 msgstr ""
+"Batch serialization: Support serializing multiple tools into API format at "
+"once"
 
 #: ../../source/detailed_guide/tool.md:15
 msgid "支持的数据类型（参数类型）"
-msgstr ""
+msgstr "Supported data types (parameter types)"
 
 #: ../../source/detailed_guide/tool.md:16
 msgid "**基本类型**: `str`, `int`, `float`, `bool`"
-msgstr ""
+msgstr "**Basic types**: str, int, float, bool"
 
 #: ../../source/detailed_guide/tool.md:17
 msgid "**容器类型**: `List[T]`, `Dict[K, V]`"
-msgstr ""
+msgstr "**Container Types**: `List[T]`, `Dict[K, V]`"
 
 #: ../../source/detailed_guide/tool.md:18
 msgid "**Pydantic 模型**: 自动解析模型字段和验证规则"
 msgstr ""
+"**Pydantic Model**: Automatically parses model fields and validation rules"
 
 #: ../../source/detailed_guide/tool.md:19
 msgid "**可选参数**: 支持带默认值的可选参数"
 msgstr ""
+"The text \"可选参数: 支持带默认值的可选参数\" translates to \"Optional parameters: Supports"
+" optional parameters with default values\"."
 
 #: ../../source/detailed_guide/tool.md:20
 msgid "**复杂嵌套**: 支持嵌套的容器类型和复杂对象"
 msgstr ""
+"**Complex Nesting**: Supports nested container types and complex objects"
 
 #: ../../source/detailed_guide/tool.md:22
 msgid "**⚠️ 注意： 由于LLM提供给工具的参数只能是json支持的类型，所以实际上`Tuple`, `Set`等容器是无法作为工具参数的**"
 msgstr ""
+"⚠️ Note: Because the parameters provided by the LLM to the tool can only be "
+"JSON-supported types, containers such as `Tuple` and `Set` cannot actually "
+"be used as tool parameters."
 
 #: ../../source/detailed_guide/tool.md:24
 msgid "支持的返回类型"
-msgstr ""
+msgstr "supported return types"
 
 #: ../../source/detailed_guide/tool.md:25
 msgid "工具函数可以返回多种数据格式，系统会自动处理这些返回值并将其传递给 LLM："
-msgstr ""
+msgstr "工具函数可返回多种数据格式，系统会自动处理这些返回值并将其传递给 LLM："
 
 #: ../../source/detailed_guide/tool.md:27
 msgid "基本返回类型"
-msgstr ""
+msgstr "Basic return type"
 
 #: ../../source/detailed_guide/tool.md:28
 msgid "**字符串 (`str`)**: 直接作为文本内容返回给 LLM"
-msgstr ""
+msgstr "字符串 (`str`)**: 直接作为文本内容返回给 LLM"
 
 #: ../../source/detailed_guide/tool.md:29
 msgid "**JSON 可序列化对象**: 包括 `dict`, `list`, `int`, `float`, `bool`, `None`"
 msgstr ""
+"The text parameter is of type `JSON serializable object`, which is not "
+"supported. Please provide a string as the text to translate."
 
 #: ../../source/detailed_guide/tool.md:30
 msgid "**Pydantic 模型**: 自动序列化为 JSON 格式"
-msgstr ""
+msgstr "Pydantic models: automatically serialized to JSON format"
 
 #: ../../source/detailed_guide/tool.md:32
 msgid "多模态返回类型"
-msgstr ""
+msgstr "Multimodal return type"
 
 #: ../../source/detailed_guide/tool.md:33
 msgid "**图片URL (`ImgUrl`)**: 返回网络图片链接，LLM 可以\"看到\"图片内容"
 msgstr ""
+"Translate the provided text. Note that the `text` parameter appears to contain a description of an image URL, rather than the URL itself.\n"
+"\n"
+"Input text: \"图片URL (`ImgUrl`): 返回网络图片链接，LLM 可以\"看到\"图片内容\"\n"
+"Source language: Chinese\n"
+"Target language: English\n"
+"\n"
+"Translation: \"Image URL (`ImgUrl`): Returns a web image link, allowing the LLM to \"see\" the image content\""
 
 #: ../../source/detailed_guide/tool.md:34
 msgid "**本地图片 (`ImgPath`)**: 返回本地图片文件路径，自动转换为 base64 格式"
 msgstr ""
+"**Local Image (`ImgPath`)**: Returns the local image file path, "
+"automatically converted to base64 format."
 
 #: ../../source/detailed_guide/tool.md:35
-msgid "**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
+msgid ""
+"**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
 msgstr ""
+"The provided parameter `text` is of type `Tuple[str, ImgUrl]` or `Tuple[str,"
+" ImgPath]`, but the function `translate_text` only accepts a string as input"
+" for the `text` parameter. Please provide a valid string for the `text` "
+"parameter."
 
 #: ../../source/detailed_guide/tool.md:37
 msgid "返回类型示例"
-msgstr ""
+msgstr "return type example"
 
 #: ../../source/detailed_guide/tool.md:96
 msgid "返回类型处理机制"
 msgstr ""
+"{\"translation\": \"Return type processing mechanism\", "
+"\"confidence_score\": 0.95}"
 
 #: ../../source/detailed_guide/tool.md:98
 msgid "**基本类型**: 直接序列化为 JSON 字符串传递给 LLM"
 msgstr ""
+"**Basic types**: Directly serialized into JSON strings and passed to the LLM"
 
 #: ../../source/detailed_guide/tool.md:99
 msgid "**图片类型**:"
-msgstr ""
+msgstr "**Image type**:"
 
 #: ../../source/detailed_guide/tool.md:100
 msgid "`ImgUrl`: 直接使用网络 URL"
-msgstr ""
+msgstr "`ImgUrl`: Direct use of network URL"
 
 #: ../../source/detailed_guide/tool.md:101
 msgid "`ImgPath`: 自动转换为 base64 编码的 data URL"
-msgstr ""
+msgstr "`ImgPath`: auto-converted to base64 encoded data URL"
 
 #: ../../source/detailed_guide/tool.md:102
 msgid "**组合类型**: 将文本和图片组合成多模态消息，LLM 可以同时看到文本说明和图片内容"
 msgstr ""
+"**Composite type**: Combine text and images into a multimodal message, "
+"allowing the LLM to see both the text description and the image content"
 
 #: ../../source/detailed_guide/tool.md:103
 msgid "**错误处理**: 不支持的返回类型会自动转换为字符串格式"
 msgstr ""
+"Error Handling: Unsupported return types are automatically converted to "
+"string format."
 
 #: ../../source/detailed_guide/tool.md:105
 msgid "**⚠️ 返回类型注意事项**:"
-msgstr ""
+msgstr "**⚠️ Return Type Considerations**:"
 
 #: ../../source/detailed_guide/tool.md:106
 msgid "确保本地图片文件路径存在且可读"
-msgstr ""
+msgstr "Ensure that the local image file path exists and is readable"
 
 #: ../../source/detailed_guide/tool.md:107
 msgid "网络图片 URL 应该是公开可访问的"
-msgstr ""
+msgstr "Network image URLs should be publicly accessible"
 
 #: ../../source/detailed_guide/tool.md:108
 msgid ""
 "组合类型的元组必须是 `(str, ImgPath)` 或 `(str, ImgUrl)` 格式, "
 "不能交换`str`和`ImgPath`/`ImgUrl`的顺序"
 msgstr ""
+"Tuple types must be in the format `(str, ImgPath)` or `(str, ImgUrl)`, the "
+"order of `str` and `ImgPath`/`ImgUrl` cannot be swapped."
 
 #: ../../source/detailed_guide/tool.md:109
 msgid "避免返回过大的数据结构，以免影响 LLM 处理效率"
 msgstr ""
+"Avoid returning excessively large data structures to prevent impacting LLM "
+"processing efficiency."
 
 #: ../../source/detailed_guide/tool.md:111
 msgid "**⚠️ 注意：`@tool` 装饰器要求被装饰的函数本身定义为 `async def`，以便在异步执行链路中无缝协作。**"
 msgstr ""
+"⚠️ **Note:** The `@tool` decorator requires the decorated function itself to"
+" be defined as `async def` to seamlessly cooperate within the asynchronous "
+"execution chain."
 
 #: ../../source/detailed_guide/tool.md:113
 msgid "使用方法"
-msgstr ""
+msgstr "Usage"
 
 #: ../../source/detailed_guide/tool.md:115
 msgid "基本语法"
 msgstr ""
+"{\n"
+"  \"translation\": \"Basic grammar\",\n"
+"  \"confidence_score\": 0.98\n"
+"}"
 
 #: ../../source/detailed_guide/tool.md:117
 msgid "方式一：装饰器方式（推荐）"
-msgstr ""
+msgstr "Method 1: Decorator method (recommended)"
 
 #: ../../source/detailed_guide/tool.md:138
 msgid "方式二：继承方式（兼容旧版本）"
-msgstr ""
+msgstr "Method 2: Inheritance (compatible with older versions)"
 
 #: ../../source/detailed_guide/tool.md:155
 msgid "参数说明"
-msgstr ""
+msgstr "Parameter description"
 
 #: ../../source/detailed_guide/tool.md:157
 msgid "@tool 装饰器参数"
-msgstr ""
+msgstr "@tool decorator arguments"
 
 #: ../../source/detailed_guide/tool.md:158
 msgid "**name** (必需): 工具名称，应该简洁明了，符合函数命名规范"
 msgstr ""
+"name (required): Tool name, should be concise and clear, conforming to "
+"function naming conventions"
 
 #: ../../source/detailed_guide/tool.md:159
 msgid "**description** (必需): 工具的简短描述，说明工具的主要功能"
 msgstr ""
+"**description** (Required): A brief description of the tool, explaining its "
+"main function"
 
 #: ../../source/detailed_guide/tool.md:161
 msgid "函数要求"
-msgstr ""
+msgstr "Function requirements"
 
 #: ../../source/detailed_guide/tool.md:162
 msgid "**类型标注**: 建议为所有参数添加类型标注，以便自动生成准确的 JSON Schema"
 msgstr ""
+"**Type Annotation**: It is recommended to add type annotations for all "
+"parameters to automatically generate an accurate JSON Schema"
 
 #: ../../source/detailed_guide/tool.md:163
 msgid "**文档字符串**: 建议编写详细的 docstring，特别是 Args 部分的参数描述"
 msgstr ""
+"**Docstring**: Recommend writing detailed docstrings, especially parameter "
+"descriptions in the Args section."
 
 #: ../../source/detailed_guide/tool.md:164
 msgid "**返回类型**: 建议添加返回类型标注"
-msgstr ""
+msgstr "**Return Type**: It is recommended to add return type annotations"
 
 #: ../../source/detailed_guide/tool.md:166
 msgid "工具调用流程"
-msgstr ""
+msgstr "Tool call process"
 
 #: ../../source/detailed_guide/tool.md:168
 msgid "**工具注册**: 使用 `@tool` 装饰器或继承 `Tool` 类创建工具"
 msgstr ""
+"**Tool Registration**: Use the `@tool` decorator or inherit from the `Tool` "
+"class to create tools"
 
 #: ../../source/detailed_guide/tool.md:169
 msgid "**参数解析**: 系统自动从函数签名中提取参数信息"
 msgstr ""
+"**Parameter Parsing**: The system automatically extracts parameter "
+"information from the function signature."
 
 #: ../../source/detailed_guide/tool.md:170
 msgid "**Schema 生成**: 自动生成符合 OpenAI API 的工具描述"
 msgstr ""
+"**Schema Generation**: Automatic generation of tool descriptions that comply"
+" with the OpenAI API"
 
 #: ../../source/detailed_guide/tool.md:171
 msgid "**LLM 调用**: LLM 根据工具描述决定是否调用工具"
 msgstr ""
+"**LLM call**: LLM determines whether to call the tool based on the tool "
+"description"
 
 #: ../../source/detailed_guide/tool.md:172
 msgid "**参数验证**: 系统验证 LLM 提供的参数是否符合要求"
 msgstr ""
+"Parameter validation: System verifies whether the parameters provided by the"
+" LLM meet the requirements"
 
 #: ../../source/detailed_guide/tool.md:173
 msgid "**函数执行**: 调用原始 Python 函数并返回结果"
 msgstr ""
+"**Function Execution**: Call the original Python function and return the "
+"result"
 
 #: ../../source/detailed_guide/tool.md:175
 msgid "实现方法"
-msgstr ""
+msgstr "Implementation method"
 
 #: ../../source/detailed_guide/tool.md:177
 msgid "核心类结构"
-msgstr ""
+msgstr "core class structure"
 
 #: ../../source/detailed_guide/tool.md:179
 msgid "Parameter 类"
-msgstr ""
+msgstr "Parameter Class"
 
 #: ../../source/detailed_guide/tool.md:192
 msgid "Tool 类"
-msgstr ""
+msgstr "Tool Class"
 
 #: ../../source/detailed_guide/tool.md:213
 msgid "关键实现细节"
-msgstr ""
+msgstr "Key implementation details"
 
 #: ../../source/detailed_guide/tool.md:215
 msgid "参数提取机制"
-msgstr ""
+msgstr "Parameter extraction mechanism"
 
 #: ../../source/detailed_guide/tool.md:216
 msgid "系统通过以下步骤提取函数参数信息："
 msgstr ""
+"The system extracts function parameter information through the following "
+"steps:"
 
 #: ../../source/detailed_guide/tool.md:218
 msgid "**签名分析**: 使用 `inspect.signature()` 获取函数签名"
 msgstr ""
+"**Signature Analysis**: Use `inspect.signature()` to get the function "
+"signature"
 
 #: ../../source/detailed_guide/tool.md:219
 msgid "**类型提示**: 使用 `get_type_hints()` 获取类型标注"
-msgstr ""
+msgstr "**Type Hinting**: Use `get_type_hints()` to obtain type annotations"
 
 #: ../../source/detailed_guide/tool.md:220
 msgid "**文档解析**: 使用正则表达式解析 docstring 中的参数描述"
 msgstr ""
+"**Document Parsing**: Parse parameter descriptions in docstrings using "
+"regular expressions"
 
 #: ../../source/detailed_guide/tool.md:221
 msgid "**默认值处理**: 识别可选参数和默认值"
 msgstr ""
+"The function description specifies that the `source_lang` parameter has a default value of Chinese. However, the user has provided 'Chinese' as the value for `source_lang`. Thus, the provided value is the same as the default value. The function description also specifies that the `target_lang` parameter has a default value of English. The user has provided 'English' as the value for `target_lang`. Thus, the provided value is the same as the default value. There is no processing needed for the default values.\n"
+"\n"
+"**默认值处理**: 识别可选参数和默认值"
 
 #: ../../source/detailed_guide/tool.md:223
 msgid "类型转换规则"
-msgstr ""
+msgstr "Type conversion rules"
 
 #: ../../source/detailed_guide/tool.md:239
 msgid "文档字符串解析"
-msgstr ""
+msgstr "Docstring parsing"
 
 #: ../../source/detailed_guide/tool.md:240
 msgid "系统支持标准的 docstring 格式："
-msgstr ""
+msgstr "The system supports standard docstring formats:"
 
 #: ../../source/detailed_guide/tool.md:256
 msgid "兼容写法"
-msgstr ""
+msgstr "compatible writing"
 
 #: ../../source/detailed_guide/tool.md:258
 msgid "装饰器方式示例"
-msgstr ""
+msgstr "Decorator example"
 
 #: ../../source/detailed_guide/tool.md:456
 msgid "继承方式示例"
-msgstr ""
+msgstr "Inheritance example"
 
 #: ../../source/detailed_guide/tool.md:527
 msgid "工具使用示例"
-msgstr ""
+msgstr "Tool usage example"
 
 #: ../../source/detailed_guide/tool.md:578
 msgid "高级用法"
-msgstr ""
+msgstr "Advanced usage"
 
 #: ../../source/detailed_guide/tool.md:580
 msgid "工具序列化和检查"
-msgstr ""
+msgstr "Tool serialization and inspection"
 
 #: ../../source/detailed_guide/tool.md:597
 msgid "动态工具创建"
-msgstr ""
+msgstr "Dynamic tool creation"
 
 #: ../../source/detailed_guide/tool.md:620
 msgid "工具链组合"
-msgstr ""
+msgstr "tool chain combination"
 
 #: ../../source/detailed_guide/tool.md:653
 msgid "返回类型最佳实践"
-msgstr ""
+msgstr "Return Type Best Practice"
 
 #: ../../source/detailed_guide/tool.md:655
 msgid "选择合适的返回类型"
-msgstr ""
+msgstr "Select appropriate return type"
 
 #: ../../source/detailed_guide/tool.md:657
 msgid "**文本输出优先**: 如果工具主要产生文本结果，使用 `str` 或结构化的 `Dict`"
-msgstr ""
+msgstr "{\"translation\": \"Text output first\", \"confidence_score\": 0.95}"
 
 #: ../../source/detailed_guide/tool.md:658
 msgid "**结构化数据**: 复杂数据使用 `Dict` 或 `List`，便于 LLM 理解和处理"
 msgstr ""
+"**Structured Data**: Use `Dict` or `List` for complex data, making it easy "
+"for LLMs to understand and process."
 
 #: ../../source/detailed_guide/tool.md:659
 msgid "**多模态内容**: 需要展示图片时使用 `ImgPath`、`ImgUrl` 或组合类型"
 msgstr ""
+"**Multimodal Content**: Use `ImgPath`, `ImgUrl`, or a combination type when "
+"you need to display images."
 
 #: ../../source/detailed_guide/tool.md:660
 msgid "**组合输出**: 需要同时提供说明和图片时使用 `Tuple[str, ImgPath/ImgUrl]`"
 msgstr ""
+"**Combined output**: Use `Tuple[str, ImgPath/ImgUrl]` when you need to "
+"provide both description and image"
 
 #: ../../source/detailed_guide/tool.md:662
 msgid "性能优化建议"
-msgstr ""
+msgstr "Performance optimization suggestions"
 
 #: ../../source/detailed_guide/tool.md:692
 msgid "错误处理模式"
 msgstr ""
+"{\n"
+"  \"translation\": \"Error handling mode\",\n"
+"  \"confidence_score\": 0.98\n"
+"}"
 
 #: ../../source/detailed_guide/tool.md:732
 msgid "多模态类型详细说明"
 msgstr ""
+"{'translation': 'Detailed explanation of multimodal types', 'confidence': "
+"0.9}"
 
 #: ../../source/detailed_guide/tool.md:763
 msgid ""
 "工具系统提供了强大而灵活的扩展机制，让 LLM 能够调用各种外部功能。通过装饰器方式，开发者可以轻松地将现有函数转换为 LLM "
 "可用的工具，而继承方式则提供了更多的自定义控制。系统自动处理类型转换和参数验证，确保工具调用的安全性和准确性。"
 msgstr ""
+"The tool system provides a powerful and flexible extension mechanism, "
+"enabling LLMs to call various external functions. Through decorators, "
+"developers can easily convert existing functions into tools usable by LLMs, "
+"while inheritance offers more custom control. The system automatically "
+"handles type conversion and parameter validation, ensuring the safety and "
+"accuracy of tool calls."
 
 #: ../../source/detailed_guide/tool.md:765
 msgid "**关键要点总结**："
-msgstr ""
+msgstr "**Key Takeaways**"
 
 #: ../../source/detailed_guide/tool.md:766
 msgid "支持多种返回类型：基本类型、JSON对象、多模态内容"
 msgstr ""
+"Supports multiple return types: basic types, JSON objects, multimodal "
+"content"
 
 #: ../../source/detailed_guide/tool.md:767
 msgid "多模态支持：单独图片或文本+图片组合"
-msgstr ""
+msgstr "Multimodal support: single image or text + image combination"
 
 #: ../../source/detailed_guide/tool.md:768
 msgid "自动类型转换：本地图片转base64，网络图片直接使用URL"
 msgstr ""
+"Automatic type conversion: Local images are converted to base64, and network"
+" images directly use URLs."
 
 #: ../../source/detailed_guide/tool.md:769
 msgid "错误处理：推荐返回结构化的错误信息"
 msgstr ""
+"Error handling: It is recommended to return structured error information."
 
 #: ../../source/detailed_guide/tool.md:770
 msgid "性能考虑：避免返回过大数据，网络图片使用低细节级别"
 msgstr ""
-
+"Performance considerations: Avoid returning excessively large data, use low "
+"detail levels for network images"
