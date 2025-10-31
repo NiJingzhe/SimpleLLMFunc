@@ -43,6 +43,8 @@ from typing import (
 
 import uuid
 
+from pydantic import BaseModel
+
 from SimpleLLMFunc.base.ReAct import execute_llm
 from SimpleLLMFunc.base.messages import build_multimodal_content
 from SimpleLLMFunc.base.post_process import (
@@ -52,6 +54,8 @@ from SimpleLLMFunc.base.post_process import (
 from SimpleLLMFunc.base.type_resolve import (
     get_detailed_type_description,
     has_multimodal_content,
+    build_type_description_json,
+    generate_example_object,
 )
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import (
@@ -491,7 +495,46 @@ def _build_prompts(
 
     # Step 3: Get return type detailed description
     return_type = type_hints.get("return", None)
-    return_type_description = get_detailed_type_description(return_type)
+    
+    # For primitive types, use simple text description
+    # For complex types (BaseModel, List, Dict, Union), use structured JSON with example
+    try:
+        if return_type is None:
+            return_type_description = "未知类型"
+        elif return_type in (str, int, float, bool, type(None)):
+            # Primitive types: simple description
+            return_type_description = get_detailed_type_description(return_type)
+        else:
+            # Complex types: structured JSON description with example
+            from typing import get_origin, Union as TypingUnion
+            
+            is_complex = False
+            if isinstance(return_type, type) and issubclass(return_type, BaseModel):
+                is_complex = True
+            else:
+                origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
+                if origin in (list, List, dict, Dict, TypingUnion):
+                    is_complex = True
+            
+            if is_complex:
+                type_json_obj = build_type_description_json(return_type)
+                example_obj = generate_example_object(return_type)
+                import json as _json
+                return_type_description = (
+                    "Type Description (JSON):\n"
+                    + _json.dumps(type_json_obj, ensure_ascii=False, indent=2)
+                    + "\n\nExample JSON:\n"
+                    + _json.dumps(example_obj, ensure_ascii=False, indent=2)
+                )
+            else:
+                # Fallback to simple description for other types
+                return_type_description = get_detailed_type_description(return_type)
+    except Exception as e:
+        push_warning(
+            f"Failed to generate structured JSON type description, falling back to text format: {str(e)}",
+            location=get_location(),
+        )
+        return_type_description = get_detailed_type_description(return_type)
 
     # Step 4: Use custom or default templates
     system_template = custom_system_template or DEFAULT_SYSTEM_PROMPT_TEMPLATE

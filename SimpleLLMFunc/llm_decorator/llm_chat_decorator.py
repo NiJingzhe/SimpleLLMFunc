@@ -32,7 +32,6 @@ from SimpleLLMFunc.logger import (
     async_log_context,
     get_current_trace_id,
     get_location,
-    log_context,
     push_debug,
     push_error,
     push_warning,
@@ -43,16 +42,25 @@ from SimpleLLMFunc.observability.langfuse_client import langfuse_client
 
 # Type aliases
 MessageDict = Dict[str, Any]  # Dictionary representing a message
-HistoryList = List[MessageDict]  # List of message dictionaries representing conversation history
-ToolkitList = List[Union[Tool, Callable[..., Awaitable[Any]]]]  # List of Tool objects or async functions
+HistoryList = List[
+    MessageDict
+]  # List of message dictionaries representing conversation history
+ToolkitList = List[
+    Union[Tool, Callable[..., Awaitable[Any]]]
+]  # List of Tool objects or async functions
 
 # Type variables
 T = TypeVar("T")
 P = ParamSpec("P")
 
 # Constants
-HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]  # Valid parameter names for conversation history
-DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls to prevent infinite loops
+HISTORY_PARAM_NAMES: List[str] = [
+    "history",
+    "chat_history",
+]  # Valid parameter names for conversation history
+DEFAULT_MAX_TOOL_CALLS: int = (
+    5  # Default maximum number of tool calls to prevent infinite loops
+)
 
 
 def llm_chat(
@@ -64,10 +72,10 @@ def llm_chat(
     **llm_kwargs: Any,
 ) -> Callable[
     [Union[Callable[P, Any], Callable[P, Awaitable[Any]]]],
-    Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]
+    Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]],
 ]:
     """
-    Async LLM chat decorator for implementing asynchronous conversational interactions with 
+    Async LLM chat decorator for implementing asynchronous conversational interactions with
     large language models, with support for tool calling and conversation history management.
 
     This decorator provides native async support and returns an AsyncGenerator.
@@ -172,7 +180,7 @@ def llm_chat(
                         # 收集所有响应内容用于 span 输出更新
                         collected_responses = []
                         final_history = None
-                        
+
                         async for result in _async_llm_chat_impl(
                             func_name=func_name,
                             signature=signature,
@@ -192,7 +200,7 @@ def llm_chat(
                             collected_responses.append(response_content)
                             final_history = history
                             yield result
-                        
+
                         # 更新 span 输出信息
                         chat_span.update(
                             output={
@@ -237,11 +245,10 @@ async def _async_llm_chat_impl(
     use_log_context: bool = True,
     **llm_kwargs: Any,
 ) -> AsyncGenerator[Tuple[Any, HistoryList], None]:
-    
     """
     Shared async LLM chat implementation logic.
 
-    Handles the core workflow of extracting arguments, building messages, 
+    Handles the core workflow of extracting arguments, building messages,
     processing tools, and streaming responses from the LLM.
 
     Args:
@@ -278,12 +285,16 @@ async def _async_llm_chat_impl(
         )
 
         # Step 3: Build user message content (text or multimodal)
-        user_message_content: Union[str, List[Dict[str, Any]]] = _build_user_message_content(
-            bound_args.arguments, type_hints, has_multimodal
+        user_message_content: Union[str, List[Dict[str, Any]]] = (
+            _build_user_message_content(
+                bound_args.arguments, type_hints, has_multimodal
+            )
         )
 
         # Step 4: Extract and validate conversation history from arguments
-        custom_history: Optional[HistoryList] = _extract_history_from_args(bound_args.arguments, func_name)
+        custom_history: Optional[HistoryList] = _extract_history_from_args(
+            bound_args.arguments, func_name
+        )
 
         # Step 5: Construct complete message list (system + history + user message)
         current_messages: HistoryList = _build_messages(
@@ -372,6 +383,7 @@ async def _async_llm_chat_impl(
             )
             raise
 
+
 async_llm_chat = llm_chat
 
 
@@ -383,7 +395,7 @@ def _process_tools(
 ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Awaitable[Any]]]]:
     """
     Process and validate tool list, returning API-ready tool parameters and tool mapping.
-    
+
     Wrapper around the process_tools utility function.
 
     Args:
@@ -404,7 +416,7 @@ def _extract_history_from_args(
     """
     Extract and validate conversation history from function arguments.
 
-    Looks for parameters named 'history' or 'chat_history' and validates 
+    Looks for parameters named 'history' or 'chat_history' and validates
     that they conform to the expected format.
 
     Args:
@@ -452,7 +464,7 @@ def _build_user_message_content(
     """
     Build user message content from function arguments.
 
-    Creates either plain text message or multimodal content list depending 
+    Creates either plain text message or multimodal content list depending
     on the presence of multimodal elements (images, etc.).
 
     Args:
@@ -505,18 +517,13 @@ def _build_messages(
     if docstring:
         system_content: str = docstring
         if tool_objects:
-            system_content += "\n\nYou can use the following tools flexibly:\n\t" + "\n\t".join(
+            system_content = "\n\nYou can use the following tools flexibly according to the real case and tool description:\n\t" + "\n\t".join(
                 (
-                    f"- {tool.name}: {tool.description}"
-                    if isinstance(tool, Tool)
-                    else (
-                        f"- {getattr(getattr(tool, '_tool'), 'name')}: {getattr(getattr(tool, '_tool'), 'description')}"
-                        if callable(tool) and hasattr(tool, "_tool")
-                        else f"- {tool}"
-                    )
+                    f"- {tool['function']['name']}: {tool['function']['description']}"
+                    for tool in tool_objects
                 )
-                for tool in tool_objects
-            )
+            ) + "\n\n" + system_content.strip()
+
         messages.append({"role": "system", "content": system_content})
 
     # Step 2: Add conversation history (excluding system messages)
