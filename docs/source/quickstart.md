@@ -29,11 +29,13 @@ source simplellmfunc_env/bin/activate
 有两种安装方式：
 
 **方式一：从 PyPI 安装（推荐）**
+
 ```bash
 pip install SimpleLLMFunc
 ```
 
 **方式二：从源码安装**
+
 ```bash
 # 克隆项目
 git clone https://github.com/NiJingzhe/SimpleLLMFunc.git
@@ -69,29 +71,53 @@ LOG_LEVEL=WARNING
 
 ```json
 {
-  "openai": {
-    "gpt-3.5-turbo": {
-      "api_keys": ["your-openai-api-key"],
+  "openai": [
+    {
+      "model_name": "gpt-3.5-turbo",
+      "api_keys": ["sk-test-key-1", "sk-test-key-2"],
       "base_url": "https://api.openai.com/v1",
-      "model": "gpt-3.5-turbo"
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "rate_limit_capacity": 20,
+      "rate_limit_refill_rate": 3.0
     },
-    "gpt-4": {
-      "api_keys": ["your-openai-api-key"],
+    {
+      "model_name": "gpt-4",
+      "api_keys": ["sk-test-key-3", "sk-test-key-4"],
       "base_url": "https://api.openai.com/v1",
-      "model": "gpt-4"
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "rate_limit_capacity": 10,
+      "rate_limit_refill_rate": 1.0
     }
-  },
-  "deepseek": {
-    "deepseek-chat": {
-      "api_keys": ["your-deepseek-api-key"],
-      "base_url": "https://api.deepseek.com/v1",
-      "model": "deepseek-chat"
+  ],
+  "zhipu": [
+    {
+      "model_name": "glm-4",
+      "api_keys": ["zhipu-test-key-1", "zhipu-test-key-2"],
+      "base_url": "https://open.bigmodel.cn/api/paas/v4/",
+      "max_retries": 3,
+      "retry_delay": 0.5,
+      "rate_limit_capacity": 15,
+      "rate_limit_refill_rate": 2.0
     }
-  }
+  ],
+  "claude": [
+    {
+      "model_name": "claude-3-sonnet",
+      "api_keys": ["claude-test-key-1"],
+      "base_url": "https://api.anthropic.com/v1",
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "rate_limit_capacity": 8,
+      "rate_limit_refill_rate": 0.5
+    }
+  ]
 }
 ```
 
 **重要提示：**
+
 - 请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥
 - 请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥
 - 支持多个 API 密钥，系统会自动进行负载均衡
@@ -279,6 +305,7 @@ if __name__ == "__main__":
 ```
 
 这个示例展示了动态模板参数的核心优势：
+
 - **一个函数定义，多种使用场景**
 - **调用时动态指定角色和任务**
 - **代码复用性大大提高**
@@ -369,22 +396,29 @@ SimpleLLMFunc 提供了强大的日志系统。运行 Demo 后，您可以：
 ## 常见问题
 
 ### Q: API 密钥配置错误怎么办？
+
 A: 请检查 `provider.json` 文件中的 API 密钥是否正确，确保密钥有效且有足够的配额。
 
 ### Q: 模型返回格式不正确怎么办？
+
 A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。
 
 ### Q: 如何添加更多工具？
+
 A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `toolkit` 参数中传入工具列表。
 
 ### Q: 如何实现异步调用？
+
 A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async def` 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。
 
 ### Q: 什么是动态模板参数？
+
 A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString 中的占位符，让同一个函数适应不同的使用场景。
 
 ### Q: 如何使用动态模板参数？
+
 A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如：
+
 ```python
 @llm_function(llm_interface=llm)
 async def analyze_code(code: str) -> str:
