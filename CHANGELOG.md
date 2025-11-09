@@ -1,11 +1,16 @@
 # Change log for SimpleLLMFunc
 
-## 0.3.2.beta1 Release Notes (Latest)
+## 0.3.2.beta2 Release Notes
+
+1. Remove dependence: `nest-asyncio`
+
+2. Fix document error about `provider.json`
+
+## 0.3.2.beta1 Release Notes
 
 1. Better tool call tips in system prompt.
 
 2. Better compound type annotations in prompt.
-
 
 ## 0.3.1 Release Notes
 

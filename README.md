@@ -21,7 +21,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.3.2.beta1 Latest)
+### Update Notes (0.3.2.beta2)
 
 Check **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for all version improvements
 
@@ -256,6 +256,7 @@ Summary: Excellent sound quality and battery life, comfortable to wear, but insu
 ```
 
 **Key Points:**
+
 - ✅ Only need to declare function, types, and DocString, decorator handles the rest automatically
 - ✅ Directly returns Pydantic object, no manual deserialization needed
 - ✅ Supports complex nested Pydantic models
@@ -365,6 +366,7 @@ async def my_function(param: str) -> str:
 SimpleLLMFunc provides flexible LLM interface support:
 
 **Supported Providers (via OpenAI Compatible adaptation):**
+
 - ✅ OpenAI (GPT-4, GPT-3.5, etc.)
 - ✅ Deepseek
 - ✅ Anthropic Claude
@@ -523,6 +525,7 @@ async def get_weather(location: Location, days: int = 1) -> dict:
 ```
 
 **Advantages:**
+
 - ✅ Concise and intuitive, automatically extracts parameter information from function signature
 - ✅ Supports Python native types and Pydantic models
 - ✅ Can still be called directly after decoration, convenient for unit testing
@@ -705,6 +708,7 @@ SimpleLLMFunc/
 SimpleLLMFunc supports flexible configuration:
 
 **Priority (from high to low):**
+
 1. Direct configuration in program
 2. Environment variables
 3. `.env` file
