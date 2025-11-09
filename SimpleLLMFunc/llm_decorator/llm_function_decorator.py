@@ -1,8 +1,8 @@
 """
 LLM Function Decorator Module
 
-This module provides LLM function decorators that delegate the execution of ordinary Python 
-functions to large language models. Using this decorator, simply define the function signature 
+This module provides LLM function decorators that delegate the execution of ordinary Python
+functions to large language models. Using this decorator, simply define the function signature
 (parameters and return type), then describe the function's execution strategy in the docstring.
 
 Data Flow:
@@ -103,11 +103,13 @@ def llm_function(
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
     **llm_kwargs: Any,
-) -> Callable[[Union[Callable[..., T], Callable[..., Awaitable[T]]]], Callable[..., Awaitable[T]]]:
+) -> Callable[
+    [Union[Callable[..., T], Callable[..., Awaitable[T]]]], Callable[..., Awaitable[T]]
+]:
     """
     Async LLM function decorator that delegates function execution to a large language model.
 
-    This decorator provides native async implementation, ensuring that LLM calls do not 
+    This decorator provides native async implementation, ensuring that LLM calls do not
     block the event loop during execution.
 
     ## Usage
@@ -165,7 +167,9 @@ def llm_function(
         ```
     """
 
-    def decorator(func: Union[Callable[..., T], Callable[..., Awaitable[T]]]) -> Callable[..., Awaitable[T]]:
+    def decorator(
+        func: Union[Callable[..., T], Callable[..., Awaitable[T]]],
+    ) -> Callable[..., Awaitable[T]]:
         signature = inspect.signature(func)
         docstring = func.__doc__ or ""
         func_name = func.__name__
@@ -173,7 +177,9 @@ def llm_function(
         @wraps(func)
         async def async_wrapper(*args: Any, **kwargs: Any) -> T:
             # Prepare function call context and extract template parameters
-            context, call_time_template_params = _prepare_function_call(func, args, kwargs)
+            context, call_time_template_params = _prepare_function_call(
+                func, args, kwargs
+            )
 
             async with async_log_context(
                 trace_id=context.trace_id,
@@ -203,7 +209,9 @@ def llm_function(
                 )
 
                 # Prepare tools for LLM
-                tool_param, tool_map = _prepare_tools_for_llm(toolkit, context.func_name)
+                tool_param, tool_map = _prepare_tools_for_llm(
+                    toolkit, context.func_name
+                )
 
                 # Package LLM call parameters
                 llm_params = LLMCallParams(
@@ -234,13 +242,18 @@ def llm_function(
                             max_tool_calls=max_tool_calls,
                         )
                         # Convert response to specified return type
-                        result = _process_final_response(final_response, context.return_type)
-                        
+                        result = _process_final_response(
+                            final_response, context.return_type
+                        )
+
                         # 更新 span 输出信息
                         function_span.update(
-                            output={"result": result, "return_type": str(context.return_type)},
+                            output={
+                                "result": result,
+                                "return_type": str(context.return_type),
+                            },
                         )
-                        
+
                         return result
                     except Exception as exc:
                         # 更新 span 错误信息
@@ -257,11 +270,12 @@ def llm_function(
         async_wrapper.__name__ = func_name
         async_wrapper.__doc__ = docstring
         async_wrapper.__annotations__ = func.__annotations__
-        setattr(async_wrapper, '__signature__', signature) 
+        setattr(async_wrapper, "__signature__", signature)
 
         return cast(Callable[..., Awaitable[T]], async_wrapper)
 
     return decorator
+
 
 async_llm_function = llm_function
 
@@ -304,7 +318,7 @@ def _prepare_function_call(
 ) -> Tuple[FunctionCallContext, Optional[Dict[str, Any]]]:
     """
     Prepare function call by processing parameter binding and creating execution context.
-    
+
     Also extracts and returns call-time template parameters (if provided).
 
     Args:
@@ -318,8 +332,8 @@ def _prepare_function_call(
             - call_time_template_params: Optional template params for docstring substitution
     """
     # Extract call-time template parameters (if present)
-    call_time_template_params = kwargs.pop('_template_params', None)
-    
+    call_time_template_params = kwargs.pop("_template_params", None)
+
     # Extract function metadata
     signature = inspect.signature(func)
     type_hints = get_type_hints(func)
@@ -346,9 +360,8 @@ def _prepare_function_call(
         return_type=return_type,
         docstring=docstring,
     )
-    
-    return context, call_time_template_params
 
+    return context, call_time_template_params
 
 
 def _build_messages(
@@ -383,7 +396,7 @@ def _build_messages(
         )
     else:
         # Build traditional text message list
-        system_prompt, user_prompt = _build_prompts(
+        messages = _build_prompts(
             docstring=context.docstring,
             arguments=context.bound_args.arguments,
             type_hints=context.type_hints,
@@ -391,14 +404,6 @@ def _build_messages(
             custom_user_template=user_prompt_template,
             template_params=template_params,
         )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
-
-        push_debug(f"System prompt: {system_prompt}", location=get_location())
-        push_debug(f"User prompt: {user_prompt}", location=get_location())
 
     return messages
 
@@ -408,7 +413,7 @@ def _prepare_tools_for_llm(
 ) -> Tuple[Optional[List[Dict[str, Any]]], Dict[str, Callable[..., Awaitable[Any]]]]:
     """
     Prepare tools for LLM usage, returning tool parameters and tool mapping.
-    
+
     Wrapper around the process_tools utility function.
 
     Args:
@@ -444,7 +449,7 @@ def _build_prompts(
     custom_system_template: Optional[str] = None,
     custom_user_template: Optional[str] = None,
     template_params: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, str]:
+) -> List[Dict[str, str]]:
     """
     Build system and user prompts for LLM from function metadata.
 
@@ -481,7 +486,7 @@ def _build_prompts(
                 f"Error during DocString template parameter substitution: {str(e)}. Using original DocString.",
                 location=get_location(),
             )
-    
+
     # Remove return type hint, keeping only parameter types
     param_type_hints = {k: v for k, v in type_hints.items() if k != "return"}
 
@@ -495,7 +500,7 @@ def _build_prompts(
 
     # Step 3: Get return type detailed description
     return_type = type_hints.get("return", None)
-    
+
     # For primitive types, use simple text description
     # For complex types (BaseModel, List, Dict, Union), use structured JSON with example
     try:
@@ -507,19 +512,22 @@ def _build_prompts(
         else:
             # Complex types: structured JSON description with example
             from typing import get_origin, Union as TypingUnion
-            
+
             is_complex = False
             if isinstance(return_type, type) and issubclass(return_type, BaseModel):
                 is_complex = True
             else:
-                origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
+                origin = getattr(return_type, "__origin__", None) or get_origin(
+                    return_type
+                )
                 if origin in (list, List, dict, Dict, TypingUnion):
                     is_complex = True
-            
+
             if is_complex:
                 type_json_obj = build_type_description_json(return_type)
                 example_obj = generate_example_object(return_type)
                 import json as _json
+
                 return_type_description = (
                     "Type Description (JSON):\n"
                     + _json.dumps(type_json_obj, ensure_ascii=False, indent=2)
@@ -556,7 +564,18 @@ def _build_prompts(
         parameters="\n".join(user_param_values),
     )
 
-    return system_prompt.strip(), user_prompt.strip()
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt.strip(),
+        },
+        {
+            "role": "user",
+            "content": user_prompt.strip(),
+        },
+    ]
+
+    return messages
 
 
 # ===== Async Decorator and Helper Functions =====
@@ -571,7 +590,7 @@ async def _execute_llm_with_retry_async(
     """
     Execute LLM call asynchronously with retry logic.
 
-    Handles the core async LLM execution, including automatic retry if response 
+    Handles the core async LLM execution, including automatic retry if response
     content is empty after the call completes.
 
     Args:
@@ -715,7 +734,8 @@ def _build_multimodal_messages(
 
     push_debug(f"System prompt: {system_prompt}", location=get_location())
     push_debug(
-        f"Multimodal user message contains {len(user_content)} content blocks", location=get_location()
+        f"Multimodal user message contains {len(user_content)} content blocks",
+        location=get_location(),
     )
 
     return messages
