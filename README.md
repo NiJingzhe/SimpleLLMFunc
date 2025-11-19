@@ -21,7 +21,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.3.2.beta2)
+### Update Notes (0.3.2.beta3)
 
 Check **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for all version improvements
 
