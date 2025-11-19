@@ -157,7 +157,9 @@ def handle_union_type(value: Any, args: tuple, param_name: str) -> List[Dict[str
                 elif isinstance(item, ImgUrl):
                     content.append(create_image_url_content(item, f"{param_name}[{i}]"))
                 elif isinstance(item, ImgPath):
-                    content.append(create_image_path_content(item, f"{param_name}[{i}]"))
+                    content.append(
+                        create_image_path_content(item, f"{param_name}[{i}]")
+                    )
             else:
                 push_error(
                     "多模态参数只能被标注为Optional[List[Text/ImgUrl/ImgPath]] 或 Optional[Text/ImgUrl/ImgPath] 或 List[Text/ImgUrl/ImgPath] 或 Text/ImgUrl/ImgPath",
@@ -208,6 +210,7 @@ def describe_pydantic_model(model_class: Type[BaseModel]) -> str:
 
 # ===== New: Structured JSON description and example generation =====
 
+
 def build_type_description_json(
     type_hint: Any,
     depth: int = 0,
@@ -242,7 +245,11 @@ def build_type_description_json(
     if isinstance(type_hint, type) and issubclass(type_hint, BaseModel):
         type_id = ("model", type_hint)
         if type_id in seen:
-            return {"type": "object", "title": type_hint.__name__, "note": "circular_ref"}
+            return {
+                "type": "object",
+                "title": type_hint.__name__,
+                "note": "circular_ref",
+            }
         seen.add(type_id)
 
         schema = type_hint.model_json_schema()
@@ -266,7 +273,11 @@ def build_type_description_json(
             child_desc = (
                 build_type_description_json(field_ann, depth + 1, max_depth, seen)
                 if field_ann is not None
-                else {k: v for k, v in field_info.items() if k in {"type", "description", "minimum", "maximum", "default"}}
+                else {
+                    k: v
+                    for k, v in field_info.items()
+                    if k in {"type", "description", "minimum", "maximum", "default"}
+                }
             )
             # Enrich with simple constraints from schema
             if "type" not in child_desc and "type" in field_info:
@@ -293,7 +304,9 @@ def build_type_description_json(
         items_type = args[0] if args else Any
         return {
             "type": "array",
-            "items": build_type_description_json(items_type, depth + 1, max_depth, seen),
+            "items": build_type_description_json(
+                items_type, depth + 1, max_depth, seen
+            ),
         }
 
     # Dict mapping
@@ -301,7 +314,9 @@ def build_type_description_json(
         value_type = args[1] if len(args) >= 2 else Any
         return {
             "type": "object",
-            "additionalProperties": build_type_description_json(value_type, depth + 1, max_depth, seen),
+            "additionalProperties": build_type_description_json(
+                value_type, depth + 1, max_depth, seen
+            ),
         }
 
     # Union / Optional
@@ -309,7 +324,12 @@ def build_type_description_json(
         non_none = [t for t in args if t is not type(None)]
         if len(non_none) == 1:
             return build_type_description_json(non_none[0], depth + 1, max_depth, seen)
-        return {"anyOf": [build_type_description_json(t, depth + 1, max_depth, seen) for t in non_none]}
+        return {
+            "anyOf": [
+                build_type_description_json(t, depth + 1, max_depth, seen)
+                for t in non_none
+            ]
+        }
 
     # Simple / builtin types
     return {"type": _json_type_name(type_hint)}
@@ -317,11 +337,11 @@ def build_type_description_json(
 
 def _generate_primitive_example(type_hint: Any) -> Any:
     """Generate example value for primitive types directly.
-    
+
     Also handles Optional[T] by extracting the inner type.
     """
     from typing import get_origin, get_args, Union as TypingUnion
-    
+
     # Handle Optional[T] / Union[T, None]
     origin = get_origin(type_hint)
     if origin is TypingUnion:
@@ -330,7 +350,7 @@ def _generate_primitive_example(type_hint: Any) -> Any:
         for t in args:
             if t is not type(None):
                 return _generate_primitive_example(t)  # Recursively check inner type
-    
+
     # Primitive types
     if type_hint is str:
         return "example"
@@ -342,7 +362,7 @@ def _generate_primitive_example(type_hint: Any) -> Any:
         return True
     if type_hint is type(None):
         return None
-    
+
     return None  # Not a primitive, need recursive handling
 
 
@@ -381,18 +401,22 @@ def generate_example_object(
         for field_name, field in model_fields.items():
             ann = getattr(field, "annotation", Any)
             default = getattr(field, "default", ...)
-            
+
             # Check if default is valid (not ... and not PydanticUndefined)
             has_default = (
-                default is not ... 
+                default is not ...
                 and default is not PydanticUndefined
-                and not (hasattr(type(default), '__name__') and 'PydanticUndefined' in str(type(default)))
+                and not (
+                    hasattr(type(default), "__name__")
+                    and "PydanticUndefined" in str(type(default))
+                )
             )
 
             if has_default:
                 # Try to serialize default to ensure it's JSON-compatible
                 try:
                     import json as _json_test
+
                     _json_test.dumps(default)  # Test serialization
                     example[field_name] = default
                 except (TypeError, ValueError):
@@ -402,7 +426,9 @@ def generate_example_object(
                         example[field_name] = primitive_example
                     else:
                         # For complex types, use recursive generation
-                        example[field_name] = generate_example_object(ann, depth + 1, max_depth, seen)
+                        example[field_name] = generate_example_object(
+                            ann, depth + 1, max_depth, seen
+                        )
             else:
                 # No default value: generate example based on type annotation
                 # Try primitive types first for better performance
@@ -411,7 +437,9 @@ def generate_example_object(
                     example[field_name] = primitive_example
                 else:
                     # For complex types (List, Dict, Union, nested BaseModel), use recursive generation
-                    example[field_name] = generate_example_object(ann, depth + 1, max_depth, seen)
+                    example[field_name] = generate_example_object(
+                        ann, depth + 1, max_depth, seen
+                    )
         return example
 
     # Get origin after BaseModel check

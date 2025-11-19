@@ -713,7 +713,7 @@ def _build_multimodal_messages(
         Message list with multimodal content
     """
     # Build system prompt (still plain text)
-    system_prompt, _ = _build_prompts(
+    prompts_list = _build_prompts(
         docstring=context.docstring,
         arguments=context.bound_args.arguments,
         type_hints=context.type_hints,
@@ -721,6 +721,8 @@ def _build_multimodal_messages(
         custom_user_template=user_prompt_template,
         template_params=template_params,
     )
+    # Extract system prompt content (first message in the list)
+    system_prompt = prompts_list[0]["content"] if prompts_list else ""
 
     # Build multimodal user message content
     user_content = build_multimodal_content(
