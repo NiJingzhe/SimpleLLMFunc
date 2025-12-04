@@ -6,8 +6,6 @@
 @License :   (C)Copyright 2025, Jingzhe Ni
 @Desc    :   Init for SimpleLLMFunc
 """
-import nest_asyncio  # type: ignore
-nest_asyncio.apply()
 
 from rich import traceback
 traceback.install(show_locals=True)

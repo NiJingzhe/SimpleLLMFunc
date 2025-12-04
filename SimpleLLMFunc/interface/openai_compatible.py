@@ -2,7 +2,8 @@ from __future__ import annotations
 import json
 import os
 import asyncio
-from typing import Optional, Dict, Literal, Iterable, Any, AsyncGenerator, override, Coroutine
+from typing import Optional, Dict, Literal, Iterable, Any, AsyncGenerator, Coroutine
+from typing_extensions import override
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion import ChatCompletion

@@ -21,7 +21,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.3.0 Latest)
+### 更新说明 (0.3.2.beta3)
 
 查看 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** 了解所有版本改进
 
@@ -260,6 +260,7 @@ Output:
 ```
 
 **关键点：**
+
 - ✅ 只需声明函数、类型和 DocString，装饰器自动处理其他
 - ✅ 直接返回 Pydantic 对象，无需手动反序列化
 - ✅ 支持复杂嵌套的 Pydantic 模型
@@ -369,6 +370,7 @@ async def my_function(param: str) -> str:
 SimpleLLMFunc 提供了灵活的 LLM 接口支持：
 
 **支持的供应商（通过 OpenAI Compatible 适配）：**
+
 - ✅ OpenAI (GPT-4, GPT-3.5 等)
 - ✅ Deepseek
 - ✅ Anthropic Claude
@@ -403,21 +405,28 @@ async def my_function(text: str) -> str:
 
 ```json
 {
-    "deepseek": {
-        "v3-turbo": {
-            "api_keys": ["sk-your-api-key"],
+    "deepseek": [
+        {
+            "model_name": "deepseek-v3.2",
+            "api_keys": ["sk-your-api-key-1", "sk-your-api-key-2"],
             "base_url": "https://api.deepseek.com/v1",
-            "model": "deepseek-chat",
-            "rate_limit": 100
+            "max_retries": 5,
+            "retry_delay": 1.0,
+            "rate_limit_capacity": 10,
+            "rate_limit_refill_rate": 1.0
         }
-    },
-    "openai": {
-        "gpt-4": {
+    ],
+    "openai": [
+        {
+            "model_name": "gpt-4",
             "api_keys": ["sk-your-api-key"],
             "base_url": "https://api.openai.com/v1",
-            "model": "gpt-4"
+            "max_retries": 5,
+            "retry_delay": 1.0,
+            "rate_limit_capacity": 10,
+            "rate_limit_refill_rate": 1.0
         }
-    }
+    ]
 }
 ```
 
@@ -520,6 +529,7 @@ async def get_weather(location: Location, days: int = 1) -> dict:
 ```
 
 **优势：**
+
 - ✅ 简洁直观，自动从函数签名提取参数信息
 - ✅ 支持 Python 原生类型和 Pydantic 模型
 - ✅ 装饰后仍可直接调用，便于单元测试
@@ -702,6 +712,7 @@ SimpleLLMFunc/
 SimpleLLMFunc 支持灵活的配置：
 
 **优先级（从高到低）：**
+
 1. 程序中直接配置
 2. 环境变量
 3. `.env` 文件

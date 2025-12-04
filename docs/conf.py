@@ -6,6 +6,9 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os
+import sys
+
 project = 'SimpleLLMFunc'
 copyright = '2025, Nijingzhe'
 author = 'Nijingzhe'
@@ -15,44 +18,43 @@ author = 'Nijingzhe'
 
 extensions = [
     'myst_parser',
-    'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
     'sphinx.ext.githubpages',
 ]
 
-templates_path = ['_templates']
-exclude_patterns = []   # type: ignore
+
+language = os.environ.get('SPHINX_LANGUAGE', 'en')
 
 # 国际化配置
-locale_dirs = ['../locale/']   # 翻译文件目录
-gettext_compact = False        # 支持多个域
-gettext_additional_targets = [
-    'index',
-    'introduction',
-    'quickstart',
-    'guide',
-    'examples',
-    'langfuse_integration',
-]
+locale_dirs = ['locale/']
+gettext_compact = False
 
-# 支持的语言
-language = 'zh_CN'
+# 语言显示名称映射
 languages = {
-    'zh_CN': '中文',
+    'zh_CN': '中文（简体）',
     'en': 'English',
 }
+
+
+source_suffix = [ '.md', '.rst' ]
+master_doc = 'index'
+
+# ReadTheDocs 环境检测
+is_readthedocs = os.environ.get('READTHEDOCS') == 'True'
+
+# 如果在ReadTheDocs环境中，使用环境变量设置的语言
+if is_readthedocs:
+    language = os.environ.get('READTHEDOCS_LANGUAGE', 'en')
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
 
 # HTML主题选项
 html_theme_options = {
     'analytics_id': '',  # 可选：Google Analytics ID
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'vcs_pageview_mode': '',
@@ -65,12 +67,13 @@ html_theme_options = {
     'titles_only': False
 }
 
-# 多语言支持
+# HTML上下文配置
 html_context = {
-    'languages': languages,
-    'current_language': language,
     'current_version': 'latest',
     'versions': {
         'latest': 'latest',
-    }
+    },
+    'display_version': True,
 }
+
+

@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 from SimpleLLMFunc.base.messages import build_multimodal_content
 from SimpleLLMFunc.base.type_resolve.multimodal import has_multimodal_content
 from SimpleLLMFunc.base.type_resolve.description import (
+    build_type_description_json,
+    generate_example_object,
     get_detailed_type_description,
 )
 from SimpleLLMFunc.logger import push_debug
@@ -60,10 +62,55 @@ def build_parameter_type_descriptions(
 
 
 def build_return_type_description(return_type: Any) -> str:
-    """构建返回类型描述"""
+    """构建返回类型描述
+    
+    对于简单类型：使用文本描述
+    对于复杂类型（BaseModel, List, Dict, Union）：使用 JSON 格式 + 示例
+    """
+    from typing import get_origin, Union as TypingUnion
+    from pydantic import BaseModel
+    
     if return_type is None:
         return "未知类型"
-    return get_detailed_type_description(return_type)
+    
+    # 简单类型：使用文本描述
+    if return_type in (str, int, float, bool, type(None)):
+        return get_detailed_type_description(return_type)
+    
+    # 复杂类型：检查是否为 BaseModel、List、Dict、Union
+    is_complex = False
+    if isinstance(return_type, type) and issubclass(return_type, BaseModel):
+        is_complex = True
+    else:
+        origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
+        if origin in (list, List, dict, Dict, TypingUnion):
+            is_complex = True
+    
+    if is_complex:
+        # 使用 JSON 格式描述 + 示例
+        try:
+            type_json_obj = build_type_description_json(return_type)
+            example_obj = generate_example_object(return_type)
+            import json as _json
+            
+            return (
+                "Type Description (JSON):\n"
+                + _json.dumps(type_json_obj, ensure_ascii=False, indent=2)
+                + "\n\nExample JSON:\n"
+                + _json.dumps(example_obj, ensure_ascii=False, indent=2)
+            )
+        except Exception as e:
+            from SimpleLLMFunc.logger import push_warning
+            from SimpleLLMFunc.logger.logger import get_location
+            
+            push_warning(
+                f"Failed to generate structured JSON type description, falling back to text format: {str(e)}",
+                location=get_location(),
+            )
+            return get_detailed_type_description(return_type)
+    else:
+        # 其他类型：使用简单描述
+        return get_detailed_type_description(return_type)
 
 
 def build_text_messages(

@@ -69,11 +69,11 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 ## ❓ 常见问题速查
 
 - **如何配置 API 密钥？** → [配置与环境](detailed_guide/config.md)
-- **装饰器支持同步函数吗？** → [llm_function 装饰器](detailed_guide/llm_function.md#重要说明)
+- **装饰器支持同步函数吗？** → [llm_function 装饰器 - 重要说明](detailed_guide/llm_function.md)
 - **如何做多轮对话？** → [llm_chat 装饰器](detailed_guide/llm_chat.md)
 - **如何让 LLM 调用函数？** → [工具系统](detailed_guide/tool.md)
-- **支持哪些 LLM 提供商？** → [LLM 接口层](detailed_guide/llm_interface.md#openaicompatible-实现)
-- **如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md#故障排除)
+- **支持哪些 LLM 提供商？** → [LLM 接口层 - OpenAICompatible 实现](detailed_guide/llm_interface.md)
+- **如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md)
 
 ## 🔗 其他资源
 

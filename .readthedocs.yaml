@@ -6,24 +6,18 @@ build:
     python: "3.11"
   commands:
     - pip install -r docs/requirements.txt
+    - cd docs && sphinx-build -b html -c . source $READTHEDOCS_OUTPUT/html
 
 sphinx:
-  configuration: docs/source/conf.py
+  configuration: docs/conf.py
   builder: html
   fail_on_warning: false
 
+# 多语言支持
 formats:
   - htmlzip
-  - pdf
 
-# 多语言支持配置
-builds:
-  latest:
-    configuration: docs/source/conf.py
-    fail_on_warning: false
-  zh_CN:
-    configuration: docs/source/conf.py
-    fail_on_warning: false
-  en:
-    configuration: docs/source/conf.py
-    fail_on_warning: false
+# 语言配置
+python:
+  install:
+    - requirements: docs/requirements.txt

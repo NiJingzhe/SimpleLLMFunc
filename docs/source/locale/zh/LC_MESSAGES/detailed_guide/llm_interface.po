@@ -1,0 +1,425 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/detailed_guide/llm_interface.md:1
+msgid "LLM 接口层"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:3
+msgid "本文档介绍 SimpleLLMFunc 的 LLM 接口层设计，包括接口抽象、密钥管理和流量控制等核心组件。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:5
+msgid "概述"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:7
+msgid "SimpleLLMFunc 提供了完整的 LLM 接口框架，旨在统一不同 LLM 服务提供商的调用方式。该框架包含三个核心组件："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:9
+msgid "**LLM_Interface** - 抽象基类，定义标准接口规范"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:10
+msgid "**APIKeyPool** - API 密钥池，实现负载均衡"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:11
+msgid "**TokenBucket** - 令牌桶算法，提供流量控制"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:13
+msgid "快速开始"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:15
+msgid "最简单的使用方式"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:32
+msgid "配置文件格式"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:34
+msgid "创建 `provider.json` 文件："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:64
+msgid "LLM_Interface 基类"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:66
+#: ../../source/detailed_guide/llm_interface.md:194
+#: ../../source/detailed_guide/llm_interface.md:240
+msgid "设计理念"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:68
+msgid ""
+"`LLM_Interface` 是所有 LLM 实现的抽象基类，定义了统一的接口规范。所有具体实现（如 "
+"`OpenAICompatible`）都继承自这个类。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:70
+#: ../../source/detailed_guide/llm_interface.md:185
+#: ../../source/detailed_guide/llm_interface.md:198
+#: ../../source/detailed_guide/llm_interface.md:262
+msgid "核心特性"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:72
+msgid "**标准化接口**: 定义了 `chat()` 和 `chat_stream()` 两个核心方法"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:73
+msgid "**类型安全**: 使用 Python 类型注解确保类型正确性"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:74
+msgid "**异步原生**: 完全基于异步编程，支持高并发"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:75
+msgid "**可扩展性**: 通过继承轻松添加新的 LLM 服务支持"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:77
+msgid "接口定义"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:132
+msgid "OpenAICompatible 实现"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:134
+msgid "什么是 OpenAICompatible"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:136
+msgid "`OpenAICompatible` 是 `LLM_Interface` 的具体实现，支持任何兼容 OpenAI API 格式的服务，包括："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:138
+msgid "OpenAI (GPT-4, GPT-3.5)"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:139
+msgid "Deepseek"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:140
+msgid "Anthropic Claude"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:141
+msgid "火山引擎 Ark"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:142
+msgid "百度千帆"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:143
+msgid "本地 LLM (Ollama, vLLM)"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:144
+msgid "任何兼容 OpenAI API 的服务"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:146
+msgid "创建接口"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:148
+msgid "方式 1: 从配置文件加载（推荐）"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:162
+msgid "方式 2: 直接创建"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:187
+msgid "**自动重试**: 请求失败时自动重试（可配置次数）"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:188
+msgid "**令牌统计**: 自动统计 input 和 output token 数量"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:189
+msgid "**流量控制**: 使用令牌桶算法防止速率限制"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:190
+msgid "**密钥轮换**: 自动在多个密钥间负载均衡"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:192
+msgid "APIKeyPool - 密钥管理"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:196
+msgid "`APIKeyPool` 使用**小根堆**数据结构实现 API 密钥的负载均衡，确保请求均匀分布到不同的密钥上。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:200
+msgid "**小根堆轮换**: 自动选择负载最低的密钥"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:201
+msgid "**负载均衡**: 实时跟踪每个密钥的任务数量"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:202
+msgid "**线程安全**: 使用锁保护并发访问"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:203
+msgid "**单例模式**: 相同 provider_id 的密钥池共享状态"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:205
+msgid "工作原理"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:217
+msgid "使用示例"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:238
+msgid "TokenBucket - 流量控制"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:242
+msgid "`TokenBucket` 实现经典的**令牌桶算法**，用于 API 请求的流量控制和速率限制。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:244
+msgid "算法原理"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:246
+msgid "令牌桶工作原理："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:248
+msgid "**令牌生成**: 以固定速率向桶中添加令牌"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:249
+msgid "**令牌消费**: 每次请求消费一个或多个令牌"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:250
+msgid "**容量限制**: 桶有最大容量，多余令牌会被丢弃"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:251
+msgid "**突发支持**: 当桶中有足够令牌时，允许突发请求"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:253
+msgid "示例："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:264
+msgid "**平滑流量**: 避免突发请求冲击后端 API"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:265
+msgid "**可配置参数**: 支持自定义容量和补充速率"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:266
+msgid "**异步支持**: 非阻塞的令牌获取，支持超时"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:267
+msgid "**线程安全**: 统一的锁保护所有操作"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:269
+msgid "配置参数"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "参数"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "类型"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "说明"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "推荐值"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "`capacity`"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "int"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "令牌桶容量（最大令牌数）"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "10-50"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "`refill_rate`"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "float"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "令牌补充速率（tokens/秒）"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md
+msgid "0.5-5.0"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:276
+msgid "使用场景"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:289
+msgid "完整的生产级示例"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:291
+msgid "1. 多模型配置"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:315
+msgid "2. 错误处理和重试"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:337
+msgid "3. 监控和调试"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:352
+msgid "最佳实践"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:354
+msgid "1. 密钥管理"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:386
+msgid "2. 流量控制"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:395
+msgid "3. 错误处理"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:418
+msgid "故障排除"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:420
+msgid "常见问题"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:422
+msgid "**\"Rate limit exceeded\" 错误**"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:423
+msgid "增加 `rate_limit_capacity` 或 `rate_limit_refill_rate`"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:424
+msgid "检查配置中的速率限制是否与 API 限制匹配"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:426
+msgid "**密钥持续失败**"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:427
+msgid "检查 API 密钥是否有效且有足够配额"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:428
+msgid "验证 `base_url` 是否正确"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:430
+msgid "**Token 统计不准确**"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:431
+msgid "某些 API 可能不返回 token 统计信息"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:432
+msgid "框架会尽力估算，但可能不完全准确"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:434
+msgid "调试技巧"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:447
+msgid "总结"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:449
+msgid "SimpleLLMFunc 的接口层通过以下设计提供强大的 LLM 服务："
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:451
+msgid "**LLM_Interface**: 统一的抽象基类"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:452
+msgid "**OpenAICompatible**: 开箱即用的 OpenAI 兼容实现"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:453
+msgid "**APIKeyPool**: 智能的密钥负载均衡"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:454
+msgid "**TokenBucket**: 可靠的流量控制"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_interface.md:456
+msgid "这种设计既保证了易用性，又提供了企业级的功能和可靠性。"
+msgstr ""
+

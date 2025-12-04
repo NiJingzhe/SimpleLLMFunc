@@ -39,8 +39,13 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 # Constants
-HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]  # Valid parameter names for conversation history
-DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls to prevent infinite loops
+HISTORY_PARAM_NAMES: List[str] = [
+    "history",
+    "chat_history",
+]  # Valid parameter names for conversation history
+DEFAULT_MAX_TOOL_CALLS: int = (
+    5  # Default maximum number of tool calls to prevent infinite loops
+)
 
 
 def llm_chat(
@@ -52,10 +57,10 @@ def llm_chat(
     **llm_kwargs: Any,
 ) -> Callable[
     [Union[Callable[P, Any], Callable[P, Awaitable[Any]]]],
-    Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]]
+    Callable[P, AsyncGenerator[Tuple[Any, HistoryList], None]],
 ]:
     """
-    Async LLM chat decorator for implementing asynchronous conversational interactions with 
+    Async LLM chat decorator for implementing asynchronous conversational interactions with
     large language models, with support for tool calling and conversation history management.
 
     This decorator provides native async support and returns an AsyncGenerator.

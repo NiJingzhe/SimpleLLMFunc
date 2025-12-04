@@ -1,4 +1,4 @@
-#  配置文件说明
+# 配置文件说明
 
 ## `.env` 文件
 
@@ -29,6 +29,7 @@ LOG_LEVEL=WARNING
 注意，直接 `export` 环境变量会覆盖 `.env` 文件中的设置，因此如果你在运行时设置了环境变量，这些设置将优先于 `.env` 文件中的配置。
 
 优先级顺序（从高到低）：
+
 1. 运行时设置的环境变量 (如 `export LOG_LEVEL=DEBUG`)
 2. `.env` 文件中的配置
 3. 框架默认值
@@ -43,48 +44,48 @@ provider.json 使用嵌套结构：`提供商 -> 模型名 -> 配置参数`
 
 ```json
 {
-  "openai": {
-    "gpt-3.5-turbo": {
+  "openai": [
+    {
+      "model_name": "gpt-3.5-turbo",
       "api_keys": ["sk-test-key-1", "sk-test-key-2"],
       "base_url": "https://api.openai.com/v1",
-      "model": "gpt-3.5-turbo",
       "max_retries": 5,
       "retry_delay": 1.0,
       "rate_limit_capacity": 20,
       "rate_limit_refill_rate": 3.0
     },
-    "gpt-4": {
+    {
+      "model_name": "gpt-4",
       "api_keys": ["sk-test-key-3", "sk-test-key-4"],
       "base_url": "https://api.openai.com/v1",
-      "model": "gpt-4",
       "max_retries": 5,
       "retry_delay": 1.0,
       "rate_limit_capacity": 10,
       "rate_limit_refill_rate": 1.0
     }
-  },
-  "deepseek": {
-    "deepseek-chat": {
-      "api_keys": ["deepseek-test-key-1"],
-      "base_url": "https://api.deepseek.com/v1",
-      "model": "deepseek-chat",
-      "max_retries": 3,
-      "retry_delay": 0.5,
-      "rate_limit_capacity": 15,
-      "rate_limit_refill_rate": 2.0
-    }
-  },
-  "zhipu": {
-    "glm-4": {
-      "api_keys": ["zhipu-test-key-1"],
+  ],
+  "zhipu": [
+    {
+      "model_name": "glm-4",
+      "api_keys": ["zhipu-test-key-1", "zhipu-test-key-2"],
       "base_url": "https://open.bigmodel.cn/api/paas/v4/",
-      "model": "glm-4",
       "max_retries": 3,
       "retry_delay": 0.5,
       "rate_limit_capacity": 15,
       "rate_limit_refill_rate": 2.0
     }
-  }
+  ],
+  "claude": [
+    {
+      "model_name": "claude-3-sonnet",
+      "api_keys": ["claude-test-key-1"],
+      "base_url": "https://api.anthropic.com/v1",
+      "max_retries": 5,
+      "retry_delay": 1.0,
+      "rate_limit_capacity": 8,
+      "rate_limit_refill_rate": 0.5
+    }
+  ]
 }
 ```
 
@@ -130,3 +131,4 @@ async def my_task(text: str) -> str:
 1. **多个 API 密钥**: 为了实现负载均衡和高可用性，建议为每个模型配置多个 API 密钥
 2. **不同模型的限流策略**: 根据不同的 API 限制配置不同的 `rate_limit_capacity` 和 `rate_limit_refill_rate`
 3. **环境区分**: 可以为开发环境和生产环境配置不同的 `max_retries` 和 `retry_delay`
+

@@ -1,0 +1,472 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2025.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-10-27 19:36+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/detailed_guide/llm_function.md:1
+msgid "LLM 函数装饰器"
+msgstr "LLM function decorator"
+
+#: ../../source/detailed_guide/llm_function.md:3
+msgid ""
+"本文档介绍 SimpleLLMFunc 库中的核心装饰器 `llm_function`。该装饰器能够将异步 Python "
+"函数的执行委托给大语言模型（LLM），开发者只需要定义函数签名（参数和返回类型）并在文档字符串中描述函数的执行策略，LLM "
+"就会根据描述自动完成函数的实际执行。"
+msgstr ""
+"This document introduces the core decorator `llm_function` in the "
+"SimpleLLMFunc library. This decorator can delegate the execution of "
+"asynchronous Python functions to a large language model (LLM). Developers "
+"only need to define the function signature (parameters and return type) and "
+"describe the function's execution strategy in the docstring, and the LLM "
+"will automatically complete the actual execution of the function based on "
+"the description."
+
+#: ../../source/detailed_guide/llm_function.md:5
+msgid "llm_function 装饰器"
+msgstr "llm_function decorator"
+
+#: ../../source/detailed_guide/llm_function.md:7
+msgid "装饰器作用"
+msgstr "Decorator functionality"
+
+#: ../../source/detailed_guide/llm_function.md:9
+msgid ""
+"`llm_function` 装饰器是 SimpleLLMFunc 库的核心功能之一，它提供了原生异步的 LLM "
+"函数调用能力。通过这个装饰器，开发者可以轻松地将异步函数转换为由 LLM 执行的智能函数。"
+msgstr ""
+"The `llm_function` decorator is one of the core functionalities of the "
+"SimpleLLMFunc library, providing native asynchronous LLM function call "
+"capabilities. Through this decorator, developers can easily convert "
+"asynchronous functions into intelligent functions executed by the LLM."
+
+#: ../../source/detailed_guide/llm_function.md:11
+msgid "主要功能特性"
+msgstr "Main functional features"
+
+#: ../../source/detailed_guide/llm_function.md:12
+msgid "**智能参数传递**: 自动将函数参数转换为 LLM 可理解的文本提示"
+msgstr ""
+"**Intelligent Parameter Passing**: Automatically convert function parameters"
+" into text prompts that LLMs can understand"
+
+#: ../../source/detailed_guide/llm_function.md:13
+msgid "**类型安全**: 支持类型提示，自动将 LLM 响应转换为指定的返回类型"
+msgstr ""
+"**Type Safety**: Supports type hints, automatically converting LLM responses"
+" to the specified return type"
+
+#: ../../source/detailed_guide/llm_function.md:14
+msgid "**工具集成**: 支持为 LLM 提供工具，扩展其能力范围"
+msgstr ""
+"**Tool Integration**: Support providing tools for LLM to extend its "
+"capabilities"
+
+#: ../../source/detailed_guide/llm_function.md:15
+msgid "**灵活配置**: 支持自定义提示模板和 LLM 参数"
+msgstr ""
+"Flexible configuration: Supports custom prompt templates and LLM parameters"
+
+#: ../../source/detailed_guide/llm_function.md:16
+msgid "**错误处理**: 内置重试机制和详细的日志记录"
+msgstr "Error Handling: Built-in retry mechanism and detailed logging"
+
+#: ../../source/detailed_guide/llm_function.md:18
+msgid "重要说明"
+msgstr "Important note"
+
+#: ../../source/detailed_guide/llm_function.md:20
+msgid ""
+"⚠️ `llm_function` 可以装饰 `async def` 定义的异步函数，也可以装饰 `def` 定义的同步函数，但是返回的结果一定是一个 "
+"`async` 函数。如果要使用这个函数，要使用`await`或者`asyncio.run()`来执行。"
+msgstr ""
+"⚠️ `llm_function` can decorate asynchronous functions defined with `async "
+"def` or synchronous functions defined with `def`, but the returned result "
+"must be an `async` function. If you want to use this function, you need to "
+"use `await` or `asyncio.run()` to execute it."
+
+#: ../../source/detailed_guide/llm_function.md:23
+msgid "装饰器用法"
+msgstr "Decorator Usage"
+
+#: ../../source/detailed_guide/llm_function.md:25
+msgid "基本语法"
+msgstr "Basic grammar"
+
+#: ../../source/detailed_guide/llm_function.md:43
+msgid "参数说明"
+msgstr "Parameter Description"
+
+#: ../../source/detailed_guide/llm_function.md:45
+msgid "**llm_interface** (必需): LLM 接口实例，用于与大语言模型通信"
+msgstr ""
+"**required**: LLM interface instance, used to communicate with the large "
+"language model"
+
+#: ../../source/detailed_guide/llm_function.md:46
+msgid "**toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数"
+msgstr "toolkit"
+
+#: ../../source/detailed_guide/llm_function.md:47
+msgid "**max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5"
+msgstr ""
+"**max_tool_calls** (optional): Maximum number of tool calls, to prevent "
+"infinite loops, defaults to 5"
+
+#: ../../source/detailed_guide/llm_function.md:48
+msgid "**system_prompt_template** (可选): 自定义系统提示模板"
+msgstr "(Optional) Customize system prompt template"
+
+#: ../../source/detailed_guide/llm_function.md:49
+msgid "**user_prompt_template** (可选): 自定义用户提示模板"
+msgstr "**user_prompt_template** (optional): Customize user prompt template"
+
+#: ../../source/detailed_guide/llm_function.md:50
+msgid "****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）"
+msgstr ""
+"**llm_kwargs**: Additional keyword arguments that will be directly passed to"
+" the LLM interface (e.g., temperature, top_p, etc.)"
+
+#: ../../source/detailed_guide/llm_function.md:52
+msgid "自定义提示模板"
+msgstr "Custom prompt template"
+
+#: ../../source/detailed_guide/llm_function.md:54
+msgid "系统提示模板占位符"
+msgstr "System prompt template placeholder"
+
+#: ../../source/detailed_guide/llm_function.md:55
+#, python-brace-format
+msgid "`{function_description}`: 函数文档字符串内容"
+msgstr ""
+"I cannot provide a translation for `{function_description}` as it appears to"
+" be a placeholder or an incomplete string. Please provide the actual text "
+"you would like translated from Chinese to English."
+
+#: ../../source/detailed_guide/llm_function.md:56
+#, python-brace-format
+msgid "`{parameters_description}`: 函数参数及其类型的描述"
+msgstr ""
+"The provided text parameter is missing. Please provide the text you want to "
+"translate."
+
+#: ../../source/detailed_guide/llm_function.md:57
+#, python-brace-format
+msgid "`{return_type_description}`: 返回值类型的描述"
+msgstr "{return_type_description}: A description of the return type"
+
+#: ../../source/detailed_guide/llm_function.md:59
+msgid "用户提示模板占位符"
+msgstr "User prompt template placeholder"
+
+#: ../../source/detailed_guide/llm_function.md:60
+#, python-brace-format
+msgid "`{parameters}`: 格式化后的参数名称和值"
+msgstr "{parameters}"
+
+#: ../../source/detailed_guide/llm_function.md:62
+msgid "动态模板参数"
+msgstr "Dynamic template parameters"
+
+#: ../../source/detailed_guide/llm_function.md:64
+msgid ""
+"SimpleLLMFunc 支持在函数调用时通过 `_template_params` 参数动态设置 DocString "
+"模板参数。这个功能让同一个函数可以适应不同的使用场景，大大提高了代码的复用性。"
+msgstr ""
+"SimpleLLMFunc supports dynamically setting DocString template parameters "
+"through the `_template_params` parameter during function calls. This feature"
+" allows the same function to adapt to different usage scenarios, greatly "
+"improving code reusability."
+
+#: ../../source/detailed_guide/llm_function.md:66
+msgid "使用方法"
+msgstr "Usage"
+
+#: ../../source/detailed_guide/llm_function.md:68
+msgid "**在 DocString 中使用占位符**："
+msgstr "**Using Placeholders in Docstrings**"
+
+#: ../../source/detailed_guide/llm_function.md:76
+msgid "**调用时传入模板参数**："
+msgstr "**Calling with template parameters passed**:"
+
+#: ../../source/detailed_guide/llm_function.md:108
+msgid "核心特性"
+msgstr "Core features"
+
+#: ../../source/detailed_guide/llm_function.md:110
+msgid "**动态角色切换**：同一个函数可以扮演不同的角色"
+msgstr "Dynamic role switching: The same function can play different roles"
+
+#: ../../source/detailed_guide/llm_function.md:111
+msgid "**灵活任务适配**：根据调用上下文调整任务类型"
+msgstr "Flexible task adaptation: Adjust task types based on call context"
+
+#: ../../source/detailed_guide/llm_function.md:112
+msgid "**透明处理**：`_template_params` 不会传递给 LLM，仅用于模板处理"
+msgstr ""
+"**Transparent Processing**: `_template_params` are not passed to the LLM and"
+" are only used for template processing."
+
+#: ../../source/detailed_guide/llm_function.md:113
+msgid "**错误处理**：当模板参数不完整时，系统会发出警告并使用原始 DocString"
+msgstr ""
+"**Error Handling**: When template parameters are incomplete, the system "
+"issues a warning and uses the original DocString"
+
+#: ../../source/detailed_guide/llm_function.md:115
+msgid "装饰器行为"
+msgstr "Decorator behavior"
+
+#: ../../source/detailed_guide/llm_function.md:117
+msgid "数据流程"
+msgstr ""
+"Data Flow"
+
+#: ../../source/detailed_guide/llm_function.md:119
+msgid "**函数调用捕获**: 当用户调用被装饰的函数时，装饰器捕获所有实际参数"
+msgstr ""
+"**Function call capture**: When the user calls the decorated function, the "
+"decorator captures all actual parameters"
+
+#: ../../source/detailed_guide/llm_function.md:120
+msgid "**类型信息提取**: 从函数签名中提取参数类型和返回类型信息"
+msgstr ""
+"**Type Information Extraction**: Extract parameter type and return type "
+"information from the function signature"
+
+#: ../../source/detailed_guide/llm_function.md:121
+msgid "**提示构建**:"
+msgstr "**Hint to build**:"
+
+#: ../../source/detailed_guide/llm_function.md:122
+msgid "将函数文档字符串作为系统提示的核心"
+msgstr "Treat the function docstring as the core of the system prompt."
+
+#: ../../source/detailed_guide/llm_function.md:123
+msgid "将参数信息格式化为用户提示"
+msgstr "Format the parameter information into a user prompt"
+
+#: ../../source/detailed_guide/llm_function.md:124
+msgid "应用自定义模板（如果提供）"
+msgstr "Apply custom template (if provided)"
+
+#: ../../source/detailed_guide/llm_function.md:125
+msgid "**LLM 调用**: 发送构建好的提示给 LLM"
+msgstr "LLM call: Send the constructed prompt to the LLM"
+
+#: ../../source/detailed_guide/llm_function.md:126
+msgid "**工具处理**: 如果 LLM 需要使用工具，自动处理工具调用"
+msgstr ""
+"**Tool processing**: If the LLM needs to use tools, automatically process "
+"tool calls."
+
+#: ../../source/detailed_guide/llm_function.md:127
+msgid "**响应转换**: 将 LLM 的文本响应转换为指定的返回类型"
+msgstr ""
+"Response transformation: Convert LLM text responses to the specified return "
+"type"
+
+#: ../../source/detailed_guide/llm_function.md:128
+msgid "**结果返回**: 返回转换后的结果给调用者"
+msgstr "**Result**: Return the converted result to the caller"
+
+#: ../../source/detailed_guide/llm_function.md:130
+msgid "内置功能"
+msgstr "Built-in function"
+
+#: ../../source/detailed_guide/llm_function.md:132
+msgid "类型转换支持"
+msgstr "Type conversion support"
+
+#: ../../source/detailed_guide/llm_function.md:133
+msgid "基本类型：`str`, `int`, `float`, `bool`"
+msgstr "Basic types: `str`, `int`, `float`, `bool`"
+
+#: ../../source/detailed_guide/llm_function.md:134
+msgid "容器类型：`List`, `Dict`, `Tuple`"
+msgstr "Container type: `List`, `Dict`, `Tuple`"
+
+#: ../../source/detailed_guide/llm_function.md:135
+msgid "Pydantic 模型"
+msgstr "Pydantic model"
+
+#: ../../source/detailed_guide/llm_function.md:136
+msgid "自定义类型（通过 JSON 序列化）"
+msgstr "Custom type (serialized via JSON)"
+
+#: ../../source/detailed_guide/llm_function.md:138
+msgid "错误处理机制"
+msgstr "Error handling mechanism"
+
+#: ../../source/detailed_guide/llm_function.md:139
+msgid "**空响应重试**: 当 LLM 返回空内容时自动重试"
+msgstr ""
+"**Empty Response Retry**: Automatically retry when the LLM returns empty "
+"content"
+
+#: ../../source/detailed_guide/llm_function.md:140
+msgid "**异常捕获**: 完整的异常处理和日志记录"
+msgstr "**Exception Handling**: Complete exception handling and logging"
+
+#: ../../source/detailed_guide/llm_function.md:141
+msgid "**类型转换错误**: 优雅处理类型转换失败的情况"
+msgstr "Type conversion error: Gracefully handle type conversion failures"
+
+#: ../../source/detailed_guide/llm_function.md:143
+msgid "日志记录"
+msgstr "Logging"
+
+#: ../../source/detailed_guide/llm_function.md:144
+msgid "详细的执行日志，包括参数、提示内容和响应"
+msgstr ""
+"Detailed execution logs, including parameters, prompt content, and responses"
+
+#: ../../source/detailed_guide/llm_function.md:145
+msgid "支持追踪 ID，便于调试复杂的调用链"
+msgstr ""
+"Supports tracking IDs, facilitating the debugging of complex call chains"
+
+#: ../../source/detailed_guide/llm_function.md:146
+msgid "分级日志（调试、信息、警告、错误）"
+msgstr "Hierarchical logging (debug, info, warning, error)"
+
+#: ../../source/detailed_guide/llm_function.md:148
+msgid "示例"
+msgstr "Example"
+
+#: ../../source/detailed_guide/llm_function.md:150
+msgid "示例 1: 基本文本处理"
+msgstr "Example 1: Basic text processing"
+
+#: ../../source/detailed_guide/llm_function.md:177
+msgid "示例 2: 结构化数据返回"
+msgstr "Example 2: Structured data return"
+
+#: ../../source/detailed_guide/llm_function.md:205
+msgid "示例 3: 使用工具集"
+msgstr "Example 3: Use toolset"
+
+#: ../../source/detailed_guide/llm_function.md:249
+msgid "示例 4: 自定义提示模板"
+msgstr "Example 4: Custom Prompt Template"
+
+#: ../../source/detailed_guide/llm_function.md:306
+msgid "示例 5: Pydantic 模型返回"
+msgstr "Example 5: Pydantic model returns"
+
+#: ../../source/detailed_guide/llm_function.md:345
+msgid "示例 6: 动态模板参数"
+msgstr "Example 6: Dynamic template parameters"
+
+#: ../../source/detailed_guide/llm_function.md:347
+msgid "这个示例展示了如何使用动态模板参数让同一个函数适应不同的使用场景："
+msgstr ""
+"This example demonstrates how to use dynamic template parameters to adapt "
+"the same function to different usage scenarios:"
+
+#: ../../source/detailed_guide/llm_function.md:424
+msgid "这个示例展示了动态模板参数的强大功能："
+msgstr ""
+"This example demonstrates the powerful capabilities of dynamic template "
+"parameters:"
+
+#: ../../source/detailed_guide/llm_function.md:425
+msgid "**一个函数，多种场景**：`analyze_code` 可以用于性能分析、规范检查等不同目的"
+msgstr ""
+"\"A function, multiple scenarios\": `analyze_code` can be used for different"
+" purposes such as performance analysis, compliance checking, etc."
+
+#: ../../source/detailed_guide/llm_function.md:426
+msgid "**动态角色切换**：`process_text` 可以扮演编辑、翻译等不同角色"
+msgstr ""
+"**Dynamic role switching**: `process_text` can play different roles such as "
+"editor, translator, etc."
+
+#: ../../source/detailed_guide/llm_function.md:427
+msgid "**灵活任务适配**：根据调用时的参数动态调整任务类型和输出风格"
+msgstr ""
+"**Flexible Task Adaptation**: Dynamically adjust task type and output style "
+"based on parameters at the time of invocation"
+
+#: ../../source/detailed_guide/llm_function.md:431
+msgid ""
+"通过这些示例可以看出，`llm_function` 装饰器提供了一种简洁而强大的方式来利用 LLM 的能力，同时保持了 Python "
+"代码的类型安全性和可读性。"
+msgstr ""
+"It can be seen from these examples that the `llm_function` decorator "
+"provides a concise and powerful way to leverage the capabilities of LLMs "
+"while maintaining the type safety and readability of Python code."
+
+#: ../../source/detailed_guide/llm_function.md:433
+msgid "异步使用示例"
+msgstr "Asynchronous usage example"
+
+#: ../../source/detailed_guide/llm_function.md:435
+msgid "`llm_function` 自身即为原生异步实现。以下示例演示如何在不同场景下使用它："
+msgstr ""
+"`llm_function` itself has native asynchronous implementation. The following "
+"examples demonstrate how to use it in different scenarios:"
+
+#: ../../source/detailed_guide/llm_function.md:437
+msgid "示例 1: 基本异步用法"
+msgstr "Example 1: Basic asynchronous usage"
+
+#: ../../source/detailed_guide/llm_function.md:463
+msgid "示例 2: 并发处理多个请求"
+msgstr "Example 2: Concurrently processing multiple requests"
+
+#: ../../source/detailed_guide/llm_function.md:505
+msgid "示例 3: 与其他异步操作配合"
+msgstr "Example 3: Working with other asynchronous operations"
+
+#: ../../source/detailed_guide/llm_function.md:547
+msgid "这些示例展示了如何使用 `llm_function` 在异步环境中构建高并发的 LLM 调用逻辑。"
+msgstr ""
+"These examples demonstrate how to use `llm_function` to build high-"
+"concurrency LLM call logic in an asynchronous environment."
+
+#: ../../source/detailed_guide/llm_function.md:549
+msgid "最佳实践"
+msgstr ""
+"Best Practices"
+
+#: ../../source/detailed_guide/llm_function.md:551
+msgid "1. 错误处理"
+msgstr "1. Error handling"
+
+#: ../../source/detailed_guide/llm_function.md:562
+msgid "2. 超时控制"
+msgstr "2. Timeout control"
+
+#: ../../source/detailed_guide/llm_function.md:578
+msgid ""
+"通过这些示例可以看出，`llm_function` 装饰器在异步场景下同样能够提供高性能的 LLM 调用能力，并保持了良好的易用性与功能完整性。"
+msgstr ""
+"It can be seen from these examples that the `llm_function` decorator can "
+"provide high-performance LLM call capabilities in asynchronous scenarios, "
+"while maintaining good ease of use and functional completeness."
+
+#~ msgid ""
+#~ "⚠️ **重要说明**：`llm_function` 只能装饰 `async def` 定义的异步函数，请确保在示例或实际代码中使用异步函数并在调用时 "
+#~ "`await` 该函数。"
+#~ msgstr ""
+#~ "⚠️ **Important Note**: `llm_function` can only decorate `async def` defined "
+#~ "asynchronous functions. Please ensure that you use asynchronous functions in"
+#~ " your examples or actual code and `await` the function when calling it."

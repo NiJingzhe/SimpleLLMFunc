@@ -1,8 +1,8 @@
 """
 LLM Function Decorator Module
 
-This module provides LLM function decorators that delegate the execution of ordinary Python 
-functions to large language models. Using this decorator, simply define the function signature 
+This module provides LLM function decorators that delegate the execution of ordinary Python
+functions to large language models. Using this decorator, simply define the function signature
 (parameters and return type), then describe the function's execution strategy in the docstring.
 
 Data Flow:
@@ -62,11 +62,13 @@ def llm_function(
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
     **llm_kwargs: Any,
-) -> Callable[[Union[Callable[..., T], Callable[..., Awaitable[T]]]], Callable[..., Awaitable[T]]]:
+) -> Callable[
+    [Union[Callable[..., T], Callable[..., Awaitable[T]]]], Callable[..., Awaitable[T]]
+]:
     """
     Async LLM function decorator that delegates function execution to a large language model.
 
-    This decorator provides native async implementation, ensuring that LLM calls do not 
+    This decorator provides native async implementation, ensuring that LLM calls do not
     block the event loop during execution.
 
     ## Usage
@@ -124,7 +126,9 @@ def llm_function(
         ```
     """
 
-    def decorator(func: Union[Callable[..., T], Callable[..., Awaitable[T]]]) -> Callable[..., Awaitable[T]]:
+    def decorator(
+        func: Union[Callable[..., T], Callable[..., Awaitable[T]]],
+    ) -> Callable[..., Awaitable[T]]:
         signature = inspect.signature(func)
         docstring = func.__doc__ or ""
         func_name = func.__name__
@@ -202,10 +206,11 @@ def llm_function(
         async_wrapper.__name__ = func_name
         async_wrapper.__doc__ = docstring
         async_wrapper.__annotations__ = func.__annotations__
-        setattr(async_wrapper, '__signature__', signature) 
+        setattr(async_wrapper, "__signature__", signature)
 
         return cast(Callable[..., Awaitable[T]], async_wrapper)
 
     return decorator
+
 
 async_llm_function = llm_function
