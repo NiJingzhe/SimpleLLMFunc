@@ -105,7 +105,11 @@ class TestRetryLLMCall:
         sample_messages: list,
     ) -> None:
         """Test retrying LLM call successfully."""
-        mock_extract.side_effect = ["", "success"]
+        # extract_content_from_response 被调用3次：
+        # 1. 第一次尝试（返回空）
+        # 2. 第二次尝试（返回成功，触发break）
+        # 3. 最终检查（返回成功）
+        mock_extract.side_effect = ["", "success", "success"]
         mock_get_final.return_value = MagicMock()
         mock_execute.return_value = AsyncMock()
         

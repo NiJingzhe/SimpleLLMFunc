@@ -3,13 +3,165 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
-from typing import Any, Awaitable, Callable, Dict, List
+from typing import Any, Awaitable, Callable, Dict, List, get_type_hints, get_origin, get_args, Union as TypingUnion
 
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+
+
+def _convert_tool_arguments(
+    arguments: Dict[str, Any],
+    tool_func: Callable[..., Awaitable[Any]],
+) -> Dict[str, Any]:
+    """转换工具参数，将字符串列表转换为多模态对象列表。
+    
+    根据工具函数的类型注解，自动将 LLM 传递的字符串数组转换为对应的多模态对象数组。
+    支持的类型：
+    - List[ImgPath] -> List[ImgPath对象]
+    - List[ImgUrl] -> List[ImgUrl对象]
+    - List[Text] -> List[Text对象]
+    - Optional[List[...]] -> 处理 None 值
+    - Union 类型 -> 提取非 None 类型
+    
+    Args:
+        arguments: LLM 传递的原始参数字典（JSON 解析后）
+        tool_func: 工具函数对象
+        
+    Returns:
+        转换后的参数字典
+    """
+    try:
+        # 获取函数签名和类型注解
+        signature = inspect.signature(tool_func)
+        type_hints = get_type_hints(tool_func)
+        
+        converted_args = {}
+        
+        for param_name, param_value in arguments.items():
+            if param_name not in signature.parameters:
+                # 参数不在签名中，保持原样
+                converted_args[param_name] = param_value
+                continue
+            
+            param_type = type_hints.get(param_name, Any)
+            
+            # 处理 None 值
+            if param_value is None:
+                converted_args[param_name] = None
+                continue
+            
+            # 处理 Optional 类型
+            origin = get_origin(param_type)
+            if origin is TypingUnion:
+                args = get_args(param_type)
+                # 提取非 None 类型
+                non_none_types = [t for t in args if t is not type(None)]
+                if non_none_types:
+                    param_type = non_none_types[0]
+                    origin = get_origin(param_type)
+            
+            # 处理列表类型
+            if origin is list:
+                args = get_args(param_type)
+                if not args:
+                    # List 没有类型参数，保持原样
+                    converted_args[param_name] = param_value
+                    continue
+                
+                element_type = args[0]
+                
+                # 检查是否为多模态列表类型
+                if element_type is ImgPath:
+                    if isinstance(param_value, list):
+                        try:
+                            converted_args[param_name] = [ImgPath(path) for path in param_value]
+                        except Exception as e:
+                            push_warning(
+                                f"工具参数 '{param_name}' 转换为 List[ImgPath] 失败: {e}，使用原始值",
+                                location=get_location(),
+                            )
+                            converted_args[param_name] = param_value
+                    else:
+                        converted_args[param_name] = param_value
+                elif element_type is ImgUrl:
+                    if isinstance(param_value, list):
+                        try:
+                            converted_args[param_name] = [ImgUrl(url) for url in param_value]
+                        except Exception as e:
+                            push_warning(
+                                f"工具参数 '{param_name}' 转换为 List[ImgUrl] 失败: {e}，使用原始值",
+                                location=get_location(),
+                            )
+                            converted_args[param_name] = param_value
+                    else:
+                        converted_args[param_name] = param_value
+                elif element_type is Text:
+                    if isinstance(param_value, list):
+                        try:
+                            converted_args[param_name] = [Text(text) for text in param_value]
+                        except Exception as e:
+                            push_warning(
+                                f"工具参数 '{param_name}' 转换为 List[Text] 失败: {e}，使用原始值",
+                                location=get_location(),
+                            )
+                            converted_args[param_name] = param_value
+                    else:
+                        converted_args[param_name] = param_value
+                else:
+                    # 非多模态列表，保持原样
+                    converted_args[param_name] = param_value
+            # 处理单个多模态类型
+            elif param_type is ImgPath:
+                if isinstance(param_value, str):
+                    try:
+                        converted_args[param_name] = ImgPath(param_value)
+                    except Exception as e:
+                        push_warning(
+                            f"工具参数 '{param_name}' 转换为 ImgPath 失败: {e}，使用原始值",
+                            location=get_location(),
+                        )
+                        converted_args[param_name] = param_value
+                else:
+                    converted_args[param_name] = param_value
+            elif param_type is ImgUrl:
+                if isinstance(param_value, str):
+                    try:
+                        converted_args[param_name] = ImgUrl(param_value)
+                    except Exception as e:
+                        push_warning(
+                            f"工具参数 '{param_name}' 转换为 ImgUrl 失败: {e}，使用原始值",
+                            location=get_location(),
+                        )
+                        converted_args[param_name] = param_value
+                else:
+                    converted_args[param_name] = param_value
+            elif param_type is Text:
+                if isinstance(param_value, str):
+                    try:
+                        converted_args[param_name] = Text(param_value)
+                    except Exception as e:
+                        push_warning(
+                            f"工具参数 '{param_name}' 转换为 Text 失败: {e}，使用原始值",
+                            location=get_location(),
+                        )
+                        converted_args[param_name] = param_value
+                else:
+                    converted_args[param_name] = param_value
+            else:
+                # 其他类型，保持原样
+                converted_args[param_name] = param_value
+        
+        return converted_args
+    except Exception as e:
+        push_warning(
+            f"工具参数转换过程中出错: {e}，使用原始参数",
+            location=get_location(),
+        )
+        return arguments
 
 
 async def _execute_single_tool_call(
@@ -56,7 +208,11 @@ async def _execute_single_tool_call(
             push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
 
             tool_func = tool_map[tool_name]
-            tool_result = await tool_func(**arguments)
+            
+            # 转换参数：将字符串列表转换为多模态对象列表
+            converted_arguments = _convert_tool_arguments(arguments, tool_func)
+            
+            tool_result = await tool_func(**converted_arguments)
 
             # 更新工具调用观测数据，序列化输出以便langfuse记录
             from SimpleLLMFunc.base.tool_call.validation import (
@@ -308,7 +464,8 @@ async def process_tool_calls(
                 break
 
     # Append普通工具调用结果
-    current_messages = messages
+    # 创建messages的副本以避免修改原始列表
+    current_messages = messages.copy()
     for msgs in normal_results:
         current_messages.extend(msgs)
     

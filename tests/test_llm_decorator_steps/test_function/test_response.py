@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +17,7 @@ from SimpleLLMFunc.llm_decorator.steps.function.response import (
 class TestExtractResponseContent:
     """Tests for extract_response_content function."""
 
-    @patch("SimpleLLMFunc.llm_decorator.steps.function.response.extract_content_from_response")
+    @patch("SimpleLLMFunc.base.post_process.extract_content_from_response")
     def test_extract_content(self, mock_extract: Any, mock_chat_completion: Any) -> None:
         """Test extracting response content."""
         mock_extract.return_value = "test content"

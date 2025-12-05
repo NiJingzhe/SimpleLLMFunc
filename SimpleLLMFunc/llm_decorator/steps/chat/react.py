@@ -28,7 +28,7 @@ async def execute_llm_call(
     **llm_kwargs: Any,
 ) -> AsyncGenerator[Any, None]:
     """执行 LLM 调用"""
-    return execute_llm(
+    async for response in execute_llm(
         llm_interface=llm_interface,
         messages=messages,
         tools=tools,
@@ -36,7 +36,8 @@ async def execute_llm_call(
         max_tool_calls=max_tool_calls,
         stream=stream,
         **llm_kwargs,
-    )
+    ):
+        yield response
 
 
 async def execute_react_loop_streaming(

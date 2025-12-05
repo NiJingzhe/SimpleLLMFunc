@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from typing import Optional
+from typing import List, Optional
 from unittest.mock import patch
 
 import pytest
@@ -13,13 +12,15 @@ from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from pydantic import BaseModel
 
 from SimpleLLMFunc.base.post_process import (
-    _convert_to_dict,
-    _convert_to_pydantic_model,
+    _convert_from_xml,
+    _convert_xml_to_pydantic,
     _convert_to_primitive_type,
     extract_content_from_response,
     extract_content_from_stream_response,
     process_response,
 )
+# Import internal function for testing
+from SimpleLLMFunc.base import post_process
 
 
 class TestExtractContentFromResponse:
@@ -88,8 +89,11 @@ class TestExtractContentFromStreamResponse:
 
     def test_extract_content_empty_chunk(self) -> None:
         """Test extracting content from empty chunk."""
-        from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
-        from openai.types.chat.chat_completion_chunk import ChoiceDelta
+        from openai.types.chat.chat_completion_chunk import (
+            ChatCompletionChunk,
+            Choice as ChunkChoice,
+            ChoiceDelta,
+        )
 
         delta = ChoiceDelta(content="", role="assistant")
         choice = ChunkChoice(delta=delta, finish_reason=None, index=0)
@@ -105,8 +109,11 @@ class TestExtractContentFromStreamResponse:
 
     def test_extract_content_none_chunk(self) -> None:
         """Test extracting content when chunk content is None."""
-        from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
-        from openai.types.chat.chat_completion_chunk import ChoiceDelta
+        from openai.types.chat.chat_completion_chunk import (
+            ChatCompletionChunk,
+            Choice as ChunkChoice,
+            ChoiceDelta,
+        )
 
         delta = ChoiceDelta(content=None, role="assistant")
         choice = ChunkChoice(delta=delta, finish_reason=None, index=0)
@@ -175,66 +182,173 @@ class TestConvertToPrimitiveType:
             _convert_to_primitive_type("test", str)  # str is not handled by this function
 
 
-class TestConvertToDict:
-    """Tests for _convert_to_dict function."""
+class TestExtractXmlContent:
+    """Tests for _extract_xml_content function."""
 
-    def test_convert_valid_json(self) -> None:
-        """Test converting valid JSON string."""
-        json_str = '{"key": "value", "number": 123}'
-        result = _convert_to_dict(json_str, "test_func")
+    def test_extract_pure_xml(self) -> None:
+        """Test extracting pure XML."""
+        content = '<result><key>value</key></result>'
+        result = post_process._extract_xml_content(content)
+        assert result == '<result><key>value</key></result>'
+
+    def test_extract_xml_from_code_block(self) -> None:
+        """Test extracting XML from code block."""
+        content = '```xml\n<result><key>value</key></result>\n```'
+        result = post_process._extract_xml_content(content)
+        assert result == '<result><key>value</key></result>'
+
+    def test_extract_xml_with_whitespace(self) -> None:
+        """Test extracting XML with whitespace."""
+        content = '   <result><key>value</key></result>   '
+        result = post_process._extract_xml_content(content)
+        assert result == '<result><key>value</key></result>'
+
+    def test_extract_xml_with_code_block_whitespace(self) -> None:
+        """Test extracting XML from code block with whitespace."""
+        content = '```xml\n  <result><key>value</key></result>  \n```'
+        result = post_process._extract_xml_content(content)
+        assert result == '<result><key>value</key></result>'
+
+    def test_extract_xml_with_multiline_code_block(self) -> None:
+        """Test extracting XML from multiline code block."""
+        content = '''```xml
+<result>
+  <key>value</key>
+</result>
+```'''
+        result = post_process._extract_xml_content(content)
+        assert '<result>' in result
+        assert '<key>value</key>' in result
+
+
+class TestConvertFromXml:
+    """Tests for _convert_from_xml function."""
+
+    def test_convert_valid_xml(self) -> None:
+        """Test converting valid XML string."""
+        xml_str = '<result><key>value</key><number>123</number></result>'
+        result = _convert_from_xml(xml_str, "test_func")
         assert result == {"key": "value", "number": 123}
+        assert isinstance(result["number"], int)
 
-    def test_convert_json_with_code_block(self) -> None:
-        """Test converting JSON wrapped in code block."""
-        json_str = '```json\n{"key": "value"}\n```'
-        result = _convert_to_dict(json_str, "test_func")
+    def test_convert_xml_with_code_block(self) -> None:
+        """Test converting XML wrapped in code block."""
+        xml_str = '```xml\n<result><key>value</key></result>\n```'
+        result = _convert_from_xml(xml_str, "test_func")
         assert result == {"key": "value"}
 
-    def test_convert_json_with_markdown_code_block(self) -> None:
-        """Test converting JSON in markdown code block."""
-        json_str = "```json\n{\"key\": \"value\"}\n```"
-        result = _convert_to_dict(json_str, "test_func")
-        assert result == {"key": "value"}
+    def test_convert_xml_with_list(self) -> None:
+        """Test converting XML with list items."""
+        xml_str = '<result><items><item>item1</item><item>item2</item></items></result>'
+        result = _convert_from_xml(xml_str, "test_func")
+        assert "items" in result
+        assert isinstance(result.get("items"), list)
 
-    def test_convert_invalid_json(self) -> None:
-        """Test converting invalid JSON."""
+    def test_convert_invalid_xml(self) -> None:
+        """Test converting invalid XML."""
         with pytest.raises(ValueError):
-            _convert_to_dict("not a json", "test_func")
+            _convert_from_xml("not xml", "test_func")
 
     def test_convert_empty_string(self) -> None:
         """Test converting empty string."""
         with pytest.raises(ValueError):
-            _convert_to_dict("", "test_func")
+            _convert_from_xml("", "test_func")
+
+    def test_convert_xml_with_nested_structure(self) -> None:
+        """Test converting XML with nested structure."""
+        xml_str = '<result><outer><inner>value</inner></outer></result>'
+        result = _convert_from_xml(xml_str, "test_func")
+        assert "outer" in result
+        assert isinstance(result["outer"], dict)
+        assert result["outer"]["inner"] == "value"
+
+    def test_convert_xml_with_numeric_types(self) -> None:
+        """Test converting XML with numeric types."""
+        xml_str = '<result><int_val>42</int_val><float_val>3.14</float_val><bool_val>true</bool_val></result>'
+        result = _convert_from_xml(xml_str, "test_func")
+        assert result["int_val"] == 42
+        assert isinstance(result["int_val"], int)
+        assert result["float_val"] == 3.14
+        assert isinstance(result["float_val"], float)
+        assert result["bool_val"] is True
+
+    def test_convert_xml_with_pure_xml_start(self) -> None:
+        """Test converting XML that starts with <."""
+        xml_str = '<result><key>value</key></result>'
+        result = _convert_from_xml(xml_str, "test_func")
+        assert result == {"key": "value"}
 
 
-class TestConvertToPydanticModel:
-    """Tests for _convert_to_pydantic_model function."""
+class TestConvertXmlToPydantic:
+    """Tests for _convert_xml_to_pydantic function."""
 
-    def test_convert_valid_json_to_model(self, sample_pydantic_model) -> None:
-        """Test converting valid JSON to Pydantic model."""
-        json_str = '{"name": "John", "age": 30, "email": "john@example.com"}'
-        result = _convert_to_pydantic_model(json_str, sample_pydantic_model, "test_func")
+    def test_convert_valid_xml_to_model(self, sample_pydantic_model) -> None:
+        """Test converting valid XML to Pydantic model."""
+        xml_str = '<SampleModel><name>John</name><age>30</age><email>john@example.com</email></SampleModel>'
+        result = _convert_xml_to_pydantic(xml_str, sample_pydantic_model, "test_func")
         assert isinstance(result, sample_pydantic_model)
         assert result.name == "John"
         assert result.age == 30
         assert result.email == "john@example.com"
 
-    def test_convert_json_with_code_block_to_model(self, sample_pydantic_model) -> None:
-        """Test converting JSON in code block to model."""
-        json_str = '```json\n{"name": "Jane", "age": 25}\n```'
-        result = _convert_to_pydantic_model(json_str, sample_pydantic_model, "test_func")
+    def test_convert_xml_with_code_block_to_model(self, sample_pydantic_model) -> None:
+        """Test converting XML in code block to model."""
+        xml_str = '```xml\n<SampleModel><name>Jane</name><age>25</age></SampleModel>\n```'
+        result = _convert_xml_to_pydantic(xml_str, sample_pydantic_model, "test_func")
         assert result.name == "Jane"
         assert result.age == 25
+
+    def test_convert_xml_with_result_wrapper(self, sample_pydantic_model) -> None:
+        """Test converting XML with result wrapper."""
+        xml_str = '<result><SampleModel><name>Bob</name><age>35</age></SampleModel></result>'
+        result = _convert_xml_to_pydantic(xml_str, sample_pydantic_model, "test_func")
+        assert result.name == "Bob"
+        assert result.age == 35
 
     def test_convert_empty_string_to_model(self, sample_pydantic_model) -> None:
         """Test converting empty string to model."""
         with pytest.raises(ValueError):
-            _convert_to_pydantic_model("", sample_pydantic_model, "test_func")
+            _convert_xml_to_pydantic("", sample_pydantic_model, "test_func")
 
-    def test_convert_invalid_json_to_model(self, sample_pydantic_model) -> None:
-        """Test converting invalid JSON to model."""
+    def test_convert_invalid_xml_to_model(self, sample_pydantic_model) -> None:
+        """Test converting invalid XML to model."""
         with pytest.raises(ValueError):
-            _convert_to_pydantic_model("not json", sample_pydantic_model, "test_func")
+            _convert_xml_to_pydantic("not xml", sample_pydantic_model, "test_func")
+
+    def test_convert_xml_with_nested_model(self) -> None:
+        """Test converting XML with nested Pydantic model."""
+
+        class InnerModel(BaseModel):
+            value: str
+
+        class OuterModel(BaseModel):
+            inner: InnerModel
+
+        xml_str = '<OuterModel><inner><value>test</value></inner></OuterModel>'
+        result = _convert_xml_to_pydantic(xml_str, OuterModel, "test_func")
+        assert isinstance(result, OuterModel)
+        assert result.inner.value == "test"
+
+    def test_convert_xml_with_list_in_model(self) -> None:
+        """Test converting XML with list in Pydantic model."""
+        from typing import List
+
+        class ListModel(BaseModel):
+            items: List[str]
+
+        xml_str = '<ListModel><items><item>item1</item><item>item2</item></items></ListModel>'
+        result = _convert_xml_to_pydantic(xml_str, ListModel, "test_func")
+        assert isinstance(result, ListModel)
+        assert len(result.items) == 2
+        assert "item1" in result.items
+
+    def test_convert_xml_with_missing_optional_fields(self, sample_pydantic_model) -> None:
+        """Test converting XML with missing optional fields."""
+        xml_str = '<SampleModel><name>John</name><age>30</age></SampleModel>'
+        result = _convert_xml_to_pydantic(xml_str, sample_pydantic_model, "test_func")
+        assert result.name == "John"
+        assert result.age == 30
+        assert result.email is None
 
 
 class TestProcessResponse:
@@ -313,7 +427,7 @@ class TestProcessResponse:
         """Test processing response as dict."""
         mock_get_context.return_value = "test_func"
         message = ChatCompletionMessage(
-            role="assistant", content='{"key": "value", "number": 123}'
+            role="assistant", content='<result><key>value</key><number>123</number></result>'
         )
         choice = Choice(finish_reason="stop", index=0, message=message)
         response = ChatCompletion(
@@ -337,7 +451,7 @@ class TestProcessResponse:
         """Test processing response as Pydantic model."""
         mock_get_context.return_value = "test_func"
         message = ChatCompletionMessage(
-            role="assistant", content='{"name": "Alice", "age": 28}'
+            role="assistant", content='<SampleModel><name>Alice</name><age>28</age></SampleModel>'
         )
         choice = Choice(finish_reason="stop", index=0, message=message)
         response = ChatCompletion(
@@ -378,4 +492,49 @@ class TestProcessResponse:
         )
         result = process_response(response, str)
         assert result == ""
+
+    @patch("SimpleLLMFunc.base.post_process.get_current_context_attribute")
+    def test_process_response_list_str(
+        self, mock_get_context: Any, mock_chat_completion: ChatCompletion
+    ) -> None:
+        """Test processing response as List[str]."""
+        mock_get_context.return_value = "test_func"
+        message = ChatCompletionMessage(
+            role="assistant", content='<result><item>item1</item><item>item2</item><item>item3</item></result>'
+        )
+        choice = Choice(finish_reason="stop", index=0, message=message)
+        response = ChatCompletion(
+            id="test",
+            choices=[choice],
+            created=0,
+            model="test",
+            object="chat.completion",
+        )
+        result = process_response(response, List[str])
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result == ["item1", "item2", "item3"]
+
+    @patch("SimpleLLMFunc.base.post_process.get_current_context_attribute")
+    def test_process_response_list_int(
+        self, mock_get_context: Any, mock_chat_completion: ChatCompletion
+    ) -> None:
+        """Test processing response as List[int]."""
+        mock_get_context.return_value = "test_func"
+        message = ChatCompletionMessage(
+            role="assistant", content='<result><item>1</item><item>2</item><item>3</item></result>'
+        )
+        choice = Choice(finish_reason="stop", index=0, message=message)
+        response = ChatCompletion(
+            id="test",
+            choices=[choice],
+            created=0,
+            model="test",
+            object="chat.completion",
+        )
+        result = process_response(response, List[int])
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert result == [1, 2, 3]
+        assert all(isinstance(x, int) for x in result)
 

@@ -19,6 +19,7 @@ import inspect
 from pydantic import BaseModel
 
 from SimpleLLMFunc.logger.logger import push_error
+from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 
 
 class Parameter:
@@ -211,6 +212,14 @@ class Tool(ABC):
         elif type_annotation is bool:
             return {"type": "boolean"}
 
+        # 处理多模态类型
+        if type_annotation is ImgPath:
+            return {"type": "string", "description": "本地图片路径"}
+        elif type_annotation is ImgUrl:
+            return {"type": "string", "description": "网络图片URL"}
+        elif type_annotation is Text:
+            return {"type": "string", "description": "文本内容"}
+
         # 处理列表类型
         origin = get_origin(type_annotation)
         args = get_args(type_annotation)
@@ -340,6 +349,7 @@ def tool(
     - **可选类型**: Optional[T], Union[T, None]
     - **Pydantic模型**: 继承自BaseModel的类，会自动解析为JSON Schema
     - **多模态类型**: ImgPath（本地图片）, ImgUrl（网络图片）, Text（文本）
+    - **多模态列表**: List[ImgPath], List[ImgUrl], List[Text]（LLM传递字符串数组，自动转换为多模态对象数组）
 
     ## 一个工具函数支持的返回值类型：
     - **基本类型**: str, int, float, bool, dict, list等可序列化类型
@@ -368,8 +378,9 @@ def tool(
     Example:
         ```python
         from SimpleLLMFunc.tool import tool
-        from SimpleLLMFunc.type import ImgPath
+        from SimpleLLMFunc.type import ImgPath, ImgUrl
         from pydantic import BaseModel, Field
+        from typing import List
 
         class Location(BaseModel):
             lat: float = Field(..., description="纬度")
@@ -390,6 +401,28 @@ def tool(
             # 实现地图生成逻辑
             map_path = "./generated_map.png"
             return ImgPath(map_path)
+
+        @tool(name="process_images", description="批量处理图片")
+        async def process_images(
+            local_images: List[ImgPath],
+            remote_images: List[ImgUrl]
+        ) -> str:
+            '''
+            处理多个图片文件
+            
+            Args:
+                local_images: 本地图片路径列表（LLM传递字符串数组，自动转换为ImgPath对象列表）
+                remote_images: 网络图片URL列表（LLM传递字符串数组，自动转换为ImgUrl对象列表）
+                
+            Returns:
+                处理结果描述
+            '''
+            # LLM传递的字符串数组会自动转换为多模态对象数组
+            for img_path in local_images:
+                print(f"处理本地图片: {img_path.path}")
+            for img_url in remote_images:
+                print(f"处理网络图片: {img_url.url}")
+            return "处理完成"
         ```
     """
 

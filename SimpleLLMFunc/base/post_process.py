@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import re
-from typing import Any, Dict, Optional, Type, TypeVar, cast
+from typing import Any, Dict, List, Optional, Type, TypeVar, cast, get_origin, get_args
 
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_location
@@ -27,11 +26,16 @@ def process_response(response: Any, return_type: Optional[Type[T]]) -> T:
     if return_type in (int, float, bool):
         return cast(T, _convert_to_primitive_type(content, return_type))
 
-    if return_type is dict or getattr(return_type, "__origin__", None) is dict:
-        return cast(T, _convert_to_dict(content, func_name))
+    # 检查是否为 List 类型
+    origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
+    if origin is list or origin is List:
+        return cast(T, _convert_xml_to_list(content, return_type, func_name))
 
-    if return_type and hasattr(return_type, "model_validate_json"):
-        return cast(T, _convert_to_pydantic_model(content, return_type, func_name))
+    if return_type is dict or getattr(return_type, "__origin__", None) is dict:
+        return cast(T, _convert_from_xml(content, func_name))
+
+    if return_type and hasattr(return_type, "model_validate"):
+        return cast(T, _convert_xml_to_pydantic(content, return_type, func_name))
 
     try:
         return cast(T, content)
@@ -115,48 +119,115 @@ def _convert_to_primitive_type(content: str, return_type: Type) -> Any:
     raise ValueError(f"不支持的基本类型转换: {return_type}")
 
 
-def _convert_to_dict(content: str, func_name: str) -> Dict[str, Any]:
-    """Parse textual content into a JSON dictionary."""
+def _extract_xml_content(content: str) -> str:
+    """从内容中提取 XML（处理代码块包装）"""
+    # 处理 ```xml ... ``` 包装
+    xml_pattern = r"```xml\s*([\s\S]*?)\s*```"
+    match = re.search(xml_pattern, content)
+    if match:
+        return match.group(1).strip()
+
+    # 处理纯 XML
+    cleaned_content = content.strip()
+    if cleaned_content.startswith("<"):
+        # 移除可能的代码块标记
+        if cleaned_content.startswith("```") and cleaned_content.endswith("```"):
+            cleaned_content = cleaned_content[3:-3].strip()
+        return cleaned_content
+
+    # 如果没有找到 XML，返回原始内容（让解析器处理错误）
+    return cleaned_content
+
+
+def _convert_from_xml(content: str, func_name: str) -> Dict[str, Any]:
+    """从 XML 字符串解析为字典"""
+    from SimpleLLMFunc.base.type_resolve.xml_utils import xml_to_dict
 
     try:
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            json_pattern = r"```json\s*([\s\S]*?)\s*```"
-            match = re.search(json_pattern, content)
-            if match:
-                json_str = match.group(1)
-                return json.loads(json_str)
-
-            cleaned_content = content.strip()
-            if cleaned_content.startswith("```") and cleaned_content.endswith("```"):
-                cleaned_content = cleaned_content[3:-3].strip()
-            return json.loads(cleaned_content)
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"无法将 LLM 响应解析为有效的 JSON: {content}") from exc
-
-
-def _convert_to_pydantic_model(content: str, model_class: Type, func_name: str) -> Any:
-    """Parse textual content into a Pydantic model instance."""
-
-    try:
-        if content.strip():
-            try:
-                parsed_content = json.loads(content)
-                clean_json_str = json.dumps(parsed_content)
-                return model_class.model_validate_json(clean_json_str)
-            except json.JSONDecodeError:
-                json_pattern = r"```json\s*([\s\S]*?)\s*```"
-                match = re.search(json_pattern, content)
-                if match:
-                    json_str = match.group(1)
-                    parsed_json = json.loads(json_str)
-                    clean_json_str = json.dumps(parsed_json)
-                    return model_class.model_validate_json(clean_json_str)
-                return model_class.model_validate_json(content)
-        raise ValueError("收到空响应")
+        xml_content = _extract_xml_content(content)
+        return xml_to_dict(xml_content)
     except Exception as exc:
-        push_error(f"解析错误详情: {str(exc)}, 内容: {content}")
+        push_error(
+            f"LLM 函数 '{func_name}': XML 解析失败: {str(exc)}, 内容: {content[:200]}",
+            location=get_location(),
+        )
+        raise ValueError(f"无法将 LLM 响应解析为有效的 XML: {str(exc)}") from exc
+
+
+def _convert_xml_to_list(content: str, list_type: Any, func_name: str) -> List[Any]:
+    """从 XML 字符串解析为 List"""
+    from SimpleLLMFunc.base.type_resolve.xml_utils import xml_to_dict
+
+    try:
+        if not content.strip():
+            raise ValueError("收到空响应")
+
+        xml_content = _extract_xml_content(content)
+        data = xml_to_dict(xml_content)
+
+        # 处理根元素为 result 的情况：<result><item>...</item><item>...</item></result>
+        if isinstance(data, dict) and "item" in data and isinstance(data["item"], list):
+            item_list = data["item"]
+        elif isinstance(data, list):
+            # 如果直接是列表（例如 <result> 包含多个 <item> 时可能返回列表）
+            item_list = data
+        elif isinstance(data, dict) and len(data) == 1:
+            # 如果只有一个键，尝试使用其值
+            item_list = list(data.values())[0]
+            if not isinstance(item_list, list):
+                item_list = [item_list]
+        else:
+            raise ValueError(f"无法从 XML 中提取列表数据: {data}")
+
+        # 获取列表元素的类型
+        args = get_args(list_type)
+        item_type = args[0] if args else Any
+
+        # 转换列表中的每个元素
+        converted_list = []
+        for item in item_list:
+            if item_type is str:
+                converted_list.append(str(item))
+            elif item_type is int:
+                converted_list.append(int(item) if isinstance(item, (int, str)) else int(str(item)))
+            elif item_type is float:
+                converted_list.append(float(item) if isinstance(item, (int, float, str)) else float(str(item)))
+            elif item_type is bool:
+                if isinstance(item, bool):
+                    converted_list.append(item)
+                elif isinstance(item, str):
+                    converted_list.append(item.lower() in ("true", "yes", "1"))
+                else:
+                    converted_list.append(bool(item))
+            else:
+                # 其他类型直接使用
+                converted_list.append(item)
+
+        return converted_list
+    except Exception as exc:
+        push_error(f"解析错误详情: {str(exc)}, 内容: {content[:200]}")
+        raise ValueError(f"无法解析为 List: {str(exc)}") from exc
+
+
+def _convert_xml_to_pydantic(content: str, model_class: Type, func_name: str) -> Any:
+    """从 XML 字符串解析为 Pydantic 模型"""
+    from SimpleLLMFunc.base.type_resolve.xml_utils import xml_to_dict, dict_to_pydantic
+
+    try:
+        if not content.strip():
+            raise ValueError("收到空响应")
+
+        xml_content = _extract_xml_content(content)
+        data_dict = xml_to_dict(xml_content)
+
+        # 处理根元素：如果根元素是模型类名，提取其内容
+        model_name = model_class.__name__
+        if isinstance(data_dict, dict) and len(data_dict) == 1 and model_name in data_dict:
+            data_dict = data_dict[model_name]
+
+        return dict_to_pydantic(data_dict, model_class)
+    except Exception as exc:
+        push_error(f"解析错误详情: {str(exc)}, 内容: {content[:200]}")
         raise ValueError(f"无法解析为 Pydantic 模型: {str(exc)}") from exc
 
 

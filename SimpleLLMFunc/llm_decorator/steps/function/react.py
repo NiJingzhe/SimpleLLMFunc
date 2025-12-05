@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union, cast
 
 from SimpleLLMFunc.base.ReAct import execute_llm
 from SimpleLLMFunc.base.post_process import extract_content_from_response
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
+from SimpleLLMFunc.type.message import MessageList
+
+
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.utils import get_last_item_of_async_generator
 from SimpleLLMFunc.llm_decorator.utils import process_tools
@@ -25,7 +28,7 @@ def prepare_tools_for_execution(
 
 async def execute_llm_call(
     llm_interface: LLM_Interface,
-    messages: List[Dict[str, Any]],
+    messages: MessageList,
     tools: Optional[List[Dict[str, Any]]],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
     max_tool_calls: int,
@@ -33,15 +36,17 @@ async def execute_llm_call(
     **llm_kwargs: Any,
 ) -> AsyncGenerator[Any, None]:
     """执行 LLM 调用"""
-    return execute_llm(
+    # 类型转换：MessageList 兼容 List[Dict[str, Any]]
+    async for response in execute_llm(
         llm_interface=llm_interface,
-        messages=messages,
+        messages=cast(List[Dict[str, Any]], messages),
         tools=tools,
         tool_map=tool_map,
         max_tool_calls=max_tool_calls,
         stream=stream,
         **llm_kwargs,
-    )
+    ):
+        yield response
 
 
 async def get_final_response(
@@ -63,7 +68,7 @@ def check_response_content_empty(response: Any, func_name: str) -> bool:
 
 async def retry_llm_call(
     llm_interface: LLM_Interface,
-    messages: List[Dict[str, Any]],
+    messages: MessageList,
     tools: Optional[List[Dict[str, Any]]],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
     max_tool_calls: int,
@@ -116,7 +121,7 @@ async def retry_llm_call(
 
 async def execute_react_loop(
     llm_interface: LLM_Interface,
-    messages: List[Dict[str, Any]],
+    messages: MessageList,
     toolkit: Optional[List[Union[Tool, Callable[..., Awaitable[Any]]]]],
     max_tool_calls: int,
     llm_kwargs: Dict[str, Any],

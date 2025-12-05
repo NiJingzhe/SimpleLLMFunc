@@ -44,6 +44,38 @@ class TestBuildReturnTypeDescription:
         result = build_return_type_description(None)
         assert "未知" in result or "unknown" in result.lower()
 
+    def test_build_pydantic_model_type(self, sample_pydantic_model) -> None:
+        """Test building description for Pydantic model type."""
+        result = build_return_type_description(sample_pydantic_model)
+        assert "XML Schema" in result or "xml" in result.lower()
+        assert "Example XML" in result or "example" in result.lower()
+        assert "SampleModel" in result
+
+    def test_build_list_type(self) -> None:
+        """Test building description for List type."""
+        from typing import List
+        result = build_return_type_description(List[str])
+        assert "XML Schema" in result or "xml" in result.lower()
+        assert "Example XML" in result or "example" in result.lower()
+
+    def test_build_dict_type(self) -> None:
+        """Test building description for Dict type."""
+        from typing import Dict
+        result = build_return_type_description(Dict[str, int])
+        assert "XML Schema" in result or "xml" in result.lower()
+        assert "Example XML" in result or "example" in result.lower()
+
+    def test_build_primitive_types(self) -> None:
+        """Test building description for primitive types."""
+        result_int = build_return_type_description(int)
+        assert "int" in result_int.lower() or "integer" in result_int.lower()
+
+        result_float = build_return_type_description(float)
+        assert "float" in result_float.lower() or "number" in result_float.lower()
+
+        result_bool = build_return_type_description(bool)
+        assert "bool" in result_bool.lower() or "boolean" in result_bool.lower()
+
 
 class TestBuildTextMessages:
     """Tests for build_text_messages function."""

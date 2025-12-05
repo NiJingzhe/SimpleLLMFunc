@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast, get_origin
 
 from SimpleLLMFunc.base.messages import build_multimodal_content
 from SimpleLLMFunc.base.type_resolve.multimodal import has_multimodal_content
 from SimpleLLMFunc.base.type_resolve.description import (
-    build_type_description_json,
-    generate_example_object,
+    build_type_description_xml,
+    generate_example_xml,
     get_detailed_type_description,
 )
 from SimpleLLMFunc.logger import push_debug
@@ -18,9 +18,30 @@ from SimpleLLMFunc.llm_decorator.steps.common.prompt import (
     process_docstring_template,
 )
 from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+from SimpleLLMFunc.type.message import MessageList, MessageParam
 
 # Default prompt templates
-DEFAULT_SYSTEM_PROMPT_TEMPLATE = """
+# 简单返回类型（str/int/float/bool/None）使用纯文本约束
+DEFAULT_SYSTEM_PROMPT_TEMPLATE_PLAIN = """
+Your task is to provide results that meet the requirements based on the **function description**
+and the user's request.
+
+- Function Description:
+    {function_description}
+
+- You will receive the following parameters:
+    {parameters_description}
+
+- The type of content you need to return:
+    {return_type_description}
+
+Execution Requirements:
+1. Return the result in plain text (no XML/JSON/Markdown wrappers)
+2. Keep formatting minimal unless explicitly requested
+"""
+
+# 复杂返回类型（Pydantic/List/Dict/Union）继续使用 XML 约束
+DEFAULT_SYSTEM_PROMPT_TEMPLATE_XML = """
 Your task is to provide results that meet the requirements based on the **function description** 
 and the user's request.
 
@@ -35,7 +56,8 @@ and the user's request.
 
 Execution Requirements:
 1. Use available tools to assist in completing the task if needed
-2. Do not wrap results in markdown format or code blocks; directly output the expected content or JSON representation
+2. Return the result as well-formed XML without any markdown formatting or code blocks
+3. Ensure all XML tags are properly closed
 """
 
 DEFAULT_USER_PROMPT_TEMPLATE = """
@@ -44,6 +66,24 @@ The parameters provided are:
 
 Return the result directly without any explanation or formatting.
 """
+
+
+def _is_complex_return_type(return_type: Any) -> bool:
+    """判断返回类型是否为复杂类型，用于选择 prompt 约束"""
+    from typing import Union as TypingUnion
+    from pydantic import BaseModel
+
+    if return_type is None:
+        return False
+
+    if isinstance(return_type, type) and issubclass(return_type, BaseModel):
+        return True
+
+    origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
+    if origin in (list, List, dict, Dict, TypingUnion):
+        return True
+
+    return False
 
 
 def build_parameter_type_descriptions(
@@ -65,9 +105,9 @@ def build_return_type_description(return_type: Any) -> str:
     """构建返回类型描述
     
     对于简单类型：使用文本描述
-    对于复杂类型（BaseModel, List, Dict, Union）：使用 JSON 格式 + 示例
+    对于复杂类型（BaseModel, List, Dict, Union）：使用 XML Schema 格式 + 示例
     """
-    from typing import get_origin, Union as TypingUnion
+    from typing import Union as TypingUnion
     from pydantic import BaseModel
     
     if return_type is None:
@@ -87,24 +127,23 @@ def build_return_type_description(return_type: Any) -> str:
             is_complex = True
     
     if is_complex:
-        # 使用 JSON 格式描述 + 示例
+        # 使用 XML Schema 格式描述 + 示例
         try:
-            type_json_obj = build_type_description_json(return_type)
-            example_obj = generate_example_object(return_type)
-            import json as _json
+            type_xml_schema = build_type_description_xml(return_type)
+            example_xml = generate_example_xml(return_type)
             
             return (
-                "Type Description (JSON):\n"
-                + _json.dumps(type_json_obj, ensure_ascii=False, indent=2)
-                + "\n\nExample JSON:\n"
-                + _json.dumps(example_obj, ensure_ascii=False, indent=2)
+                "XML Schema:\n"
+                + type_xml_schema
+                + "\n\nExample XML:\n"
+                + example_xml
             )
         except Exception as e:
             from SimpleLLMFunc.logger import push_warning
             from SimpleLLMFunc.logger.logger import get_location
             
             push_warning(
-                f"Failed to generate structured JSON type description, falling back to text format: {str(e)}",
+                f"Failed to generate structured XML type description, falling back to text format: {str(e)}",
                 location=get_location(),
             )
             return get_detailed_type_description(return_type)
@@ -120,7 +159,7 @@ def build_text_messages(
     arguments: Dict[str, Any],
     system_template: str,
     user_template: str,
-) -> List[Dict[str, str]]:
+) -> MessageList:
     """构建文本消息列表"""
     # 构建 system prompt
     system_prompt = system_template.format(
@@ -136,7 +175,7 @@ def build_text_messages(
     ]
     user_prompt = user_template.format(parameters="\n".join(user_param_values))
 
-    messages = [
+    messages: MessageList = [
         {"role": "system", "content": system_prompt.strip()},
         {"role": "user", "content": user_prompt.strip()},
     ]
@@ -151,14 +190,15 @@ def build_multimodal_messages(
     system_prompt: str,
     arguments: Dict[str, Any],
     type_hints: Dict[str, Any],
-) -> List[Dict[str, Any]]:
+) -> MessageList:
     """构建多模态消息列表"""
     # 构建多模态用户消息内容
     user_content = build_multimodal_content(arguments, type_hints)
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_content},
+    # 使用类型转换确保符合 OpenAI SDK 的消息类型
+    messages: MessageList = [
+        cast(MessageParam, {"role": "system", "content": system_prompt}),
+        cast(MessageParam, {"role": "user", "content": user_content}),
     ]
 
     push_debug(f"System prompt: {system_prompt}", location=get_location())
@@ -175,7 +215,7 @@ def build_initial_prompts(
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
     template_params: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
+) -> MessageList:
     """构建初始提示的完整流程"""
     # 1. 处理 docstring 模板参数
     processed_docstring = process_docstring_template(
@@ -199,7 +239,14 @@ def build_initial_prompts(
     )
 
     # 6. 选择模板
-    system_template = system_prompt_template or DEFAULT_SYSTEM_PROMPT_TEMPLATE
+    if system_prompt_template:
+        system_template = system_prompt_template
+    else:
+        system_template = (
+            DEFAULT_SYSTEM_PROMPT_TEMPLATE_XML
+            if _is_complex_return_type(signature.return_type)
+            else DEFAULT_SYSTEM_PROMPT_TEMPLATE_PLAIN
+        )
     user_template = user_prompt_template or DEFAULT_USER_PROMPT_TEMPLATE
 
     # 7. 构建消息列表
@@ -213,7 +260,11 @@ def build_initial_prompts(
             system_template,
             user_template,
         )
-        system_prompt = text_messages[0]["content"]
+        # 提取 system prompt 内容
+        system_prompt_content = text_messages[0].get("content", "")
+        if not isinstance(system_prompt_content, str):
+            system_prompt_content = str(system_prompt_content) if system_prompt_content else ""
+        system_prompt = system_prompt_content
 
         # 构建多模态消息
         messages = build_multimodal_messages(

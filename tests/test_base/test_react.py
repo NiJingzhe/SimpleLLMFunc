@@ -152,10 +152,10 @@ class TestExecuteLLM:
         """Test executing streaming LLM call without tools."""
         mock_get_context.return_value = "test_func"
         
-        async def stream_generator():
+        async def stream_generator(**kwargs):
             yield mock_chat_completion_chunk
         
-        mock_llm_interface.chat_stream = AsyncMock(return_value=stream_generator())
+        mock_llm_interface.chat_stream = stream_generator
         mock_observation = MagicMock()
         mock_observation.__enter__ = MagicMock(return_value=mock_observation)
         mock_observation.__exit__ = MagicMock(return_value=None)

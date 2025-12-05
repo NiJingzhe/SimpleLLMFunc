@@ -25,6 +25,7 @@ types-polib = "^1.2.0.20250401"
 types-tqdm = "^4.67.0.20250809"
 sphinx-intl = "^2.3.2"
 myst-parser = "^4.0.1"
+pytest-asyncio = "^1.3.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

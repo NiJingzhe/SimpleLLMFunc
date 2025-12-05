@@ -71,17 +71,22 @@ class TestExtractToolCallsFromStreamResponse:
 
     def test_extract_from_stream_chunk(self) -> None:
         """Test extracting tool calls from stream chunk."""
-        from openai.types.chat.chat_completion_chunk import Choice as ChunkChoice
-        from openai.types.chat.chat_completion_chunk import ChoiceDelta
-        from openai.types.chat.chat_completion_message_tool_call import (
-            ChatCompletionMessageToolCall as StreamToolCall,
+        from openai.types.chat.chat_completion_chunk import (
+            ChatCompletionChunk,
+            Choice as ChunkChoice,
+            ChoiceDelta,
+            ChoiceDeltaToolCall,
+            ChoiceDeltaToolCallFunction,
         )
 
-        tool_call = StreamToolCall(
-            id="call_123",
-            function=Function(name="test_tool", arguments='{"arg": "value"}'),
-            type="function",
+        tool_call = ChoiceDeltaToolCall(
             index=0,
+            id="call_123",
+            type="function",
+            function=ChoiceDeltaToolCallFunction(
+                name="test_tool",
+                arguments='{"arg": "value"}'
+            ),
         )
         delta = ChoiceDelta(
             content=None,

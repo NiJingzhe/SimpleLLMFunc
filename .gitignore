@@ -156,6 +156,7 @@ logs/
 # Add any project-specific ignores below
 **/log_indices/
 **/*.log
+examples/testlog/
 
 sandbox/
 examples/provider.json
@@ -164,3 +165,9 @@ examples/**/provider.json
 
 
 .DS_Store
+
+testlogs/
+coverage*
+htmlcov/
+.claude/
+draft/
