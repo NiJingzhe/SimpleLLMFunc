@@ -170,8 +170,22 @@ async def _execute_single_tool_call(
 ) -> tuple[Dict[str, Any], List[Dict[str, Any]], bool]:
     """Execute a single tool call and return its results.
 
+    处理两类工具调用结果：
+    1. 普通工具调用（返回 JSON 可序列化的文本/对象）
+       - 返回 is_multimodal=False
+       - 消息列表包含标准的 tool role message
+       - 这些结果会直接添加到消息历史中
+    
+    2. 多模态工具调用（返回图像、文件等）
+       - 返回 is_multimodal=True
+       - 消息列表包含 user role message，带有多模态内容（图像、文件等）
+       - 这些结果不能通过标准的 OpenAI tool_call 机制传输
+       - 因此需要特殊处理：移除原始 assistant message 中的 tool_call，
+         用 assistant + user 消息对替代
+
     Returns:
         Tuple of (tool_call_dict, list_of_messages_to_append, is_multimodal)
+        其中 is_multimodal 指示是否为多模态结果
     """
 
     tool_call_id = tool_call.get("id")
@@ -416,6 +430,29 @@ async def process_tool_calls(
     
     对于多模态工具调用，会先插入一个 assistant message 说明将使用该工具，
     然后再插入工具结果的 user message。
+
+    IMPORTANT: 此函数会修改 `messages` 参数中的原始字典对象（特别是 assistant message），
+    这是**必需的行为**，而非 bug，原因如下：
+    
+    1. 多模态工具调用处理：
+       - OpenAI API 的 tool_call 机制无法传输图像等多模态内容
+       - 对于多模态工具调用（返回图片、文件等），我们需要：
+         a) 从原始 assistant message 中移除该工具的 tool_call 定义
+         b) 用自定义的 assistant + user 消息对替代（用户在 user message 中提供多模态内容）
+       - 这就是为什么需要修改原始 messages 中的 assistant message 对象
+    
+    2. 为什么不用 deep copy：
+       - deep copy 会增加内存开销
+       - 业务逻辑本身需要改变消息结构
+       - 调用者最终收到的 messages 就包含了这些必要的修改
+    
+    Args:
+        tool_calls: 要执行的工具调用列表
+        messages: 消息历史列表。**会被就地修改**（仅修改 assistant message，不改变列表本身）
+        tool_map: 工具名称到函数的映射字典
+
+    Returns:
+        修改后的完整消息列表，包含原始消息、工具调用结果和多模态替代消息
     """
 
     if not tool_calls:
@@ -439,14 +476,22 @@ async def process_tool_calls(
         else:
             normal_results.append(messages_to_append)
 
-    # 从原始messages中移除多模态工具调用的tool_calls
+    # =========================================================================
+    # 阶段 1: 从原始 messages 中移除多模态工具调用的 tool_calls
+    # =========================================================================
+    # 这一步是**必需的**，原因如下：
+    # 1. 多模态工具调用无法通过标准的 OpenAI tool_call 机制传输（OpenAI API 不支持）
+    # 2. 因此我们需要从消息历史中移除这些 tool_calls
+    # 3. 后续会用 assistant + user 消息对替代（user message 中包含多模态内容）
+    # 4. 修改原始 messages 中的字典对象是合理的，因为这些改动必须被反映到最终结果中
+    # =========================================================================
     if multimodal_tool_call_ids:
         # 找到最后一个包含tool_calls的assistant message
         for i in range(len(messages) - 1, -1, -1):
             msg = messages[i]
             if msg.get("role") == "assistant" and "tool_calls" in msg:
                 original_tool_calls = msg["tool_calls"]
-                # 过滤掉多模态工具调用
+                # 过滤掉多模态工具调用，保留普通工具调用
                 filtered_tool_calls = [
                     tc for tc in original_tool_calls
                     if tc.get("id") not in multimodal_tool_call_ids
@@ -454,22 +499,34 @@ async def process_tool_calls(
                 
                 if not filtered_tool_calls:
                     # 如果所有tool_calls都是多模态的，移除tool_calls字段
+                    # 并用空字符串替代content（不能是None，因为那是tool_call专用格式）
                     del msg["tool_calls"]
-                    # 如果content为None，设置为空字符串
                     if msg.get("content") is None:
                         msg["content"] = ""
                 else:
-                    # 否则更新为过滤后的tool_calls
+                    # 否则更新为过滤后的tool_calls（只保留普通工具调用）
                     msg["tool_calls"] = filtered_tool_calls
                 break
 
-    # Append普通工具调用结果
-    # 创建messages的副本以避免修改原始列表
+    # =========================================================================
+    # 阶段 2: 构建最终消息列表
+    # =========================================================================
+    # 从修改后的 messages 开始（已移除多模态工具调用），然后追加结果
+    # 注：这里的 .copy() 只是为了创建新列表对象，不是 defensive copy
+    #    因为已经在上面修改了原始 messages 中的字典内容（assistant message）
+    #    这些修改是必需的，不需要"防守"
     current_messages = messages.copy()
     for msgs in normal_results:
         current_messages.extend(msgs)
     
-    # 处理多模态工具调用：先插入assistant message，再插入user message
+    # =========================================================================
+    # 阶段 3: 处理多模态工具调用结果
+    # =========================================================================
+    # 多模态工具调用（返回图像、文件等）需要特殊处理：
+    # 1. 创建一个 assistant message 说明将使用该工具
+    # 2. 然后添加用户提供的 user message（包含多模态内容）
+    # 这样做是因为 OpenAI API 的标准 tool_call 机制无法处理多模态结果
+    # 所以我们用消息对的方式来模拟工具调用的交互过程
     for tool_call_dict, user_messages in multimodal_results:
         tool_name = tool_call_dict.get("function", {}).get("name", "unknown")
         arguments = tool_call_dict.get("function", {}).get("arguments", "{}")
