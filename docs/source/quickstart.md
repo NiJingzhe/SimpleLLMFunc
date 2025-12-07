@@ -4,7 +4,7 @@
 
 ## 环境要求
 
-- Python 3.10 或更高版本
+- Python 3.11 或更高版本
 - 支持的操作系统：Windows、macOS、Linux
 
 ## 第一步：环境准备

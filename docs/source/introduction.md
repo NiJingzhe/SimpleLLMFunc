@@ -231,6 +231,8 @@ asyncio.run(main())
 - **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
 - **异步支持**: `@llm_function` 与 `@llm_chat` 原生支持异步调用，无需额外别名。
 - **多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。
+- **步骤化装饰器流水线**：`llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct 和响应解析拆分为可组合的步骤，便于调试与扩展。
+- **基础引擎模块化**：`base/messages`、`base/tool_call`、`base/type_resolve` 独立演进，类型解析和多模态处理更稳健。
 - **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。
 - **API 密钥管理**: 智能负载均衡多个 API 密钥。
 - **流量控制**: 集成令牌桶算法，实现智能流量平滑。
@@ -243,65 +245,49 @@ SimpleLLMFunc 的目录结构如下：
 
 ```
 SimpleLLMFunc/
-├── __init__.py                     # 包初始化文件
-├── config.py                       # 全局配置
-├── utils.py                        # 通用工具函数
-├── interface/                      # LLM 接口层
-│   ├── __init__.py                 # 包初始化文件
-│   ├── llm_interface.py            # LLM 接口抽象基类
-│   ├── key_pool.py                 # API 密钥负载均衡管理
-│   ├── openai_compatible.py        # OpenAI 兼容实现
-│   └── token_bucket.py             # 令牌桶流量控制
-├── llm_decorator/                  # LLM 装饰器模块
-│   ├── __init__.py                 # 包初始化文件
-│   ├── llm_function_decorator.py   # @llm_function 装饰器实现
-│   ├── llm_chat_decorator.py       # @llm_chat 装饰器实现
-│   ├── multimodal_types.py         # 多模态类型（Text, ImgUrl, ImgPath）
-│   └── utils/                      # 装饰器工具函数包
-│       ├── __init__.py
-│       └── tools.py                # 工具处理、序列化等
-├── base/                           # 核心执行引擎
-│   ├── __init__.py
-│   ├── ReAct.py                    # ReAct 引擎与工具调用协调
-│   ├── messages.py                 # 消息构建与多模态处理
-│   ├── post_process.py             # 响应解析与类型转换
-│   ├── type_resolve.py             # 类型解析
-│   └── tool_call.py                # 工具调用执行与序列化
-├── logger/                         # 日志与可观测性系统
-│   ├── __init__.py
-│   ├── logger.py                   # 日志 API 导出
-│   ├── core.py                     # 日志系统核心实现
-│   ├── logger_config.py            # 日志配置管理
-│   ├── context_manager.py          # 上下文与 trace_id 管理
-│   ├── formatters.py               # 日志格式化器
-│   ├── types.py                    # 日志类型定义
-│   └── utils.py                    # 日志工具函数
-├── tool/                           # 工具系统
-│   ├── __init__.py
-│   └── tool.py                     # @tool 装饰器与 Tool 基类
-├── observability/                  # 可观测性集成
-│   ├── __init__.py
-│   ├── langfuse_client.py          # Langfuse 客户端
-│   └── langfuse_config.py          # Langfuse 配置管理
-└── type/                           # 多模态类型导出
-    └── __init__.py                 # Text, ImgUrl, ImgPath 等类型
+├── __init__.py                  # 包初始化
+├── config.py                    # 全局配置
+├── utils.py                     # 通用工具函数
+├── base/                        # 核心执行引擎
+│   ├── messages/                # 消息构建与多模态内容生成
+│   ├── tool_call/               # 工具调用参数转换、执行与校验
+│   ├── type_resolve/            # 类型描述、示例与多模态类型解析
+│   ├── post_process.py          # 响应解析与类型转换
+│   └── ReAct.py                 # ReAct 协调器
+├── interface/                   # LLM 接口层
+│   ├── llm_interface.py         # 抽象基类
+│   ├── openai_compatible.py     # OpenAI 兼容实现
+│   ├── key_pool.py              # API 密钥负载均衡
+│   └── token_bucket.py          # 令牌桶流量控制
+├── llm_decorator/               # 装饰器与步骤化流水线
+│   ├── llm_function_decorator.py
+│   ├── llm_chat_decorator.py
+│   ├── multimodal_types.py
+│   ├── steps/                   # Prompt/签名/执行/响应拆分
+│   │   ├── common/
+│   │   ├── function/
+│   │   └── chat/
+│   └── utils/tools.py
+├── tool/                        # 工具定义与序列化
+│   └── tool.py
+├── type/                        # 类型与多模态辅助
+│   ├── decorator.py             # 装饰器相关的类型定义
+│   ├── message.py               # 消息片段类型
+│   └── multimodal.py            # Text / ImgUrl / ImgPath 等
+├── logger/                      # 日志与可观测性
+├── observability/               # Langfuse 等集成
+└── py.typed
 ```
 
 ### 模块介绍
 
 #### LLM 接口模块
 
-`interface` 模块提供了与各种 LLM 服务通信的标准接口。它支持任何符合 OpenAI API 格式的服务，包括 OpenAI 自身、Azure OpenAI、各种开源模型的兼容 API 等。新增的 `token_bucket.py` 提供了流量控制功能，防止API调用频率过高。
+`interface` 模块提供了与各种 LLM 服务通信的标准接口，支持任何符合 OpenAI API 格式的服务，包括 OpenAI/Deepseek/Claude 及自建兼容 API。`token_bucket.py` 负责流量控制，`key_pool.py` 负责密钥负载均衡。
 
 #### LLM 装饰器模块
 
-`llm_decorator` 模块是框架的核心，提供了四种主要装饰器：
-
-- `@llm_function`: 用于创建无状态的 LLM 功能，适合单次查询和转换任务
-- `@llm_chat`: 用于创建对话式 LLM 功能，支持历史记录管理和多轮交互
-  
-
-该模块还包含 `multimodal_types.py`，定义了 `Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图像的混合输入。
+`llm_decorator` 模块是框架的核心，提供 `@llm_function` 与 `@llm_chat`，并在 `steps/` 中将 Prompt 构建、签名解析、ReAct 执行、响应解析等环节拆分为可组合步骤。`multimodal_types.py` 定义了 `Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图片混合输入。
 
 #### 类型定义模块
 
@@ -313,7 +299,7 @@ SimpleLLMFunc/
 
 #### 工具系统
 
-`tool` 模块允许 LLM 访问外部工具和服务，增强其解决问题的能力。工具可以是任何 Python 函数，通过 `@tool` 装饰器进行标记。该模块现在支持多模态工具返回，工具可以返回图片、文本或其组合。
+`tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。
 
 ## 适用人群
 

@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 19:32+0800\n"
+"POT-Creation-Date: 2025-11-10 02:53+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -367,10 +367,4 @@ msgstr ""
 #: ../../source/langfuse_integration.md:297
 msgid "[Langfuse 官方文档](https://langfuse.com/docs)"
 msgstr ""
-
-#~ msgid "[SimpleLLMFunc 文档](../README.md)"
-#~ msgstr ""
-
-#~ msgid "[API 参考](./api_reference.md)"
-#~ msgstr ""
 

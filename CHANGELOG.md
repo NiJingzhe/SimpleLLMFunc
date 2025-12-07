@@ -1,5 +1,33 @@
 # Change log for SimpleLLMFunc
 
+## 0.4.0 Release Notes
+
+### Major Refactoring
+
+1. **Modular Architecture Restructuring**: Completely refactored the base module, splitting messages, tool_call, and type_resolve into dedicated sub-modules for better code organization and maintainability.
+
+2. **Decorator Logic Step-based Implementation**: Refactored decorator logic into a steps-based architecture within the `llm_decorator` module, improving code clarity and extensibility.
+
+3. **Type System Enhancement**: Introduced new type support modules including decorator types and multimodal type support, expanding framework capabilities.
+
+4. **Type Resolution System Refactoring**: Comprehensive refactoring of the type resolution system to enhance functionality support and improve type inference accuracy.
+
+### Features
+
+1. **Enhanced Tool Call Execution**: Improved tool call execution mechanism with extended support for multimodal interactions, enabling richer LLM interactions.
+
+2. **Multimodal Type Support**: Added comprehensive multimodal type support throughout the framework for better handling of diverse content types.
+
+### Bug Fixes
+
+1. Fixed system prompt nesting issues when building multi-model content.
+
+### Testing
+
+Added extensive test coverage for refactored modules to ensure stability and reliability.
+
+---
+
 ## 0.3.2.beta2 Release Notes
 
 1. Remove dependence: `nest-asyncio`

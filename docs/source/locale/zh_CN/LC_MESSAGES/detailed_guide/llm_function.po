@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 19:36+0800\n"
+"POT-Creation-Date: 2025-12-08 01:12+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -70,325 +70,338 @@ msgid "**错误处理**: 内置重试机制和详细的日志记录"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:18
-msgid "重要说明"
+msgid "0.4.0 版本要点"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:19
+msgid "**步骤化执行链**：`llm_decorator/steps` 拆分了 Prompt 构建、签名解析、ReAct 执行和响应解析，便于扩展与调试。"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:20
+msgid "**类型解析增强**：`base/type_resolve` 新增描述、示例和多模态解析子模块，对嵌套类型、多模态联合类型的推断更稳健。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:21
 msgid ""
-"⚠️ `llm_function` 可以装饰 `async def` 定义的异步函数，也可以装饰 `def` "
-"定义的同步函数，但是返回的结果一定是一个 `async` 函数。如果要使用这个函数，要使用`await`或者`asyncio.run()`来执行。"
+"**多模态工具链优化**：`base/tool_call/execution` "
+"改进工具调用入参与返回的多模态处理，确保图片/文本组合的传递和校验更可靠。"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:23
-msgid "装饰器用法"
+msgid "重要说明"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:25
+msgid ""
+"⚠️ `llm_function` 只能装饰 `async def` 定义的异步函数，返回的也是可 `await` "
+"的协程；请在异步上下文中调用，或在脚本入口使用 `asyncio.run()`。"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:28
+msgid "装饰器用法"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:30
 msgid "基本语法"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:43
+#: ../../source/detailed_guide/llm_function.md:48
 msgid "参数说明"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:45
+#: ../../source/detailed_guide/llm_function.md:50
 msgid "**llm_interface** (必需): LLM 接口实例，用于与大语言模型通信"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:46
+#: ../../source/detailed_guide/llm_function.md:51
 msgid "**toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:47
+#: ../../source/detailed_guide/llm_function.md:52
 msgid "**max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:48
+#: ../../source/detailed_guide/llm_function.md:53
 msgid "**system_prompt_template** (可选): 自定义系统提示模板"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:49
+#: ../../source/detailed_guide/llm_function.md:54
 msgid "**user_prompt_template** (可选): 自定义用户提示模板"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:50
+#: ../../source/detailed_guide/llm_function.md:55
 msgid "****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:52
+#: ../../source/detailed_guide/llm_function.md:57
 msgid "自定义提示模板"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:54
-msgid "系统提示模板占位符"
-msgstr ""
-
-#: ../../source/detailed_guide/llm_function.md:55
-#, python-brace-format
-msgid "`{function_description}`: 函数文档字符串内容"
-msgstr ""
-
-#: ../../source/detailed_guide/llm_function.md:56
-#, python-brace-format
-msgid "`{parameters_description}`: 函数参数及其类型的描述"
-msgstr ""
-
-#: ../../source/detailed_guide/llm_function.md:57
-#, python-brace-format
-msgid "`{return_type_description}`: 返回值类型的描述"
-msgstr ""
-
 #: ../../source/detailed_guide/llm_function.md:59
-msgid "用户提示模板占位符"
+msgid "系统提示模板占位符"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:60
 #, python-brace-format
-msgid "`{parameters}`: 格式化后的参数名称和值"
+msgid "`{function_description}`: 函数文档字符串内容"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:61
+#, python-brace-format
+msgid "`{parameters_description}`: 函数参数及其类型的描述"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:62
-msgid "动态模板参数"
+#, python-brace-format
+msgid "`{return_type_description}`: 返回值类型的描述"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_function.md:64
+msgid "用户提示模板占位符"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:65
+#, python-brace-format
+msgid "`{parameters}`: 格式化后的参数名称和值"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:67
+msgid "动态模板参数"
+msgstr ""
+
+#: ../../source/detailed_guide/llm_function.md:69
 msgid ""
 "SimpleLLMFunc 支持在函数调用时通过 `_template_params` 参数动态设置 DocString "
 "模板参数。这个功能让同一个函数可以适应不同的使用场景，大大提高了代码的复用性。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:66
+#: ../../source/detailed_guide/llm_function.md:71
 msgid "使用方法"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:68
+#: ../../source/detailed_guide/llm_function.md:73
 msgid "**在 DocString 中使用占位符**："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:76
+#: ../../source/detailed_guide/llm_function.md:81
 msgid "**调用时传入模板参数**："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:108
+#: ../../source/detailed_guide/llm_function.md:113
 msgid "核心特性"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:110
+#: ../../source/detailed_guide/llm_function.md:115
 msgid "**动态角色切换**：同一个函数可以扮演不同的角色"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:111
+#: ../../source/detailed_guide/llm_function.md:116
 msgid "**灵活任务适配**：根据调用上下文调整任务类型"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:112
+#: ../../source/detailed_guide/llm_function.md:117
 msgid "**透明处理**：`_template_params` 不会传递给 LLM，仅用于模板处理"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:113
+#: ../../source/detailed_guide/llm_function.md:118
 msgid "**错误处理**：当模板参数不完整时，系统会发出警告并使用原始 DocString"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:115
+#: ../../source/detailed_guide/llm_function.md:120
 msgid "装饰器行为"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:117
+#: ../../source/detailed_guide/llm_function.md:122
 msgid "数据流程"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:119
+#: ../../source/detailed_guide/llm_function.md:124
 msgid "**函数调用捕获**: 当用户调用被装饰的函数时，装饰器捕获所有实际参数"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:120
+#: ../../source/detailed_guide/llm_function.md:125
 msgid "**类型信息提取**: 从函数签名中提取参数类型和返回类型信息"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:121
+#: ../../source/detailed_guide/llm_function.md:126
 msgid "**提示构建**:"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:122
+#: ../../source/detailed_guide/llm_function.md:127
 msgid "将函数文档字符串作为系统提示的核心"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:123
+#: ../../source/detailed_guide/llm_function.md:128
 msgid "将参数信息格式化为用户提示"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:124
+#: ../../source/detailed_guide/llm_function.md:129
 msgid "应用自定义模板（如果提供）"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:125
+#: ../../source/detailed_guide/llm_function.md:130
 msgid "**LLM 调用**: 发送构建好的提示给 LLM"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:126
+#: ../../source/detailed_guide/llm_function.md:131
 msgid "**工具处理**: 如果 LLM 需要使用工具，自动处理工具调用"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:127
+#: ../../source/detailed_guide/llm_function.md:132
 msgid "**响应转换**: 将 LLM 的文本响应转换为指定的返回类型"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:128
+#: ../../source/detailed_guide/llm_function.md:133
 msgid "**结果返回**: 返回转换后的结果给调用者"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:130
+#: ../../source/detailed_guide/llm_function.md:135
 msgid "内置功能"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:132
+#: ../../source/detailed_guide/llm_function.md:137
 msgid "类型转换支持"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:133
+#: ../../source/detailed_guide/llm_function.md:138
 msgid "基本类型：`str`, `int`, `float`, `bool`"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:134
+#: ../../source/detailed_guide/llm_function.md:139
 msgid "容器类型：`List`, `Dict`, `Tuple`"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:135
+#: ../../source/detailed_guide/llm_function.md:140
 msgid "Pydantic 模型"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:136
+#: ../../source/detailed_guide/llm_function.md:141
 msgid "自定义类型（通过 JSON 序列化）"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:138
+#: ../../source/detailed_guide/llm_function.md:143
 msgid "错误处理机制"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:139
+#: ../../source/detailed_guide/llm_function.md:144
 msgid "**空响应重试**: 当 LLM 返回空内容时自动重试"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:140
+#: ../../source/detailed_guide/llm_function.md:145
 msgid "**异常捕获**: 完整的异常处理和日志记录"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:141
+#: ../../source/detailed_guide/llm_function.md:146
 msgid "**类型转换错误**: 优雅处理类型转换失败的情况"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:143
+#: ../../source/detailed_guide/llm_function.md:148
 msgid "日志记录"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:144
+#: ../../source/detailed_guide/llm_function.md:149
 msgid "详细的执行日志，包括参数、提示内容和响应"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:145
+#: ../../source/detailed_guide/llm_function.md:150
 msgid "支持追踪 ID，便于调试复杂的调用链"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:146
+#: ../../source/detailed_guide/llm_function.md:151
 msgid "分级日志（调试、信息、警告、错误）"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:148
+#: ../../source/detailed_guide/llm_function.md:153
 msgid "示例"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:150
+#: ../../source/detailed_guide/llm_function.md:155
 msgid "示例 1: 基本文本处理"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:177
+#: ../../source/detailed_guide/llm_function.md:182
 msgid "示例 2: 结构化数据返回"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:205
+#: ../../source/detailed_guide/llm_function.md:210
 msgid "示例 3: 使用工具集"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:249
+#: ../../source/detailed_guide/llm_function.md:254
 msgid "示例 4: 自定义提示模板"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:306
+#: ../../source/detailed_guide/llm_function.md:311
 msgid "示例 5: Pydantic 模型返回"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:345
+#: ../../source/detailed_guide/llm_function.md:350
 msgid "示例 6: 动态模板参数"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:347
+#: ../../source/detailed_guide/llm_function.md:352
 msgid "这个示例展示了如何使用动态模板参数让同一个函数适应不同的使用场景："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:424
+#: ../../source/detailed_guide/llm_function.md:429
 msgid "这个示例展示了动态模板参数的强大功能："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:425
+#: ../../source/detailed_guide/llm_function.md:430
 msgid "**一个函数，多种场景**：`analyze_code` 可以用于性能分析、规范检查等不同目的"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:426
+#: ../../source/detailed_guide/llm_function.md:431
 msgid "**动态角色切换**：`process_text` 可以扮演编辑、翻译等不同角色"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:427
+#: ../../source/detailed_guide/llm_function.md:432
 msgid "**灵活任务适配**：根据调用时的参数动态调整任务类型和输出风格"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:431
+#: ../../source/detailed_guide/llm_function.md:436
 msgid ""
 "通过这些示例可以看出，`llm_function` 装饰器提供了一种简洁而强大的方式来利用 LLM 的能力，同时保持了 Python "
 "代码的类型安全性和可读性。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:433
+#: ../../source/detailed_guide/llm_function.md:438
 msgid "异步使用示例"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:435
+#: ../../source/detailed_guide/llm_function.md:440
 msgid "`llm_function` 自身即为原生异步实现。以下示例演示如何在不同场景下使用它："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:437
+#: ../../source/detailed_guide/llm_function.md:442
 msgid "示例 1: 基本异步用法"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:463
+#: ../../source/detailed_guide/llm_function.md:468
 msgid "示例 2: 并发处理多个请求"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:505
+#: ../../source/detailed_guide/llm_function.md:510
 msgid "示例 3: 与其他异步操作配合"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:547
+#: ../../source/detailed_guide/llm_function.md:552
 msgid "这些示例展示了如何使用 `llm_function` 在异步环境中构建高并发的 LLM 调用逻辑。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:549
+#: ../../source/detailed_guide/llm_function.md:554
 msgid "最佳实践"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:551
+#: ../../source/detailed_guide/llm_function.md:556
 msgid "1. 错误处理"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:562
+#: ../../source/detailed_guide/llm_function.md:567
 msgid "2. 超时控制"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_function.md:578
+#: ../../source/detailed_guide/llm_function.md:583
 msgid "通过这些示例可以看出，`llm_function` 装饰器在异步场景下同样能够提供高性能的 LLM 调用能力，并保持了良好的易用性与功能完整性。"
 msgstr ""
-
-#~ msgid ""
-#~ "⚠️ **重要说明**：`llm_function` 只能装饰 `async def`"
-#~ " 定义的异步函数，请确保在示例或实际代码中使用异步函数并在调用时 `await` 该函数。"
-#~ msgstr ""
 

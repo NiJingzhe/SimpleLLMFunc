@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"POT-Creation-Date: 2025-12-08 01:12+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -33,7 +33,7 @@ msgid "环境要求"
 msgstr ""
 
 #: ../../source/quickstart.md:7
-msgid "Python 3.10 或更高版本"
+msgid "Python 3.11 或更高版本"
 msgstr ""
 
 #: ../../source/quickstart.md:8
@@ -64,226 +64,226 @@ msgstr ""
 msgid "**方式一：从 PyPI 安装（推荐）**"
 msgstr ""
 
-#: ../../source/quickstart.md:36
+#: ../../source/quickstart.md:37
 msgid "**方式二：从源码安装**"
 msgstr ""
 
-#: ../../source/quickstart.md:49
+#: ../../source/quickstart.md:51
 msgid "第二步：配置 API 密钥"
 msgstr ""
 
-#: ../../source/quickstart.md:51
+#: ../../source/quickstart.md:53
 msgid "2.1 创建配置文件"
 msgstr ""
 
-#: ../../source/quickstart.md:53
+#: ../../source/quickstart.md:55
 msgid "在项目根目录创建 `.env` 文件："
 msgstr ""
 
-#: ../../source/quickstart.md:60
+#: ../../source/quickstart.md:62
 msgid "编辑 `.env` 文件，配置日志设置："
 msgstr ""
 
-#: ../../source/quickstart.md:66
+#: ../../source/quickstart.md:68
 msgid "2.2 创建模型配置文件"
 msgstr ""
 
-#: ../../source/quickstart.md:68
+#: ../../source/quickstart.md:70
 msgid "创建 `provider.json` 文件来配置您的 LLM 模型："
 msgstr ""
 
-#: ../../source/quickstart.md:94
+#: ../../source/quickstart.md:119
 msgid "**重要提示：**"
 msgstr ""
 
-#: ../../source/quickstart.md:95
+#: ../../source/quickstart.md:121
 msgid "请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥"
 msgstr ""
 
-#: ../../source/quickstart.md:96
+#: ../../source/quickstart.md:122
 msgid "请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥"
 msgstr ""
 
-#: ../../source/quickstart.md:97
+#: ../../source/quickstart.md:123
 msgid "支持多个 API 密钥，系统会自动进行负载均衡"
 msgstr ""
 
-#: ../../source/quickstart.md:98
+#: ../../source/quickstart.md:124
 msgid "可以配置多个不同的模型提供商"
 msgstr ""
 
-#: ../../source/quickstart.md:99
+#: ../../source/quickstart.md:125
 msgid "配置文件使用嵌套结构：`provider -> model_name -> 配置参数`"
 msgstr ""
 
-#: ../../source/quickstart.md:101
+#: ../../source/quickstart.md:127
 msgid "第三步：创建第一个 Demo"
 msgstr ""
 
-#: ../../source/quickstart.md:103
+#: ../../source/quickstart.md:129
 msgid "3.1 基础文本分析示例"
 msgstr ""
 
-#: ../../source/quickstart.md:105
+#: ../../source/quickstart.md:131
 msgid "创建一个名为 `first_demo.py` 的文件："
 msgstr ""
 
-#: ../../source/quickstart.md:107
+#: ../../source/quickstart.md:133
 msgid ""
 "⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 "
 "`async def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。"
 msgstr ""
 
-#: ../../source/quickstart.md:162
+#: ../../source/quickstart.md:188
 msgid "3.2 运行 Demo"
 msgstr ""
 
-#: ../../source/quickstart.md:168
+#: ../../source/quickstart.md:194
 msgid "您应该看到类似以下的输出："
 msgstr ""
 
-#: ../../source/quickstart.md:180
+#: ../../source/quickstart.md:206
 msgid "第四步：进阶示例"
 msgstr ""
 
-#: ../../source/quickstart.md:182
+#: ../../source/quickstart.md:208
 msgid "4.1 动态模板参数示例"
 msgstr ""
 
-#: ../../source/quickstart.md:184
+#: ../../source/quickstart.md:210
 msgid "这个示例展示了如何使用 `_template_params` 让同一个函数适应不同的使用场景："
 msgstr ""
 
-#: ../../source/quickstart.md:281
+#: ../../source/quickstart.md:307
 msgid "这个示例展示了动态模板参数的核心优势："
 msgstr ""
 
-#: ../../source/quickstart.md:282
+#: ../../source/quickstart.md:309
 msgid "**一个函数定义，多种使用场景**"
 msgstr ""
 
-#: ../../source/quickstart.md:283
+#: ../../source/quickstart.md:310
 msgid "**调用时动态指定角色和任务**"
 msgstr ""
 
-#: ../../source/quickstart.md:284
+#: ../../source/quickstart.md:311
 msgid "**代码复用性大大提高**"
 msgstr ""
 
-#: ../../source/quickstart.md:286
+#: ../../source/quickstart.md:313
 msgid "4.2 带工具调用的示例"
 msgstr ""
 
-#: ../../source/quickstart.md:288
+#: ../../source/quickstart.md:315
 msgid "创建一个更复杂的示例，展示工具调用功能："
 msgstr ""
 
-#: ../../source/quickstart.md:359
+#: ../../source/quickstart.md:386
 msgid "第五步：查看日志"
 msgstr ""
 
-#: ../../source/quickstart.md:361
+#: ../../source/quickstart.md:388
 msgid "SimpleLLMFunc 提供了强大的日志系统。运行 Demo 后，您可以："
 msgstr ""
 
-#: ../../source/quickstart.md:363
+#: ../../source/quickstart.md:390
 msgid "查看控制台输出的彩色日志"
 msgstr ""
 
-#: ../../source/quickstart.md:364
+#: ../../source/quickstart.md:391
 msgid "检查 `./agent.log` 文件中的详细日志"
 msgstr ""
 
-#: ../../source/quickstart.md:365
+#: ../../source/quickstart.md:392
 msgid "查看 `log_indices/trace_index.json` 中的结构化日志索引"
 msgstr ""
 
-#: ../../source/quickstart.md:367
+#: ../../source/quickstart.md:394
 msgid "每个函数调用都会生成唯一的 `trace_id`，方便追踪和调试。"
 msgstr ""
 
-#: ../../source/quickstart.md:369
+#: ../../source/quickstart.md:396
 msgid "常见问题"
 msgstr ""
 
-#: ../../source/quickstart.md:371
+#: ../../source/quickstart.md:398
 msgid "Q: API 密钥配置错误怎么办？"
 msgstr ""
 
-#: ../../source/quickstart.md:372
+#: ../../source/quickstart.md:400
 msgid "A: 请检查 `provider.json` 文件中的 API 密钥是否正确，确保密钥有效且有足够的配额。"
 msgstr ""
 
-#: ../../source/quickstart.md:374
+#: ../../source/quickstart.md:402
 msgid "Q: 模型返回格式不正确怎么办？"
 msgstr ""
 
-#: ../../source/quickstart.md:375
+#: ../../source/quickstart.md:404
 msgid "A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。"
 msgstr ""
 
-#: ../../source/quickstart.md:377
+#: ../../source/quickstart.md:406
 msgid "Q: 如何添加更多工具？"
 msgstr ""
 
-#: ../../source/quickstart.md:378
+#: ../../source/quickstart.md:408
 msgid "A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `toolkit` 参数中传入工具列表。"
 msgstr ""
 
-#: ../../source/quickstart.md:380
+#: ../../source/quickstart.md:410
 msgid "Q: 如何实现异步调用？"
 msgstr ""
 
-#: ../../source/quickstart.md:381
+#: ../../source/quickstart.md:412
 msgid ""
 "A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async "
 "def` 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。"
 msgstr ""
 
-#: ../../source/quickstart.md:383
+#: ../../source/quickstart.md:414
 msgid "Q: 什么是动态模板参数？"
 msgstr ""
 
-#: ../../source/quickstart.md:384
+#: ../../source/quickstart.md:416
 msgid ""
 "A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString "
 "中的占位符，让同一个函数适应不同的使用场景。"
 msgstr ""
 
-#: ../../source/quickstart.md:386
+#: ../../source/quickstart.md:418
 msgid "Q: 如何使用动态模板参数？"
 msgstr ""
 
-#: ../../source/quickstart.md:387
+#: ../../source/quickstart.md:420
 #, python-brace-format
 msgid "A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如："
 msgstr ""
 
-#: ../../source/quickstart.md:407
+#: ../../source/quickstart.md:441
 msgid "下一步"
 msgstr ""
 
-#: ../../source/quickstart.md:409
+#: ../../source/quickstart.md:443
 msgid "恭喜！您已经成功运行了第一个 SimpleLLMFunc 应用。接下来您可以："
 msgstr ""
 
-#: ../../source/quickstart.md:411
+#: ../../source/quickstart.md:445
 msgid "探索更多示例代码（在 `examples/` 目录中）"
 msgstr ""
 
-#: ../../source/quickstart.md:412
+#: ../../source/quickstart.md:446
 msgid "阅读详细文档了解高级功能"
 msgstr ""
 
-#: ../../source/quickstart.md:413
+#: ../../source/quickstart.md:447
 msgid "尝试创建自己的 LLM 应用"
 msgstr ""
 
-#: ../../source/quickstart.md:414
+#: ../../source/quickstart.md:448
 msgid "参与社区讨论和贡献"
 msgstr ""
 
-#: ../../source/quickstart.md:416
+#: ../../source/quickstart.md:450
 msgid "祝您使用愉快！"
 msgstr ""
 

@@ -3,11 +3,12 @@
 
 # You can set these variables from the command line, and also
 # from the environment for the first two.
-SPHINXOPTS    ?=
+SPHINXOPTS    ?= -c .
 SPHINXBUILD   ?= sphinx-build
 SOURCEDIR     = source
 BUILDDIR      = build
-LOCALEDIR     = locale
+# 翻译文件目录（与 conf.py 中的 locale_dirs 保持一致）
+LOCALEDIR     = source/locale
 
 # 支持的语言列表
 LANGUAGES     = zh_CN en
@@ -37,7 +38,7 @@ clean:
 
 # 提取可翻译字符串
 gettext:
-	$(SPHINXBUILD) -b gettext $(SOURCEDIR) $(BUILDDIR)/gettext
+	$(SPHINXBUILD) -b gettext $(SPHINXOPTS) $(SOURCEDIR) $(BUILDDIR)/gettext
 
 # 更新.po文件
 update-po: gettext
@@ -57,13 +58,13 @@ compile-po:
 html-%: compile-po
 	@lang=$$(echo $* | sed 's/html-//'); \
 	echo "Building HTML for $$lang..."; \
-	$(SPHINXBUILD) -b html -D language=$$lang $(SOURCEDIR) $(BUILDDIR)/html/$$lang $(SPHINXOPTS) $(O)
+	$(SPHINXBUILD) -b html -D language=$$lang $(SPHINXOPTS) $(SOURCEDIR) $(BUILDDIR)/html/$$lang $(O)
 
 # 构建所有语言的HTML文档
 html-all: compile-po
 	@for lang in $(LANGUAGES); do \
 		echo "Building HTML for $$lang..."; \
-		$(SPHINXBUILD) -b html -D language=$$lang $(SOURCEDIR) $(BUILDDIR)/html/$$lang $(SPHINXOPTS) $(O); \
+		$(SPHINXBUILD) -b html -D language=$$lang $(SPHINXOPTS) $(SOURCEDIR) $(BUILDDIR)/html/$$lang $(O); \
 	done
 
 # 默认构建中文文档
