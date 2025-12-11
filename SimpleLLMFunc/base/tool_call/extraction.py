@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict, Literal
 
 from SimpleLLMFunc.logger import push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
+
+
+class ReasoningDetail(TypedDict):
+    """推理细节类型（如 Google Gemini 的 reasoning_details）"""
+    id: str
+    format: str
+    index: int
+    type: Literal["reasoning.encrypted"]
+    data: str
 
 
 class ToolCallFunctionInfo(TypedDict):
@@ -141,4 +150,114 @@ def extract_tool_calls_from_stream_response(chunk: Any) -> List[Dict[str, Any]]:
         push_error(f"提取流工具调用时出错: {str(exc)}")
 
     return tool_call_chunks
+
+
+def extract_reasoning_details(response: Any) -> List[ReasoningDetail]:
+    """从非流式响应中提取 reasoning_details。
+    
+    Args:
+        response: LLM 响应对象
+        
+    Returns:
+        reasoning_details 列表
+    """
+    reasoning_details: List[ReasoningDetail] = []
+    
+    try:
+        if hasattr(response, "choices") and len(response.choices) > 0:
+            message = response.choices[0].message
+            
+            # 尝试从 message 中获取 reasoning_details
+            reasoning_details_raw = None
+            if hasattr(message, "reasoning_details"):
+                reasoning_details_raw = message.reasoning_details
+            elif isinstance(message, dict) and "reasoning_details" in message:
+                reasoning_details_raw = message["reasoning_details"]
+            
+            if reasoning_details_raw:
+                for detail in reasoning_details_raw:
+                    # 处理 detail 可能是字典或对象的情况
+                    if isinstance(detail, dict):
+                        reasoning_details.append(
+                            ReasoningDetail(
+                                id=detail.get("id", ""),
+                                format=detail.get("format", ""),
+                                index=detail.get("index", 0),
+                                type=detail.get("type", "reasoning.encrypted"),
+                                data=detail.get("data", ""),
+                            )
+                        )
+                    else:
+                        # detail 是对象，尝试获取属性
+                        reasoning_details.append(
+                            ReasoningDetail(
+                                id=getattr(detail, "id", "") if hasattr(detail, "id") else "",
+                                format=getattr(detail, "format", "") if hasattr(detail, "format") else "",
+                                index=getattr(detail, "index", 0) if hasattr(detail, "index") else 0,
+                                type=getattr(detail, "type", "reasoning.encrypted") if hasattr(detail, "type") else "reasoning.encrypted",
+                                data=getattr(detail, "data", "") if hasattr(detail, "data") else "",
+                            )
+                        )
+    except Exception as exc:
+        push_error(f"提取 reasoning_details 时出错: {str(exc)}")
+        import traceback
+        push_error(f"详细错误: {traceback.format_exc()}")
+    
+    return reasoning_details
+
+
+def extract_reasoning_details_from_stream(chunk: Any) -> List[ReasoningDetail]:
+    """从流式响应 chunk 中提取 reasoning_details。
+    
+    Args:
+        chunk: 流式响应的一个 chunk
+        
+    Returns:
+        reasoning_details 列表
+    """
+    reasoning_details: List[ReasoningDetail] = []
+    
+    try:
+        if hasattr(chunk, "choices") and len(chunk.choices) > 0:
+            choice = chunk.choices[0]
+            if hasattr(choice, "delta") and choice.delta:
+                delta = choice.delta
+                
+                # 尝试从 delta 中获取 reasoning_details
+                reasoning_details_raw = None
+                if hasattr(delta, "reasoning_details"):
+                    reasoning_details_raw = delta.reasoning_details
+                elif isinstance(delta, dict) and "reasoning_details" in delta:
+                    reasoning_details_raw = delta["reasoning_details"]
+                
+                if reasoning_details_raw:
+                    for detail in reasoning_details_raw:
+                        # 处理 detail 可能是字典或对象的情况
+                        if isinstance(detail, dict):
+                            reasoning_details.append(
+                                ReasoningDetail(
+                                    id=detail.get("id", ""),
+                                    format=detail.get("format", ""),
+                                    index=detail.get("index", 0),
+                                    type=detail.get("type", "reasoning.encrypted"),
+                                    data=detail.get("data", ""),
+                                )
+                            )
+                        else:
+                            # detail 是对象，尝试获取属性
+                            reasoning_details.append(
+                                ReasoningDetail(
+                                    id=getattr(detail, "id", "") if hasattr(detail, "id") else "",
+                                    format=getattr(detail, "format", "") if hasattr(detail, "format") else "",
+                                    index=getattr(detail, "index", 0) if hasattr(detail, "index") else 0,
+                                    type=getattr(detail, "type", "reasoning.encrypted") if hasattr(detail, "type") else "reasoning.encrypted",
+                                    data=getattr(detail, "data", "") if hasattr(detail, "data") else "",
+                                )
+                            )
+    except Exception as exc:
+        push_error(f"提取流式 reasoning_details 时出错: {str(exc)}")
+        import traceback
+        push_error(f"详细错误: {traceback.format_exc()}")
+    
+    return reasoning_details
 

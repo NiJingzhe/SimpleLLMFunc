@@ -18,7 +18,7 @@ provider_json_path = os.path.join(current_dir, "provider.json")
 try:
     llm_interface = OpenAICompatible.load_from_json_file(
         provider_json_path
-    )["volc_engine"]["deepseek-v3-250324"]
+    )["openrouter"]["google/gemini-3-pro-preview"]
 except Exception:
     llm_interface = None
 

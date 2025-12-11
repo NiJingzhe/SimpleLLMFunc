@@ -28,6 +28,8 @@ from SimpleLLMFunc.base.post_process import (
 )
 from SimpleLLMFunc.base.tool_call import (
     accumulate_tool_calls_from_chunks,
+    extract_reasoning_details,
+    extract_reasoning_details_from_stream,
     extract_tool_calls,
     extract_tool_calls_from_stream_response,
     process_tool_calls,
@@ -86,6 +88,7 @@ async def execute_llm(
     content = ""
     tool_calls: List[Dict[str, Any]] = []
     tool_call_chunks: List[Dict[str, Any]] = []
+    reasoning_details: List[Dict[str, Any]] = []
     last_response: Any = None
 
     with langfuse_client.start_as_current_observation(
@@ -99,6 +102,7 @@ async def execute_llm(
     ) as generation_span:
         if stream:
             # Handle streaming response
+            reasoning_details_list: List[Dict[str, Any]] = []
             async for chunk in llm_interface.chat_stream(
                 messages=current_messages,
                 tools=tools,
@@ -106,10 +110,12 @@ async def execute_llm(
             ):
                 content += extract_content_from_stream_response(chunk, func_name)
                 tool_call_chunks.extend(extract_tool_calls_from_stream_response(chunk))
+                reasoning_details_list.extend(extract_reasoning_details_from_stream(chunk))
                 last_response = chunk
                 yield chunk
 
             tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
+            reasoning_details = reasoning_details_list
         else:
             # Handle non-streaming response
             initial_response = await llm_interface.chat(
@@ -120,6 +126,7 @@ async def execute_llm(
 
             content = extract_content_from_response(initial_response, func_name)
             tool_calls = extract_tool_calls(initial_response)
+            reasoning_details = extract_reasoning_details(initial_response)
             last_response = initial_response
             yield initial_response
 
@@ -134,7 +141,10 @@ async def execute_llm(
             current_messages.append(assistant_message)
 
         if len(tool_calls) != 0:
-            assistant_tool_call_message = build_assistant_tool_message(tool_calls)
+            assistant_tool_call_message = build_assistant_tool_message(
+                tool_calls, 
+                reasoning_details if reasoning_details else None
+            )
             current_messages.append(assistant_tool_call_message)
         else:
             # No tool calls, return final result
@@ -199,6 +209,7 @@ async def execute_llm(
                 # Handle streaming response after tool calls
                 content = ""
                 tool_call_chunks = []  # Reset for iteration
+                reasoning_details_list = []  # Reset for iteration
                 async for chunk in llm_interface.chat_stream(
                     messages=current_messages,
                     tools=tools,
@@ -208,9 +219,13 @@ async def execute_llm(
                     tool_call_chunks.extend(
                         extract_tool_calls_from_stream_response(chunk)
                     )
+                    reasoning_details_list.extend(
+                        extract_reasoning_details_from_stream(chunk)
+                    )
                     last_response = chunk
                     yield chunk
                 tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
+                reasoning_details = reasoning_details_list
             else:
                 # Handle non-streaming response after tool calls
                 response = await llm_interface.chat(
@@ -221,6 +236,7 @@ async def execute_llm(
 
                 content = extract_content_from_response(response, func_name)
                 tool_calls = extract_tool_calls(response)
+                reasoning_details = extract_reasoning_details(response)
                 last_response = response
                 yield response
 
@@ -237,7 +253,10 @@ async def execute_llm(
             current_messages.append(assistant_message)
 
         if len(tool_calls) != 0:
-            assistant_tool_call_message = build_assistant_tool_message(tool_calls)
+            assistant_tool_call_message = build_assistant_tool_message(
+                tool_calls,
+                reasoning_details if reasoning_details else None
+            )
             current_messages.append(assistant_tool_call_message)
 
         if len(tool_calls) == 0:
