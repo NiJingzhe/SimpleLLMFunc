@@ -21,7 +21,7 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.4.0)
+### Update Notes (0.4.1)
 
 Check **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for all version improvements
 
@@ -832,7 +832,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {October},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.4.0},
+  version = {0.4.1},
   year = {2025}
 }
 ```

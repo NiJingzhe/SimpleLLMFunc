@@ -1,5 +1,26 @@
 # Change log for SimpleLLMFunc
 
+## 0.4.1 Release Notes
+
+### Features
+
+1. **Gemini 3 Pro Preview Support**: Added `reasoning_details` field support to enable compatibility with Google Gemini 3 Pro Preview model under OpenAI-compatible interface.
+
+2. **Reasoning Details Extraction**: 
+   - Added `ReasoningDetail` type definition in `extraction.py`
+   - Implemented extraction functions for both streaming and non-streaming responses
+   - Support for extracting reasoning details from message objects (both dict and object formats)
+
+3. **Message Type Enhancement**: Extended message type definitions in `message.py` to include `reasoning_details` field support.
+
+4. **ReAct Engine Integration**: Integrated reasoning details extraction and propagation in the ReAct engine for tool call workflows.
+
+### Examples
+
+- Updated example files (`llm_function_pydantic_example.py`, `parallel_toolcall_example.py`, `llm_chat_raw_tooluse_example.py`) to use `gemini-3-pro-preview` model.
+
+---
+
 ## 0.4.0 Release Notes
 
 ### Major Refactoring
