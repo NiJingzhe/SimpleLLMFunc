@@ -1,5 +1,17 @@
 # Change log for SimpleLLMFunc
 
+## 0.4.2 Release Notes
+
+### Refactoring
+
+1. **ReAct Engine Return Type Enhancement**: Modified `execute_llm` function to return both response and message history in streaming mode.
+   - Changed return type from `AsyncGenerator[Any, None]` to `AsyncGenerator[Tuple[Any, List[Dict[str, Any]]], None]`
+   - Now yields `(response, current_messages.copy())` instead of just `response`
+   - Creates a copy of `current_messages` to avoid modifying the original list
+   - Updated related test files to adapt to the new return type
+
+---
+
 ## 0.4.1 Release Notes
 
 ### Features
