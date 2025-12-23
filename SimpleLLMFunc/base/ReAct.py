@@ -12,7 +12,7 @@ LLM calls with tool usage. It manages:
 from __future__ import annotations
 from datetime import datetime, timezone
 
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Tuple
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import app_log, push_debug
@@ -46,7 +46,7 @@ async def execute_llm(
     max_tool_calls: int,
     stream: bool = False,
     **llm_kwargs,
-) -> AsyncGenerator[Any, None]:
+) -> AsyncGenerator[Tuple[Any, List[Dict[str, Any]]], None]:
     """Execute LLM calls and orchestrate iterative tool usage.
 
     Implements the ReAct (Reasoning and Acting) pattern by:
@@ -66,12 +66,14 @@ async def execute_llm(
             **llm_kwargs: Additional keyword arguments to pass to the LLM interface.
 
     Yields:
-            Responses from the LLM (either complete responses or stream chunks).
+            Tuple of (response, updated_messages) where:
+            - response: Responses from the LLM (either complete responses or stream chunks)
+            - updated_messages: Current message history including tool call results
     """
 
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
 
-    current_messages = messages
+    current_messages = messages.copy()  # 创建副本以避免修改原始列表
     call_count = 0
 
     push_debug(
@@ -110,9 +112,9 @@ async def execute_llm(
             ):
                 content += extract_content_from_stream_response(chunk, func_name)
                 tool_call_chunks.extend(extract_tool_calls_from_stream_response(chunk))
-                reasoning_details_list.extend(extract_reasoning_details_from_stream(chunk))
+                reasoning_details_list.extend(extract_reasoning_details_from_stream(chunk))  # type: ignore
                 last_response = chunk
-                yield chunk
+                yield chunk, current_messages.copy()
 
             tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
             reasoning_details = reasoning_details_list
@@ -126,9 +128,9 @@ async def execute_llm(
 
             content = extract_content_from_response(initial_response, func_name)
             tool_calls = extract_tool_calls(initial_response)
-            reasoning_details = extract_reasoning_details(initial_response)
+            reasoning_details = extract_reasoning_details(initial_response)  # type: ignore
             last_response = initial_response
-            yield initial_response
+            yield initial_response, current_messages.copy()
 
         push_debug(
             f"LLM 函数 '{func_name}' 初始响应已获取，工具调用数: {len(tool_calls)}",
@@ -159,6 +161,7 @@ async def execute_llm(
                 output={"content": content, "tool_calls": []},
                 usage_details=usage_info,
             )
+            # 注意：响应已经在上面 yield 过了，这里直接 return
             return
 
         # 更新观测数据
@@ -220,10 +223,10 @@ async def execute_llm(
                         extract_tool_calls_from_stream_response(chunk)
                     )
                     reasoning_details_list.extend(
-                        extract_reasoning_details_from_stream(chunk)
+                        extract_reasoning_details_from_stream(chunk)  # type: ignore
                     )
                     last_response = chunk
-                    yield chunk
+                    yield chunk, current_messages.copy()
                 tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
                 reasoning_details = reasoning_details_list
             else:
@@ -236,9 +239,9 @@ async def execute_llm(
 
                 content = extract_content_from_response(response, func_name)
                 tool_calls = extract_tool_calls(response)
-                reasoning_details = extract_reasoning_details(response)
+                reasoning_details = extract_reasoning_details(response)  # type: ignore
                 last_response = response
-                yield response
+                yield response, current_messages.copy()
 
             # 更新迭代生成观测数据
             usage_info = extract_usage_from_response(last_response)
@@ -269,6 +272,7 @@ async def execute_llm(
                 f"LLM 函数 '{func_name}' 完成执行",
                 location=get_location(),
             )
+            # 注意：响应已经在上面 yield 过了，这里直接 return
             return
 
         # Continue with next iteration of tool calls
@@ -325,7 +329,7 @@ async def execute_llm(
             location=get_location(),
         )
 
-        yield final_response
+        yield final_response, current_messages.copy()
 
 
 __all__ = ["execute_llm"]

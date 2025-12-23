@@ -32,7 +32,7 @@ class TestExecuteLLM:
         mock_langfuse.start_as_current_observation.return_value = mock_observation
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=sample_messages,
             tools=None,
@@ -68,7 +68,7 @@ class TestExecuteLLM:
         tools = [{"type": "function", "function": {"name": "test_tool"}}]
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=sample_messages,
             tools=tools,
@@ -125,7 +125,7 @@ class TestExecuteLLM:
         tool_map = {"test_tool": AsyncMock(return_value="result")}
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=sample_messages,
             tools=tools,
@@ -162,7 +162,7 @@ class TestExecuteLLM:
         mock_langfuse.start_as_current_observation.return_value = mock_observation
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=sample_messages,
             tools=None,
@@ -206,7 +206,7 @@ class TestExecuteLLM:
         tool_map = {"test_tool": AsyncMock(return_value="result")}
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=sample_messages,
             tools=tools,
@@ -238,7 +238,7 @@ class TestExecuteLLM:
         mock_langfuse.start_as_current_observation.return_value = mock_observation
 
         responses = []
-        async for response in execute_llm(
+        async for response, _ in execute_llm(
             llm_interface=mock_llm_interface,
             messages=[],
             tools=None,

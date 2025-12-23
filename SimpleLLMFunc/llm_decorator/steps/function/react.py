@@ -37,7 +37,8 @@ async def execute_llm_call(
 ) -> AsyncGenerator[Any, None]:
     """执行 LLM 调用"""
     # 类型转换：MessageList 兼容 List[Dict[str, Any]]
-    async for response in execute_llm(
+    # execute_llm 现在返回 (response, updated_messages) 元组，但我们只需要 response
+    async for response, _ in execute_llm(
         llm_interface=llm_interface,
         messages=cast(List[Dict[str, Any]], messages),
         tools=tools,

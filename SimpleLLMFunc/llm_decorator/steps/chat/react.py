@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Tuple, Union
 
 from SimpleLLMFunc.base.ReAct import execute_llm
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
@@ -26,9 +26,9 @@ async def execute_llm_call(
     max_tool_calls: int,
     stream: bool = False,
     **llm_kwargs: Any,
-) -> AsyncGenerator[Any, None]:
-    """执行 LLM 调用"""
-    async for response in execute_llm(
+) -> AsyncGenerator[Tuple[Any, List[Dict[str, Any]]], None]:
+    """执行 LLM 调用，返回响应和更新后的消息"""
+    async for response, updated_messages in execute_llm(
         llm_interface=llm_interface,
         messages=messages,
         tools=tools,
@@ -37,7 +37,7 @@ async def execute_llm_call(
         stream=stream,
         **llm_kwargs,
     ):
-        yield response
+        yield response, updated_messages
 
 
 async def execute_react_loop_streaming(
@@ -48,8 +48,8 @@ async def execute_react_loop_streaming(
     stream: bool,
     llm_kwargs: Dict[str, Any],
     func_name: str,
-) -> AsyncGenerator[Any, None]:
-    """执行 ReAct 循环的流式版本（无重试）"""
+) -> AsyncGenerator[Tuple[Any, List[Dict[str, Any]]], None]:
+    """执行 ReAct 循环的流式版本（无重试），返回响应和更新后的消息"""
     # 1. 准备工具
     tool_param, tool_map = prepare_tools_for_execution(toolkit, func_name)
 
@@ -64,7 +64,7 @@ async def execute_react_loop_streaming(
         **llm_kwargs,
     )
 
-    # 3. 直接返回响应流（不进行重试）
-    async for response in response_stream:
-        yield response
+    # 3. 返回响应流和更新后的消息
+    async for response, updated_messages in response_stream:
+        yield response, updated_messages
 

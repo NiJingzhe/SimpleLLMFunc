@@ -71,8 +71,8 @@ class TestProcessChatResponseStream:
         mock_process.return_value = "content"
         
         async def mock_stream():
-            yield "response1"
-            yield "response2"
+            yield "response1", sample_messages.copy()
+            yield "response2", sample_messages.copy()
         
         results = []
         async for content, history in process_chat_response_stream(
@@ -92,7 +92,7 @@ class TestProcessChatResponseStream:
         mock_process.return_value = mock_chat_completion
         
         async def mock_stream():
-            yield mock_chat_completion
+            yield mock_chat_completion, sample_messages.copy()
         
         results = []
         async for content, history in process_chat_response_stream(

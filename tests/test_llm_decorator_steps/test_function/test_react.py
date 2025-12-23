@@ -37,8 +37,8 @@ class TestExecuteLLMCall:
     ) -> None:
         """Test executing LLM call."""
         async def mock_generator():
-            yield "response1"
-            yield "response2"
+            yield "response1", sample_messages.copy()
+            yield "response2", sample_messages.copy()
         
         mock_execute_llm.return_value = mock_generator()
         

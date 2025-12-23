@@ -34,8 +34,8 @@ class TestExecuteLLMCall:
     ) -> None:
         """Test executing LLM call."""
         async def mock_generator():
-            yield "response1"
-            yield "response2"
+            yield "response1", sample_messages.copy()
+            yield "response2", sample_messages.copy()
         
         mock_execute_llm.return_value = mock_generator()
         
@@ -49,7 +49,7 @@ class TestExecuteLLMCall:
         )
         
         responses = []
-        async for r in result:
+        async for r, _ in result:
             responses.append(r)
         
         assert len(responses) >= 1
@@ -72,13 +72,13 @@ class TestExecuteReactLoopStreaming:
         mock_prepare.return_value = (None, {})
         
         async def mock_generator():
-            yield "response1"
-            yield "response2"
+            yield "response1", sample_messages.copy()
+            yield "response2", sample_messages.copy()
         
         mock_execute.return_value = mock_generator()
         
         responses = []
-        async for response in execute_react_loop_streaming(
+        async for response, _ in execute_react_loop_streaming(
             mock_llm_interface,
             sample_messages,
             None,

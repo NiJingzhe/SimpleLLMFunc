@@ -37,14 +37,19 @@ def process_single_chat_response(
 
 
 async def process_chat_response_stream(
-    response_stream: AsyncGenerator[Any, None],
+    response_stream: AsyncGenerator[Tuple[Any, List[Dict[str, Any]]], None],
     return_mode: Literal["text", "raw"],
-    messages: List[Dict[str, Any]],
+    messages: List[Dict[str, Any]],  # 初始消息，用于兼容性
     func_name: str,
     stream: bool,
 ) -> AsyncGenerator[Tuple[Any, HistoryList], None]:
     """处理流式响应的完整流程"""
-    async for response in response_stream:
+    current_messages = messages.copy()  # 初始消息
+    
+    async for response, updated_messages in response_stream:
+        # 更新当前消息为最新版本（包含工具调用结果）
+        current_messages = updated_messages
+        
         # 记录响应日志
         app_log(
             f"LLM Chat '{func_name}' received response:"
@@ -60,10 +65,10 @@ async def process_chat_response_stream(
             func_name,
         )
 
-        # Yield 响应和当前历史
-        yield content, messages
+        # Yield 响应和更新后的历史（包含工具调用结果）
+        yield content, current_messages.copy()
 
     # 流结束标记（text 模式）
     if return_mode == "text":
-        yield "", messages
+        yield "", current_messages.copy()
 
