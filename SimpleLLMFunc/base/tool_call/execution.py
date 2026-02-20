@@ -240,14 +240,30 @@ async def _execute_single_tool_call(
 
             tool_func = tool_map[tool_name]
 
+            # 获取原始函数和 Tool 对象（用于检查参数）
+            # tool_func 是 tool.run，是一个绑定方法，__self__ 就是 Tool 对象
+            original_func = None
+            tool_obj = None
+            has_event_emitter_param = False
+
+            # 尝试从绑定方法获取 Tool 对象
+            if hasattr(tool_func, "__self__"):
+                tool_obj = tool_func.__self__
+                original_func = getattr(tool_obj, "func", None)
+                if tool_obj and hasattr(tool_obj, "parameters"):
+                    has_event_emitter_param = "event_emitter" in [
+                        p.name for p in tool_obj.parameters
+                    ]
+
+            if original_func is None:
+                original_func = tool_func
+
             # 转换参数：将字符串列表转换为多模态对象列表
-            converted_arguments = _convert_tool_arguments(arguments, tool_func)
+            converted_arguments = _convert_tool_arguments(arguments, original_func)
 
             # 注入 event_emitter：如果工具函数有 event_emitter 参数
-            if event_emitter is not None:
-                sig = inspect.signature(tool_func)
-                if "event_emitter" in sig.parameters:
-                    converted_arguments["event_emitter"] = event_emitter
+            if event_emitter is not None and has_event_emitter_param:
+                converted_arguments["event_emitter"] = event_emitter
 
             tool_result = await tool_func(**converted_arguments)
 
