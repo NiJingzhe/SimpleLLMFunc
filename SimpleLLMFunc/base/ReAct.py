@@ -14,10 +14,27 @@ from datetime import datetime, timezone
 import json
 import time
 
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import (
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    cast,
+)
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.type import MessageList, ToolDefinitionList, ToolCall, ToolCallArguments, ToolResult
+from SimpleLLMFunc.type import (
+    MessageList,
+    ToolDefinitionList,
+    ToolCall,
+    ToolCallArguments,
+    ToolResult,
+)
 from SimpleLLMFunc.logger import app_log, push_debug
 from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_location
 from SimpleLLMFunc.logger.context_manager import get_current_trace_id
@@ -38,6 +55,7 @@ from SimpleLLMFunc.hooks.events import (
     ReactIterationEndEvent,
     ReactEndEvent,
 )
+from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter, NoOpEventEmitter
 from SimpleLLMFunc.type.tool_call import dict_to_tool_call
 from SimpleLLMFunc.base.messages import (
     build_assistant_response_message,
@@ -70,7 +88,7 @@ async def _process_tool_calls_with_events_gen(
     iteration: int,
 ) -> AsyncGenerator[Union[EventYield, MessageList], None]:
     """处理工具调用并发射事件（异步生成器版本）
-    
+
     Args:
         tool_calls: 工具调用列表
         messages: 消息列表
@@ -79,7 +97,7 @@ async def _process_tool_calls_with_events_gen(
         trace_id: 追踪ID
         func_name: 函数名
         iteration: 迭代次数
-    
+
     Yields:
         EventYield: 事件对象
         MessageList: 更新后的消息列表（作为最后一个 yield）
@@ -87,11 +105,17 @@ async def _process_tool_calls_with_events_gen(
     if not tool_calls:
         yield messages
         return
-    
+
+    # 准备执行环境
+    from SimpleLLMFunc.base.tool_call.execution import _execute_single_tool_call
+    import asyncio
+
     # 发射工具调用批次开始事件
     if enable_event:
         try:
-            tool_calls_typed: List[ToolCall] = [dict_to_tool_call(tc) for tc in tool_calls]
+            tool_calls_typed: List[ToolCall] = [
+                dict_to_tool_call(tc) for tc in tool_calls
+            ]
             yield EventYield(
                 event=ToolCallsBatchStartEvent(
                     event_type=ReActEventType.TOOL_CALLS_BATCH_START,
@@ -105,20 +129,33 @@ async def _process_tool_calls_with_events_gen(
             )
         except Exception:
             pass
-    
-    # 准备执行环境
-    from SimpleLLMFunc.base.tool_call.execution import _execute_single_tool_call
-    import asyncio
-    
+
     event_queue: asyncio.Queue[Optional[EventYield]] = asyncio.Queue()
-    
-    async def _execute_with_events_task(tool_call: Dict[str, Any]) -> tuple[Dict[str, Any], List[Dict[str, Any]], bool, Optional[ToolResult], Optional[Exception], float]:
+
+    # 创建 ToolEventEmitter 用于收集 tool 发出的自定义事件
+    tool_event_emitter = ToolEventEmitter(
+        _queue=event_queue,
+        _trace_id=trace_id,
+        _func_name=func_name,
+        _iteration=iteration,
+    )
+
+    async def _execute_with_events_task(
+        tool_call: Dict[str, Any],
+    ) -> tuple[
+        Dict[str, Any],
+        List[Dict[str, Any]],
+        bool,
+        Optional[ToolResult],
+        Optional[Exception],
+        float,
+    ]:
         """执行单个工具调用并将事件放入队列"""
         tool_call_id = tool_call.get("id", "")
         function_call = tool_call.get("function", {})
         tool_name = function_call.get("name", "")
         arguments_str = function_call.get("arguments", "{}")
-        
+
         # 发射工具调用开始事件
         if enable_event:
             try:
@@ -141,17 +178,19 @@ async def _process_tool_calls_with_events_gen(
                 )
             except Exception:
                 pass
-        
+
         # 执行工具调用
         tool_start_time = time.time()
         tool_result: Optional[ToolResult] = None
         tool_error: Optional[Exception] = None
-        
+
         try:
-            tool_call_dict, messages_to_append, is_multimodal = await _execute_single_tool_call(
-                tool_call, tool_map
-            )
-            
+            (
+                tool_call_dict,
+                messages_to_append,
+                is_multimodal,
+            ) = await _execute_single_tool_call(tool_call, tool_map)
+
             # 从消息中提取工具结果
             if messages_to_append:
                 tool_message = messages_to_append[0]
@@ -159,22 +198,26 @@ async def _process_tool_calls_with_events_gen(
                     content = tool_message.get("content", "")
                     try:
                         parsed = json.loads(content)
-                        tool_result = parsed if isinstance(parsed, (str, dict, list)) else content
+                        tool_result = (
+                            parsed if isinstance(parsed, (str, dict, list)) else content
+                        )
                     except Exception:
                         tool_result = content
         except Exception as e:
             tool_error = e
             # 如果执行失败，创建错误消息
             tool_call_dict = tool_call
-            messages_to_append = [{
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": json.dumps({"error": str(e)}, ensure_ascii=False),
-            }]
+            messages_to_append = [
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": json.dumps({"error": str(e)}, ensure_ascii=False),
+                }
+            ]
             is_multimodal = False
-        
+
         tool_execution_time = time.time() - tool_start_time
-        
+
         # 发射工具调用结束或错误事件
         if enable_event:
             try:
@@ -218,21 +261,28 @@ async def _process_tool_calls_with_events_gen(
                     )
             except Exception:
                 pass
-        
-        return (tool_call_dict, messages_to_append, is_multimodal, tool_result, tool_error, tool_execution_time)
-    
+
+        return (
+            tool_call_dict,
+            messages_to_append,
+            is_multimodal,
+            tool_result,
+            tool_error,
+            tool_execution_time,
+        )
+
     # 启动所有任务
     tasks = [asyncio.create_task(_execute_with_events_task(tc)) for tc in tool_calls]
     batch_start_time = time.time()
-    
+
     # 创建一个任务来监控所有工具任务的完成，并发送终止信号
     async def monitor_completion():
         await asyncio.gather(*tasks, return_exceptions=True)
         await event_queue.put(None)
-    
+
     # 启动监控任务（不等待它）
     monitor_task = asyncio.create_task(monitor_completion())
-    
+
     # 实时消费事件流（与工具执行并发）
     # 当工具执行时，事件会被放入队列，我们立即 yield 出去
     while True:
@@ -240,21 +290,28 @@ async def _process_tool_calls_with_events_gen(
         if event is None:
             break
         yield event
-    
+
     # 确保监控任务完成
     await monitor_task
-    
+
     # 收集结果
     tool_results: List[ToolCallResult] = []
     # 这里我们只收集成功完成的结果，异常已经在 task 内部捕获
     results = [t.result() for t in tasks if not t.cancelled() and not t.exception()]
-    
+
     # 收集工具调用结果用于批次结束事件
-    for tool_call_dict, messages_to_append, is_multimodal, tool_result, tool_error, exec_time in results:
+    for (
+        tool_call_dict,
+        messages_to_append,
+        is_multimodal,
+        tool_result,
+        tool_error,
+        exec_time,
+    ) in results:
         tool_call_id = tool_call_dict.get("id", "")
         function_call = tool_call_dict.get("function", {})
         tool_name = function_call.get("name", "")
-        
+
         tool_result_dict: ToolCallResult = {
             "tool_name": tool_name,
             "tool_call_id": tool_call_id,
@@ -265,7 +322,7 @@ async def _process_tool_calls_with_events_gen(
         if tool_error:
             tool_result_dict["error"] = tool_error
         tool_results.append(tool_result_dict)
-    
+
     # 发射工具调用批次结束事件
     total_execution_time = time.time() - batch_start_time
     if enable_event:
@@ -288,16 +345,16 @@ async def _process_tool_calls_with_events_gen(
             )
         except Exception:
             pass
-    
+
     # =========================================================================
     # 后处理：构建消息列表 (替代 process_tool_calls 以避免重复执行)
     # =========================================================================
-    
+
     # 分类结果
     normal_results: List[List[Dict[str, Any]]] = []
     multimodal_results: List[tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
     multimodal_tool_call_ids: set[str] = set()
-    
+
     for tool_call_dict, messages_to_append, is_multimodal, _, _, _ in results:
         if is_multimodal:
             multimodal_results.append((tool_call_dict, messages_to_append))
@@ -308,7 +365,7 @@ async def _process_tool_calls_with_events_gen(
             normal_results.append(messages_to_append)
 
     current_messages = messages.copy()
-    
+
     # 阶段 1: 移除多模态 tool_calls
     if multimodal_tool_call_ids:
         for i in range(len(current_messages) - 1, -1, -1):
@@ -316,12 +373,13 @@ async def _process_tool_calls_with_events_gen(
             if msg.get("role") == "assistant" and "tool_calls" in msg:  # type: ignore
                 original_tool_calls = msg["tool_calls"]  # type: ignore
                 filtered_tool_calls = [
-                    tc for tc in original_tool_calls   # type: ignore
+                    tc
+                    for tc in original_tool_calls  # type: ignore
                     if tc.get("id") not in multimodal_tool_call_ids
                 ]
-                
+
                 if not filtered_tool_calls:
-                    del msg["tool_calls"]   # type: ignore
+                    del msg["tool_calls"]  # type: ignore
                     if msg.get("content") is None:  # type: ignore
                         msg["content"] = ""  # type: ignore
                 else:
@@ -331,12 +389,12 @@ async def _process_tool_calls_with_events_gen(
     # 阶段 2: 追加普通结果
     for msgs in normal_results:
         current_messages.extend(msgs)  # type: ignore
-    
+
     # 阶段 3: 处理多模态结果
     for tool_call_dict, user_messages in multimodal_results:
         tool_name = tool_call_dict.get("function", {}).get("name", "unknown")
         arguments = tool_call_dict.get("function", {}).get("arguments", "{}")
-        
+
         assistant_message = {
             "role": "assistant",
             "content": f"我将求助用户使用 {tool_name} 工具来获取结果，使用参数为：{arguments}，请用户按照工具的描述和参数要求，提供符合要求的结果。",
@@ -384,7 +442,9 @@ async def execute_llm(
     """
 
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
-    current_trace_id = trace_id or get_current_trace_id() or f"trace_{int(time.time() * 1000)}"
+    current_trace_id = (
+        trace_id or get_current_trace_id() or f"trace_{int(time.time() * 1000)}"
+    )
 
     current_messages = messages.copy()  # 创建副本以避免修改原始列表
     call_count = 0
@@ -455,8 +515,8 @@ async def execute_llm(
     llm_kwargs_filtered = llm_kwargs.copy()
     if not tools:
         # 如果没有传递任何 tool，不应该设置 tool_choice
-        llm_kwargs_filtered.pop('tool_choice', None)
-    
+        llm_kwargs_filtered.pop("tool_choice", None)
+
     with langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_initial_llm_call",
@@ -480,9 +540,11 @@ async def execute_llm(
                 content += chunk_content
                 accumulated_content += chunk_content
                 tool_call_chunks.extend(extract_tool_calls_from_stream_response(chunk))
-                reasoning_details_list.extend(extract_reasoning_details_from_stream(chunk))  # type: ignore
+                reasoning_details_list.extend(
+                    extract_reasoning_details_from_stream(chunk)
+                )  # type: ignore
                 last_response = chunk
-                
+
                 # 发射 chunk 事件
                 if enable_event:
                     try:
@@ -501,7 +563,7 @@ async def execute_llm(
                     except Exception:
                         pass
                     chunk_index += 1
-                
+
                 # 发射响应
                 if enable_event:
                     try:
@@ -529,7 +591,7 @@ async def execute_llm(
             tool_calls = extract_tool_calls(initial_response)
             reasoning_details = extract_reasoning_details(initial_response)  # type: ignore
             last_response = initial_response
-            
+
             # 发射响应
             if enable_event:
                 try:
@@ -548,8 +610,10 @@ async def execute_llm(
         if enable_event:
             try:
                 usage_info = extract_usage_from_response(last_response)
-                tool_calls_typed_initial: List[ToolCall] = [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
-                
+                tool_calls_typed_initial: List[ToolCall] = (
+                    [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
+                )
+
                 yield EventYield(
                     event=LLMCallEndEvent(
                         event_type=ReActEventType.LLM_CALL_END,
@@ -579,8 +643,7 @@ async def execute_llm(
 
         if len(tool_calls) != 0:
             assistant_tool_call_message = build_assistant_tool_message(
-                tool_calls, 
-                reasoning_details if reasoning_details else None
+                tool_calls, reasoning_details if reasoning_details else None
             )
             current_messages.append(cast(Any, assistant_tool_call_message))
         else:
@@ -590,7 +653,11 @@ async def execute_llm(
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
-                    final_content = extract_content_from_response(last_response, func_name) if last_response else content
+                    final_content = (
+                        extract_content_from_response(last_response, func_name)
+                        if last_response
+                        else content
+                    )
                     yield EventYield(
                         event=ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
@@ -609,12 +676,12 @@ async def execute_llm(
                     )
                 except Exception:
                     pass
-            
+
             app_log(
                 f"LLM 函数 '{func_name}' 完成执行",
                 location=get_location(),
             )
-            
+
             # 更新观测数据
             usage_info = extract_usage_from_response(last_response)
             usage_dict_no_tools: Optional[Dict[str, int]] = None
@@ -677,13 +744,14 @@ async def execute_llm(
             tool_calls=tool_calls,
             messages=cast(List[Dict[str, Any]], current_messages),
             tool_map=tool_map,
+            event_emitter=NoOpEventEmitter(),
         )
         current_messages = cast(MessageList, result_messages_iteration)
 
     while call_count < max_tool_calls:
         # Phase 3: Iterative LLM-tool interaction
         iteration = call_count + 1
-        
+
         # 发射迭代开始事件
         if enable_event:
             try:
@@ -699,7 +767,7 @@ async def execute_llm(
                 )
             except Exception:
                 pass
-        
+
         push_debug(
             f"LLM 函数 '{func_name}' 工具调用循环 (次数: {call_count})",
             location=get_location(),
@@ -742,7 +810,7 @@ async def execute_llm(
             completion_start_time=datetime.now(timezone.utc),
         ) as iteration_generation_span:
             last_response = None
-            
+
             if stream:
                 # Handle streaming response after tool calls
                 content = ""
@@ -755,7 +823,9 @@ async def execute_llm(
                     tools=tools,
                     **llm_kwargs_filtered,
                 ):
-                    chunk_content = extract_content_from_stream_response(chunk, func_name)
+                    chunk_content = extract_content_from_stream_response(
+                        chunk, func_name
+                    )
                     content += chunk_content
                     accumulated_content += chunk_content
                     tool_call_chunks.extend(
@@ -765,7 +835,7 @@ async def execute_llm(
                         extract_reasoning_details_from_stream(chunk)  # type: ignore
                     )
                     last_response = chunk
-                    
+
                     # 发射 chunk 事件
                     if enable_event:
                         try:
@@ -784,7 +854,7 @@ async def execute_llm(
                         except Exception:
                             pass
                         chunk_index += 1
-                    
+
                     # 发射响应
                     if enable_event:
                         try:
@@ -811,7 +881,7 @@ async def execute_llm(
                 tool_calls = extract_tool_calls(response)
                 reasoning_details = extract_reasoning_details(response)  # type: ignore
                 last_response = response
-                
+
                 # 发射响应
                 if enable_event:
                     try:
@@ -824,13 +894,17 @@ async def execute_llm(
                         pass
                 else:
                     yield response, cast(MessageList, current_messages.copy())
-            
+
             # 发射迭代中的 LLM 调用结束事件
             iteration_llm_execution_time = time.time() - iteration_llm_start_time
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
-                    tool_calls_typed_iteration: List[ToolCall] = [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
+                    tool_calls_typed_iteration: List[ToolCall] = (
+                        [dict_to_tool_call(tc) for tc in tool_calls]
+                        if tool_calls
+                        else []
+                    )
                     yield EventYield(
                         event=LLMCallEndEvent(
                             event_type=ReActEventType.LLM_CALL_END,
@@ -869,8 +943,7 @@ async def execute_llm(
 
         if len(tool_calls) != 0:
             assistant_tool_call_message = build_assistant_tool_message(
-                tool_calls,
-                reasoning_details if reasoning_details else None
+                tool_calls, reasoning_details if reasoning_details else None
             )
             current_messages.append(cast(Any, assistant_tool_call_message))
 
@@ -880,7 +953,7 @@ async def execute_llm(
                 f"LLM 函数 '{func_name}' 无更多工具调用，返回最终结果",
                 location=get_location(),
             )
-            
+
             # 发射迭代结束事件
             iteration_time = time.time() - iteration_llm_start_time
             if enable_event:
@@ -899,13 +972,17 @@ async def execute_llm(
                     )
                 except Exception:
                     pass
-            
+
             # 发射 ReAct 结束事件
             total_execution_time = time.time() - start_time
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
-                    final_content = extract_content_from_response(last_response, func_name) if last_response else ""
+                    final_content = (
+                        extract_content_from_response(last_response, func_name)
+                        if last_response
+                        else ""
+                    )
                     yield EventYield(
                         event=ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
@@ -924,7 +1001,7 @@ async def execute_llm(
                     )
                 except Exception:
                     pass
-            
+
             app_log(
                 f"LLM 函数 '{func_name}' 完成执行",
                 location=get_location(),
@@ -939,7 +1016,7 @@ async def execute_llm(
         )
 
         total_tool_calls += len(tool_calls)
-        
+
         # 使用支持事件的工具调用处理函数
         if enable_event:
             # 使用异步生成器实时发射事件
@@ -962,9 +1039,10 @@ async def execute_llm(
                 tool_calls=tool_calls,
                 messages=cast(List[Dict[str, Any]], current_messages),
                 tool_map=tool_map,
+                event_emitter=NoOpEventEmitter(),
             )
             current_messages = cast(MessageList, result_messages)
-        
+
         # 发射迭代结束事件
         iteration_time = time.time() - iteration_llm_start_time
         if enable_event:
@@ -1030,8 +1108,8 @@ async def execute_llm(
     ) as final_generation_span:
         # 最终响应时不传递 tools，因为已经结束了
         llm_kwargs_final = llm_kwargs.copy()
-        llm_kwargs_final.pop('tool_choice', None)
-        
+        llm_kwargs_final.pop("tool_choice", None)
+
         final_response = await llm_interface.chat(
             messages=cast(List[Dict[str, Any]], current_messages),
             **llm_kwargs_final,
