@@ -189,7 +189,9 @@ async def _process_tool_calls_with_events_gen(
                 tool_call_dict,
                 messages_to_append,
                 is_multimodal,
-            ) = await _execute_single_tool_call(tool_call, tool_map)
+            ) = await _execute_single_tool_call(
+                tool_call, tool_map, event_emitter=tool_event_emitter
+            )
 
             # 从消息中提取工具结果
             if messages_to_append:
