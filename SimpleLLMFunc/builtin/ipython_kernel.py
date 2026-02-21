@@ -13,7 +13,7 @@ from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
 
 
-class Kernel:
+class iPyKernel:
     """iPython Kernel 管理类
 
     提供交互式 Python 代码执行能力，支持：
@@ -244,4 +244,4 @@ class Kernel:
         return f"Kernel {self.session_id} 已关闭"
 
 
-__all__ = ["Kernel"]
+__all__ = ["iPyKernel"]

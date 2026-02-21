@@ -1,13 +1,13 @@
 """
-iPython Kernel 代码执行示例
+iPython iPyKernel 代码执行示例
 
-这个示例展示如何使用 SimpleLLMFunc 的 builtin Kernel 实现交互式 Python 代码执行。
-iPython Kernel 的核心优势是保持连续上下文，变量可以在多次调用间持久化。
+这个示例展示如何使用 SimpleLLMFunc 的 builtin iPyKernel 实现交互式 Python 代码执行。
+iPython iPyKernel 的核心优势是保持连续上下文，变量可以在多次调用间持久化。
 
 关键特性：
 - 变量持久化：定义的变量可以在后续调用中使用
 - 实时输出：通过 event_emitter 实时获取 stdout/stderr
-- Session 隔离：不同的 Kernel 实例相互独立
+- Session 隔离：不同的 iPyKernel 实例相互独立
 
 运行要求：
     pip install jupyter-client
@@ -20,7 +20,7 @@ import asyncio
 import sys
 
 from SimpleLLMFunc import llm_chat
-from SimpleLLMFunc.builtin import Kernel
+from SimpleLLMFunc.builtin import iPyKernel
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
 from SimpleLLMFunc.hooks import (
     is_event_yield,
@@ -49,7 +49,7 @@ async def demo_basic_execution():
     print("示例 1: 基本代码执行")
     print("=" * 70)
 
-    kernel = Kernel()
+    kernel = iPyKernel()
     tools = kernel.toolset
 
     execute_tool = None
@@ -86,7 +86,7 @@ async def demo_continuous_context():
     print("示例 2: 连续上下文 - 变量持久化")
     print("=" * 70)
 
-    kernel = Kernel()
+    kernel = iPyKernel()
     tools = kernel.toolset
     execute_tool = next(t for t in tools if t.name == "execute_code")
 
@@ -132,7 +132,7 @@ async def demo_streaming_output():
     print("示例 3: 实时 Streaming 输出")
     print("=" * 70)
 
-    kernel = Kernel()
+    kernel = iPyKernel()
     tools = kernel.toolset
     execute_tool = next(t for t in tools if t.name == "execute_code")
 
@@ -173,10 +173,10 @@ async def demo_llm_integration():
         print("请配置 provider.json 后再试")
         return
 
-    kernel = Kernel()
+    kernel = iPyKernel()
     tools = kernel.toolset
 
-    print("\n任务：使用 LLM + Kernel 解决数据分析问题")
+    print("\n任务：使用 LLM + iPyKernel 解决数据分析问题")
     print("-" * 70)
 
     @llm_chat(
@@ -225,16 +225,16 @@ async def demo_llm_integration():
 
 
 async def demo_multiple_kernels():
-    """演示多个独立的 Kernel"""
+    """演示多个独立的 iPyKernel"""
     print("\n" + "=" * 70)
-    print("示例 5: 多个独立 Kernel")
+    print("示例 5: 多个独立 iPyKernel")
     print("=" * 70)
 
-    kernel1 = Kernel()
-    kernel2 = Kernel()
+    kernel1 = iPyKernel()
+    kernel2 = iPyKernel()
 
-    print(f"\nKernel 1 session_id: {kernel1.session_id}")
-    print(f"Kernel 2 session_id: {kernel2.session_id}")
+    print(f"\niPyKernel 1 session_id: {kernel1.session_id}")
+    print(f"iPyKernel 2 session_id: {kernel2.session_id}")
 
     exec1 = next(t for t in kernel1.toolset if t.name == "execute_code")
     await exec1.func(code="kernel1_var = 'hello from kernel1'")
@@ -245,12 +245,12 @@ async def demo_multiple_kernels():
     result1 = await exec1.func(code="kernel1_var")
     result2 = await exec2.func(code="kernel2_var")
 
-    print(f"\nKernel1 中的 kernel1_var: {result1['return_value']}")
-    print(f"Kernel2 中的 kernel2_var: {result2['return_value']}")
+    print(f"\niPyKernel1 中的 kernel1_var: {result1['return_value']}")
+    print(f"iPyKernel2 中的 kernel2_var: {result2['return_value']}")
 
     result1_cross = await exec1.func(code="kernel2_var")
     print(
-        f"\nKernel1 尝试访问 kernel2_var: {result1_cross['error'] or '成功 (应该是错误)'}"
+        f"\niPyKernel1 尝试访问 kernel2_var: {result1_cross['error'] or '成功 (应该是错误)'}"
     )
 
     await kernel1.close()
@@ -260,7 +260,7 @@ async def demo_multiple_kernels():
 async def main():
     """运行所有示例"""
     print("\n" + "=" * 70)
-    print("iPython Kernel 示例")
+    print("iPython iPyKernel 示例")
     print("=" * 70)
 
     await demo_basic_execution()

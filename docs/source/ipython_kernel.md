@@ -1,17 +1,17 @@
-# iPython Kernel 代码执行
+# iPython iPyKernel 代码执行
 
-SimpleLLMFunc 提供内置的 iPython Kernel 支持，允许 LLM 在一个连续上下文中执行 Python 代码。与传统的一次性代码执行不同，iPython Kernel 保持变量和状态，让 LLM 可以分步执行复杂任务。
+SimpleLLMFunc 提供内置的 iPython iPyKernel 支持，允许 LLM 在一个连续上下文中执行 Python 代码。与传统的一次性代码执行不同，iPython iPyKernel 保持变量和状态，让 LLM 可以分步执行复杂任务。
 
 ## 功能特性
 
 - **连续上下文**: 变量在多次调用间持久化，LLM 可以分步执行任务
 - **实时 Streaming**: 通过 `event_emitter` 实时获取 stdout/stderr 输出
-- **Session 隔离**: 不同的 Kernel 实例相互独立，互不影响
+- **Session 隔离**: 不同的 iPyKernel 实例相互独立，互不影响
 - **完整工具集**: 提供 execute_code、reset、list_variables、close 等工具
 
 ## 安装
 
-iPython Kernel 功能需要 `jupyter-client` 包：
+iPython iPyKernel 功能需要 `jupyter-client` 包：
 
 ```bash
 # 使用 poetry（推荐）
@@ -35,10 +35,10 @@ python -m ipykernel install --user --name=python3
 ```python
 import asyncio
 from SimpleLLMFunc import llm_chat
-from SimpleLLMFunc.builtin import Kernel
+from SimpleLLMFunc.builtin import iPyKernel
 
-# 创建 Kernel 实例
-kernel = Kernel()
+# 创建 iPyKernel 实例
+kernel = iPyKernel()
 
 # 获取工具集
 tools = kernel.toolset
@@ -62,12 +62,12 @@ async for output in python_assistant("创建一个列表并计算均值"):
     pass
 ```
 
-### 多 Kernel 隔离
+### 多 iPyKernel 隔离
 
 ```python
 # 创建两个独立的 kernel
-kernel1 = Kernel()
-kernel2 = Kernel()
+kernel1 = iPyKernel()
+kernel2 = iPyKernel()
 
 # 分别使用
 @llm_chat(toolkit=kernel1.toolset, ...)
@@ -111,7 +111,7 @@ async def chat2(message: str, history=None):
 
 ```python
 result = await kernel.reset()
-# 返回:置，所有变量已 "Kernel 已重清除"
+# 返回:置，所有变量已 "iPyKernel 已重清除"
 ```
 
 ### list_variables
@@ -163,11 +163,11 @@ async for output in llm_chat_function(message):
 
 ```python
 from SimpleLLMFunc import llm_chat
-from SimpleLLMFunc.builtin import Kernel
+from SimpleLLMFunc.builtin import iPyKernel
 from SimpleLLMFunc.hooks import is_event_yield, CustomEvent
 import sys
 
-kernel = Kernel()
+kernel = iPyKernel()
 
 @llm_chat(
     llm_interface=llm,
@@ -195,7 +195,7 @@ async for output in data_helper(
 ### 连续编程上下文
 
 ```python
-kernel = Kernel()
+kernel = iPyKernel()
 tools = kernel.toolset
 execute = next(t for t in tools if t.name == "execute_code")
 
@@ -219,10 +219,10 @@ print(result2['stdout'])  # "均值: 52.3"
 
 ## 配置选项
 
-### Kernel 构造函数参数
+### iPyKernel 构造函数参数
 
 ```python
-kernel = Kernel(
+kernel = iPyKernel(
     kernel_name="python3",  # 内核名称，默认 "python3"
     timeout=30,            # 执行超时（秒），默认 30
 )
@@ -245,7 +245,7 @@ python -m ipykernel install --user --name=myenv
 然后使用：
 
 ```python
-kernel = Kernel(kernel_name="myenv")
+kernel = iPyKernel(kernel_name="myenv")
 ```
 
 ## 最佳实践
@@ -253,7 +253,7 @@ kernel = Kernel(kernel_name="myenv")
 ### 1. 资源管理
 
 ```python
-kernel = Kernel()
+kernel = iPyKernel()
 
 try:
     # 使用 kernel
@@ -267,8 +267,8 @@ finally:
 
 ```python
 # 为不同任务创建独立的 kernel
-analysis_kernel = Kernel()
-experiment_kernel = Kernel()
+analysis_kernel = iPyKernel()
+experiment_kernel = iPyKernel()
 
 # 分析任务使用 analysis_kernel
 @llm_chat(toolkit=analysis_kernel.toolset, ...)
@@ -317,7 +317,7 @@ for event in events:
 ### 内核未找到
 
 ```
-NoSuchKernel: python3
+NoSuchiPyKernel: python3
 ```
 
 解决方案：
@@ -330,7 +330,7 @@ python -m ipykernel install --user --name=python3
 
 增加超时时间：
 ```python
-kernel = Kernel(timeout=120)  # 2分钟
+kernel = iPyKernel(timeout=120)  # 2分钟
 ```
 
 ### 变量未定义
