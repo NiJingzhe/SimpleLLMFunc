@@ -16,6 +16,7 @@ httpx = { extras = ["socks"], version = "^0.28.1" }
 rich = "^14.0.0"
 langfuse = "^3.6.1"
 tqdm = "^4.67.1"
+jupyter-client = "^8.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.4.0"
