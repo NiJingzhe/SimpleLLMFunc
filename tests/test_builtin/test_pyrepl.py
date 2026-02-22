@@ -5,6 +5,46 @@ from __future__ import annotations
 import pytest
 import asyncio
 
+from SimpleLLMFunc.hooks.events import CustomEvent
+
+
+async def _wait_for_input_request(
+    emitter,
+    seen_request_ids: set[str] | None = None,
+    timeout: float = 2.0,
+) -> tuple[str, str]:
+    """Wait until one unseen kernel_input_request event is emitted."""
+
+    seen = seen_request_ids if seen_request_ids is not None else set()
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        events = await emitter.get_events()
+        for event_yield in events:
+            event = event_yield.event
+            if not isinstance(event, CustomEvent):
+                continue
+            if event.event_name != "kernel_input_request":
+                continue
+
+            data = getattr(event, "data", None)
+            if not isinstance(data, dict):
+                continue
+
+            request_id = data.get("request_id")
+            prompt = data.get("prompt", "")
+            if not isinstance(request_id, str) or not request_id:
+                continue
+            if request_id in seen:
+                continue
+            if not isinstance(prompt, str):
+                prompt = ""
+
+            return request_id, prompt
+
+        await asyncio.sleep(0.01)
+
+    raise AssertionError("Timed out waiting for kernel_input_request event")
+
 
 class TestPyReplCreation:
     """Test PyRepl class creation."""
@@ -23,6 +63,28 @@ class TestPyReplCreation:
 
         repl = PyRepl()
         assert repl._lock is not None
+
+    def test_repl_timeout_defaults(self):
+        """PyRepl should expose documented timeout defaults."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        assert (
+            repl.execution_timeout_seconds == PyRepl.DEFAULT_EXECUTION_TIMEOUT_SECONDS
+        )
+        assert (
+            repl.input_idle_timeout_seconds == PyRepl.DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS
+        )
+
+    def test_repl_rejects_non_positive_timeouts(self):
+        """Timeout values should be validated at construction time."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        with pytest.raises(ValueError, match="execution_timeout_seconds"):
+            PyRepl(execution_timeout_seconds=0)
+
+        with pytest.raises(ValueError, match="input_idle_timeout_seconds"):
+            PyRepl(input_idle_timeout_seconds=0)
 
 
 class TestPyReplToolset:
@@ -216,14 +278,13 @@ class TestPyReplStreaming:
 
         events = await emitter.get_events()
 
-        stdout_events = [
-            e
-            for e in events
-            if isinstance(e.event, CustomEvent)
-            and e.event.event_name == "kernel_stdout"
-        ]
+        stdout_events = []
+        for event_yield in events:
+            event = event_yield.event
+            if isinstance(event, CustomEvent) and event.event_name == "kernel_stdout":
+                stdout_events.append(event)
         assert len(stdout_events) > 0
-        assert "test" in str(stdout_events[0].event.data)
+        assert "test" in str(stdout_events[0].data)
 
 
 class TestPyReplEventLoopSafety:
@@ -255,6 +316,113 @@ class TestPyReplEventLoopSafety:
         assert tick_count >= 3
 
 
+class TestPyReplTimeout:
+    """Test PyRepl timeout policy for execution and interactive input."""
+
+    @pytest.mark.asyncio
+    async def test_execute_timeout_is_configurable(self):
+        """Execution should honor configured timeout duration."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl(execution_timeout_seconds=0.2)
+        result = await repl.execute("import time\ntime.sleep(0.5)")
+
+        assert result["success"] is False
+        assert result["error"] is not None
+        assert "0.2 seconds" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_waiting_for_input_does_not_consume_timeout(self):
+        """input() waiting time should be excluded from timeout budget."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
+
+        repl = PyRepl(execution_timeout_seconds=0.2, input_idle_timeout_seconds=2)
+        emitter = ToolEventEmitter()
+
+        run_task = asyncio.create_task(
+            repl.execute(
+                "name = input('Name: ')\nprint(f'Hello, {name}!')",
+                event_emitter=emitter,
+            )
+        )
+
+        request_id, _prompt = await _wait_for_input_request(emitter)
+
+        await asyncio.sleep(0.35)
+        assert not run_task.done()
+
+        assert PyRepl.submit_input(request_id, "Alice") is True
+        result = await asyncio.wait_for(run_task, timeout=2)
+
+        assert result["success"] is True
+        assert "Hello, Alice!" in result["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_timeout_is_reset_after_each_input_submission(self):
+        """Each accepted input value should reset execution timeout window."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
+
+        repl = PyRepl(execution_timeout_seconds=0.2, input_idle_timeout_seconds=2)
+        emitter = ToolEventEmitter()
+
+        run_task = asyncio.create_task(
+            repl.execute(
+                """
+first = input('First: ')
+import time
+time.sleep(0.15)
+second = input('Second: ')
+print(first + second)
+""",
+                event_emitter=emitter,
+            )
+        )
+
+        seen_request_ids: set[str] = set()
+        request_1, prompt_1 = await _wait_for_input_request(emitter, seen_request_ids)
+        assert prompt_1 == "First: "
+        seen_request_ids.add(request_1)
+
+        await asyncio.sleep(0.3)
+        assert PyRepl.submit_input(request_1, "A") is True
+
+        request_2, prompt_2 = await _wait_for_input_request(emitter, seen_request_ids)
+        assert prompt_2 == "Second: "
+
+        await asyncio.sleep(0.3)
+        assert not run_task.done()
+        assert PyRepl.submit_input(request_2, "B") is True
+
+        result = await asyncio.wait_for(run_task, timeout=2)
+        assert result["success"] is True
+        assert "AB" in result["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_input_idle_timeout_is_enforced(self):
+        """Tool-input requests should fail after configured idle timeout."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
+
+        repl = PyRepl(execution_timeout_seconds=2, input_idle_timeout_seconds=0.2)
+        emitter = ToolEventEmitter()
+
+        run_task = asyncio.create_task(
+            repl.execute("value = input('Value: ')", event_emitter=emitter)
+        )
+
+        request_id, prompt = await _wait_for_input_request(emitter)
+        assert prompt == "Value: "
+
+        result = await asyncio.wait_for(run_task, timeout=2)
+
+        assert result["success"] is False
+        assert result["error"] == "Input request timed out after 0.2 seconds"
+        assert "Input request timed out after 0.2 seconds" in result["stderr"]
+        assert PyRepl.submit_input(request_id, "late") is False
+
+
 class TestPyReplInputHook:
     """Test PyRepl interactive input() bridge."""
 
@@ -269,7 +437,6 @@ class TestPyReplInputHook:
         """execute should emit input request and accept UI-provided response."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
-        from SimpleLLMFunc.hooks.events import CustomEvent
 
         repl = PyRepl()
         emitter = ToolEventEmitter()
@@ -281,27 +448,7 @@ class TestPyReplInputHook:
             )
         )
 
-        request_id = None
-        prompt = ""
-        deadline = asyncio.get_running_loop().time() + 2
-        while asyncio.get_running_loop().time() < deadline and request_id is None:
-            events = await emitter.get_events()
-            for event_yield in events:
-                event = event_yield.event
-                if (
-                    isinstance(event, CustomEvent)
-                    and event.event_name == "kernel_input_request"
-                ):
-                    data = getattr(event, "data", None)
-                    if isinstance(data, dict):
-                        request_id = data.get("request_id")
-                        prompt = data.get("prompt", "")
-                    break
-
-            if request_id is None:
-                await asyncio.sleep(0.01)
-
-        assert isinstance(request_id, str) and request_id
+        request_id, prompt = await _wait_for_input_request(emitter)
         assert prompt == "Name: "
         assert PyRepl.submit_input(request_id, "Alice") is True
 

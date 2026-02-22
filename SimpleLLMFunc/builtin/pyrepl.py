@@ -39,6 +39,14 @@ class _LineCapture(io.TextIOBase):
             self._buf = ""
 
 
+class _InputRequestTimeoutError(TimeoutError):
+    """Raised when waiting for a tool input request times out."""
+
+
+class _InputRequestInterruptedError(Exception):
+    """Raised when waiting for tool input is interrupted externally."""
+
+
 class PyRepl:
     """轻量级 Python REPL
 
@@ -58,11 +66,27 @@ class PyRepl:
 
     _input_registry_lock = threading.Lock()
     _pending_input_queues: Dict[str, queue.Queue[str]] = {}
+    DEFAULT_EXECUTION_TIMEOUT_SECONDS = 120.0
+    DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS = 300.0
 
-    def __init__(self):
+    def __init__(
+        self,
+        execution_timeout_seconds: float = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+        input_idle_timeout_seconds: float = DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS,
+    ):
+        execution_timeout = float(execution_timeout_seconds)
+        if execution_timeout <= 0:
+            raise ValueError("execution_timeout_seconds must be greater than 0")
+
+        input_idle_timeout = float(input_idle_timeout_seconds)
+        if input_idle_timeout <= 0:
+            raise ValueError("input_idle_timeout_seconds must be greater than 0")
+
         self.namespace: Dict[str, Any] = {}
         self._tools: Optional[List[Tool]] = None
         self._lock = threading.Lock()
+        self.execution_timeout_seconds = execution_timeout
+        self.input_idle_timeout_seconds = input_idle_timeout
 
     @classmethod
     def _register_input_queue(cls, request_id: str) -> queue.Queue[str]:
@@ -151,6 +175,8 @@ class PyRepl:
 
         start_time = time.time()
         loop = asyncio.get_running_loop()
+        timeout_seconds = self.execution_timeout_seconds
+        input_idle_timeout_seconds = self.input_idle_timeout_seconds
 
         stdout_parts: List[str] = []
         stderr_parts: List[str] = []
@@ -159,6 +185,34 @@ class PyRepl:
         done_event = threading.Event()
         stop_event = threading.Event()
         original_input = builtins.input
+        timeout_state_lock = threading.Lock()
+        timeout_deadline = time.monotonic() + timeout_seconds
+        pending_input_waiters = 0
+
+        def format_timeout_seconds(seconds: float) -> str:
+            if float(seconds).is_integer():
+                return str(int(seconds))
+            return f"{seconds:g}"
+
+        def mark_input_wait_start() -> None:
+            nonlocal pending_input_waiters
+            with timeout_state_lock:
+                pending_input_waiters += 1
+
+        def mark_input_wait_end(reset_timeout: bool) -> None:
+            nonlocal pending_input_waiters, timeout_deadline
+            with timeout_state_lock:
+                if pending_input_waiters > 0:
+                    pending_input_waiters -= 1
+                if reset_timeout:
+                    timeout_deadline = time.monotonic() + timeout_seconds
+
+        def is_timeout_reached() -> bool:
+            with timeout_state_lock:
+                if pending_input_waiters > 0:
+                    return False
+                deadline = timeout_deadline
+            return time.monotonic() >= deadline
 
         def emit_custom_event(event_name: str, data: Dict[str, Any]) -> None:
             if not event_emitter:
@@ -182,7 +236,14 @@ class PyRepl:
 
         def input_hook(prompt: str = "") -> str:
             if event_emitter is None:
-                return original_input(prompt)
+                mark_input_wait_start()
+                got_value = False
+                try:
+                    value = original_input(prompt)
+                    got_value = True
+                    return value
+                finally:
+                    mark_input_wait_end(reset_timeout=got_value)
 
             request_id = uuid.uuid4().hex
             request_queue = self._register_input_queue(request_id)
@@ -191,19 +252,34 @@ class PyRepl:
                 {
                     "request_id": request_id,
                     "prompt": prompt,
+                    "idle_timeout_seconds": input_idle_timeout_seconds,
                 },
             )
 
+            mark_input_wait_start()
+            got_value = False
+            request_deadline = time.monotonic() + input_idle_timeout_seconds
             try:
                 while not stop_event.is_set():
+                    remaining_seconds = request_deadline - time.monotonic()
+                    if remaining_seconds <= 0:
+                        raise _InputRequestTimeoutError(
+                            "Input request timed out after "
+                            f"{format_timeout_seconds(input_idle_timeout_seconds)} seconds"
+                        )
+
                     try:
-                        return request_queue.get(timeout=0.1)
+                        wait_timeout = min(0.1, remaining_seconds)
+                        value = request_queue.get(timeout=wait_timeout)
+                        got_value = True
+                        return value
                     except queue.Empty:
                         continue
             finally:
                 self._pop_input_queue(request_id)
+                mark_input_wait_end(reset_timeout=got_value)
 
-            raise EOFError("Input request interrupted")
+            raise _InputRequestInterruptedError("Input request interrupted")
 
         def run_code():
             nonlocal error_msg, return_value
@@ -238,8 +314,22 @@ class PyRepl:
                             on_output(return_value)
                     except SyntaxError:
                         pass
+                    except _InputRequestTimeoutError as exc:
+                        error_msg = str(exc)
+                        on_error(error_msg)
+                    except _InputRequestInterruptedError:
+                        if not stop_event.is_set():
+                            error_msg = "Input request interrupted"
+                            on_error(error_msg)
                     except Exception:
                         error_msg = traceback.format_exc()
+                        on_error(error_msg)
+                except _InputRequestTimeoutError as exc:
+                    error_msg = str(exc)
+                    on_error(error_msg)
+                except _InputRequestInterruptedError:
+                    if not stop_event.is_set():
+                        error_msg = "Input request interrupted"
                         on_error(error_msg)
                 except Exception:
                     error_msg = traceback.format_exc()
@@ -252,12 +342,23 @@ class PyRepl:
 
         thread = threading.Thread(target=run_code, daemon=True)
         thread.start()
-        completed = await asyncio.to_thread(done_event.wait, 30)
+        poll_interval_seconds = 0.1
+        timed_out = False
+        while not done_event.is_set():
+            await asyncio.sleep(poll_interval_seconds)
+            if done_event.is_set():
+                break
+            if is_timeout_reached():
+                timed_out = True
+                break
 
-        if not completed and error_msg is None:
+        if timed_out and error_msg is None:
             stop_event.set()
             await asyncio.to_thread(done_event.wait, 1)
-            error_msg = "Execution timed out after 30 seconds"
+            error_msg = (
+                "Execution timed out after "
+                f"{format_timeout_seconds(timeout_seconds)} seconds"
+            )
             stderr_parts.append(error_msg + "\n")
             if event_emitter:
                 await event_emitter.emit("kernel_stderr", {"text": error_msg + "\n"})
