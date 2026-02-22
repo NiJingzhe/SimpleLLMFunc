@@ -171,3 +171,7 @@ coverage*
 htmlcov/
 .claude/
 draft/
+
+
+context7.json
+provider.json
