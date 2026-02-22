@@ -118,10 +118,42 @@ if __name__ == "__main__":
     agent()
 ```
 
-运行：
+Run:
 
 ```bash
 poetry run python examples/tui_chat_example.py
+```
+
+### SelfReference memory operations (local, no model)
+
+**File**: [examples/self_reference_basic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/self_reference_basic_example.py)
+
+Shows how to use `SelfReference` without any LLM provider:
+
+- Explicitly wire `SelfReference` with `PyRepl`
+- Perform CRUD operations through `self_reference.memory["agent_main"]`
+- Persist durable preferences into system prompt via `append_system_prompt(...)`
+
+Run:
+
+```bash
+poetry run python examples/self_reference_basic_example.py
+```
+
+### SelfReference + TUI Agent
+
+**File**: [examples/tui_self_reference_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_self_reference_example.py)
+
+Shows full agent behavior when `@llm_chat` receives `self_reference`:
+
+- `llm_chat` automatically appends the SelfReference Memory Contract to system prompt
+- Agent mutates memory via memory handles inside `execute_code`
+- Per-turn memory edits are merged into `updated_history` / `ReactEndEvent.final_messages`
+
+Run:
+
+```bash
+poetry run python examples/tui_self_reference_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控

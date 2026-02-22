@@ -110,6 +110,36 @@ class TestPyReplToolset:
         assert "reset_repl" in tool_names
         assert "list_variables" in tool_names
 
+    def test_execute_tool_description_has_repl_guidance(self):
+        """execute_code description should guide LLM usage clearly."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        description = execute_tool.description
+        assert "persistent REPL session" in description
+        assert 'if __name__ == "__main__"' in description
+        assert "input()" in description
+        assert "does not delete self-reference conversation memory" in description
+
+    def test_all_tool_descriptions_are_english_guidance(self):
+        """Builtin tool descriptions should be explicit English guidance."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        descriptions = {tool.name: tool.description for tool in repl.toolset}
+
+        assert "Reset REPL runtime variables" in descriptions["reset_repl"]
+        assert "preserves attached self_reference object" in descriptions["reset_repl"]
+        assert "List user-defined variables" in descriptions["list_variables"]
+        assert (
+            "excluding private names and self_reference"
+            in descriptions["list_variables"]
+        )
+
 
 class TestPyReplExecute:
     """Test PyRepl execute functionality."""
@@ -218,6 +248,100 @@ class TestPyReplListVariables:
         names = [v["name"] for v in vars]
         assert "x" in names
         assert "name" in names
+
+
+class TestPyReplSelfReference:
+    """Test SelfReference integration in PyRepl namespace."""
+
+    def test_attach_self_reference_exposes_global(self):
+        """Attached self_reference should be available in REPL globals."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        repl = PyRepl()
+        repl.attach_self_reference(self_reference)
+
+        assert repl.namespace.get("self_reference") is self_reference
+
+    def test_bind_history_delegates_to_self_reference(self):
+        """PyRepl bind_history should update attached SelfReference store."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        repl = PyRepl(self_reference=self_reference)
+
+        repl.bind_history("agent_main", [{"role": "user", "content": "hello"}])
+
+        assert self_reference.list_history_keys() == ["agent_main"]
+        assert self_reference.snapshot_history("agent_main") == [
+            {"role": "user", "content": "hello"}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_execute_can_mutate_memory_via_self_reference_handle(self):
+        """execute_code should mutate memory through self_reference proxy methods."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        repl = PyRepl(self_reference=self_reference)
+
+        result = await repl.execute(
+            'self_reference.memory["agent_main"].append('
+            '{"role": "assistant", "content": "ok"})\n_ = 1'
+        )
+
+        assert result["success"] is True
+        assert self_reference.snapshot_history("agent_main") == [
+            {"role": "user", "content": "seed"},
+            {"role": "assistant", "content": "ok"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_reset_keeps_attached_self_reference(self):
+        """reset_repl should preserve attached self_reference global object."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        repl = PyRepl(self_reference=self_reference)
+
+        await repl.execute("x = 1")
+        await repl.reset()
+
+        assert repl.namespace.get("self_reference") is self_reference
+
+    @pytest.mark.asyncio
+    async def test_reset_does_not_delete_self_reference_memory(self):
+        """reset_repl should not clear SelfReference history store."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history(
+            "agent_main",
+            [{"role": "user", "content": "remember me"}],
+        )
+
+        repl = PyRepl(self_reference=self_reference)
+        await repl.execute("x = 1")
+        await repl.reset()
+
+        assert self_reference.snapshot_history("agent_main") == [
+            {"role": "user", "content": "remember me"}
+        ]
+
+    def test_bind_history_requires_attached_self_reference(self):
+        """Convenience bind API should fail when no self_reference is attached."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        with pytest.raises(RuntimeError, match="No self_reference attached"):
+            repl.bind_history("agent_main", [{"role": "user", "content": "x"}])
 
 
 class TestPyReplStreaming:

@@ -84,13 +84,16 @@ def build_chat_user_message_content(
 
 def build_chat_system_prompt(
     docstring: str,
-    tool_objects: Optional[List[Dict[str, Any]]],
+    tool_objects: Optional[List[Any]],
+    history_system_prompt: Optional[str] = None,
 ) -> Optional[str]:
     """构建聊天系统提示"""
-    if not docstring:
+    base_prompt = history_system_prompt if history_system_prompt else docstring
+
+    if not base_prompt:
         return None
 
-    system_content = docstring
+    system_content = base_prompt
 
     # 如果提供工具，添加工具描述
     if tool_objects:
@@ -106,6 +109,25 @@ def build_chat_system_prompt(
         )
 
     return system_content
+
+
+def extract_history_system_prompt(history: Optional[HistoryList]) -> Optional[str]:
+    """Extract latest valid system prompt from history list."""
+
+    if not history:
+        return None
+
+    for msg in reversed(history):
+        if not isinstance(msg, dict):
+            continue
+        if msg.get("role") != "system":
+            continue
+
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+
+    return None
 
 
 def filter_history_messages(
@@ -137,21 +159,22 @@ def build_chat_messages(
     # 1. 准备工具
     tool_param, tool_map = process_tools(toolkit, signature.func_name)
 
-    # 2. 构建系统提示
-    system_content = build_chat_system_prompt(
-        signature.docstring,
-        tool_param,
-    )
-    if system_content:
-        messages.append({"role": "system", "content": system_content})
-
-    # 3. 提取对话历史
+    # 2. 提取对话历史
     custom_history = extract_conversation_history(
         signature.bound_args.arguments,
         signature.func_name,
     )
 
-    # 4. 过滤并添加历史消息
+    # 3. 构建系统提示（history 中的 system prompt 优先）
+    system_content = build_chat_system_prompt(
+        signature.docstring,
+        tool_param,
+        history_system_prompt=extract_history_system_prompt(custom_history),
+    )
+    if system_content:
+        messages.append({"role": "system", "content": system_content})
+
+    # 4. 过滤并添加非 system 历史消息
     if custom_history:
         filtered_history = filter_history_messages(custom_history, signature.func_name)
         messages.extend(filtered_history)
@@ -176,4 +199,3 @@ def build_chat_messages(
         messages.append({"role": "user", "content": user_message_content})
 
     return messages
-

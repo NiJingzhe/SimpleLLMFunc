@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
@@ -10,6 +11,7 @@ from SimpleLLMFunc.llm_decorator.steps.chat.message import (
     build_chat_messages,
     build_chat_system_prompt,
     build_chat_user_message_content,
+    extract_history_system_prompt,
     extract_conversation_history,
     filter_history_messages,
 )
@@ -71,6 +73,31 @@ class TestBuildChatSystemPrompt:
         assert result is not None
         assert "test_tool" in result
 
+    def test_build_prefers_history_system_prompt(self) -> None:
+        """History-derived system prompt should override docstring text."""
+        result = build_chat_system_prompt(
+            "Docstring prompt",
+            None,
+            history_system_prompt="History prompt",
+        )
+        assert result == "History prompt"
+
+
+class TestExtractHistorySystemPrompt:
+    """Tests for extract_history_system_prompt helper."""
+
+    def test_extract_latest_system_prompt(self) -> None:
+        history = [
+            {"role": "system", "content": "old system"},
+            {"role": "user", "content": "hi"},
+            {"role": "system", "content": "new system"},
+        ]
+        assert extract_history_system_prompt(history) == "new system"
+
+    def test_extract_system_prompt_returns_none_when_missing(self) -> None:
+        history = [{"role": "user", "content": "hi"}]
+        assert extract_history_system_prompt(history) is None
+
 
 class TestBuildChatUserMessageContent:
     """Tests for build_chat_user_message_content function."""
@@ -86,13 +113,9 @@ class TestBuildChatUserMessageContent:
         assert "Hello" in result
 
     @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.build_multimodal_content")
-    def test_build_multimodal_content(
-        self, mock_build_multimodal: Any
-    ) -> None:
+    def test_build_multimodal_content(self, mock_build_multimodal: Any) -> None:
         """Test building multimodal user message content."""
-        mock_build_multimodal.return_value = [
-            {"type": "text", "text": "test"}
-        ]
+        mock_build_multimodal.return_value = [{"type": "text", "text": "test"}]
         arguments = {"image": "test"}
         type_hints = {"image": str}
         result = build_chat_user_message_content(
@@ -122,7 +145,7 @@ class TestFilterHistoryMessages:
         ]
         result = filter_history_messages(history, "test_func")
         assert len(result) == 1
-        assert result[0]["role"] == "user"
+        assert cast(dict[str, Any], result[0])["role"] == "user"
 
 
 class TestBuildChatMessages:
@@ -136,7 +159,7 @@ class TestBuildChatMessages:
         """Test building chat messages."""
         mock_process_tools.return_value = (None, {})
         mock_has_multimodal.return_value = False
-        
+
         from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
         import inspect
 
@@ -147,7 +170,7 @@ class TestBuildChatMessages:
         sig = inspect.signature(test_func)
         bound = sig.bind("Hello")
         bound.apply_defaults()
-        
+
         signature = FunctionSignature(
             func_name="test_func",
             trace_id="trace_123",
@@ -161,3 +184,41 @@ class TestBuildChatMessages:
         result = build_chat_messages(signature, None, ["history"])
         assert len(result) >= 1
 
+    @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.process_tools")
+    @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.has_multimodal_content")
+    def test_build_messages_uses_history_system_prompt(
+        self, mock_has_multimodal: Any, mock_process_tools: Any
+    ) -> None:
+        """History system prompt should override docstring in built messages."""
+        mock_process_tools.return_value = (None, {})
+        mock_has_multimodal.return_value = False
+
+        from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+        import inspect
+
+        def test_func(message: str, history=None) -> str:
+            """Docstring system prompt."""
+            return "result"
+
+        sig = inspect.signature(test_func)
+        history = [
+            {"role": "system", "content": "Runtime system prompt"},
+            {"role": "user", "content": "hello"},
+        ]
+        bound = sig.bind("Hello", history)
+        bound.apply_defaults()
+
+        signature = FunctionSignature(
+            func_name="test_func",
+            trace_id="trace_123",
+            bound_args=bound,
+            signature=sig,
+            type_hints={"message": str, "history": list, "return": str},
+            return_type=str,
+            docstring="Docstring system prompt.",
+        )
+
+        result = build_chat_messages(signature, None, ["history"])
+        first_message = cast(dict[str, Any], result[0])
+        assert first_message["role"] == "system"
+        assert first_message["content"] == "Runtime system prompt"
