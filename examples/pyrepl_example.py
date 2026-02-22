@@ -1,26 +1,27 @@
 """
-iPython iPyKernel 代码执行示例
+PyRepl 代码执行示例
 
-这个示例展示如何使用 SimpleLLMFunc 的 builtin iPyKernel 实现交互式 Python 代码执行。
-iPython iPyKernel 的核心优势是保持连续上下文，变量可以在多次调用间持久化。
+这个示例展示如何使用 SimpleLLMFunc 的 builtin PyRepl 实现交互式 Python 代码执行。
+PyRepl 的核心优势是保持连续上下文，变量可以在多次调用间持久化。
 
 关键特性：
+- 轻量实现：仅依赖 Python 内置模块，无需 jupyter_client
 - 变量持久化：定义的变量可以在后续调用中使用
 - 实时输出：通过 event_emitter 实时获取 stdout/stderr
-- Session 隔离：不同的 iPyKernel 实例相互独立
+- Session 隔离：不同的 PyRepl 实例相互独立
 
 运行要求：
-    pip install jupyter-client
+    无需额外依赖（仅 Python 内置模块）
 
 使用示例：
-    python ipython_kernel_example.py
+    python pyrepl_example.py
 """
 
 import asyncio
 import sys
 
 from SimpleLLMFunc import llm_chat
-from SimpleLLMFunc.builtin import iPyKernel
+from SimpleLLMFunc.builtin import PyRepl
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
 from SimpleLLMFunc.hooks import (
     is_event_yield,
@@ -49,8 +50,8 @@ async def demo_basic_execution():
     print("示例 1: 基本代码执行")
     print("=" * 70)
 
-    kernel = iPyKernel()
-    tools = kernel.toolset
+    repl = PyRepl()
+    tools = repl.toolset
 
     execute_tool = None
     for tool in tools:
@@ -77,8 +78,6 @@ result
     print(f"  return_value: {result['return_value']}")
     print(f"  execution_time_ms: {result['execution_time_ms']:.2f}")
 
-    await kernel.close()
-
 
 async def demo_continuous_context():
     """演示连续上下文（变量持久化）"""
@@ -86,8 +85,8 @@ async def demo_continuous_context():
     print("示例 2: 连续上下文 - 变量持久化")
     print("=" * 70)
 
-    kernel = iPyKernel()
-    tools = kernel.toolset
+    repl = PyRepl()
+    tools = repl.toolset
     execute_tool = next(t for t in tools if t.name == "execute_code")
 
     print("\n[第一次调用] 定义变量 x = [1, 2, 3, 4, 5]")
@@ -123,8 +122,6 @@ mean_val + std_val
     )
     print(f"  stdout: {result3['stdout']}")
 
-    await kernel.close()
-
 
 async def demo_streaming_output():
     """演示实时 streaming 输出"""
@@ -132,8 +129,8 @@ async def demo_streaming_output():
     print("示例 3: 实时 Streaming 输出")
     print("=" * 70)
 
-    kernel = iPyKernel()
-    tools = kernel.toolset
+    repl = PyRepl()
+    tools = repl.toolset
     execute_tool = next(t for t in tools if t.name == "execute_code")
 
     from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
@@ -159,8 +156,6 @@ print("完成!")
         if isinstance(event.event, CustomEvent):
             print(f"  [{event.event.event_name}] {event.event.data}")
 
-    await kernel.close()
-
 
 async def demo_llm_integration():
     """演示与 LLM 集成"""
@@ -173,10 +168,10 @@ async def demo_llm_integration():
         print("请配置 provider.json 后再试")
         return
 
-    kernel = iPyKernel()
-    tools = kernel.toolset
+    repl = PyRepl()
+    tools = repl.toolset
 
-    print("\n任务：使用 LLM + iPyKernel 解决数据分析问题")
+    print("\n任务：使用 LLM + PyRepl 解决数据分析问题")
     print("-" * 70)
 
     @llm_chat(
@@ -211,63 +206,100 @@ async def demo_llm_integration():
                     print(f"[stdout] {event.data['text']}", end="")
                 elif event.event_name == "kernel_stderr":
                     print(f"[stderr] {event.data['text']}", end="", file=sys.stderr)
-                elif event.event_name == "kernel_result":
-                    print(f"[result] {event.data['result']}")
-                elif event.event_name == "kernel_error":
-                    print(f"[error] {event.data['error']}")
         else:
             print(f"\n{'=' * 70}")
             print("LLM 最终响应:")
             print(f"{'=' * 70}")
             print(output.response)
 
-    await kernel.close()
 
-
-async def demo_multiple_kernels():
-    """演示多个独立的 iPyKernel"""
+async def demo_multiple_repls():
+    """演示多个独立的 PyRepl"""
     print("\n" + "=" * 70)
-    print("示例 5: 多个独立 iPyKernel")
+    print("示例 5: 多个独立 PyRepl")
     print("=" * 70)
 
-    kernel1 = iPyKernel()
-    kernel2 = iPyKernel()
+    repl1 = PyRepl()
+    repl2 = PyRepl()
 
-    print(f"\niPyKernel 1 session_id: {kernel1.session_id}")
-    print(f"iPyKernel 2 session_id: {kernel2.session_id}")
+    print(f"\nPyRepl 1: {id(repl1)}")
+    print(f"PyRepl 2: {id(repl2)}")
 
-    exec1 = next(t for t in kernel1.toolset if t.name == "execute_code")
-    await exec1.func(code="kernel1_var = 'hello from kernel1'")
+    exec1 = next(t for t in repl1.toolset if t.name == "execute_code")
+    await exec1.func(code="repl1_var = 'hello from repl1'")
 
-    exec2 = next(t for t in kernel2.toolset if t.name == "execute_code")
-    await exec2.func(code="kernel2_var = 'hello from kernel2'")
+    exec2 = next(t for t in repl2.toolset if t.name == "execute_code")
+    await exec2.func(code="repl2_var = 'hello from repl2'")
 
-    result1 = await exec1.func(code="kernel1_var")
-    result2 = await exec2.func(code="kernel2_var")
+    result1 = await exec1.func(code="repl1_var")
+    result2 = await exec2.func(code="repl2_var")
 
-    print(f"\niPyKernel1 中的 kernel1_var: {result1['return_value']}")
-    print(f"iPyKernel2 中的 kernel2_var: {result2['return_value']}")
+    print(f"\nPyRepl1 中的 repl1_var: {result1['return_value']}")
+    print(f"PyRepl2 中的 repl2_var: {result2['return_value']}")
 
-    result1_cross = await exec1.func(code="kernel2_var")
+    result1_cross = await exec1.func(code="repl2_var")
     print(
-        f"\niPyKernel1 尝试访问 kernel2_var: {result1_cross['error'] or '成功 (应该是错误)'}"
+        f"\nPyRepl1 尝试访问 repl2_var: {result1_cross['error'] or '成功 (应该是错误)'}"
     )
 
-    await kernel1.close()
-    await kernel2.close()
+
+async def demo_reset():
+    """演示重置功能"""
+    print("\n" + "=" * 70)
+    print("示例 6: 重置 PyRepl 状态")
+    print("=" * 70)
+
+    repl = PyRepl()
+    tools = repl.toolset
+    execute_tool = next(t for t in tools if t.name == "execute_code")
+    reset_tool = next(t for t in tools if t.name == "reset_repl")
+
+    await execute_tool.func(code="x = 100")
+    print("设置 x = 100")
+
+    result = await execute_tool.func(code="x")
+    print(f"读取 x: {result['return_value']}")
+
+    print("\n执行 reset_repl...")
+    reset_result = await reset_tool.func()
+    print(f"Reset 结果: {reset_result}")
+
+    result = await execute_tool.func(code="x")
+    print(f"重置后读取 x: {result['error'] or '成功读取 (应该报错)'}")
+
+
+async def demo_list_variables():
+    """演示列出变量功能"""
+    print("\n" + "=" * 70)
+    print("示例 7: 列出变量")
+    print("=" * 70)
+
+    repl = PyRepl()
+    tools = repl.toolset
+    execute_tool = next(t for t in tools if t.name == "execute_code")
+    list_tool = next(t for t in tools if t.name == "list_variables")
+
+    await execute_tool.func(code="x = 10")
+    await execute_tool.func(code="name = 'test'")
+    await execute_tool.func(code="import os")
+    print("创建了变量: x, name, os")
+
+    result = await list_tool.func()
+    print(f"\n当前变量: {result}")
 
 
 async def main():
     """运行所有示例"""
     print("\n" + "=" * 70)
-    print("iPython iPyKernel 示例")
+    print("PyRepl 示例")
     print("=" * 70)
 
     await demo_basic_execution()
     await demo_continuous_context()
     await demo_streaming_output()
-    await demo_llm_integration()
-    await demo_multiple_kernels()
+    await demo_list_variables()
+    await demo_reset()
+    await demo_multiple_repls()
 
     print("\n" + "=" * 70)
     print("所有示例完成!")

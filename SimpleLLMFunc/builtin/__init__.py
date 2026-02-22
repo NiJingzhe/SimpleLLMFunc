@@ -1,3 +1,3 @@
-from .ipython_kernel import iPyKernel
+from .pyrepl import PyRepl
 
-__all__ = ["iPyKernel"]
+__all__ = ["PyRepl"]
