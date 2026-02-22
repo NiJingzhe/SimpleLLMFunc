@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator
@@ -248,6 +249,7 @@ async def test_consume_react_stream_updates_model_and_tool_blocks() -> None:
 
     assert adapter.model_start_order == ["llm_call_1"]
     assert adapter.model_content["llm_call_1"] == "Hello world"
+    assert adapter.model_stats["llm_call_1"].startswith("test-model |")
     assert "1.20s" in adapter.model_stats["llm_call_1"]
     assert adapter.tool_output["call-1"] == "1\n"
     assert "0.30s" in adapter.tool_stats["call-1"]
@@ -345,3 +347,42 @@ async def test_consume_react_stream_requires_event_mode() -> None:
 
     with pytest.raises(ValueError, match="enable_event=True"):
         await consume_react_stream(_stream(), adapter=adapter)
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_stops_after_react_end_event() -> None:
+    """Consumer should return immediately once ReactEndEvent is received."""
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+    final_messages = [
+        {"role": "user", "content": "hello"},
+        {"role": "assistant", "content": "done"},
+    ]
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=ReactEndEvent(
+                event_type=ReActEventType.REACT_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                final_response="done",
+                final_messages=final_messages,
+                total_iterations=1,
+                total_execution_time=0.2,
+                total_tool_calls=0,
+                total_llm_calls=1,
+                total_token_usage=None,
+            )
+        )
+
+        # Simulate upstream cleanup that could otherwise block the UI.
+        await asyncio.Event().wait()
+
+    history = await asyncio.wait_for(
+        consume_react_stream(_stream(), adapter=adapter),
+        timeout=0.2,
+    )
+
+    assert history == final_messages

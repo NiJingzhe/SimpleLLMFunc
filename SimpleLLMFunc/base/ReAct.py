@@ -26,6 +26,7 @@ from typing import (
     Union,
     cast,
 )
+from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.type import (
@@ -76,6 +77,38 @@ from SimpleLLMFunc.base.tool_call import (
 )
 
 from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+
+
+def _as_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _read_context_token_counters() -> tuple[int, int]:
+    return (
+        _as_int(get_current_context_attribute("input_tokens") or 0),
+        _as_int(get_current_context_attribute("output_tokens") or 0),
+    )
+
+
+def _usage_from_context_delta(
+    input_before: int,
+    output_before: int,
+) -> Optional[CompletionUsage]:
+    input_after, output_after = _read_context_token_counters()
+    prompt_tokens = max(0, input_after - input_before)
+    completion_tokens = max(0, output_after - output_before)
+
+    if prompt_tokens == 0 and completion_tokens == 0:
+        return None
+
+    return CompletionUsage(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        total_tokens=prompt_tokens + completion_tokens,
+    )
 
 
 async def _process_tool_calls_with_events_gen(
@@ -521,6 +554,8 @@ async def execute_llm(
         # 如果没有传递任何 tool，不应该设置 tool_choice
         llm_kwargs_filtered.pop("tool_choice", None)
 
+    llm_input_tokens_before, llm_output_tokens_before = _read_context_token_counters()
+
     with langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_initial_llm_call",
@@ -614,6 +649,11 @@ async def execute_llm(
         if enable_event:
             try:
                 usage_info = extract_usage_from_response(last_response)
+                if usage_info is None:
+                    usage_info = _usage_from_context_delta(
+                        llm_input_tokens_before,
+                        llm_output_tokens_before,
+                    )
                 tool_calls_typed_initial: List[ToolCall] = (
                     [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
                 )
@@ -657,6 +697,11 @@ async def execute_llm(
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            llm_input_tokens_before,
+                            llm_output_tokens_before,
+                        )
                     final_content = (
                         extract_content_from_response(last_response, func_name)
                         if last_response
@@ -688,6 +733,11 @@ async def execute_llm(
 
             # 更新观测数据
             usage_info = extract_usage_from_response(last_response)
+            if usage_info is None:
+                usage_info = _usage_from_context_delta(
+                    llm_input_tokens_before,
+                    llm_output_tokens_before,
+                )
             usage_dict_no_tools: Optional[Dict[str, int]] = None
             if usage_info:
                 usage_dict_no_tools = {
@@ -704,6 +754,11 @@ async def execute_llm(
 
         # 更新观测数据
         usage_info = extract_usage_from_response(last_response)
+        if usage_info is None:
+            usage_info = _usage_from_context_delta(
+                llm_input_tokens_before,
+                llm_output_tokens_before,
+            )
         usage_dict_with_tools: Optional[Dict[str, int]] = None
         if usage_info:
             usage_dict_with_tools = {
@@ -798,6 +853,11 @@ async def execute_llm(
                 pass
 
         total_llm_calls += 1
+
+        (
+            iteration_input_tokens_before,
+            iteration_output_tokens_before,
+        ) = _read_context_token_counters()
 
         # 为迭代调用创建新的观测
         with langfuse_client.start_as_current_observation(
@@ -904,6 +964,11 @@ async def execute_llm(
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            iteration_input_tokens_before,
+                            iteration_output_tokens_before,
+                        )
                     tool_calls_typed_iteration: List[ToolCall] = (
                         [dict_to_tool_call(tc) for tc in tool_calls]
                         if tool_calls
@@ -928,6 +993,11 @@ async def execute_llm(
 
             # 更新迭代生成观测数据
             usage_info = extract_usage_from_response(last_response)
+            if usage_info is None:
+                usage_info = _usage_from_context_delta(
+                    iteration_input_tokens_before,
+                    iteration_output_tokens_before,
+                )
             usage_dict_iteration: Optional[Dict[str, int]] = None
             if usage_info:
                 usage_dict_iteration = {
@@ -982,6 +1052,11 @@ async def execute_llm(
             if enable_event:
                 try:
                     usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            iteration_input_tokens_before,
+                            iteration_output_tokens_before,
+                        )
                     final_content = (
                         extract_content_from_response(last_response, func_name)
                         if last_response
@@ -1096,6 +1171,10 @@ async def execute_llm(
 
     total_llm_calls += 1
 
+    final_input_tokens_before, final_output_tokens_before = (
+        _read_context_token_counters()
+    )
+
     # 为最终调用创建观测
     with langfuse_client.start_as_current_observation(
         as_type="generation",
@@ -1122,6 +1201,11 @@ async def execute_llm(
         # 提取最终响应内容和用量
         final_content = extract_content_from_response(final_response, func_name)
         usage_info = extract_usage_from_response(final_response)
+        if usage_info is None:
+            usage_info = _usage_from_context_delta(
+                final_input_tokens_before,
+                final_output_tokens_before,
+            )
 
         # 发射最终 LLM 调用结束事件
         final_llm_execution_time = time.time() - final_llm_start_time

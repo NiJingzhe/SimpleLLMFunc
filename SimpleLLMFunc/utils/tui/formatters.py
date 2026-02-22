@@ -85,14 +85,20 @@ def extract_text_from_response(response: Any) -> str:
     return ""
 
 
-def format_model_stats(execution_time: float, usage: Optional[LLMUsage]) -> str:
+def format_model_stats(
+    execution_time: float,
+    usage: Optional[LLMUsage],
+    model_name: Optional[str] = None,
+) -> str:
     """Format model call stats line."""
 
+    model_label = model_name or "LLM"
+
     if usage is None:
-        return f"LLM | {execution_time:.2f}s"
+        return f"{model_label} | {execution_time:.2f}s"
 
     return (
-        f"LLM | {execution_time:.2f}s | "
+        f"{model_label} | {execution_time:.2f}s | "
         f"tokens {usage.prompt_tokens}/{usage.completion_tokens}/{usage.total_tokens} "
         "(in/out/total)"
     )

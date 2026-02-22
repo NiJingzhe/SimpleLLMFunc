@@ -137,7 +137,12 @@ async def _handle_event(
             if text:
                 await adapter.append_model_content(model_call_id, text)
 
-        stats_line = format_model_stats(event.execution_time, event.usage)
+        model_name = getattr(event.response, "model", None)
+        stats_line = format_model_stats(
+            execution_time=event.execution_time,
+            usage=event.usage,
+            model_name=model_name,
+        )
         await adapter.finish_model_response(model_call_id, stats_line)
         return
 
@@ -260,6 +265,12 @@ async def consume_react_stream(
             state=state,
             custom_hooks=hooks,
         )
+
+        # ReactEndEvent already carries the final history for this turn.
+        # Stop waiting for stream exhaustion to avoid UI stalls when upstream
+        # generators delay cleanup after emitting the terminal event.
+        if isinstance(output.event, ReactEndEvent):
+            break
 
     if not saw_event:
         raise ValueError(
