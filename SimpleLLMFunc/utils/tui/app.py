@@ -372,7 +372,14 @@ class AgentTUIApp(App[None]):
         result_widget = Static()
         stats_widget = Static("", classes="stats")
 
-        args_widget.update(Markdown(format_tool_arguments_markdown(arguments)))
+        args_widget.update(
+            Markdown(
+                format_tool_arguments_markdown(
+                    arguments,
+                    tool_name=tool_name,
+                )
+            )
+        )
 
         await model.tool_list_widget.mount(root)
         await root.mount(title)

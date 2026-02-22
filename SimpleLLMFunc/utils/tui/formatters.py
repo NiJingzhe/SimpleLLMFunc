@@ -119,7 +119,20 @@ def _format_primitive(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-def format_tool_arguments_markdown(arguments: dict[str, Any]) -> str:
+def _render_fenced_code_block(code: str, language: str = "") -> list[str]:
+    normalized = code.rstrip("\n")
+    fence = "```"
+    if "```" in normalized:
+        fence = "````"
+
+    fence_header = f"{fence}{language}" if language else fence
+    return [fence_header, normalized, fence]
+
+
+def format_tool_arguments_markdown(
+    arguments: dict[str, Any],
+    tool_name: Optional[str] = None,
+) -> str:
     """Format tool arguments to readable markdown."""
 
     if not arguments:
@@ -127,6 +140,11 @@ def format_tool_arguments_markdown(arguments: dict[str, Any]) -> str:
 
     lines: list[str] = []
     for key, value in arguments.items():
+        if tool_name == "execute_code" and key == "code" and isinstance(value, str):
+            lines.append(f"- `{key}`:")
+            lines.extend(_render_fenced_code_block(value, language="python"))
+            continue
+
         if isinstance(value, (dict, list)):
             pretty = json.dumps(value, ensure_ascii=False, indent=2)
             lines.append(f"- `{key}`:")
