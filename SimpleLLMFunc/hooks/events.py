@@ -313,6 +313,8 @@ class CustomEvent(ReActEvent):
     # 自定义事件信息
     event_name: str  # 事件名称，由用户定义
     data: Any = None  # 事件数据，任意类型
+    tool_name: Optional[str] = None  # 所属工具名称（如果可用）
+    tool_call_id: Optional[str] = None  # 所属工具调用 ID（如果可用）
 
 
 __all__ = [

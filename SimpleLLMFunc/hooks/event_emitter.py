@@ -47,6 +47,8 @@ class ToolEventEmitter:
     _trace_id: str = ""
     _func_name: str = ""
     _iteration: int = 0
+    _tool_name: str = ""
+    _tool_call_id: str = ""
 
     def __post_init__(self):
         """初始化后处理"""
@@ -76,6 +78,8 @@ class ToolEventEmitter:
             iteration=self._iteration,
             event_name=event_name,
             data=data,
+            tool_name=self._tool_name or None,
+            tool_call_id=self._tool_call_id or None,
         )
 
         from SimpleLLMFunc.hooks.stream import EventYield

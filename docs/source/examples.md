@@ -6,33 +6,32 @@
 
 ## 基础示例
 
-### llm_function 基础使用
+### llm_function 结构化输出（Pydantic）
 
-**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+**文件**: [examples/llm_function_pydantic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_pydantic_example.py)
 
-这个例子展示了如何使用 `@llm_function` 装饰器创建 LLM 驱动的函数：
-- 基本的文本分析
-- 动态模板参数的使用
-- 结构化输出（Pydantic 模型）
-- 类型安全的返回值处理
+这个例子展示了如何使用 `@llm_function` 返回复杂 Pydantic 结构：
+- 多层嵌套模型定义
+- 自动结构化解析
+- 类型安全返回值处理
 
-### 产品评论分析
+### 动态模板参数
 
-**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+**文件**: [examples/dynamic_template_demo.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/dynamic_template_demo.py)
 
-演示如何使用 `@llm_function` 进行产品评论分析：
-- 定义 Pydantic 模型作为返回类型
-- 自动解析 LLM 的结构化输出
-- 处理复杂的返回格式
+演示如何在调用时通过 `_template_params` 动态填充 DocString 模板：
+- 一个函数适配多种任务
+- 按角色/风格切换 Prompt
+- 降低重复函数定义
 
-### 天气信息查询与建议
+### llm_function 事件流 + Pydantic
 
-**文件**: [examples/llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+**文件**: [examples/llm_function_event_pydantic.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_event_pydantic.py)
 
-展示工具集成的基础示例：
-- 定义 `@tool` 装饰器的工具函数
-- 在 `@llm_function` 中使用工具
-- 处理 LLM 的工具调用
+展示 `@llm_function(enable_event=True)` 的事件流与结构化输出协同：
+- 捕获 LLM 调用事件
+- 观察执行统计
+- 处理最终结构化结果
 
 ## 高级示例
 
@@ -94,6 +93,37 @@ python examples/event_stream_chatbot.py
 
 **详细文档**：了解更多事件流的使用方法，请参考 [事件流系统](detailed_guide/event_stream.md)。
 
+### 开箱即用终端 TUI
+
+**文件**: [examples/tui_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_chat_example.py)
+
+展示 `@tui` 与 `@llm_chat` 叠加后的终端体验：
+
+- 聊天输入循环（底部输入框）
+- 模型流式输出 + Markdown 渲染
+- 灰色 reasoning delta（模型支持时）
+- 工具调用参数/结果可视化
+- 自定义 tool event hook（`custom_event_hook`）
+- 示例同时注册 `PyRepl`（`execute_code`）与 `batch_process`，演示内置 hook + 自定义 hook
+
+核心写法：
+
+```python
+@tui(custom_event_hook=[my_hook])
+@llm_chat(..., stream=True, enable_event=True)
+async def agent(message: str, history=None):
+    ...
+
+if __name__ == "__main__":
+    agent()
+```
+
+运行：
+
+```bash
+poetry run python examples/tui_chat_example.py
+```
+
 ### llm_function 事件流与 Token 用量监控
 
 **文件**: [examples/llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)
@@ -142,15 +172,23 @@ async for output in summarize_text(text="..."):
 poetry run python examples/llm_function_token_usage.py
 ```
 
-### llm_chat 聊天应用
+### llm_chat 事件流聊天应用
 
-**文件**: [examples/llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
+**文件**: [examples/event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)
 
-展示如何使用 `@llm_chat` 装饰器构建对话应用：
-- 多轮对话的历史管理
-- 流式响应的处理
-- 工具在对话中的应用
-- 对话会话的保存和加载
+展示如何使用 `@llm_chat` + 事件流构建完整对话应用：
+- 多轮对话历史管理
+- 流式响应与事件并行消费
+- 工具调用可视化与统计
+
+### 自定义 Tool 事件
+
+**文件**: [examples/custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)
+
+演示在工具执行期间发射并消费自定义事件：
+- `ToolEventEmitter` 进度事件上报
+- `CustomEvent` 消费与渲染
+- 批处理任务过程可视化
 
 ### 并行工具调用
 
@@ -193,18 +231,18 @@ poetry run python examples/llm_function_token_usage.py
 ## 按功能分类的示例
 
 ### 文本处理
-- **文本分类**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
-- **文本摘要**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
-- **情感分析**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+- **结构化提取**: 见 [llm_function_pydantic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_pydantic_example.py)
+- **动态模板**: 见 [dynamic_template_demo.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/dynamic_template_demo.py)
+- **事件流监控**: 见 [llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)
 
 ### 工具调用
-- **单个工具调用**: 见 [llm_function_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_example.py)
+- **内置 REPL 工具调用**: 见 [pyrepl_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/pyrepl_example.py)
 - **多工具并行调用**: 见 [parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)
 
 ### 对话与 Agent
-- **基础聊天**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
-- **带工具的聊天**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
-- **多会话并发**: 见 [llm_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_chat_example.py)
+- **事件流聊天**: 见 [event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)
+- **自定义工具事件**: 见 [custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)
+- **终端 TUI 聊天**: 见 [tui_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_chat_example.py)
 - **事件流观测**: 见 [event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py) ⭐ 使用 `enable_event=True` 实时观察 ReAct 循环执行过程
 
 ### 多模态处理
@@ -225,10 +263,10 @@ poetry run python examples/llm_function_token_usage.py
 cd examples
 
 # 运行基础 LLM 函数示例
-python llm_function_example.py
+python llm_function_pydantic_example.py
 
 # 运行聊天示例
-python llm_chat_example.py
+python event_stream_chatbot.py
 
 # 运行并行工具调用示例
 python parallel_toolcall_example.py
@@ -238,6 +276,9 @@ python multi_modality_toolcall.py
 
 # 运行事件流 Chatbot 示例（需要先安装 rich: pip install rich）
 python event_stream_chatbot.py
+
+# 运行 Textual TUI 示例
+python tui_chat_example.py
 ```
 
 ## 完整的 Examples 目录
@@ -256,12 +297,12 @@ python event_stream_chatbot.py
 
 ### 初级用户
 1. 阅读 [快速开始](quickstart.md) 文档
-2. 运行 `llm_function_example.py`
+2. 运行 `llm_function_pydantic_example.py`
 3. 修改示例代码，尝试自己的 Prompt
 
 ### 中级用户
 1. 学习 [llm_chat 装饰器文档](detailed_guide/llm_chat.md)
-2. 运行 `llm_chat_example.py`
+2. 运行 `event_stream_chatbot.py`
 3. 尝试 `parallel_toolcall_example.py`
 
 ### 高级用户

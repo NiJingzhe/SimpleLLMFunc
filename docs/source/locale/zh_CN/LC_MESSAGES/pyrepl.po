@@ -1,0 +1,254 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-22 18:55+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/pyrepl.md:1
+msgid "PyRepl 代码执行"
+msgstr "PyRepl 代码执行"
+
+#: ../../source/pyrepl.md:3
+msgid ""
+"SimpleLLMFunc 提供内置的 PyRepl 支持，允许 LLM 在一个连续上下文中执行 Python "
+"代码。与传统的一次性代码执行不同，PyRepl 保持变量和状态，让 LLM 可以分步执行复杂任务。"
+msgstr ""
+"SimpleLLMFunc 提供内置的 PyRepl 支持，允许 LLM 在一个连续上下文中执行 Python "
+"代码。与传统的一次性代码执行不同，PyRepl 保持变量和状态，让 LLM 可以分步执行复杂任务。"
+
+#: ../../source/pyrepl.md:5
+msgid "功能特性"
+msgstr "功能特性"
+
+#: ../../source/pyrepl.md:7
+msgid "**轻量实现**：仅依赖 Python 内置模块，无需 jupyter_client"
+msgstr "**轻量实现**：仅依赖 Python 内置模块，无需 jupyter_client"
+
+#: ../../source/pyrepl.md:8
+msgid "**连续上下文**：变量在多次调用间持久化，LLM 可以分步执行任务"
+msgstr "**连续上下文**：变量在多次调用间持久化，LLM 可以分步执行任务"
+
+#: ../../source/pyrepl.md:9
+msgid "**实时 Streaming**：通过 `event_emitter` 实时获取 stdout/stderr 输出"
+msgstr "**实时 Streaming**：通过 `event_emitter` 实时获取 stdout/stderr 输出"
+
+#: ../../source/pyrepl.md:10
+msgid "**异步不阻塞**：代码执行在独立线程运行，不阻塞主事件循环（适合 TUI/流式 UI）"
+msgstr "**异步不阻塞**：代码执行在独立线程运行，不阻塞主事件循环（适合 TUI/流式 UI）"
+
+#: ../../source/pyrepl.md:11
+msgid "**Session 隔离**：不同的 PyRepl 实例相互独立，互不影响"
+msgstr "**Session 隔离**：不同的 PyRepl 实例相互独立，互不影响"
+
+#: ../../source/pyrepl.md:12
+msgid "**完整工具集**：提供 execute_code、reset_repl、list_variables 等工具"
+msgstr "**完整工具集**：提供 execute_code、reset_repl、list_variables 等工具"
+
+#: ../../source/pyrepl.md:13
+msgid "**超时保护**：单次 `execute_code` 默认 30 秒超时，超时会返回错误信息"
+msgstr "**超时保护**：单次 `execute_code` 默认 30 秒超时，超时会返回错误信息"
+
+#: ../../source/pyrepl.md:15
+msgid "快速开始"
+msgstr "快速开始"
+
+#: ../../source/pyrepl.md:17
+msgid "基本用法"
+msgstr "基本用法"
+
+#: ../../source/pyrepl.md:49
+msgid "多 PyRepl 隔离"
+msgstr "多 PyRepl 隔离"
+
+#: ../../source/pyrepl.md:66
+msgid "工具详解"
+msgstr "工具详解"
+
+#: ../../source/pyrepl.md:68
+msgid "execute_code"
+msgstr "execute_code"
+
+#: ../../source/pyrepl.md:70
+msgid "执行 Python 代码，返回执行结果。"
+msgstr "执行 Python 代码，返回执行结果。"
+
+#: ../../source/pyrepl.md:72
+msgid ""
+"说明：`execute_code` 默认有 30 秒超时保护。超时时 `success=False`，并在 `error`/`stderr` "
+"中返回超时信息。"
+msgstr ""
+"说明：`execute_code` 默认有 30 秒超时保护。超时时 `success=False`，并在 `error`/`stderr` "
+"中返回超时信息。"
+
+#: ../../source/pyrepl.md:74
+msgid "**参数：**"
+msgstr "**参数：**"
+
+#: ../../source/pyrepl.md
+msgid "参数"
+msgstr "参数"
+
+#: ../../source/pyrepl.md
+msgid "类型"
+msgstr "类型"
+
+#: ../../source/pyrepl.md
+msgid "描述"
+msgstr "描述"
+
+#: ../../source/pyrepl.md
+msgid "code"
+msgstr "code"
+
+#: ../../source/pyrepl.md
+msgid "str"
+msgstr "str"
+
+#: ../../source/pyrepl.md
+msgid "要执行的 Python 代码"
+msgstr "要执行的 Python 代码"
+
+#: ../../source/pyrepl.md
+msgid "event_emitter"
+msgstr "event_emitter"
+
+#: ../../source/pyrepl.md
+msgid "ToolEventEmitter"
+msgstr "ToolEventEmitter"
+
+#: ../../source/pyrepl.md
+msgid "可选，事件发射器用于实时输出"
+msgstr "可选，事件发射器用于实时输出"
+
+#: ../../source/pyrepl.md:81
+msgid "**返回值：**"
+msgstr "**返回值：**"
+
+#: ../../source/pyrepl.md:94
+msgid "reset_repl"
+msgstr "reset_repl"
+
+#: ../../source/pyrepl.md:96
+msgid "重置 repl 状态，清除所有变量。"
+msgstr "重置 repl 状态，清除所有变量。"
+
+#: ../../source/pyrepl.md:103
+msgid "list_variables"
+msgstr "list_variables"
+
+#: ../../source/pyrepl.md:105
+msgid "列出当前 repl 中定义的所有变量。"
+msgstr "列出当前 repl 中定义的所有变量。"
+
+#: ../../source/pyrepl.md:112
+msgid "Streaming 事件"
+msgstr "Streaming 事件"
+
+#: ../../source/pyrepl.md:114
+msgid "当 `enable_event=True` 时，`execute_code` 会实时发射以下事件："
+msgstr "当 `enable_event=True` 时，`execute_code` 会实时发射以下事件："
+
+#: ../../source/pyrepl.md
+msgid "事件名"
+msgstr "事件名"
+
+#: ../../source/pyrepl.md
+msgid "data 字段"
+msgstr "data 字段"
+
+#: ../../source/pyrepl.md
+msgid "`kernel_stdout`"
+msgstr "`kernel_stdout`"
+
+#: ../../source/pyrepl.md
+#, python-brace-format
+msgid "`{text: str}`"
+msgstr "`{text: str}`"
+
+#: ../../source/pyrepl.md
+msgid "标准输出"
+msgstr "标准输出"
+
+#: ../../source/pyrepl.md
+msgid "`kernel_stderr`"
+msgstr "`kernel_stderr`"
+
+#: ../../source/pyrepl.md
+msgid "标准错误"
+msgstr "标准错误"
+
+#: ../../source/pyrepl.md:121
+msgid "捕获 Streaming 事件"
+msgstr "捕获 Streaming 事件"
+
+#: ../../source/pyrepl.md:136
+msgid "使用示例"
+msgstr "使用示例"
+
+#: ../../source/pyrepl.md:138
+msgid "数据分析助手"
+msgstr "数据分析助手"
+
+#: ../../source/pyrepl.md:171
+msgid "连续编程上下文"
+msgstr "连续编程上下文"
+
+#: ../../source/pyrepl.md:196
+msgid "配置选项"
+msgstr "配置选项"
+
+#: ../../source/pyrepl.md:198
+msgid "PyRepl 构造函数参数"
+msgstr "PyRepl 构造函数参数"
+
+#: ../../source/pyrepl.md:205
+msgid "最佳实践"
+msgstr "最佳实践"
+
+#: ../../source/pyrepl.md:207
+msgid "1. Session 隔离"
+msgstr "1. Session 隔离"
+
+#: ../../source/pyrepl.md:225
+msgid "2. 错误处理"
+msgstr "2. 错误处理"
+
+#: ../../source/pyrepl.md:236
+msgid "3. 实时反馈"
+msgstr "3. 实时反馈"
+
+#: ../../source/pyrepl.md:238
+msgid "启用 `event_emitter` 获取实时输出，提供更好的用户体验："
+msgstr "启用 `event_emitter` 获取实时输出，提供更好的用户体验："
+
+#: ../../source/pyrepl.md:256
+msgid "4. 重置状态"
+msgstr "4. 重置状态"
+
+#: ../../source/pyrepl.md:258
+msgid "当需要重新开始时，可以使用 `reset_repl` 清除所有变量："
+msgstr "当需要重新开始时，可以使用 `reset_repl` 清除所有变量："
+
+#: ../../source/pyrepl.md:266
+msgid "相关链接"
+msgstr "相关链接"
+
+#: ../../source/pyrepl.md:268
+msgid "示例文件：`examples/pyrepl_example.py`"
+msgstr "示例文件：`examples/pyrepl_example.py`"

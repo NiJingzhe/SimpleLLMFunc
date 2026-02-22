@@ -7,659 +7,708 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-01-09 06:03+0800\n"
+"POT-Creation-Date: 2026-02-22 18:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/detailed_guide/event_stream.md:1
 msgid "事件流系统（Event Stream）"
-msgstr ""
+msgstr "事件流系统（Event Stream）"
 
 #: ../../source/detailed_guide/event_stream.md:3
 msgid ""
-"事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。通过启用事件流，你可以监控 "
-"LLM 调用、工具调用、流式响应等所有关键环节，实现更精细的控制和更好的用户体验。"
+"事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。通过启用事件流，你可以监控 LLM"
+" 调用、工具调用、流式响应等所有关键环节，实现更精细的控制和更好的用户体验。"
 msgstr ""
+"事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。通过启用事件流，你可以监控 LLM"
+" 调用、工具调用、流式响应等所有关键环节，实现更精细的控制和更好的用户体验。"
 
 #: ../../source/detailed_guide/event_stream.md:5
 msgid "**适用范围**：事件流系统同时支持 `@llm_chat` 和 `@llm_function` 装饰器，提供统一的事件观测体验。"
-msgstr ""
+msgstr "**适用范围**：事件流系统同时支持 `@llm_chat` 和 `@llm_function` 装饰器，提供统一的事件观测体验。"
 
 #: ../../source/detailed_guide/event_stream.md:7
 msgid "概述"
-msgstr ""
+msgstr "概述"
 
 #: ../../source/detailed_guide/event_stream.md:9
 msgid "什么是事件流？"
-msgstr ""
+msgstr "什么是事件流？"
 
 #: ../../source/detailed_guide/event_stream.md:11
 msgid "事件流（Event Stream）是一种观察者模式的应用，它会在 ReAct 循环执行过程中产生一系列事件，包括："
-msgstr ""
+msgstr "事件流（Event Stream）是一种观察者模式的应用，它会在 ReAct 循环执行过程中产生一系列事件，包括："
 
 #: ../../source/detailed_guide/event_stream.md:13
 msgid "**LLM 调用事件**：LLM 调用开始、流式 chunk 到达、调用结束"
-msgstr ""
+msgstr "**LLM 调用事件**：LLM 调用开始、流式 chunk 到达、调用结束"
 
 #: ../../source/detailed_guide/event_stream.md:14
 msgid "**工具调用事件**：工具调用开始、执行完成、批次处理"
-msgstr ""
+msgstr "**工具调用事件**：工具调用开始、执行完成、批次处理"
 
 #: ../../source/detailed_guide/event_stream.md:15
 msgid "**ReAct 循环事件**：循环开始、迭代开始/结束、循环结束"
-msgstr ""
+msgstr "**ReAct 循环事件**：循环开始、迭代开始/结束、循环结束"
 
 #: ../../source/detailed_guide/event_stream.md:16
 msgid "**执行统计**：Token 使用量、执行耗时、调用次数等"
-msgstr ""
+msgstr "**执行统计**：Token 使用量、执行耗时、调用次数等"
 
 #: ../../source/detailed_guide/event_stream.md:18
 msgid "为什么需要事件流？"
-msgstr ""
+msgstr "为什么需要事件流？"
 
 #: ../../source/detailed_guide/event_stream.md:20
 msgid "在传统使用中，你只能获得最终的响应结果。而事件流提供了："
-msgstr ""
+msgstr "在传统使用中，你只能获得最终的响应结果。而事件流提供了："
 
 #: ../../source/detailed_guide/event_stream.md:22
 msgid "**实时监控**：观察 LLM 和工具调用的实时状态"
-msgstr ""
+msgstr "**实时监控**：观察 LLM 和工具调用的实时状态"
 
 #: ../../source/detailed_guide/event_stream.md:23
 msgid "**性能分析**：获取详细的执行统计和性能指标（Token 用量、耗时等）"
-msgstr ""
+msgstr "**性能分析**：获取详细的执行统计和性能指标（Token 用量、耗时等）"
 
 #: ../../source/detailed_guide/event_stream.md:24
 msgid "**自定义 UI**：基于事件构建丰富的用户界面（进度条、流式显示等）"
-msgstr ""
+msgstr "**自定义 UI**：基于事件构建丰富的用户界面（进度条、流式显示等）"
 
 #: ../../source/detailed_guide/event_stream.md:25
 msgid "**调试支持**：深入了解 ReAct 循环的执行细节"
-msgstr ""
+msgstr "**调试支持**：深入了解 ReAct 循环的执行细节"
 
 #: ../../source/detailed_guide/event_stream.md:26
 msgid "**状态管理**：通过 Wrapper 模式实现 Context Compression、状态持久化等"
-msgstr ""
+msgstr "**状态管理**：通过 Wrapper 模式实现 Context Compression、状态持久化等"
 
 #: ../../source/detailed_guide/event_stream.md:28
 msgid "设计哲学：Agent 作为无状态函数"
-msgstr ""
+msgstr "设计哲学：Agent 作为无状态函数"
 
 #: ../../source/detailed_guide/event_stream.md:30
 msgid "SimpleLLMFunc 遵循一个核心设计哲学：**Agent 本身是一个函数，不管理自己的状态**。"
-msgstr ""
+msgstr "SimpleLLMFunc 遵循一个核心设计哲学：**Agent 本身是一个函数，不管理自己的状态**。"
 
 #: ../../source/detailed_guide/event_stream.md:32
 msgid "这意味着："
-msgstr ""
+msgstr "这意味着："
 
 #: ../../source/detailed_guide/event_stream.md:34
 msgid "✅ **无状态设计**：`@llm_chat` 装饰的函数是纯函数，每次调用都是独立的"
-msgstr ""
+msgstr "✅ **无状态设计**：`@llm_chat` 装饰的函数是纯函数，每次调用都是独立的"
 
 #: ../../source/detailed_guide/event_stream.md:35
 msgid "✅ **状态外置**：所有状态（包括 `history`）都通过参数传入和返回值传出"
-msgstr ""
+msgstr "✅ **状态外置**：所有状态（包括 `history`）都通过参数传入和返回值传出"
 
 #: ../../source/detailed_guide/event_stream.md:36
 msgid "✅ **可组合性**：通过 wrapper 函数实现状态管理和高级功能"
-msgstr ""
+msgstr "✅ **可组合性**：通过 wrapper 函数实现状态管理和高级功能"
 
 #: ../../source/detailed_guide/event_stream.md:38
 msgid "**为什么这样设计？**"
-msgstr ""
+msgstr "**为什么这样设计？**"
 
 #: ../../source/detailed_guide/event_stream.md:40
 msgid "**函数式编程**：符合函数式编程理念，易于测试和推理"
-msgstr ""
+msgstr "**函数式编程**：符合函数式编程理念，易于测试和推理"
 
 #: ../../source/detailed_guide/event_stream.md:41
 msgid "**灵活性**：状态管理完全由用户控制，可以实现各种自定义逻辑"
-msgstr ""
+msgstr "**灵活性**：状态管理完全由用户控制，可以实现各种自定义逻辑"
 
 #: ../../source/detailed_guide/event_stream.md:42
 msgid "**可扩展性**：通过 wrapper 函数可以轻松添加 Context Compression、状态持久化等功能"
-msgstr ""
+msgstr "**可扩展性**：通过 wrapper 函数可以轻松添加 Context Compression、状态持久化等功能"
 
 #: ../../source/detailed_guide/event_stream.md:44
 msgid "**如何实现状态管理和修改？**"
-msgstr ""
+msgstr "**如何实现状态管理和修改？**"
 
 #: ../../source/detailed_guide/event_stream.md:46
 msgid "通过事件流，你可以："
-msgstr ""
+msgstr "通过事件流，你可以："
 
 #: ../../source/detailed_guide/event_stream.md:48
 msgid "**监控状态**：通过事件获取 Agent 的内部状态信息（消息历史、工具调用等）"
-msgstr ""
+msgstr "**监控状态**：通过事件获取 Agent 的内部状态信息（消息历史、工具调用等）"
 
 #: ../../source/detailed_guide/event_stream.md:49
 msgid "**修改状态**：在 wrapper 函数中拦截和修改 `history`，实现 Context Compression 等功能"
-msgstr ""
+msgstr "**修改状态**：在 wrapper 函数中拦截和修改 `history`，实现 Context Compression 等功能"
 
 #: ../../source/detailed_guide/event_stream.md:50
 msgid "**状态持久化**：在 wrapper 中实现状态的保存和恢复"
-msgstr ""
+msgstr "**状态持久化**：在 wrapper 中实现状态的保存和恢复"
 
 #: ../../source/detailed_guide/event_stream.md:52
 msgid "下面我们将详细展示如何通过 wrapper 函数实现这些功能。"
-msgstr ""
+msgstr "下面我们将详细展示如何通过 wrapper 函数实现这些功能。"
 
 #: ../../source/detailed_guide/event_stream.md:54
 msgid "启用事件流"
-msgstr ""
+msgstr "启用事件流"
 
 #: ../../source/detailed_guide/event_stream.md:56
 msgid "基本用法"
-msgstr ""
+msgstr "基本用法"
 
 #: ../../source/detailed_guide/event_stream.md:58
 msgid "在 `@llm_chat` 或 `@llm_function` 装饰器中设置 `enable_event=True` 即可启用事件流："
-msgstr ""
+msgstr "在 `@llm_chat` 或 `@llm_function` 装饰器中设置 `enable_event=True` 即可启用事件流："
 
 #: ../../source/detailed_guide/event_stream.md:60
 msgid "llm_chat 的事件流"
-msgstr ""
+msgstr "llm_chat 的事件流"
 
 #: ../../source/detailed_guide/event_stream.md:62
 msgid "`@llm_chat` 装饰器在启用事件流时，返回一个生成器，yield `ReactOutput`："
-msgstr ""
+msgstr "`@llm_chat` 装饰器在启用事件流时，返回一个生成器，yield `ReactOutput`："
 
 #: ../../source/detailed_guide/event_stream.md:89
 msgid "llm_function 的事件流"
-msgstr ""
+msgstr "llm_function 的事件流"
 
 #: ../../source/detailed_guide/event_stream.md:91
 msgid "`@llm_function` 装饰器在启用事件流时，也返回一个生成器，yield `ReactOutput`："
-msgstr ""
+msgstr "`@llm_function` 装饰器在启用事件流时，也返回一个生成器，yield `ReactOutput`："
 
 #: ../../source/detailed_guide/event_stream.md:118
 msgid "返回值变化"
-msgstr ""
+msgstr "返回值变化"
 
 #: ../../source/detailed_guide/event_stream.md:120
 msgid "启用事件流后，函数的返回值类型会发生变化："
-msgstr ""
+msgstr "启用事件流后，函数的返回值类型会发生变化："
 
 #: ../../source/detailed_guide/event_stream.md:122
 msgid "**llm_chat 默认模式** (`enable_event=False`):"
-msgstr ""
+msgstr "**llm_chat 默认模式** (`enable_event=False`):"
 
 #: ../../source/detailed_guide/event_stream.md:129
 msgid "**llm_chat 事件流模式** (`enable_event=True`):"
-msgstr ""
+msgstr "**llm_chat 事件流模式** (`enable_event=True`):"
 
 #: ../../source/detailed_guide/event_stream.md:139
 msgid "**llm_function 默认模式** (`enable_event=False`):"
-msgstr ""
+msgstr "**llm_function 默认模式** (`enable_event=False`):"
 
 #: ../../source/detailed_guide/event_stream.md:146
 msgid "**llm_function 事件流模式** (`enable_event=True`):"
-msgstr ""
+msgstr "**llm_function 事件流模式** (`enable_event=True`):"
 
 #: ../../source/detailed_guide/event_stream.md:157
 msgid "核心类型"
-msgstr ""
+msgstr "核心类型"
 
 #: ../../source/detailed_guide/event_stream.md:159
 msgid "ReactOutput"
-msgstr ""
+msgstr "ReactOutput"
 
 #: ../../source/detailed_guide/event_stream.md:161
 msgid "`ReactOutput` 是一个 Tagged Union 类型，包含两种可能的值："
-msgstr ""
+msgstr "`ReactOutput` 是一个 Tagged Union 类型，包含两种可能的值："
 
 #: ../../source/detailed_guide/event_stream.md:169
 msgid "ResponseYield"
-msgstr ""
+msgstr "ResponseYield"
 
 #: ../../source/detailed_guide/event_stream.md:171
 msgid "响应数据，包含 LLM 的响应内容和消息历史："
-msgstr ""
+msgstr "响应数据，包含 LLM 的响应内容和消息历史："
 
 #: ../../source/detailed_guide/event_stream.md:181
 msgid "EventYield"
-msgstr ""
+msgstr "EventYield"
 
 #: ../../source/detailed_guide/event_stream.md:183
 msgid "事件数据，包含 ReAct 循环中的各种事件："
-msgstr ""
+msgstr "事件数据，包含 ReAct 循环中的各种事件："
 
 #: ../../source/detailed_guide/event_stream.md:192
 msgid "事件类型"
-msgstr ""
+msgstr "事件类型"
 
 #: ../../source/detailed_guide/event_stream.md:194
 msgid "事件流包含以下类型的事件，按执行顺序排列："
-msgstr ""
+msgstr "事件流包含以下类型的事件，按执行顺序排列："
 
 #: ../../source/detailed_guide/event_stream.md:196
 msgid "1. ReactStartEvent"
-msgstr ""
+msgstr "1. ReactStartEvent"
 
 #: ../../source/detailed_guide/event_stream.md:198
 msgid "ReAct 循环开始事件，在循环开始时触发。"
-msgstr ""
+msgstr "ReAct 循环开始事件，在循环开始时触发。"
 
 #: ../../source/detailed_guide/event_stream.md:208
 msgid "**使用场景**：初始化 UI、显示开始提示、记录 trace_id"
-msgstr ""
+msgstr "**使用场景**：初始化 UI、显示开始提示、记录 trace_id"
 
 #: ../../source/detailed_guide/event_stream.md:210
 msgid "2. ReactIterationStartEvent"
-msgstr ""
+msgstr "2. ReactIterationStartEvent"
 
 #: ../../source/detailed_guide/event_stream.md:212
 msgid "ReAct 迭代开始事件，每次迭代开始时触发。"
-msgstr ""
+msgstr "ReAct 迭代开始事件，每次迭代开始时触发。"
 
 #: ../../source/detailed_guide/event_stream.md:220
 msgid "**使用场景**：显示迭代进度、更新消息历史"
-msgstr ""
+msgstr "**使用场景**：显示迭代进度、更新消息历史"
 
 #: ../../source/detailed_guide/event_stream.md:222
 msgid "3. LLMCallStartEvent"
-msgstr ""
+msgstr "3. LLMCallStartEvent"
 
 #: ../../source/detailed_guide/event_stream.md:224
 msgid "LLM 调用开始事件，在 LLM 调用前触发。"
-msgstr ""
+msgstr "LLM 调用开始事件，在 LLM 调用前触发。"
 
 #: ../../source/detailed_guide/event_stream.md:235
 msgid "**使用场景**：显示\"正在思考...\"提示、记录调用参数"
-msgstr ""
+msgstr "**使用场景**：显示\"正在思考...\"提示、记录调用参数"
 
 #: ../../source/detailed_guide/event_stream.md:237
 msgid "4. LLMChunkArriveEvent"
-msgstr ""
+msgstr "4. LLMChunkArriveEvent"
 
 #: ../../source/detailed_guide/event_stream.md:239
 msgid "LLM 流式 chunk 到达事件（仅流式模式）。"
-msgstr ""
+msgstr "LLM 流式 chunk 到达事件（仅流式模式）。"
 
 #: ../../source/detailed_guide/event_stream.md:249
 msgid "**使用场景**：实时渲染流式响应、显示打字效果"
-msgstr ""
+msgstr "**使用场景**：实时渲染流式响应、显示打字效果"
 
 #: ../../source/detailed_guide/event_stream.md:251
 msgid "5. LLMCallEndEvent"
-msgstr ""
+msgstr "5. LLMCallEndEvent"
 
 #: ../../source/detailed_guide/event_stream.md:253
 msgid "LLM 调用结束事件，在调用完成后触发。"
-msgstr ""
+msgstr "LLM 调用结束事件，在调用完成后触发。"
 
 #: ../../source/detailed_guide/event_stream.md:265
 msgid "**使用场景**：显示 Token 使用量、记录性能指标、检查工具调用"
-msgstr ""
+msgstr "**使用场景**：显示 Token 使用量、记录性能指标、检查工具调用"
 
 #: ../../source/detailed_guide/event_stream.md:267
 msgid "6. ToolCallsBatchStartEvent"
-msgstr ""
+msgstr "6. ToolCallsBatchStartEvent"
 
 #: ../../source/detailed_guide/event_stream.md:269
 msgid "工具调用批次开始事件，当 LLM 返回多个工具调用时触发。"
-msgstr ""
+msgstr "工具调用批次开始事件，当 LLM 返回多个工具调用时触发。"
 
 #: ../../source/detailed_guide/event_stream.md:278
 msgid "**使用场景**：显示工具调用批次信息、准备并行执行"
-msgstr ""
+msgstr "**使用场景**：显示工具调用批次信息、准备并行执行"
 
 #: ../../source/detailed_guide/event_stream.md:280
 msgid "7. ToolCallStartEvent"
-msgstr ""
+msgstr "7. ToolCallStartEvent"
 
 #: ../../source/detailed_guide/event_stream.md:282
 msgid "单个工具调用开始事件。"
-msgstr ""
+msgstr "单个工具调用开始事件。"
 
 #: ../../source/detailed_guide/event_stream.md:293
 msgid "**使用场景**：显示工具调用信息、记录调用参数"
-msgstr ""
+msgstr "**使用场景**：显示工具调用信息、记录调用参数"
 
 #: ../../source/detailed_guide/event_stream.md:295
 msgid "8. ToolCallEndEvent"
-msgstr ""
+msgstr "8. ToolCallEndEvent"
 
 #: ../../source/detailed_guide/event_stream.md:297
 msgid "单个工具调用结束事件（**关键**：立即获取结果）。"
-msgstr ""
+msgstr "单个工具调用结束事件（**关键**：立即获取结果）。"
 
 #: ../../source/detailed_guide/event_stream.md:310
 msgid "**使用场景**：显示工具执行结果、更新 UI、记录执行时间"
-msgstr ""
+msgstr "**使用场景**：显示工具执行结果、更新 UI、记录执行时间"
 
 #: ../../source/detailed_guide/event_stream.md:312
-msgid "9. ToolCallsBatchEndEvent"
-msgstr ""
+msgid "9. CustomEvent"
+msgstr "9. CustomEvent"
 
 #: ../../source/detailed_guide/event_stream.md:314
+msgid "工具内部主动发射的自定义事件，用于进度、日志、阶段状态等实时反馈。"
+msgstr "工具内部主动发射的自定义事件，用于进度、日志、阶段状态等实时反馈。"
+
+#: ../../source/detailed_guide/event_stream.md:325
+msgid "**使用场景**：在 TUI 或自定义 UI 中增量渲染工具执行过程（例如 PyRepl stdout/stderr、批处理进度）。"
+msgstr "**使用场景**：在 TUI 或自定义 UI 中增量渲染工具执行过程（例如 PyRepl stdout/stderr、批处理进度）。"
+
+#: ../../source/detailed_guide/event_stream.md:327
+msgid "10. ToolCallsBatchEndEvent"
+msgstr "10. ToolCallsBatchEndEvent"
+
+#: ../../source/detailed_guide/event_stream.md:329
 msgid "工具调用批次结束事件，批次全部完成后触发。"
-msgstr ""
+msgstr "工具调用批次结束事件，批次全部完成后触发。"
 
-#: ../../source/detailed_guide/event_stream.md:326
+#: ../../source/detailed_guide/event_stream.md:341
 msgid "**使用场景**：显示批次统计、性能分析"
-msgstr ""
+msgstr "**使用场景**：显示批次统计、性能分析"
 
-#: ../../source/detailed_guide/event_stream.md:328
-msgid "10. ReactIterationEndEvent"
-msgstr ""
+#: ../../source/detailed_guide/event_stream.md:343
+msgid "11. ReactIterationEndEvent"
+msgstr "11. ReactIterationEndEvent"
 
-#: ../../source/detailed_guide/event_stream.md:330
+#: ../../source/detailed_guide/event_stream.md:345
 msgid "ReAct 迭代结束事件，每次迭代完成时触发。"
-msgstr ""
+msgstr "ReAct 迭代结束事件，每次迭代完成时触发。"
 
-#: ../../source/detailed_guide/event_stream.md:340
+#: ../../source/detailed_guide/event_stream.md:355
 msgid "**使用场景**：显示迭代统计、更新进度"
-msgstr ""
+msgstr "**使用场景**：显示迭代统计、更新进度"
 
-#: ../../source/detailed_guide/event_stream.md:342
-msgid "11. ReactEndEvent"
-msgstr ""
+#: ../../source/detailed_guide/event_stream.md:357
+msgid "12. ReactEndEvent"
+msgstr "12. ReactEndEvent"
 
-#: ../../source/detailed_guide/event_stream.md:344
+#: ../../source/detailed_guide/event_stream.md:359
 msgid "ReAct 循环结束事件，循环结束时触发。"
-msgstr ""
+msgstr "ReAct 循环结束事件，循环结束时触发。"
 
-#: ../../source/detailed_guide/event_stream.md:358
+#: ../../source/detailed_guide/event_stream.md:373
 msgid "**使用场景**：显示完整统计、性能分析、保存执行记录"
-msgstr ""
+msgstr "**使用场景**：显示完整统计、性能分析、保存执行记录"
 
-#: ../../source/detailed_guide/event_stream.md:360
+#: ../../source/detailed_guide/event_stream.md:375
 msgid "使用示例"
-msgstr ""
+msgstr "使用示例"
 
-#: ../../source/detailed_guide/event_stream.md:362
+#: ../../source/detailed_guide/event_stream.md:377
 msgid "示例 1: 基本事件处理"
-msgstr ""
+msgstr "示例 1: 基本事件处理"
 
-#: ../../source/detailed_guide/event_stream.md:433
+#: ../../source/detailed_guide/event_stream.md:448
 msgid "示例 2: 使用类型守卫"
-msgstr ""
+msgstr "示例 2: 使用类型守卫"
 
-#: ../../source/detailed_guide/event_stream.md:447
+#: ../../source/detailed_guide/event_stream.md:462
 msgid "示例 3: 使用过滤器"
-msgstr ""
+msgstr "示例 3: 使用过滤器"
 
-#: ../../source/detailed_guide/event_stream.md:474
+#: ../../source/detailed_guide/event_stream.md:489
 msgid "示例 4: 事件观测器"
-msgstr ""
+msgstr "示例 4: 事件观测器"
 
-#: ../../source/detailed_guide/event_stream.md:476
+#: ../../source/detailed_guide/event_stream.md:491
 msgid "使用 `@with_event_observer` 装饰器自动处理所有事件："
-msgstr ""
+msgstr "使用 `@with_event_observer` 装饰器自动处理所有事件："
 
-#: ../../source/detailed_guide/event_stream.md:498
+#: ../../source/detailed_guide/event_stream.md:513
 msgid "示例 5: 完整的事件流 Chatbot"
-msgstr ""
+msgstr "示例 5: 完整的事件流 Chatbot"
 
-#: ../../source/detailed_guide/event_stream.md:500
+#: ../../source/detailed_guide/event_stream.md:515
 msgid ""
 "参考 "
 "[examples/event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
 " 获取一个功能完整的示例，包括："
 msgstr ""
+"参考 "
+"[examples/event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
+" 获取一个功能完整的示例，包括："
 
-#: ../../source/detailed_guide/event_stream.md:502
+#: ../../source/detailed_guide/event_stream.md:517
 msgid "实时流式响应渲染（使用 Rich 库）"
-msgstr ""
+msgstr "实时流式响应渲染（使用 Rich 库）"
 
-#: ../../source/detailed_guide/event_stream.md:503
+#: ../../source/detailed_guide/event_stream.md:518
 msgid "工具调用可视化"
-msgstr ""
+msgstr "工具调用可视化"
 
-#: ../../source/detailed_guide/event_stream.md:504
+#: ../../source/detailed_guide/event_stream.md:519
 msgid "完整的执行统计"
-msgstr ""
+msgstr "完整的执行统计"
 
-#: ../../source/detailed_guide/event_stream.md:505
+#: ../../source/detailed_guide/event_stream.md:520
 msgid "美观的终端 UI"
-msgstr ""
+msgstr "美观的终端 UI"
 
-#: ../../source/detailed_guide/event_stream.md:507
+#: ../../source/detailed_guide/event_stream.md:522
 msgid "最佳实践"
-msgstr ""
+msgstr "最佳实践"
 
-#: ../../source/detailed_guide/event_stream.md:509
+#: ../../source/detailed_guide/event_stream.md:524
 msgid "1. 事件处理顺序"
-msgstr ""
+msgstr "1. 事件处理顺序"
 
-#: ../../source/detailed_guide/event_stream.md:511
+#: ../../source/detailed_guide/event_stream.md:526
 msgid "事件按照 ReAct 循环的执行顺序产生，建议按照以下顺序处理："
-msgstr ""
+msgstr "事件按照 ReAct 循环的执行顺序产生，建议按照以下顺序处理："
 
-#: ../../source/detailed_guide/event_stream.md:529
+#: ../../source/detailed_guide/event_stream.md:544
 msgid "2. 性能考虑"
-msgstr ""
+msgstr "2. 性能考虑"
 
-#: ../../source/detailed_guide/event_stream.md:531
+#: ../../source/detailed_guide/event_stream.md:546
 msgid "事件处理应该是轻量级的，避免阻塞主流程"
-msgstr ""
+msgstr "事件处理应该是轻量级的，避免阻塞主流程"
 
-#: ../../source/detailed_guide/event_stream.md:532
+#: ../../source/detailed_guide/event_stream.md:547
 msgid "使用异步操作处理事件（如日志记录、UI 更新）"
-msgstr ""
+msgstr "使用异步操作处理事件（如日志记录、UI 更新）"
 
-#: ../../source/detailed_guide/event_stream.md:533
+#: ../../source/detailed_guide/event_stream.md:548
 msgid "对于高频事件（如 `LLMChunkArriveEvent`），考虑批量处理"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:535
-msgid "3. 错误处理"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:537
-msgid "事件处理中的错误不应影响主流程："
-msgstr ""
+msgstr "对于高频事件（如 `LLMChunkArriveEvent`），考虑批量处理"
 
 #: ../../source/detailed_guide/event_stream.md:550
-msgid "4. UI 更新"
-msgstr ""
+msgid "3. 错误处理"
+msgstr "3. 错误处理"
 
 #: ../../source/detailed_guide/event_stream.md:552
+msgid "事件处理中的错误不应影响主流程："
+msgstr "事件处理中的错误不应影响主流程："
+
+#: ../../source/detailed_guide/event_stream.md:565
+msgid "4. UI 更新"
+msgstr "4. UI 更新"
+
+#: ../../source/detailed_guide/event_stream.md:567
 msgid "使用事件流构建响应式 UI："
-msgstr ""
+msgstr "使用事件流构建响应式 UI："
 
-#: ../../source/detailed_guide/event_stream.md:575
+#: ../../source/detailed_guide/event_stream.md:591
 msgid "5. 状态管理和修改（Wrapper 模式）"
-msgstr ""
+msgstr "5. 状态管理和修改（Wrapper 模式）"
 
-#: ../../source/detailed_guide/event_stream.md:577
+#: ../../source/detailed_guide/event_stream.md:593
 msgid "由于 Agent 是无状态的，所有状态都通过参数和返回值传递。通过 wrapper 函数，你可以："
-msgstr ""
+msgstr "由于 Agent 是无状态的，所有状态都通过参数和返回值传递。通过 wrapper 函数，你可以："
 
-#: ../../source/detailed_guide/event_stream.md:579
+#: ../../source/detailed_guide/event_stream.md:595
 msgid "**监控状态**：通过事件获取内部状态"
-msgstr ""
+msgstr "**监控状态**：通过事件获取内部状态"
 
-#: ../../source/detailed_guide/event_stream.md:580
+#: ../../source/detailed_guide/event_stream.md:596
 msgid "**修改状态**：拦截和修改 `history` 参数"
-msgstr ""
+msgstr "**修改状态**：拦截和修改 `history` 参数"
 
-#: ../../source/detailed_guide/event_stream.md:581
+#: ../../source/detailed_guide/event_stream.md:597
 msgid "**实现高级功能**：Context Compression、状态持久化等"
-msgstr ""
+msgstr "**实现高级功能**：Context Compression、状态持久化等"
 
-#: ../../source/detailed_guide/event_stream.md:583
+#: ../../source/detailed_guide/event_stream.md:599
 msgid "5.1 基础 Wrapper：状态监控"
-msgstr ""
+msgstr "5.1 基础 Wrapper：状态监控"
 
-#: ../../source/detailed_guide/event_stream.md:626
+#: ../../source/detailed_guide/event_stream.md:642
 msgid "5.2 高级 Wrapper：Context Compression"
-msgstr ""
+msgstr "5.2 高级 Wrapper：Context Compression"
 
-#: ../../source/detailed_guide/event_stream.md:628
+#: ../../source/detailed_guide/event_stream.md:644
 msgid "通过修改 `history` 参数，可以实现 Context Compression（上下文压缩）："
-msgstr ""
+msgstr "通过修改 `history` 参数，可以实现 Context Compression（上下文压缩）："
 
-#: ../../source/detailed_guide/event_stream.md:708
+#: ../../source/detailed_guide/event_stream.md:724
 msgid "5.3 高级 Wrapper：状态持久化"
-msgstr ""
+msgstr "5.3 高级 Wrapper：状态持久化"
 
-#: ../../source/detailed_guide/event_stream.md:767
+#: ../../source/detailed_guide/event_stream.md:783
 msgid "5.4 组合多个 Wrapper"
-msgstr ""
+msgstr "5.4 组合多个 Wrapper"
 
-#: ../../source/detailed_guide/event_stream.md:769
+#: ../../source/detailed_guide/event_stream.md:785
 msgid "你可以组合多个 wrapper 实现复杂的功能："
-msgstr ""
+msgstr "你可以组合多个 wrapper 实现复杂的功能："
 
-#: ../../source/detailed_guide/event_stream.md:793
+#: ../../source/detailed_guide/event_stream.md:809
 msgid "6. 向后兼容"
-msgstr ""
+msgstr "6. 向后兼容"
 
-#: ../../source/detailed_guide/event_stream.md:795
+#: ../../source/detailed_guide/event_stream.md:811
 msgid "如果需要同时支持事件流和传统模式，可以使用 `responses_only`："
-msgstr ""
+msgstr "如果需要同时支持事件流和传统模式，可以使用 `responses_only`："
 
-#: ../../source/detailed_guide/event_stream.md:808
+#: ../../source/detailed_guide/event_stream.md:824
 msgid "常见问题"
-msgstr ""
+msgstr "常见问题"
 
-#: ../../source/detailed_guide/event_stream.md:810
+#: ../../source/detailed_guide/event_stream.md:826
 msgid "Q: 事件流会影响性能吗？"
-msgstr ""
+msgstr "Q: 事件流会影响性能吗？"
 
-#: ../../source/detailed_guide/event_stream.md:812
+#: ../../source/detailed_guide/event_stream.md:828
 msgid ""
 "A: "
 "事件流本身是轻量级的，不会显著影响性能。事件处理是异步的，不会阻塞主流程。如果你担心性能，可以在生产环境中禁用事件流（`enable_event=False`）。"
 msgstr ""
+"A: "
+"事件流本身是轻量级的，不会显著影响性能。事件处理是异步的，不会阻塞主流程。如果你担心性能，可以在生产环境中禁用事件流（`enable_event=False`）。"
 
-#: ../../source/detailed_guide/event_stream.md:814
+#: ../../source/detailed_guide/event_stream.md:830
 msgid "Q: 如何只监听特定类型的事件？"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:816
-msgid "A: 使用 `filter_events` 函数："
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:827
-msgid "Q: 事件流和流式响应有什么区别？"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:829
-msgid "A:"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:831
-msgid "**流式响应** (`stream=True`)：控制 LLM 是否以流式方式返回响应"
-msgstr ""
+msgstr "Q: 如何只监听特定类型的事件？"
 
 #: ../../source/detailed_guide/event_stream.md:832
-msgid "**事件流** (`enable_event=True`)：控制是否产生事件，用于观察执行过程"
-msgstr ""
+msgid "A: 使用 `filter_events` 函数："
+msgstr "A: 使用 `filter_events` 函数："
 
-#: ../../source/detailed_guide/event_stream.md:834
-msgid "两者可以独立使用，也可以同时启用。"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:836
-msgid "Q: 可以在事件处理中修改执行流程吗？"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:838
-msgid ""
-"A: 事件是只读的观察点，不能直接修改执行流程。但你可以通过 wrapper 函数在调用前后修改 `history` 参数，从而间接影响 "
-"Agent 的行为。例如，可以实现 Context Compression、状态过滤等功能。"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:840
-msgid "Q: 如何修改 Agent 的状态？"
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:842
-msgid "A: 由于 Agent 是无状态的，所有状态都通过 `history` 参数传递。你可以："
-msgstr ""
-
-#: ../../source/detailed_guide/event_stream.md:844
-msgid "**在调用前修改**：通过 wrapper 函数修改传入的 `history` 参数"
-msgstr ""
+#: ../../source/detailed_guide/event_stream.md:843
+msgid "Q: 事件流和流式响应有什么区别？"
+msgstr "Q: 事件流和流式响应有什么区别？"
 
 #: ../../source/detailed_guide/event_stream.md:845
-msgid "**在调用后修改**：通过 wrapper 函数修改返回的 `history`（在 `ResponseYield` 中）"
-msgstr ""
+msgid "A:"
+msgstr "A:"
 
-#: ../../source/detailed_guide/event_stream.md:846
-msgid "**通过事件监控**：通过事件获取状态信息，但修改需要通过 wrapper 实现"
-msgstr ""
+#: ../../source/detailed_guide/event_stream.md:847
+msgid "**流式响应** (`stream=True`)：控制 LLM 是否以流式方式返回响应"
+msgstr "**流式响应** (`stream=True`)：控制 LLM 是否以流式方式返回响应"
 
 #: ../../source/detailed_guide/event_stream.md:848
-msgid "详见 [状态管理和修改（Wrapper 模式）](#5-状态管理和修改wrapper-模式) 章节。"
-msgstr ""
+msgid "**事件流** (`enable_event=True`)：控制是否产生事件，用于观察执行过程"
+msgstr "**事件流** (`enable_event=True`)：控制是否产生事件，用于观察执行过程"
 
 #: ../../source/detailed_guide/event_stream.md:850
-msgid "Q: llm_function 支持事件流吗？"
-msgstr ""
+msgid "两者可以独立使用，也可以同时启用。"
+msgstr "两者可以独立使用，也可以同时启用。"
 
 #: ../../source/detailed_guide/event_stream.md:852
-msgid ""
-"A: 是的！`@llm_function` 也执行 ReAct 循环，从 v0.5.0+ 开始完全支持事件流。当 "
-"`enable_event=True` 时，`@llm_function` 返回一个生成器，yield 事件和最终响应。"
-msgstr ""
+msgid "Q: 可以在事件处理中修改执行流程吗？"
+msgstr "Q: 可以在事件处理中修改执行流程吗？"
 
 #: ../../source/detailed_guide/event_stream.md:854
+msgid ""
+"A: 事件是只读的观察点，不能直接修改执行流程。但你可以通过 wrapper 函数在调用前后修改 `history` 参数，从而间接影响 Agent "
+"的行为。例如，可以实现 Context Compression、状态过滤等功能。"
+msgstr ""
+"A: 事件是只读的观察点，不能直接修改执行流程。但你可以通过 wrapper 函数在调用前后修改 `history` 参数，从而间接影响 Agent "
+"的行为。例如，可以实现 Context Compression、状态过滤等功能。"
+
+#: ../../source/detailed_guide/event_stream.md:856
+msgid "Q: 如何修改 Agent 的状态？"
+msgstr "Q: 如何修改 Agent 的状态？"
+
+#: ../../source/detailed_guide/event_stream.md:858
+msgid "A: 由于 Agent 是无状态的，所有状态都通过 `history` 参数传递。你可以："
+msgstr "A: 由于 Agent 是无状态的，所有状态都通过 `history` 参数传递。你可以："
+
+#: ../../source/detailed_guide/event_stream.md:860
+msgid "**在调用前修改**：通过 wrapper 函数修改传入的 `history` 参数"
+msgstr "**在调用前修改**：通过 wrapper 函数修改传入的 `history` 参数"
+
+#: ../../source/detailed_guide/event_stream.md:861
+msgid "**在调用后修改**：通过 wrapper 函数修改返回的 `history`（在 `ResponseYield` 中）"
+msgstr "**在调用后修改**：通过 wrapper 函数修改返回的 `history`（在 `ResponseYield` 中）"
+
+#: ../../source/detailed_guide/event_stream.md:862
+msgid "**通过事件监控**：通过事件获取状态信息，但修改需要通过 wrapper 实现"
+msgstr "**通过事件监控**：通过事件获取状态信息，但修改需要通过 wrapper 实现"
+
+#: ../../source/detailed_guide/event_stream.md:864
+msgid "详见 [状态管理和修改（Wrapper 模式）](#state-management-wrapper-mode) 章节。"
+msgstr "详见 [状态管理和修改（Wrapper 模式）](#state-management-wrapper-mode) 章节。"
+
+#: ../../source/detailed_guide/event_stream.md:866
+msgid "Q: llm_function 支持事件流吗？"
+msgstr "Q: llm_function 支持事件流吗？"
+
+#: ../../source/detailed_guide/event_stream.md:868
+msgid ""
+"A: 是的！`@llm_function` 也执行 ReAct 循环，从 v0.5.0+ 开始完全支持事件流。当 `enable_event=True`"
+" 时，`@llm_function` 返回一个生成器，yield 事件和最终响应。"
+msgstr ""
+"A: 是的！`@llm_function` 也执行 ReAct 循环，从 v0.5.0+ 开始完全支持事件流。当 `enable_event=True`"
+" 时，`@llm_function` 返回一个生成器，yield 事件和最终响应。"
+
+#: ../../source/detailed_guide/event_stream.md:870
 msgid ""
 "**重要区别**：`@llm_function` 的 `ResponseYield.response` "
 "包含的是**解析后的结果**（`str`、Pydantic 对象等），而不是原始的 `ChatCompletion` 对象。这符合 "
 "`llm_function` 的设计理念：将 LLM 响应转换为指定的返回类型。"
 msgstr ""
+"**重要区别**：`@llm_function` 的 `ResponseYield.response` "
+"包含的是**解析后的结果**（`str`、Pydantic 对象等），而不是原始的 `ChatCompletion` 对象。这符合 "
+"`llm_function` 的设计理念：将 LLM 响应转换为指定的返回类型。"
 
-#: ../../source/detailed_guide/event_stream.md:856
+#: ../../source/detailed_guide/event_stream.md:872
 msgid "示例："
-msgstr ""
+msgstr "示例："
 
-#: ../../source/detailed_guide/event_stream.md:873
+#: ../../source/detailed_guide/event_stream.md:889
 msgid "参考示例："
-msgstr ""
+msgstr "参考示例："
 
-#: ../../source/detailed_guide/event_stream.md:875
+#: ../../source/detailed_guide/event_stream.md:891
 msgid ""
 "[Token "
 "用量监控](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
 " - 字符串返回类型"
 msgstr ""
+"[Token "
+"用量监控](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
+" - 字符串返回类型"
 
-#: ../../source/detailed_guide/event_stream.md:876
+#: ../../source/detailed_guide/event_stream.md:892
 msgid ""
 "[Pydantic "
 "结构化输出](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_event_pydantic.py)"
 " - Pydantic 对象返回类型"
 msgstr ""
+"[Pydantic "
+"结构化输出](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_event_pydantic.py)"
+" - Pydantic 对象返回类型"
 
-#: ../../source/detailed_guide/event_stream.md:878
+#: ../../source/detailed_guide/event_stream.md:894
 msgid "Q: 事件中的 `trace_id` 有什么用？"
-msgstr ""
+msgstr "Q: 事件中的 `trace_id` 有什么用？"
 
-#: ../../source/detailed_guide/event_stream.md:880
+#: ../../source/detailed_guide/event_stream.md:896
 msgid "A: `trace_id` 用于追踪整个 ReAct 循环的执行过程，可以用于日志关联、调试和性能分析。"
-msgstr ""
+msgstr "A: `trace_id` 用于追踪整个 ReAct 循环的执行过程，可以用于日志关联、调试和性能分析。"
 
-#: ../../source/detailed_guide/event_stream.md:882
+#: ../../source/detailed_guide/event_stream.md:898
 msgid "相关资源"
-msgstr ""
+msgstr "相关资源"
 
-#: ../../source/detailed_guide/event_stream.md:884
+#: ../../source/detailed_guide/event_stream.md:900
 msgid "[llm_chat 装饰器文档](llm_chat.md) - 了解 `llm_chat` 的基础用法"
-msgstr ""
+msgstr "[llm_chat 装饰器文档](llm_chat.md) - 了解 `llm_chat` 的基础用法"
 
-#: ../../source/detailed_guide/event_stream.md:885
+#: ../../source/detailed_guide/event_stream.md:901
 msgid ""
 "[事件流 Chatbot "
 "示例](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
 " - 完整示例代码"
 msgstr ""
+"[事件流 Chatbot "
+"示例](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
+" - 完整示例代码"
 
-#: ../../source/detailed_guide/event_stream.md:886
-msgid "[工具系统文档](../tool.md) - 了解工具调用的详细信息"
-msgstr ""
+#: ../../source/detailed_guide/event_stream.md:902
+msgid "[工具系统文档](tool.md) - 了解工具调用的详细信息"
+msgstr "[工具系统文档](tool.md) - 了解工具调用的详细信息"
 
+#~ msgid "9. ToolCallsBatchEndEvent"
+#~ msgstr ""
+
+#~ msgid "10. ReactIterationEndEvent"
+#~ msgstr ""
+
+#~ msgid "11. ReactEndEvent"
+#~ msgstr ""
+
+#~ msgid "详见 [状态管理和修改（Wrapper 模式）](#5-状态管理和修改wrapper-模式) 章节。"
+#~ msgstr ""
+
+#~ msgid "[工具系统文档](../tool.md) - 了解工具调用的详细信息"
+#~ msgstr ""

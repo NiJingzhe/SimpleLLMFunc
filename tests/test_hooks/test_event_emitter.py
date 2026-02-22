@@ -42,6 +42,27 @@ class TestToolEventEmitter:
         assert event.iteration == 1
 
     @pytest.mark.asyncio
+    async def test_emit_custom_event_with_tool_context(self):
+        """Test emitting custom event carries tool metadata."""
+        emitter = ToolEventEmitter(
+            _trace_id="test-trace-123",
+            _func_name="test_func",
+            _iteration=1,
+            _tool_name="execute_code",
+            _tool_call_id="call_abc",
+        )
+
+        await emitter.emit("kernel_stdout", {"text": "hello\n"})
+
+        events = await emitter.get_events()
+        assert len(events) == 1
+
+        event = events[0].event
+        assert isinstance(event, CustomEvent)
+        assert event.tool_name == "execute_code"
+        assert event.tool_call_id == "call_abc"
+
+    @pytest.mark.asyncio
     async def test_emit_multiple_events(self):
         """Test emitting multiple custom events."""
         emitter = ToolEventEmitter()
@@ -156,3 +177,20 @@ class TestCustomEvent:
 
         assert event.event_name == "progress"
         assert event.data is None
+
+    def test_custom_event_tool_context_defaults_to_none(self):
+        """Test custom event tool context defaults."""
+        from datetime import datetime, timezone
+
+        event = CustomEvent(
+            event_type=ReActEventType.CUSTOM_EVENT,
+            timestamp=datetime.now(timezone.utc),
+            trace_id="test-trace",
+            func_name="test_func",
+            iteration=1,
+            event_name="progress",
+            data={"step": 1},
+        )
+
+        assert event.tool_name is None
+        assert event.tool_call_id is None

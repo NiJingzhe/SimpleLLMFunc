@@ -7,17 +7,17 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2025-12-11 17:04+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/detailed_guide/tool.md:1
@@ -35,7 +35,6 @@ msgid ""
 msgstr ""
 "SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 API 的能力，让 LLM "
 "能够执行计算、查询数据、调用服务等操作。工具系统支持两种创建方式，并能自动将 Python 函数转换为 LLM 可理解的工具描述格式。"
-
 
 #: ../../source/detailed_guide/tool.md:7
 msgid "核心功能特性"
@@ -123,15 +122,17 @@ msgstr "多模态返回类型"
 
 #: ../../source/detailed_guide/tool.md:33
 msgid "**图片URL (`ImgUrl`)**: 返回网络图片链接，LLM 可以\"看到\"图片内容"
-msgstr ""
+msgstr "**图片URL (`ImgUrl`)**: 返回网络图片链接，LLM 可以\"看到\"图片内容"
 
 #: ../../source/detailed_guide/tool.md:34
 msgid "**本地图片 (`ImgPath`)**: 返回本地图片文件路径，自动转换为 base64 格式"
 msgstr "**本地图片 (`ImgPath`)**: 返回本地图片文件路径，自动转换为 base64 格式"
 
 #: ../../source/detailed_guide/tool.md:35
-msgid "**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
-msgstr "**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
+msgid ""
+"**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
+msgstr ""
+"**文本+图片组合 (`Tuple[str, ImgUrl]` 或 `Tuple[str, ImgPath]`)**: 同时返回文本说明和图片"
 
 #: ../../source/detailed_guide/tool.md:37
 msgid "返回类型示例"
@@ -184,7 +185,6 @@ msgid ""
 msgstr ""
 "组合类型的元组必须是 `(str, ImgPath)` 或 `(str, ImgUrl)` 格式, "
 "不能交换`str`和`ImgPath`/`ImgUrl`的顺序"
-
 
 #: ../../source/detailed_guide/tool.md:109
 msgid "避免返回过大的数据结构，以免影响 LLM 处理效率"
@@ -402,7 +402,6 @@ msgstr ""
 "工具系统提供了强大而灵活的扩展机制，让 LLM 能够调用各种外部功能。通过装饰器方式，开发者可以轻松地将现有函数转换为 LLM "
 "可用的工具，而继承方式则提供了更多的自定义控制。系统自动处理类型转换和参数验证，确保工具调用的安全性和准确性。"
 
-
 #: ../../source/detailed_guide/tool.md:765
 msgid "**关键要点总结**："
 msgstr "**关键要点总结**："
@@ -426,4 +425,3 @@ msgstr "错误处理：推荐返回结构化的错误信息"
 #: ../../source/detailed_guide/tool.md:770
 msgid "性能考虑：避免返回过大数据，网络图片使用低细节级别"
 msgstr "性能考虑：避免返回过大数据，网络图片使用低细节级别"
-

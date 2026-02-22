@@ -1,18 +1,15 @@
-#!/bin/bash
-source /Users/lildino/Library/Caches/pypoetry/virtualenvs/simplellmfunc-v9Mcp8Tm-py3.13/bin/activate
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 根目录文件
-for file in ../docs/source/locale/zh/LC_MESSAGES/*.po; do
-    basename=$(basename "$file")
-    echo "Translating $basename..."
-    python translate_po.py "$file" -o "../docs/source/locale/en/LC_MESSAGES/$basename" -b 20 -c 100
-done
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-# detailed_guide子目录文件
-for file in ../docs/source/locale/zh/LC_MESSAGES/detailed_guide/*.po; do
-    basename=$(basename "$file")
-    echo "Translating detailed_guide/$basename..."
-    python translate_po.py "$file" -o "../docs/source/locale/en/LC_MESSAGES/detailed_guide/$basename" -b 20 -c 100
-done
+cd "${PROJECT_ROOT}"
 
-echo "All translations completed!"
+poetry run python examples/translate_docs_locale.py \
+  --target-lang en \
+  --source-lang zh_CN \
+  --translate \
+  --include-fuzzy \
+  --normalize-metadata \
+  "$@"

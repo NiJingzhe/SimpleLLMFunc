@@ -104,6 +104,7 @@ SimpleLLMFunc/
 ├── SimpleLLMFunc/              # 主包
 │   ├── llm_decorator/         # 装饰器模块
 │   ├── base/                  # 核心实现
+│   ├── builtin/               # 内置工具
 │   ├── hooks/                 # 事件系统
 │   ├── interface/             # LLM 接口
 │   ├── tool/                  # 工具定义
@@ -111,7 +112,7 @@ SimpleLLMFunc/
 │   ├── logger/                # 日志系统
 │   ├── observability/         # 可观测性
 │   ├── config.py              # 配置
-│   └── utils.py               # 工具函数
+│   └── utils/                 # 工具函数与 TUI
 ├── tests/                     # 测试目录
 ├── examples/                  # 示例目录
 ├── docs/                      # 文档目录
@@ -297,7 +298,7 @@ SimpleLLMFunc/
 **文件列表**:
 
 - `config.py`: 框架配置管理
-- `utils.py`: 通用工具函数
+- `utils/`: 通用工具函数与 TUI 组件
 - `__init__.py`: 包入口文件
 
 ## 测试与示例

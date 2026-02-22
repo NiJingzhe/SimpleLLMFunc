@@ -132,14 +132,6 @@ async def _process_tool_calls_with_events_gen(
 
     event_queue: asyncio.Queue[Optional[EventYield]] = asyncio.Queue()
 
-    # 创建 ToolEventEmitter 用于收集 tool 发出的自定义事件
-    tool_event_emitter = ToolEventEmitter(
-        _queue=event_queue,
-        _trace_id=trace_id,
-        _func_name=func_name,
-        _iteration=iteration,
-    )
-
     async def _execute_with_events_task(
         tool_call: Dict[str, Any],
     ) -> tuple[
@@ -183,6 +175,16 @@ async def _process_tool_calls_with_events_gen(
         tool_start_time = time.time()
         tool_result: Optional[ToolResult] = None
         tool_error: Optional[Exception] = None
+
+        # 为每个 tool call 创建独立 emitter，携带 tool 上下文用于 UI 定位
+        tool_event_emitter = ToolEventEmitter(
+            _queue=cast(Any, event_queue),
+            _trace_id=trace_id,
+            _func_name=func_name,
+            _iteration=iteration,
+            _tool_name=tool_name,
+            _tool_call_id=tool_call_id,
+        )
 
         try:
             (

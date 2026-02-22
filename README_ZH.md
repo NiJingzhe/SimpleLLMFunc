@@ -279,6 +279,33 @@ Output:
 
 如果你想构建完整的 Agent 框架，可以参考我们的姊妹项目 [SimpleManus](https://github.com/NiJingzhe/SimpleManus)。
 
+#### @tui - 开箱即用终端 UI（llm_chat）
+
+SimpleLLMFunc 提供了基于 Textual + Event Stream 的终端 TUI：
+
+- 用户/助手交替消息流
+- 流式 Markdown 渲染
+- 工具调用参数/结果面板
+- 模型与工具统计（耗时、Token）
+- 支持 `custom_event_hook` 实时更新工具输出
+- 内置退出方式：`/exit`、`/quit`、`/q`、`Ctrl+Q`、`Ctrl+C`
+
+```python
+from SimpleLLMFunc import llm_chat, tui
+
+
+@tui(custom_event_hook=[...])
+@llm_chat(llm_interface=my_llm_interface, stream=True, enable_event=True)
+async def agent(message: str, history=None):
+    """Your agent prompt"""
+
+
+if __name__ == "__main__":
+    agent()
+```
+
+完整示例见：`examples/tui_chat_example.py`
+
 #### 异步原生设计
 
 `llm_function` 和 `llm_chat` 均为原生异步设计，无需额外配置：
@@ -660,9 +687,16 @@ SimpleLLMFunc/
 │   ├── llm_decorator/         # LLM 装饰器模块
 │   │   ├── llm_function_decorator.py    # @llm_function 实现
 │   │   ├── llm_chat_decorator.py        # @llm_chat 实现
-│   │   └── utils.py                     # 装饰器工具
+│   │   ├── steps/                       # 步骤化执行流水线
+│   │   └── utils/                       # 装饰器工具
 │   ├── tool/                  # 工具系统
 │   │   └── tool.py            # @tool 装饰器和 Tool 基类
+│   ├── builtin/               # 内置工具
+│   │   └── pyrepl.py          # Python REPL 工具集
+│   ├── hooks/                 # 事件流系统
+│   │   ├── events.py          # ReAct 事件定义
+│   │   ├── stream.py          # 事件/响应流封装
+│   │   └── event_emitter.py   # 工具自定义事件发射器
 │   ├── interface/             # LLM 接口层
 │   │   ├── llm_interface.py   # 抽象基类
 │   │   ├── openai_compatible.py    # OpenAI 兼容实现
@@ -670,9 +704,10 @@ SimpleLLMFunc/
 │   │   └── token_bucket.py    # 流量控制
 │   ├── base/                  # 核心执行引擎
 │   │   ├── ReAct.py           # ReAct 引擎和工具调用
-│   │   ├── messages.py        # 消息构建
+│   │   ├── messages/          # 消息构建
 │   │   ├── post_process.py    # 响应解析和类型转换
-│   │   └── type_resolve.py    # 类型解析
+│   │   ├── tool_call/         # 工具调用提取/执行/校验
+│   │   └── type_resolve/      # 类型解析
 │   ├── logger/                # 日志和可观测性
 │   │   ├── logger.py          # 日志 API
 │   │   ├── logger_config.py   # 日志配置
@@ -681,13 +716,19 @@ SimpleLLMFunc/
 │   │   └── langfuse_client.py # Langfuse 集成
 │   ├── type/                  # 多模态类型
 │   │   └── __init__.py        # Text, ImgUrl, ImgPath 等
+│   ├── utils/                 # 通用工具与 Textual TUI
+│   │   ├── __init__.py        # 通用工具导出
+│   │   └── tui/               # 终端聊天界面
 │   ├── config.py              # 全局配置
 │   └── __init__.py            # 包初始化和 API 导出
 ├── examples/                  # 使用示例
-│   ├── llm_function_example.py      # 基础示例
-│   ├── llm_chat_example.py          # 对话示例
+│   ├── llm_function_pydantic_example.py  # 结构化输出示例
+│   ├── event_stream_chatbot.py      # 对话 + 事件流示例
 │   ├── parallel_toolcall_example.py # 并发示例
 │   ├── multi_modality_toolcall.py   # 多模态示例
+│   ├── pyrepl_example.py            # 内置 PyRepl 示例
+│   ├── custom_tool_event_example.py # 自定义工具事件示例
+│   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例
 │   └── provider_template.json # 配置模板
 ├── pyproject.toml             # Poetry 配置
@@ -702,11 +743,14 @@ SimpleLLMFunc/
 |------|------|
 | **llm_decorator** | 提供 @llm_function 和 @llm_chat 装饰器 |
 | **tool** | 工具系统，@tool 装饰器和 Tool 基类 |
+| **builtin** | 内置工具（如持久化 Python REPL） |
+| **hooks** | 事件流定义、事件发射器与流封装 |
 | **interface** | LLM 接口抽象和 OpenAI 兼容实现 |
 | **base** | ReAct 引擎、消息处理、类型转换 |
 | **logger** | 结构化日志、trace_id 追踪 |
 | **observability** | Langfuse 集成，完整 LLM 可观测性 |
 | **type** | 多模态类型定义（Text、ImgUrl、ImgPath）|
+| **utils** | 通用工具与 Textual TUI 集成 |
 | **config** | 全局配置和环境变量管理 |
 
 ### 配置和环境变量
@@ -797,8 +841,8 @@ cp env_template .env
 # 编辑 .env 文件，填入你的 API 密钥
 
 # 运行示例
-python examples/llm_function_example.py
-python examples/llm_chat_example.py
+python examples/llm_function_pydantic_example.py
+python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
 ```
 
@@ -817,7 +861,7 @@ python examples/parallel_toolcall_example.py
 - 🔄 [更新日志](CHANGELOG.md)
 - 🔗 [GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc)
 - 🤖 [SimpleManus (Agent 框架)](https://github.com/NiJingzhe/SimpleManus)
-- 🌍 [English README](README_EN.md)
+- 🌍 [English README](README.md)
 
 ## Star History
 

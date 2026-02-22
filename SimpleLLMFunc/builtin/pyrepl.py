@@ -174,7 +174,13 @@ class PyRepl:
 
         thread = threading.Thread(target=run_code, daemon=True)
         thread.start()
-        done_event.wait(timeout=30)
+        completed = await asyncio.to_thread(done_event.wait, 30)
+
+        if not completed and error_msg is None:
+            error_msg = "Execution timed out after 30 seconds"
+            stderr_parts.append(error_msg + "\n")
+            if event_emitter:
+                await event_emitter.emit("kernel_stderr", {"text": error_msg + "\n"})
 
         execution_time_ms = (time.time() - start_time) * 1000
 

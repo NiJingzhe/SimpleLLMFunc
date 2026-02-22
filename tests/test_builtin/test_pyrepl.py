@@ -224,3 +224,32 @@ class TestPyReplStreaming:
         ]
         assert len(stdout_events) > 0
         assert "test" in str(stdout_events[0].event.data)
+
+
+class TestPyReplEventLoopSafety:
+    """Test PyRepl does not block asyncio event loop."""
+
+    @pytest.mark.asyncio
+    async def test_execute_does_not_block_event_loop(self):
+        """execute_code should not freeze the loop during long-running code."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        tick_count = 0
+        running = True
+
+        async def ticker() -> None:
+            nonlocal tick_count
+            while running:
+                tick_count += 1
+                await asyncio.sleep(0.01)
+
+        ticker_task = asyncio.create_task(ticker())
+        try:
+            result = await repl.execute("import time\ntime.sleep(0.12)")
+            assert result["success"] is True
+        finally:
+            running = False
+            await ticker_task
+
+        assert tick_count >= 3
