@@ -89,6 +89,60 @@ async def test_ctrl_q_quits_app() -> None:
 
 
 @pytest.mark.asyncio
+async def test_streaming_model_content_auto_scrolls_to_bottom() -> None:
+    """Model streaming updates should keep chat log pinned to latest content."""
+    app = _make_app()
+
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "word " * 2200)
+        await pilot.pause(0.05)
+
+        chat_log = app.query_one("#chat-log", VerticalScroll)
+        assert chat_log.max_scroll_y > 0
+
+        chat_log.scroll_home(animate=False, immediate=True)
+        await pilot.pause(0.02)
+        assert chat_log.scroll_y == 0
+
+        await app.append_model_content("llm_call_1", "tail " * 200)
+        await pilot.pause(0.05)
+
+        assert chat_log.scroll_y >= chat_log.max_scroll_y - 0.5
+
+
+@pytest.mark.asyncio
+async def test_streaming_tool_output_auto_scrolls_to_bottom() -> None:
+    """Tool streaming output should keep chat log pinned to latest content."""
+    app = _make_app()
+
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-1",
+            tool_name="execute_code",
+            arguments={"code": "print(1)"},
+        )
+        await app.append_tool_output(
+            "call-1", "".join(f"line {i}\n" for i in range(160))
+        )
+        await pilot.pause(0.05)
+
+        chat_log = app.query_one("#chat-log", VerticalScroll)
+        assert chat_log.max_scroll_y > 0
+
+        chat_log.scroll_home(animate=False, immediate=True)
+        await pilot.pause(0.02)
+        assert chat_log.scroll_y == 0
+
+        await app.append_tool_output("call-1", "tail line\n")
+        await pilot.pause(0.05)
+
+        assert chat_log.scroll_y >= chat_log.max_scroll_y - 0.5
+
+
+@pytest.mark.asyncio
 async def test_pending_tool_input_submits_to_pyrepl() -> None:
     """When PyRepl requests input, Enter should submit to request id."""
     submit_mock = Mock(return_value=True)

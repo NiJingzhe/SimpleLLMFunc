@@ -65,8 +65,6 @@ class AgentTUIApp(App[None]):
 
     .bubble {
         height: auto;
-        max-height: 70%;
-        overflow-y: auto;
         margin: 0 0 1 0;
         padding: 1;
         border: round #3a4252;
@@ -152,6 +150,7 @@ class AgentTUIApp(App[None]):
 
         self._models: dict[str, _ModelWidgets] = {}
         self._tools: dict[str, _ToolWidgets] = {}
+        self._scroll_after_refresh_pending = False
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="chat-log")
@@ -162,6 +161,24 @@ class AgentTUIApp(App[None]):
             "TUI ready. Type a message to start. Use /chat <message> to bypass pending tool input; use /exit, /quit, /q, or Ctrl+Q to quit."
         )
         self.query_one("#chat-input", Input).focus()
+
+    def _scroll_chat_log_to_end(self) -> None:
+        chat_log = self.query_one("#chat-log", VerticalScroll)
+        chat_log.scroll_end(animate=False, force=True, immediate=True)
+
+    def _auto_scroll_chat_log(self) -> None:
+        self._scroll_chat_log_to_end()
+
+        if self._scroll_after_refresh_pending:
+            return
+
+        self._scroll_after_refresh_pending = True
+
+        def _after_refresh_scroll() -> None:
+            self._scroll_after_refresh_pending = False
+            self._scroll_chat_log_to_end()
+
+        self.call_after_refresh(_after_refresh_scroll)
 
     def _set_chat_placeholder(self) -> None:
         input_widget = self.query_one("#chat-input", Input)
@@ -285,13 +302,13 @@ class AgentTUIApp(App[None]):
         await chat_log.mount(bubble)
         await bubble.mount(role)
         await bubble.mount(body)
-        chat_log.scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
     async def _append_system_hint(self, text: str) -> None:
         chat_log = self.query_one("#chat-log", VerticalScroll)
         hint = Static(Text(text, style="#7f8798"))
         await chat_log.mount(hint)
-        chat_log.scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
     # ------------------------------------------------------------------
     # Adapter methods used by consume_react_stream
@@ -313,7 +330,7 @@ class AgentTUIApp(App[None]):
         await root.mount(content_widget)
         await root.mount(tool_list_widget)
         await root.mount(stats_widget)
-        chat_log.scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
         self._models[model_call_id] = _ModelWidgets(
             root=root,
@@ -332,7 +349,7 @@ class AgentTUIApp(App[None]):
 
         model.content += content_delta
         model.content_widget.update(Markdown(model.content or " "))
-        self.query_one("#chat-log", VerticalScroll).scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
     async def append_model_reasoning(
         self,
@@ -345,13 +362,14 @@ class AgentTUIApp(App[None]):
 
         model.reasoning += reasoning_delta
         model.reasoning_widget.update(model.reasoning)
+        self._auto_scroll_chat_log()
 
     async def finish_model_response(self, model_call_id: str, stats_line: str) -> None:
         model = self._models.get(model_call_id)
         if model is None:
             return
         model.stats_widget.update(stats_line)
-        self.query_one("#chat-log", VerticalScroll).scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
     async def start_tool_call(
         self,
@@ -396,7 +414,7 @@ class AgentTUIApp(App[None]):
             result_widget=result_widget,
             stats_widget=stats_widget,
         )
-        self.query_one("#chat-log", VerticalScroll).scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
     async def append_tool_output(self, tool_call_id: str, output_delta: str) -> None:
         tool = self._tools.get(tool_call_id)
@@ -406,6 +424,7 @@ class AgentTUIApp(App[None]):
         tool.output += output_delta
         if tool.output:
             tool.output_widget.update(Markdown(f"```text\n{tool.output}\n```"))
+            self._auto_scroll_chat_log()
 
     async def set_tool_status(self, tool_call_id: str, status: str) -> None:
         tool = self._tools.get(tool_call_id)
@@ -413,6 +432,7 @@ class AgentTUIApp(App[None]):
             return
 
         tool.status_widget.update(status)
+        self._auto_scroll_chat_log()
 
     async def request_tool_input(
         self,
@@ -445,7 +465,7 @@ class AgentTUIApp(App[None]):
         tool.status_widget.update("success" if success else "error")
         tool.result_widget.update(Markdown(result_markdown or ""))
         tool.stats_widget.update(stats_line)
-        self.query_one("#chat-log", VerticalScroll).scroll_end(animate=False)
+        self._auto_scroll_chat_log()
 
 
 __all__ = ["AgentTUIApp"]
