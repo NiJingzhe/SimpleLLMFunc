@@ -1,7 +1,13 @@
-"""SimpleLLMFunc Textual TUI example.
+"""SimpleLLMFunc Textual TUI example with persistent PyRepl.
 
 Run:
     poetry run python examples/tui_chat_example.py
+
+Notes:
+    - ``toolkit=[*repl.toolset]`` provides a persistent Python environment,
+      similar to IPython.
+    - State is shared across calls (imports, variables, functions), so
+      incremental code execution is recommended.
 """
 
 from __future__ import annotations
@@ -19,6 +25,7 @@ def load_llm():
     models = OpenAICompatible.load_from_json_file(provider_json_path)
     return models["openrouter"]["qwen/qwen3.5-397b-a17b"]
 
+
 llm = load_llm()
 repl = PyRepl()
 
@@ -31,11 +38,21 @@ repl = PyRepl()
     enable_event=True,
 )
 async def agent(message: str, history: HistoryList):
-    """You are a task assistant.
+    """You are a practical coding assistant.
 
+    You have a persistent Python REPL toolset (like IPython):
+    - All execute_code calls run in one continuous session.
+    - Imports, variables, and functions persist across tool calls.
+    - Prefer reusing existing session state instead of re-running everything.
+
+    Important execution rules:
+    - Do not rely on ``if __name__ == "__main__":`` blocks; this environment
+      is not a script main-entry runtime.
+    - ``input()`` is supported. Use it when interactive user values are needed.
+    - Keep tool calls focused and print intermediate results when useful.
+
+    Response style:
     - Keep answers concise and practical.
-    - Use execute_code for math/programming verification when needed.
-    - Use batch_process tool when user asks for step-by-step task execution.
     """
 
 
