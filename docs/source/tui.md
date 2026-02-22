@@ -43,12 +43,15 @@ if __name__ == "__main__":
 - 每次模型调用结束后，在消息下方展示耗时与 token 用量
 - 工具调用开始时展示结构化参数（可读格式，不是裸 JSON 字符串）
 - 工具执行期间消费 `CustomEvent` 并实时更新工具输出
+- 当工具（如 PyRepl）触发 `input()` 时，输入框自动切换为工具输入模式并优先回填该请求
 - 工具结束后展示结果与调用统计（耗时/状态）
 - 聊天消息区支持超出视口滚动，单条消息有最大高度并支持内部滚动
 
 ## 交互与退出
 
 - 发送消息：输入后按 Enter
+- 当存在待处理的工具输入请求时，Enter 会优先把输入提交给该请求
+- 强制发送新一轮聊天：`/chat <message>`（可在有待处理工具输入时绕过优先路由）
 - 退出命令：`/exit`、`/quit`、`/q`
 - 快捷键退出：`Ctrl+Q`（同时保留 `Ctrl+C`）
 
@@ -79,7 +82,7 @@ async def agent(message: str, history=None):
     ...
 ```
 
-框架也内置了部分常见工具事件的默认解析（例如 PyRepl 的 `kernel_stdout`/`kernel_stderr`）。
+框架也内置了部分常见工具事件的默认解析（例如 PyRepl 的 `kernel_stdout`/`kernel_stderr`/`kernel_input_request`）。
 
 ## 运行示例
 

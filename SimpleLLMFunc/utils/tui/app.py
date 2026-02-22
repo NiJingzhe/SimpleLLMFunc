@@ -11,6 +11,7 @@ from textual.app import App, ComposeResult
 from textual.containers import VerticalGroup, VerticalScroll
 from textual.widgets import Input, Static
 
+from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
 from SimpleLLMFunc.hooks.stream import ReactOutput
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
@@ -41,6 +42,8 @@ class _ToolWidgets:
 
 class AgentTUIApp(App[None]):
     """Terminal chat UI for llm_chat event streams."""
+
+    DEFAULT_INPUT_PLACEHOLDER = "Type a message and press Enter"
 
     CSS = """
     Screen {
@@ -127,6 +130,7 @@ class AgentTUIApp(App[None]):
         custom_hooks: Optional[Sequence[ToolCustomEventHook]] = None,
         title_text: str = "SimpleLLMFunc TUI",
         initial_history: Optional[MessageList] = None,
+        input_router: Optional[AgentInputRouter] = None,
     ):
         super().__init__()
         self.title = title_text
@@ -139,33 +143,107 @@ class AgentTUIApp(App[None]):
         self.history: MessageList = list(initial_history or [])
         self._busy = False
 
+        if input_router is not None:
+            self._input_router = input_router
+        else:
+            from SimpleLLMFunc.builtin import PyRepl
+
+            self._input_router = AgentInputRouter(submit_tool_input=PyRepl.submit_input)
+
         self._models: dict[str, _ModelWidgets] = {}
         self._tools: dict[str, _ToolWidgets] = {}
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="chat-log")
-        yield Input(placeholder="Type a message and press Enter", id="chat-input")
+        yield Input(placeholder=self.DEFAULT_INPUT_PLACEHOLDER, id="chat-input")
 
     async def on_mount(self) -> None:
         await self._append_system_hint(
-            "TUI ready. Type a message to start. Use /exit, /quit, /q, or Ctrl+Q to quit."
+            "TUI ready. Type a message to start. Use /chat <message> to bypass pending tool input; use /exit, /quit, /q, or Ctrl+Q to quit."
         )
         self.query_one("#chat-input", Input).focus()
 
-    async def on_input_submitted(self, event: Input.Submitted) -> None:
-        user_text = event.value.strip()
-        if not user_text:
+    def _set_chat_placeholder(self) -> None:
+        input_widget = self.query_one("#chat-input", Input)
+        input_widget.placeholder = self.DEFAULT_INPUT_PLACEHOLDER
+
+    def _set_tool_input_placeholder(self, prompt: str) -> None:
+        input_widget = self.query_one("#chat-input", Input)
+        prompt_text = prompt.strip()
+        if prompt_text:
+            input_widget.placeholder = f"Tool input: {prompt_text}"
+        else:
+            input_widget.placeholder = (
+                "Tool input required; type response and press Enter"
+            )
+
+    def _refresh_input_widget_state(self) -> None:
+        input_widget = self.query_one("#chat-input", Input)
+        pending_request = self._input_router.peek_pending_tool_request()
+
+        if pending_request is not None:
+            input_widget.disabled = False
+            self._set_tool_input_placeholder(pending_request.prompt)
+            input_widget.focus()
             return
 
-        if user_text.lower() in {"/exit", "/quit", "/q"}:
+        self._set_chat_placeholder()
+        if self._busy:
+            input_widget.disabled = True
+        else:
+            input_widget.disabled = False
+            input_widget.focus()
+
+    async def on_input_submitted(self, event: Input.Submitted) -> None:
+        input_widget = self.query_one("#chat-input", Input)
+        stripped_value = event.value.strip()
+
+        if stripped_value.lower() in {"/exit", "/quit", "/q"}:
             self.exit()
             return
+
+        force_chat = False
+        input_payload = event.value
+        if stripped_value.lower().startswith("/chat"):
+            force_chat = True
+            input_payload = stripped_value[5:].lstrip()
+
+        route_result = self._input_router.route_input(
+            UserInputEvent(
+                text=input_payload,
+                force_chat=force_chat,
+            )
+        )
+
+        if route_result.route == "tool":
+            if route_result.request is not None:
+                await self.append_tool_output(
+                    route_result.request.tool_call_id,
+                    f"> {route_result.submitted_text}\n",
+                )
+                await self.set_tool_status(route_result.request.tool_call_id, "running")
+
+            input_widget.value = ""
+            self._refresh_input_widget_state()
+            return
+
+        if route_result.route == "rejected":
+            await self._append_system_hint(
+                route_result.reason or "Tool input request expired."
+            )
+            input_widget.value = ""
+            self._refresh_input_widget_state()
+            return
+
+        if route_result.route == "noop":
+            return
+
+        user_text = route_result.chat_text
 
         if self._busy:
             await self._append_system_hint("Agent is still responding, please wait.")
             return
 
-        input_widget = self.query_one("#chat-input", Input)
         input_widget.value = ""
 
         await self._append_user_message(user_text)
@@ -194,8 +272,8 @@ class AgentTUIApp(App[None]):
             await self._append_system_hint(f"Agent error: {exc}")
         finally:
             self._busy = False
-            input_widget.disabled = False
-            input_widget.focus()
+            self._input_router.clear_all_requests()
+            self._refresh_input_widget_state()
 
     async def _append_user_message(self, text: str) -> None:
         chat_log = self.query_one("#chat-log", VerticalScroll)
@@ -328,6 +406,23 @@ class AgentTUIApp(App[None]):
             return
 
         tool.status_widget.update(status)
+
+    async def request_tool_input(
+        self,
+        tool_call_id: str,
+        request_id: str,
+        prompt: str,
+    ) -> None:
+        self._input_router.register_tool_request(
+            tool_call_id=tool_call_id,
+            request_id=request_id,
+            prompt=prompt,
+        )
+        self._refresh_input_widget_state()
+
+    async def clear_tool_input(self, tool_call_id: str) -> None:
+        self._input_router.clear_tool_requests(tool_call_id)
+        self._refresh_input_widget_state()
 
     async def finish_tool_call(
         self,

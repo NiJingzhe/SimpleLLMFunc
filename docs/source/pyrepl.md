@@ -117,6 +117,7 @@ variables = await repl.list_variables()
 |--------|-----------|------|
 | `kernel_stdout` | `{text: str}` | 标准输出 |
 | `kernel_stderr` | `{text: str}` | 标准错误 |
+| `kernel_input_request` | `{request_id: str, prompt: str}` | `input()` 请求用户输入 |
 
 ### 捕获 Streaming 事件
 
@@ -131,6 +132,9 @@ async for output in llm_chat_function(message):
                 print(f"[stdout] {event.data['text']}", end="")
             elif event.event_name == "kernel_stderr":
                 print(f"[stderr] {event.data['text']}", end="", file=sys.stderr)
+
+# 说明：当 event_name == "kernel_input_request" 时，
+# 你可以把用户输入通过 PyRepl.submit_input(request_id, value) 回填。
 ```
 
 ## 使用示例

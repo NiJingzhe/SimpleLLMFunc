@@ -67,6 +67,15 @@ class TUIStreamAdapter(Protocol):
 
     async def set_tool_status(self, tool_call_id: str, status: str) -> None: ...
 
+    async def request_tool_input(
+        self,
+        tool_call_id: str,
+        request_id: str,
+        prompt: str,
+    ) -> None: ...
+
+    async def clear_tool_input(self, tool_call_id: str) -> None: ...
+
     async def finish_tool_call(
         self,
         tool_call_id: str,
@@ -101,6 +110,22 @@ async def _ensure_active_model_call(
     state.model_has_chunk_text[model_call_id] = False
     await adapter.start_model_response(model_call_id)
     return model_call_id
+
+
+def _extract_input_request(data: object) -> tuple[Optional[str], str]:
+    if not isinstance(data, dict):
+        return None, ""
+
+    request_id = data.get("request_id")
+    prompt = data.get("prompt")
+
+    if not isinstance(request_id, str) or not request_id:
+        return None, ""
+
+    if not isinstance(prompt, str):
+        prompt = ""
+
+    return request_id, prompt
 
 
 async def _handle_event(
@@ -174,6 +199,15 @@ async def _handle_event(
         if snapshot is None:
             return
 
+        if event.event_name == "kernel_input_request":
+            request_id, prompt = _extract_input_request(event.data)
+            if request_id:
+                await adapter.request_tool_input(
+                    tool_call_id=tool_call_id,
+                    request_id=request_id,
+                    prompt=prompt,
+                )
+
         update = apply_tool_event_hooks(
             event=event,
             snapshot=snapshot,
@@ -210,6 +244,7 @@ async def _handle_event(
             stats_line=stats_line,
             success=event.success,
         )
+        await adapter.clear_tool_input(event.tool_call_id)
         if event.tool_call_id in state.running_tool_call_ids:
             state.running_tool_call_ids.remove(event.tool_call_id)
         snapshot = state.tool_snapshots.get(event.tool_call_id)
@@ -231,6 +266,7 @@ async def _handle_event(
             stats_line=stats_line,
             success=False,
         )
+        await adapter.clear_tool_input(event.tool_call_id)
         if event.tool_call_id in state.running_tool_call_ids:
             state.running_tool_call_ids.remove(event.tool_call_id)
         snapshot = state.tool_snapshots.get(event.tool_call_id)

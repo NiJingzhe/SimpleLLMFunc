@@ -65,6 +65,20 @@ def pyrepl_tool_event_hook(
             return ToolEventRenderUpdate(append_output=text, status="stderr")
         return None
 
+    if event.event_name == "kernel_input_request":
+        prompt = ""
+        if isinstance(event.data, dict):
+            raw_prompt = event.data.get("prompt")
+            if isinstance(raw_prompt, str):
+                prompt = raw_prompt
+
+        if prompt:
+            if not prompt.endswith("\n"):
+                prompt += "\n"
+            return ToolEventRenderUpdate(append_output=prompt, status="waiting-input")
+
+        return ToolEventRenderUpdate(status="waiting-input")
+
     return None
 
 

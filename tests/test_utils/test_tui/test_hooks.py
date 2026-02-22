@@ -64,3 +64,22 @@ def test_apply_tool_event_hooks_uses_custom_hook_first() -> None:
     assert update is not None
     assert update.append_output == "custom\n"
     assert update.status == "working"
+
+
+def test_pyrepl_tool_event_hook_handles_input_request() -> None:
+    """PyRepl hook should render input prompt and waiting status."""
+    snapshot = ToolRenderSnapshot(
+        tool_name="execute_code",
+        tool_call_id="call-1",
+        arguments={"code": "name = input('Name: ')"},
+    )
+    event = _build_event(
+        "kernel_input_request",
+        {"request_id": "req-1", "prompt": "Name: "},
+    )
+
+    update = pyrepl_tool_event_hook(event, snapshot)
+
+    assert update is not None
+    assert update.status == "waiting-input"
+    assert update.append_output == "Name: \n"

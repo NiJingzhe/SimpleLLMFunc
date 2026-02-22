@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from unittest.mock import Mock
 
 import pytest
 from textual.containers import VerticalScroll
-from textual.widgets import Static
+from textual.widgets import Input, Static
 
+from SimpleLLMFunc.hooks.input_stream import AgentInputRouter
 from SimpleLLMFunc.hooks.stream import ReactOutput
 from SimpleLLMFunc.utils.tui.app import AgentTUIApp
 
@@ -17,12 +19,13 @@ async def _unused_agent(_message: str) -> AsyncGenerator[ReactOutput, None]:
         yield None
 
 
-def _make_app() -> AgentTUIApp:
+def _make_app(input_router: AgentInputRouter | None = None) -> AgentTUIApp:
     return AgentTUIApp(
         agent_func=_unused_agent,
         input_param="message",
         history_param=None,
         static_kwargs={},
+        input_router=input_router,
     )
 
 
@@ -83,3 +86,52 @@ async def test_ctrl_q_quits_app() -> None:
         await pilot.press("ctrl+q")
         await pilot.pause(0.05)
         assert not app.is_running
+
+
+@pytest.mark.asyncio
+async def test_pending_tool_input_submits_to_pyrepl() -> None:
+    """When PyRepl requests input, Enter should submit to request id."""
+    submit_mock = Mock(return_value=True)
+    app = _make_app(input_router=AgentInputRouter(submit_tool_input=submit_mock))
+
+    async with app.run_test() as pilot:
+        app._busy = True
+        await app.request_tool_input(
+            tool_call_id="call-1",
+            request_id="req-1",
+            prompt="Name: ",
+        )
+
+        input_widget = app.query_one("#chat-input", Input)
+        assert not input_widget.disabled
+        assert "Tool input" in input_widget.placeholder
+
+        await pilot.click("#chat-input")
+        await pilot.press("A", "l", "i", "c", "e", "enter")
+        await pilot.pause(0.05)
+
+        submit_mock.assert_called_once_with("req-1", "Alice")
+        assert not app._input_router.has_pending_tool_requests()
+        assert input_widget.disabled
+
+
+@pytest.mark.asyncio
+async def test_chat_command_bypasses_pending_tool_input() -> None:
+    """/chat should bypass pending tool-input routing."""
+    submit_mock = Mock(return_value=True)
+    app = _make_app(input_router=AgentInputRouter(submit_tool_input=submit_mock))
+
+    async with app.run_test() as pilot:
+        app._busy = True
+        await app.request_tool_input(
+            tool_call_id="call-2",
+            request_id="req-2",
+            prompt="Age: ",
+        )
+
+        await pilot.click("#chat-input")
+        await pilot.press("/", "c", "h", "a", "t", "space", "h", "i", "enter")
+        await pilot.pause(0.05)
+
+        submit_mock.assert_not_called()
+        assert app._input_router.has_pending_tool_requests()

@@ -71,6 +71,8 @@ class FakeAdapter:
     tool_status: dict[str, str] = field(default_factory=dict)
     tool_results: dict[str, str] = field(default_factory=dict)
     model_start_order: list[str] = field(default_factory=list)
+    tool_input_requests: list[tuple[str, str, str]] = field(default_factory=list)
+    tool_input_cleared: list[str] = field(default_factory=list)
 
     async def start_model_response(self, model_call_id: str) -> None:
         self.model_start_order.append(model_call_id)
@@ -105,6 +107,17 @@ class FakeAdapter:
 
     async def set_tool_status(self, tool_call_id: str, status: str) -> None:
         self.tool_status[tool_call_id] = status
+
+    async def request_tool_input(
+        self,
+        tool_call_id: str,
+        request_id: str,
+        prompt: str,
+    ) -> None:
+        self.tool_input_requests.append((tool_call_id, request_id, prompt))
+
+    async def clear_tool_input(self, tool_call_id: str) -> None:
+        self.tool_input_cleared.append(tool_call_id)
 
     async def finish_tool_call(
         self,
@@ -254,6 +267,7 @@ async def test_consume_react_stream_updates_model_and_tool_blocks() -> None:
     assert adapter.tool_output["call-1"] == "1\n"
     assert "0.30s" in adapter.tool_stats["call-1"]
     assert adapter.tool_status["call-1"] == "success"
+    assert adapter.tool_input_cleared == ["call-1"]
     assert history == final_messages
 
 
@@ -334,6 +348,80 @@ async def test_consume_react_stream_custom_hook_overrides_output() -> None:
     await consume_react_stream(_stream(), adapter=adapter, custom_hooks=[custom_hook])
 
     assert adapter.tool_output["call-2"] == "progress=50%\n"
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_routes_pyrepl_input_request() -> None:
+    """Consumer should pass PyRepl input requests to adapter."""
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+    tool_call = ChatCompletionMessageToolCall(
+        id="call-3",
+        type="function",
+        function=OpenAIFunction(name="execute_code", arguments='{"code": "input()"}'),
+    )
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=LLMCallStartEvent(
+                event_type=ReActEventType.LLM_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=0,
+                messages=[],
+                tools=None,
+                llm_kwargs={},
+                stream=True,
+            )
+        )
+        yield EventYield(
+            event=ToolCallStartEvent(
+                event_type=ReActEventType.TOOL_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-3",
+                arguments={"code": "name = input('Name: ')"},
+                tool_call=tool_call,
+            )
+        )
+        yield EventYield(
+            event=CustomEvent(
+                event_type=ReActEventType.CUSTOM_EVENT,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                event_name="kernel_input_request",
+                data={"request_id": "req-1", "prompt": "Name: "},
+                tool_name="execute_code",
+                tool_call_id="call-3",
+            )
+        )
+        yield EventYield(
+            event=ToolCallEndEvent(
+                event_type=ReActEventType.TOOL_CALL_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-3",
+                arguments={"code": "name = input('Name: ')"},
+                result={"stdout": "ok", "success": True},
+                execution_time=0.1,
+                success=True,
+            )
+        )
+
+    await consume_react_stream(_stream(), adapter=adapter)
+
+    assert adapter.tool_input_requests == [("call-3", "req-1", "Name: ")]
+    assert adapter.tool_output["call-3"].endswith("Name: \n")
+    assert adapter.tool_input_cleared == ["call-3"]
 
 
 @pytest.mark.asyncio

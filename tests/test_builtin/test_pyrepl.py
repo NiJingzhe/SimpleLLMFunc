@@ -253,3 +253,58 @@ class TestPyReplEventLoopSafety:
             await ticker_task
 
         assert tick_count >= 3
+
+
+class TestPyReplInputHook:
+    """Test PyRepl interactive input() bridge."""
+
+    def test_submit_input_returns_false_for_unknown_request(self):
+        """Submitting to an unknown request id should fail gracefully."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        assert PyRepl.submit_input("unknown-request", "value") is False
+
+    @pytest.mark.asyncio
+    async def test_execute_supports_input_roundtrip_via_events(self):
+        """execute should emit input request and accept UI-provided response."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
+        from SimpleLLMFunc.hooks.events import CustomEvent
+
+        repl = PyRepl()
+        emitter = ToolEventEmitter()
+
+        run_task = asyncio.create_task(
+            repl.execute(
+                "name = input('Name: ')\nprint(f'Hello, {name}!')",
+                event_emitter=emitter,
+            )
+        )
+
+        request_id = None
+        prompt = ""
+        deadline = asyncio.get_running_loop().time() + 2
+        while asyncio.get_running_loop().time() < deadline and request_id is None:
+            events = await emitter.get_events()
+            for event_yield in events:
+                event = event_yield.event
+                if (
+                    isinstance(event, CustomEvent)
+                    and event.event_name == "kernel_input_request"
+                ):
+                    data = getattr(event, "data", None)
+                    if isinstance(data, dict):
+                        request_id = data.get("request_id")
+                        prompt = data.get("prompt", "")
+                    break
+
+            if request_id is None:
+                await asyncio.sleep(0.01)
+
+        assert isinstance(request_id, str) and request_id
+        assert prompt == "Name: "
+        assert PyRepl.submit_input(request_id, "Alice") is True
+
+        result = await asyncio.wait_for(run_task, timeout=2)
+        assert result["success"] is True
+        assert "Hello, Alice!" in result["stdout"]

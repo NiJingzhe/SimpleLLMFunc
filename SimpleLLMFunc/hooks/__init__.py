@@ -25,6 +25,12 @@ from SimpleLLMFunc.hooks.event_emitter import (
     ToolEventEmitter,
     NoOpEventEmitter,
 )
+from SimpleLLMFunc.hooks.input_stream import (
+    AgentInputRouter,
+    InputRouteResult,
+    ToolInputRequest,
+    UserInputEvent,
+)
 from SimpleLLMFunc.hooks.stream import (
     EventYield,
     ReactOutput,
@@ -72,4 +78,9 @@ __all__ = [
     # 事件发射器
     "ToolEventEmitter",
     "NoOpEventEmitter",
+    # 输入流
+    "UserInputEvent",
+    "ToolInputRequest",
+    "InputRouteResult",
+    "AgentInputRouter",
 ]
