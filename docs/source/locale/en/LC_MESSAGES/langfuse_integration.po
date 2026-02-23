@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 19:32+0800\n"
+"POT-Creation-Date: 2026-02-22 18:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -17,7 +17,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/langfuse_integration.md:1
@@ -65,8 +65,7 @@ msgstr ""
 
 #: ../../source/langfuse_integration.md:13
 msgid "安装和配置"
-msgstr ""
-"Installation and Configuration"
+msgstr "Installation and Configuration"
 
 #: ../../source/langfuse_integration.md:15
 msgid "1. 安装 Langfuse"
@@ -98,8 +97,7 @@ msgstr "3. Configure environment variables"
 
 #: ../../source/langfuse_integration.md:42
 msgid "4. 初始化观测系统"
-msgstr ""
-"4. Initialize observation system"
+msgstr "4. Initialize observation system"
 
 #: ../../source/langfuse_integration.md:44
 msgid "SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse："
@@ -116,7 +114,7 @@ msgstr ""
 
 #: ../../source/langfuse_integration.md:79
 msgid "使用示例"
-msgstr "Example usage"
+msgstr "Usage Example"
 
 #: ../../source/langfuse_integration.md:81
 msgid "基本 LLM 函数追踪"
@@ -277,8 +275,7 @@ msgstr ""
 
 #: ../../source/langfuse_integration.md:219
 msgid "最佳实践"
-msgstr ""
-"Best Practice"
+msgstr "Best Practices"
 
 #: ../../source/langfuse_integration.md:221
 msgid "1. 环境分离"
@@ -315,8 +312,7 @@ msgstr "You can temporarily disable observation with `LANGFUSE_ENABLED=false`"
 
 #: ../../source/langfuse_integration.md:250
 msgid "4. 数据隐私"
-msgstr ""
-"4. Data Privacy"
+msgstr "4. Data Privacy"
 
 #: ../../source/langfuse_integration.md:252
 msgid "确保敏感数据在发送到 Langfuse 前已脱敏"
@@ -343,8 +339,7 @@ msgstr "Observer not available"
 
 #: ../../source/langfuse_integration.md:263
 msgid "检查环境变量是否正确设置"
-msgstr ""
-"Check if environment variables are set correctly"
+msgstr "Check if environment variables are set correctly"
 
 #: ../../source/langfuse_integration.md:264
 msgid "确认 Langfuse 包已安装"
@@ -391,16 +386,25 @@ msgid "示例项目"
 msgstr "Sample project"
 
 #: ../../source/langfuse_integration.md:293
-msgid "查看 `examples/langfuse_integration_example.py` 获取完整的使用示例。"
-msgstr ""
-"View `examples/langfuse_integration_example.py` for a complete usage "
-"example."
+msgid "可参考以下示例了解完整链路："
+msgstr "You can refer to the following examples for the complete workflow:"
 
 #: ../../source/langfuse_integration.md:295
+msgid "`examples/llm_function_token_usage.py`（事件流 + 用量统计）"
+msgstr ""
+"`examples/llm_function_token_usage.py` (event stream + usage statistics)"
+
+#: ../../source/langfuse_integration.md:296
+msgid "`examples/event_stream_chatbot.py`（对话 + 工具调用 + 事件流）"
+msgstr ""
+"`examples/event_stream_chatbot.py` (conversation + tool calls + event "
+"stream)"
+
+#: ../../source/langfuse_integration.md:298
 msgid "相关链接"
 msgstr "Related Links"
 
-#: ../../source/langfuse_integration.md:297
+#: ../../source/langfuse_integration.md:300
 msgid "[Langfuse 官方文档](https://langfuse.com/docs)"
 msgstr "[Langfuse Official Documentation](https://langfuse.com/docs)"
 
@@ -409,3 +413,8 @@ msgstr "[Langfuse Official Documentation](https://langfuse.com/docs)"
 
 #~ msgid "[API 参考](./api_reference.md)"
 #~ msgstr "[API Reference](./api_reference.md)"
+
+#~ msgid "查看 `examples/langfuse_integration_example.py` 获取完整的使用示例。"
+#~ msgstr ""
+#~ "View `examples/langfuse_integration_example.py` for a complete usage "
+#~ "example."

@@ -32,19 +32,21 @@ from typing import AsyncGenerator, List, Dict, Tuple
 from SimpleLLMFunc import llm_chat
 
 @llm_chat(
-    llm_interface=llm_interface,           # LLM 接口实例（必需）
-    toolkit=None,                          # 工具列表（可选）
-    max_tool_calls=5,                      # 最大工具调用次数（可选）
-    stream=True,                           # 是否启用流式模式（可选）
-    **llm_kwargs                           # 其他 LLM 参数
+    llm_interface=llm_interface,           # LLM interface instance (required)
+    toolkit=None,                          # Tool list (optional)
+    max_tool_calls=5,                      # Max tool calls (optional)
+    stream=True,                           # Stream mode (optional)
+    self_reference=None,                   # Shared SelfReference object (optional)
+    self_reference_key=None,               # SelfReference memory key (optional)
+    **llm_kwargs                           # Other LLM kwargs
 )
 async def your_chat_function(
     message: str,
     history: List[Dict[str, str]] | None = None,
 ) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
     """
-    在这里描述聊天助手的角色和行为规则。
-    这个 docstring 会被作为系统提示传递给 LLM。
+    Describe assistant role and behavior here.
+    This docstring is used as the system prompt.
     """
     yield "", history or []
 ```
@@ -60,6 +62,8 @@ async def your_chat_function(
   - `False`: 返回 `(response, messages)` 元组（向后兼容模式）
   - `True`: 返回 `ReactOutput`（`ResponseYield` 或 `EventYield`）
   - 详细说明请参考 [事件流文档](event_stream.md)
+- **self_reference** (optional): Shared `SelfReference` object. When provided, `llm_chat` automatically appends a SelfReference Memory Contract to the end of the system prompt, guiding the agent to use controlled memory APIs.
+- **self_reference_key** (optional): Memory key used for this chat function. Defaults to function name when omitted.
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
 ### 返回值
@@ -249,6 +253,63 @@ asyncio.run(demo())
 ```
 
 ## 高级特性
+
+### SelfReference auto system-prompt contract
+
+When `@llm_chat(...)` is provided with `self_reference`, the framework automatically appends a SelfReference Memory Contract to the current system prompt (with deduplication to avoid repeated blocks).
+
+The contract is runtime guidance for each turn; durable system-prompt memory remains clean and can be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
+
+The contract tells the agent:
+
+- which `self_reference.memory["<key>"]` handle to use
+- how to persist durable preferences with `append_system_prompt(...)`
+- which common memory methods are available (`append`, `update`, `delete`, `replace`, etc.)
+
+Example:
+
+```python
+from SimpleLLMFunc import SelfReference, llm_chat
+
+self_reference = SelfReference()
+
+@llm_chat(
+    llm_interface=llm,
+    toolkit=repl.toolset,
+    self_reference=self_reference,
+    self_reference_key="agent_main",
+)
+async def agent(message: str, history=None):
+    """You are a practical coding assistant."""
+```
+
+Write durable memory into system prompt from tools (for example in `execute_code`):
+
+```python
+mem = self_reference.memory["agent_main"]
+mem.append_system_prompt("User preference: answer in concise bullet points.")
+```
+
+Method reference (purpose of each memory method):
+
+- `count()`: return number of messages in this memory key.
+- `all()`: return deep-copied full message list.
+- `get(index)`: read one message at index.
+- `append(message)`: append one message.
+- `insert(index, message)`: insert one message at index.
+- `update(index, message)`: replace one message at index.
+- `delete(index)`: delete one message at index.
+- `replace(messages)`: replace entire history with validated messages.
+- `clear()`: clear all messages.
+- `get_system_prompt()`: read latest system prompt.
+- `set_system_prompt(text)`: overwrite system prompt.
+- `append_system_prompt(text)`: append text to existing system prompt memory.
+
+Forgetting memory:
+
+- Do not treat `reset_repl` as memory forgetting.
+- `reset_repl` only clears Python runtime variables.
+- Forget memory by deleting records through memory methods (`delete`, `replace`, `clear`).
 
 ### 返回模式
 

@@ -1,0 +1,302 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version:  SimpleLLMFunc\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-23 00:08+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/pyrepl.md:1
+msgid "PyRepl 代码执行"
+msgstr "PyRepl Code Execution"
+
+#: ../../source/pyrepl.md:3
+msgid ""
+"SimpleLLMFunc 提供内置的 PyRepl 支持，允许 LLM 在一个连续上下文中执行 Python "
+"代码。与传统的一次性代码执行不同，PyRepl 保持变量和状态，让 LLM 可以分步执行复杂任务。"
+msgstr ""
+"SimpleLLMFunc includes built-in PyRepl support, allowing LLMs to execute "
+"Python code in a continuous context. Unlike one-shot code execution, "
+"PyRepl preserves variables and state so the LLM can solve complex tasks "
+"step by step."
+
+#: ../../source/pyrepl.md:5
+msgid "功能特性"
+msgstr "Features"
+
+#: ../../source/pyrepl.md:7
+msgid "**轻量实现**：仅依赖 Python 内置模块，无需 jupyter_client"
+msgstr ""
+"**Lightweight implementation**: Depends only on Python built-ins; no "
+"`jupyter_client` required"
+
+#: ../../source/pyrepl.md:8
+msgid "**连续上下文**：变量在多次调用间持久化，LLM 可以分步执行任务"
+msgstr ""
+"**Continuous context**: Variables persist across calls, enabling step-by-"
+"step execution"
+
+#: ../../source/pyrepl.md:9
+msgid "**实时 Streaming**：通过 `event_emitter` 实时获取 stdout/stderr 输出"
+msgstr ""
+"**Real-time streaming**: Receive stdout/stderr in real time via "
+"`event_emitter`"
+
+#: ../../source/pyrepl.md:10
+msgid "**异步不阻塞**：代码执行在独立线程运行，不阻塞主事件循环（适合 TUI/流式 UI）"
+msgstr ""
+"**Async and non-blocking**: Code runs in a dedicated thread and does not "
+"block the main event loop (suitable for TUI/streaming UIs)"
+
+#: ../../source/pyrepl.md:11
+msgid "**Session 隔离**：不同的 PyRepl 实例相互独立，互不影响"
+msgstr ""
+"**Session isolation**: Different PyRepl instances are independent and do "
+"not interfere"
+
+#: ../../source/pyrepl.md:12
+msgid "**完整工具集**：提供 execute_code、reset_repl、list_variables 等工具"
+msgstr ""
+"**Complete toolset**: Provides `execute_code`, `reset_repl`, "
+"`list_variables`, and more"
+
+#: ../../source/pyrepl.md:13
+msgid ""
+"**超时保护**：单次 `execute_code` 默认 120 秒活动执行超时；等待 `input()` "
+"不计时，且每次收到输入后会重置超时窗口；单次 `input()` 默认 300 秒空闲超时"
+msgstr ""
+"**Timeout protection**: `execute_code` has a default 120-second active "
+"execution timeout; waiting on `input()` does not consume it, and each "
+"accepted input resets the timeout window; each `input()` also has a "
+"default 300-second idle timeout"
+
+#: ../../source/pyrepl.md:15
+msgid "快速开始"
+msgstr "Quick Start"
+
+#: ../../source/pyrepl.md:17
+msgid "基本用法"
+msgstr "Basic Usage"
+
+#: ../../source/pyrepl.md:49
+msgid "多 PyRepl 隔离"
+msgstr "Multiple PyRepl Isolation"
+
+#: ../../source/pyrepl.md:66
+msgid "工具详解"
+msgstr "Tool Details"
+
+#: ../../source/pyrepl.md:68
+msgid "execute_code"
+msgstr "execute_code"
+
+#: ../../source/pyrepl.md:70
+msgid "执行 Python 代码，返回执行结果。"
+msgstr "Execute Python code and return the execution result."
+
+#: ../../source/pyrepl.md:72
+msgid ""
+"说明：`execute_code` 默认有 120 秒活动执行超时保护。等待 `input()` 期间不会计入超时；每次 `input()` "
+"成功回填后会重置超时计时。同时，单次 `input()` 默认 300 秒空闲超时。任一超时触发时 `success=False`，并在 "
+"`error`/`stderr` 中返回超时信息。"
+msgstr ""
+"Note: `execute_code` has a default 120-second active execution timeout. "
+"Waiting on `input()` does not count against this budget, and each "
+"successful input submission resets the timeout window. In addition, each "
+"`input()` has a default 300-second idle timeout. If either timeout is "
+"triggered, `success=False`, and timeout details are returned in "
+"`error`/`stderr`."
+
+#: ../../source/pyrepl.md:74
+msgid "**参数：**"
+msgstr "**Parameters:**"
+
+#: ../../source/pyrepl.md
+msgid "参数"
+msgstr "Parameter"
+
+#: ../../source/pyrepl.md
+msgid "类型"
+msgstr "Type"
+
+#: ../../source/pyrepl.md
+msgid "描述"
+msgstr "Description"
+
+#: ../../source/pyrepl.md
+msgid "code"
+msgstr "code"
+
+#: ../../source/pyrepl.md
+msgid "str"
+msgstr "str"
+
+#: ../../source/pyrepl.md
+msgid "要执行的 Python 代码"
+msgstr "Python code to execute"
+
+#: ../../source/pyrepl.md
+msgid "event_emitter"
+msgstr "event_emitter"
+
+#: ../../source/pyrepl.md
+msgid "ToolEventEmitter"
+msgstr "ToolEventEmitter"
+
+#: ../../source/pyrepl.md
+msgid "可选，事件发射器用于实时输出"
+msgstr "Optional event emitter for real-time output"
+
+#: ../../source/pyrepl.md:81
+msgid "**返回值：**"
+msgstr "**Returns:**"
+
+#: ../../source/pyrepl.md:94
+msgid "reset_repl"
+msgstr "reset_repl"
+
+#: ../../source/pyrepl.md:96
+msgid "重置 repl 状态，清除所有变量。"
+msgstr "Reset REPL state and clear all variables."
+
+#: ../../source/pyrepl.md:103
+msgid "list_variables"
+msgstr "list_variables"
+
+#: ../../source/pyrepl.md:105
+msgid "列出当前 repl 中定义的所有变量。"
+msgstr "List all variables currently defined in the REPL."
+
+#: ../../source/pyrepl.md:112
+msgid "Streaming 事件"
+msgstr "Streaming Events"
+
+#: ../../source/pyrepl.md:114
+msgid "当 `enable_event=True` 时，`execute_code` 会实时发射以下事件："
+msgstr ""
+"When `enable_event=True`, `execute_code` emits the following events in "
+"real time:"
+
+#: ../../source/pyrepl.md
+msgid "事件名"
+msgstr "Event Name"
+
+#: ../../source/pyrepl.md
+msgid "data 字段"
+msgstr "data field"
+
+#: ../../source/pyrepl.md
+msgid "`kernel_stdout`"
+msgstr "`kernel_stdout`"
+
+#: ../../source/pyrepl.md
+#, python-brace-format
+msgid "`{text: str}`"
+msgstr "{text: str}"
+
+#: ../../source/pyrepl.md
+msgid "标准输出"
+msgstr "Standard Output"
+
+#: ../../source/pyrepl.md
+msgid "`kernel_stderr`"
+msgstr "`kernel_stderr`"
+
+#: ../../source/pyrepl.md
+msgid "标准错误"
+msgstr "Standard Error"
+
+#: ../../source/pyrepl.md
+msgid "`kernel_input_request`"
+msgstr "`kernel_input_request`"
+
+#: ../../source/pyrepl.md
+#, python-brace-format
+msgid "`{request_id: str, prompt: str, idle_timeout_seconds: float}`"
+msgstr "`{request_id: str, prompt: str, idle_timeout_seconds: float}`"
+
+#: ../../source/pyrepl.md
+msgid "`input()` 请求用户输入（含本次输入空闲超时）"
+msgstr "`input()` requests user input (including the idle timeout for this request)"
+
+#: ../../source/pyrepl.md:122
+msgid "捕获 Streaming 事件"
+msgstr "Capture Streaming Events"
+
+#: ../../source/pyrepl.md:140
+msgid "使用示例"
+msgstr "Usage Example"
+
+#: ../../source/pyrepl.md:142
+msgid "数据分析助手"
+msgstr "Data Analysis Assistant"
+
+#: ../../source/pyrepl.md:175
+msgid "连续编程上下文"
+msgstr "Continuous Programming Context"
+
+#: ../../source/pyrepl.md:200
+msgid "配置选项"
+msgstr "Configuration Options"
+
+#: ../../source/pyrepl.md:202
+msgid "PyRepl 构造函数参数"
+msgstr "PyRepl Constructor Parameters"
+
+#: ../../source/pyrepl.md:218
+msgid "最佳实践"
+msgstr "Best Practices"
+
+#: ../../source/pyrepl.md:220
+msgid "1. Session 隔离"
+msgstr "1. Session Isolation"
+
+#: ../../source/pyrepl.md:238
+msgid "2. 错误处理"
+msgstr "2. Error Handling"
+
+#: ../../source/pyrepl.md:249
+msgid "3. 实时反馈"
+msgstr "3. Real-Time Feedback"
+
+#: ../../source/pyrepl.md:251
+msgid "启用 `event_emitter` 获取实时输出，提供更好的用户体验："
+msgstr ""
+"Enable `event_emitter` to get real-time output for a better user "
+"experience:"
+
+#: ../../source/pyrepl.md:269
+msgid "4. 重置状态"
+msgstr "4. Reset State"
+
+#: ../../source/pyrepl.md:271
+msgid "当需要重新开始时，可以使用 `reset_repl` 清除所有变量："
+msgstr "When you need to start over, use `reset_repl` to clear all variables:"
+
+#: ../../source/pyrepl.md:279
+msgid "相关链接"
+msgstr "Related Links"
+
+#: ../../source/pyrepl.md:281
+msgid "示例文件：`examples/pyrepl_example.py`"
+msgstr "Example file: `examples/pyrepl_example.py`"
+
+#~ msgid "**超时保护**：单次 `execute_code` 默认 30 秒超时，超时会返回错误信息"
+#~ msgstr ""
+#~ "**Timeout protection**: `execute_code` has a"
+#~ " default 30-second timeout; timeout returns"
+#~ " an error message"

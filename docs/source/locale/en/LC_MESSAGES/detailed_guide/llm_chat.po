@@ -12,12 +12,12 @@ msgstr ""
 "POT-Creation-Date: 2026-01-09 06:03+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: zh_CN <LL@li.org>\n"
-"Language: zh_CN\n"
+"Language-Team: en <LL@li.org>\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/detailed_guide/llm_chat.md:1
@@ -218,7 +218,7 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:76
 msgid "使用示例"
-msgstr "Usage example"
+msgstr "Usage Example"
 
 #: ../../source/detailed_guide/llm_chat.md:78
 msgid "示例 1: 基础聊天助手"
@@ -267,7 +267,7 @@ msgstr "Use `asyncio.gather` to handle multiple concurrent chat sessions:"
 
 #: ../../source/detailed_guide/llm_chat.md:314
 msgid "最佳实践"
-msgstr "Best practices"
+msgstr "Best Practices"
 
 #: ../../source/detailed_guide/llm_chat.md:316
 msgid "1. 错误处理"

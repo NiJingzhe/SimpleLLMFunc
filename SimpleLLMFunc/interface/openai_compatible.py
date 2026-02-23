@@ -49,6 +49,39 @@ class OpenAICompatible(LLM_Interface):
             # 如果无法获取token计数,返回0
             return 0, 0
 
+    async def _close_stream_response(self, response: Any) -> None:
+        """Best-effort close for streaming responses.
+
+        Some providers keep stream connections open after a terminal chunk.
+        If we stop consuming early (e.g. finish grace timeout), explicitly
+        closing the stream prevents leaked HTTP connections/background tasks.
+        """
+
+        close_method = getattr(response, "close", None)
+        if callable(close_method):
+            try:
+                close_result = close_method()
+                if hasattr(close_result, "__await__"):
+                    await close_result
+            except Exception as close_exc:
+                push_warning(
+                    f"{self.model_name} failed to close stream response: {close_exc}",
+                    location=get_location(),
+                )
+            return
+
+        aclose_method = getattr(response, "aclose", None)
+        if callable(aclose_method):
+            try:
+                aclose_result = aclose_method()
+                if hasattr(aclose_result, "__await__"):
+                    await aclose_result
+            except Exception as close_exc:
+                push_warning(
+                    f"{self.model_name} failed to close stream response: {close_exc}",
+                    location=get_location(),
+                )
+
     @classmethod
     def load_from_json_file(
         cls, json_path: str
@@ -258,17 +291,18 @@ class OpenAICompatible(LLM_Interface):
         self.client = AsyncOpenAI(
             api_key=api_key_pool.get_least_loaded_key(), base_url=self.base_url
         )
+        # Grace window to receive post-finish usage chunk from providers.
+        self._stream_finish_grace_timeout = 1.0
 
     async def _get_or_create_client(self, key: str) -> AsyncOpenAI:
         """获取或创建客户端，确保使用正确的API密钥"""
         # 如果当前客户端的API密钥不匹配，或者客户端为None，创建新的客户端
         if (
             not hasattr(self, "_current_key")
-            or self._current_key != key # type: ignore
+            or self._current_key != key  # type: ignore
             or not hasattr(self, "client")
             or self.client is None
         ):
-
             # 关闭旧客户端
             if hasattr(self, "client") and self.client is not None:
                 try:
@@ -353,7 +387,11 @@ class OpenAICompatible(LLM_Interface):
                 )
 
                 # 统计token
-                if not (response.choices and response.choices[0].message and response.choices[0].message.tool_calls):  # type: ignore
+                if not (
+                    response.choices
+                    and response.choices[0].message
+                    and response.choices[0].message.tool_calls
+                ):  # type: ignore
                     prompt_tokens, completion_tokens = self._count_tokens(response)
 
                     # 更新上下文中的token计数
@@ -390,8 +428,9 @@ class OpenAICompatible(LLM_Interface):
                     )
                     raise e  # 达到最大重试次数后抛出异常
                 await asyncio.sleep(self.retry_delay)  # 重试前等待一段时间
-        return ChatCompletion(id="", choices=[], created=0, model="", object='chat.completion', usage=None)  # 添加默认返回以满足类型检查，实际上这行代码永远不会执行
-
+        return ChatCompletion(
+            id="", choices=[], created=0, model="", object="chat.completion", usage=None
+        )  # 添加默认返回以满足类型检查，实际上这行代码永远不会执行
 
     @override
     async def chat_stream(
@@ -444,36 +483,116 @@ class OpenAICompatible(LLM_Interface):
                     location=get_location(),
                 )
 
-                response = await client.chat.completions.create(  # type: ignore
-                    messages=messages,  # type: ignore
-                    model=self.model_name,
-                    stream=stream,
-                    timeout=timeout,
-                    *args,
-                    **kwargs,
-                )
+                request_kwargs = dict(kwargs)
+                auto_stream_options_added = False
+                if "stream_options" not in request_kwargs:
+                    request_kwargs["stream_options"] = {"include_usage": True}
+                    auto_stream_options_added = True
+                else:
+                    stream_options = request_kwargs.get("stream_options")
+                    if isinstance(stream_options, dict):
+                        merged_stream_options = dict(stream_options)
+                        merged_stream_options.setdefault("include_usage", True)
+                        request_kwargs["stream_options"] = merged_stream_options
 
-                total_prompt_tokens = 0
-                total_completion_tokens = 0
+                response = None
 
-                async for chunk in response:
-                    yield chunk  # 按块返回生成器中的数据
-                    if chunk.choices and chunk.choices[0].delta:  # type: ignore
-                        if not chunk.choices[0].delta.tool_calls:  # type: ignore
+                try:
+                    response = await client.chat.completions.create(  # type: ignore
+                        messages=messages,  # type: ignore
+                        model=self.model_name,
+                        stream=stream,
+                        timeout=timeout,
+                        *args,
+                        **request_kwargs,
+                    )
+                except Exception as create_exc:
+                    # 部分兼容提供方不支持 stream_options，回退到无该参数。
+                    if (
+                        auto_stream_options_added
+                        and "stream_options" in str(create_exc).lower()
+                    ):
+                        request_kwargs.pop("stream_options", None)
+                        response = await client.chat.completions.create(  # type: ignore
+                            messages=messages,  # type: ignore
+                            model=self.model_name,
+                            stream=stream,
+                            timeout=timeout,
+                            *args,
+                            **request_kwargs,
+                        )
+                    else:
+                        raise
+
+                try:
+                    total_prompt_tokens = 0
+                    total_completion_tokens = 0
+                    saw_finish_reason = False
+                    saw_usage_chunk = False
+                    finish_deadline: Optional[float] = None
+
+                    loop = asyncio.get_running_loop()
+
+                    response_iter = response.__aiter__()
+
+                    while True:
+                        try:
+                            if saw_finish_reason:
+                                if finish_deadline is None:
+                                    finish_deadline = (
+                                        loop.time() + self._stream_finish_grace_timeout
+                                    )
+
+                                remaining = finish_deadline - loop.time()
+                                if remaining <= 0:
+                                    break
+
+                                chunk = await asyncio.wait_for(
+                                    response_iter.__anext__(),
+                                    timeout=remaining,
+                                )
+                            else:
+                                chunk = await response_iter.__anext__()
+                        except StopAsyncIteration:
+                            break
+                        except asyncio.TimeoutError:
+                            break
+
+                        yield chunk  # 按块返回生成器中的数据
+                        first_choice = chunk.choices[0] if chunk.choices else None
+                        usage = getattr(chunk, "usage", None)
+
+                        if usage is not None:
+                            saw_usage_chunk = True
                             prompt_tokens, completion_tokens = self._count_tokens(chunk)
-                            total_prompt_tokens += prompt_tokens
-                            total_completion_tokens += completion_tokens
+                            # stream usage 是累计值（整次请求总量），应覆盖为最新值，
+                            # 而不是逐块相加，否则在多次 usage chunk 场景下会重复计数。
+                            total_prompt_tokens = prompt_tokens
+                            total_completion_tokens = completion_tokens
 
-                # 在整个流结束后统计token
-                input_tokens = get_current_context_attribute("input_tokens") or 0
-                output_tokens = get_current_context_attribute("output_tokens") or 0
+                        if saw_finish_reason and saw_usage_chunk:
+                            break
 
-                set_current_context_attribute(
-                    "input_tokens", input_tokens + total_prompt_tokens
-                )
-                set_current_context_attribute(
-                    "output_tokens", output_tokens + total_completion_tokens
-                )
+                        if first_choice and first_choice.finish_reason is not None:
+                            if usage is not None:
+                                break
+                            # 某些供应商会在 finish_reason 之后再发送 usage chunk。
+                            # 进入短暂 grace 模式等待收尾 chunk，避免 UI 卡住且保留 token 统计。
+                            saw_finish_reason = True
+
+                    # 在整个流结束后统计token
+                    input_tokens = get_current_context_attribute("input_tokens") or 0
+                    output_tokens = get_current_context_attribute("output_tokens") or 0
+
+                    set_current_context_attribute(
+                        "input_tokens", input_tokens + total_prompt_tokens
+                    )
+                    set_current_context_attribute(
+                        "output_tokens", output_tokens + total_completion_tokens
+                    )
+                finally:
+                    if response is not None:
+                        await self._close_stream_response(response)
 
                 self.key_pool.decrement_task_count(key)
                 break  # 如果成功，跳出重试循环

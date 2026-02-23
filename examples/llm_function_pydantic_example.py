@@ -16,17 +16,19 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
 
 try:
-    llm_interface = OpenAICompatible.load_from_json_file(
-        provider_json_path
-    )["openrouter"]["google/gemini-3-flash-preview"]
+    llm_interface = OpenAICompatible.load_from_json_file(provider_json_path)[
+        "openrouter"
+    ]["qwen/qwen3.5-397b-a17b"]
 except Exception:
-    llm_interface = None # type: ignore
+    llm_interface = None  # type: ignore
 
 assert llm_interface is not None
+
 
 # 定义复杂的 Pydantic 模型
 class Address(BaseModel):
     """地址信息"""
+
     street: str = Field(..., description="街道地址")
     city: str = Field(..., description="城市名称")
     state: Optional[str] = Field(None, description="州/省名称")
@@ -36,6 +38,7 @@ class Address(BaseModel):
 
 class Contact(BaseModel):
     """联系方式"""
+
     email: str = Field(..., description="电子邮箱")
     phone: Optional[str] = Field(None, description="电话号码")
     website: Optional[str] = Field(None, description="网站URL")
@@ -43,6 +46,7 @@ class Contact(BaseModel):
 
 class Product(BaseModel):
     """商品信息"""
+
     name: str = Field(..., description="商品名称")
     price: float = Field(..., description="商品价格")
     category: str = Field(..., description="商品类别")
@@ -51,6 +55,7 @@ class Product(BaseModel):
 
 class Company(BaseModel):
     """公司信息"""
+
     name: str = Field(..., description="公司名称")
     founded_year: int = Field(..., description="成立年份")
     employee_count: int = Field(..., description="员工数量")
@@ -62,6 +67,7 @@ class Company(BaseModel):
 
 class SearchResult(BaseModel):
     """搜索结果"""
+
     query: str = Field(..., description="搜索查询词")
     total_results: int = Field(..., description="总结果数")
     companies: List[Company] = Field(default_factory=list, description="公司列表")
@@ -70,22 +76,22 @@ class SearchResult(BaseModel):
 
 # 定义返回复杂 Pydantic 模型的 llm_function
 @llm_function(llm_interface=llm_interface)
-async def search_companies(query: str, max_results: int = 3) -> SearchResult: # type: ignore
+async def search_companies(query: str, max_results: int = 3) -> SearchResult:  # type: ignore
     """搜索符合条件的公司信息"""
-    pass 
+    pass
 
 
 async def main():
     if not llm_interface:
         print("请配置 provider.json")
         return
-    
+
     result = await search_companies("AI 科技公司", max_results=2)
-    
+
     import json
+
     print(json.dumps(result.model_dump(), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
     asyncio.run(main())
-

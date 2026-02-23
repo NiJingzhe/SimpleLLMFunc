@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.base.ReAct import execute_llm
+from SimpleLLMFunc.hooks.events import LLMCallEndEvent
+from SimpleLLMFunc.hooks.stream import EventYield
 
 
 class TestExecuteLLM:
@@ -95,26 +99,28 @@ class TestExecuteLLM:
     ) -> None:
         """Test executing LLM call with tool calls."""
         mock_get_context.return_value = "test_func"
-        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion_with_tool_calls)
-        
+        mock_llm_interface.chat = AsyncMock(
+            return_value=mock_chat_completion_with_tool_calls
+        )
+
         # Mock tool processing to return updated messages
         updated_messages = sample_messages + [
             {"role": "tool", "tool_call_id": "call_123", "content": "result"}
         ]
         mock_process_tools.return_value = updated_messages
-        
+
         # Mock second call to return final response without tool calls
         final_response = MagicMock()
         final_response.choices = [MagicMock()]
         final_response.choices[0].message = MagicMock()
         final_response.choices[0].message.content = "Final response"
         final_response.choices[0].message.tool_calls = None
-        
+
         mock_llm_interface.chat.side_effect = [
             mock_chat_completion_with_tool_calls,
             final_response,
         ]
-        
+
         mock_observation = MagicMock()
         mock_observation.__enter__ = MagicMock(return_value=mock_observation)
         mock_observation.__exit__ = MagicMock(return_value=None)
@@ -151,10 +157,10 @@ class TestExecuteLLM:
     ) -> None:
         """Test executing streaming LLM call without tools."""
         mock_get_context.return_value = "test_func"
-        
+
         async def stream_generator(**kwargs):
             yield mock_chat_completion_chunk
-        
+
         mock_llm_interface.chat_stream = stream_generator
         mock_observation = MagicMock()
         mock_observation.__enter__ = MagicMock(return_value=mock_observation)
@@ -189,13 +195,15 @@ class TestExecuteLLM:
     ) -> None:
         """Test executing when max_tool_calls is reached."""
         mock_get_context.return_value = "test_func"
-        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion_with_tool_calls)
-        
+        mock_llm_interface.chat = AsyncMock(
+            return_value=mock_chat_completion_with_tool_calls
+        )
+
         updated_messages = sample_messages + [
             {"role": "tool", "tool_call_id": "call_123", "content": "result"}
         ]
         mock_process_tools.return_value = updated_messages
-        
+
         mock_observation = MagicMock()
         mock_observation.__enter__ = MagicMock(return_value=mock_observation)
         mock_observation.__exit__ = MagicMock(return_value=None)
@@ -250,3 +258,56 @@ class TestExecuteLLM:
 
         assert len(responses) == 1
 
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct._usage_from_context_delta")
+    @patch("SimpleLLMFunc.base.ReAct.extract_usage_from_response", return_value=None)
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_streaming_usage_fallback_without_tools(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        _mock_extract_usage: MagicMock,
+        mock_usage_from_context_delta: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion_chunk: Any,
+    ) -> None:
+        """Streaming LLMCallEndEvent should fallback to context delta usage."""
+
+        mock_get_context.return_value = "test_func"
+
+        async def stream_generator(**kwargs):
+            yield mock_chat_completion_chunk
+
+        mock_llm_interface.chat_stream = stream_generator
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        mock_usage_from_context_delta.return_value = CompletionUsage(
+            prompt_tokens=12,
+            completion_tokens=5,
+            total_tokens=17,
+        )
+
+        llm_end_usage = None
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=True,
+            enable_event=True,
+        ):
+            if isinstance(output, EventYield) and isinstance(
+                output.event, LLMCallEndEvent
+            ):
+                llm_end_usage = output.event.usage
+
+        assert llm_end_usage is not None
+        assert llm_end_usage.total_tokens == 17
+        assert mock_usage_from_context_delta.called

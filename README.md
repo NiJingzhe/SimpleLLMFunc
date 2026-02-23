@@ -16,16 +16,16 @@
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![PyPI Version](https://img.shields.io/pypi/v/SimpleLLMFunc)](https://pypi.org/project/SimpleLLMFunc/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.5.0.beta1)
+### Update Notes (0.6.0)
 
-🚀 **New Feature: Event Stream System** - Real-time observability for ReAct execution cycles. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+🚀 **Major Release: PyRepl + Textual TUI + Durable Agent Memory** - `SimpleLLMFunc` now ships with a subprocess-based persistent `PyRepl`, an out-of-the-box Textual `@tui` integration for streaming `llm_chat`, and a durable `SelfReference` memory contract for stateful agent workflows.
 
-⚠️ **Note**: This is a beta release. Optional breaking changes may be introduced. See CHANGELOG for migration guide.
+📝 **Also Included**: Custom tool event emission, improved tool input routing, expanded tests, and refreshed docs/examples. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for migration and details.
 
 ### 📚 Complete Documentation
 
@@ -274,6 +274,33 @@ Also supports creating **conversational functions** and **Agent systems**. llm_c
 - Flexible return modes (text or raw response)
 
 If you want to build a complete Agent framework, you can refer to our sister project [SimpleManus](https://github.com/NiJingzhe/SimpleManus).
+
+#### @tui - Out-of-the-box terminal UI for llm_chat
+
+SimpleLLMFunc provides a ready-to-use Textual TUI powered by event streaming:
+
+- Alternating user/assistant chat timeline
+- Streaming markdown rendering
+- Tool call argument/result panels
+- Model and tool stats (latency, token usage)
+- Custom tool-event hooks for live tool output updates
+- Built-in quit controls: `/exit` `/quit` `/q`, `Ctrl+Q`, `Ctrl+C`
+
+```python
+from SimpleLLMFunc import llm_chat, tui
+
+
+@tui(custom_event_hook=[...])
+@llm_chat(llm_interface=my_llm_interface, stream=True, enable_event=True)
+async def agent(message: str, history=None):
+    """Your agent prompt"""
+
+
+if __name__ == "__main__":
+    agent()
+```
+
+See `examples/tui_chat_example.py` for a full example.
 
 #### Async Native Design
 
@@ -656,9 +683,16 @@ SimpleLLMFunc/
 │   ├── llm_decorator/         # LLM decorator module
 │   │   ├── llm_function_decorator.py    # @llm_function implementation
 │   │   ├── llm_chat_decorator.py        # @llm_chat implementation
-│   │   └── utils.py                     # Decorator utilities
+│   │   ├── steps/                       # Step-based execution pipeline
+│   │   └── utils/                       # Decorator utilities
 │   ├── tool/                  # Tool system
 │   │   └── tool.py            # @tool decorator and Tool base class
+│   ├── builtin/               # Builtin tools
+│   │   └── pyrepl.py          # Python REPL toolset
+│   ├── hooks/                 # Event stream system
+│   │   ├── events.py          # ReAct event definitions
+│   │   ├── stream.py          # Event/response stream wrappers
+│   │   └── event_emitter.py   # Tool custom event emitter
 │   ├── interface/             # LLM interface layer
 │   │   ├── llm_interface.py   # Abstract base class
 │   │   ├── openai_compatible.py    # OpenAI compatible implementation
@@ -666,9 +700,10 @@ SimpleLLMFunc/
 │   │   └── token_bucket.py    # Traffic control
 │   ├── base/                  # Core execution engine
 │   │   ├── ReAct.py           # ReAct engine and tool calls
-│   │   ├── messages.py        # Message building
+│   │   ├── messages/          # Message building
 │   │   ├── post_process.py    # Response parsing and type conversion
-│   │   └── type_resolve.py    # Type resolution
+│   │   ├── tool_call/         # Tool call extraction/execution/validation
+│   │   └── type_resolve/      # Type resolution
 │   ├── logger/                # Logging and observability
 │   │   ├── logger.py          # Logging API
 │   │   ├── logger_config.py   # Logging configuration
@@ -677,13 +712,21 @@ SimpleLLMFunc/
 │   │   └── langfuse_client.py # Langfuse integration
 │   ├── type/                  # Multimodal types
 │   │   └── __init__.py        # Text, ImgUrl, ImgPath, etc.
+│   ├── utils/
+│   │   ├── __init__.py        # Shared utility exports
+│   │   └── tui/               # Textual chat UI integration
 │   ├── config.py              # Global configuration
 │   └── __init__.py            # Package initialization and API exports
 ├── examples/                  # Usage examples
-│   ├── llm_function_example.py      # Basic examples
-│   ├── llm_chat_example.py          # Chat examples
+│   ├── llm_function_pydantic_example.py  # Structured output examples
+│   ├── event_stream_chatbot.py      # Chat + event stream examples
 │   ├── parallel_toolcall_example.py # Concurrency examples
 │   ├── multi_modality_toolcall.py   # Multimodal examples
+│   ├── pyrepl_example.py            # Builtin PyRepl usage
+│   ├── self_reference_basic_example.py # Local SelfReference usage
+│   ├── tui_self_reference_example.py # TUI SelfReference demo
+│   ├── custom_tool_event_example.py # Custom tool event examples
+│   ├── tui_chat_example.py          # Textual TUI example
 │   ├── provider.json          # Provider configuration examples
 │   └── provider_template.json # Configuration template
 ├── pyproject.toml             # Poetry configuration
@@ -698,11 +741,14 @@ SimpleLLMFunc/
 |--------|----------------|
 | **llm_decorator** | Provides @llm_function and @llm_chat decorators |
 | **tool** | Tool system, @tool decorator and Tool base class |
+| **builtin** | Builtin tools (e.g. persistent Python REPL) |
+| **hooks** | Event stream definitions, emitters, and stream wrappers |
 | **interface** | LLM interface abstraction and OpenAI compatible implementation |
 | **base** | ReAct engine, message processing, type conversion |
 | **logger** | Structured logging, trace_id tracking |
 | **observability** | Langfuse integration, complete LLM observability |
 | **type** | Multimodal type definitions (Text, ImgUrl, ImgPath) |
+| **utils** | Shared utilities and Textual TUI integration |
 | **config** | Global configuration and environment variable management |
 
 ### Configuration and Environment Variables
@@ -793,8 +839,8 @@ cp env_template .env
 # Edit .env file, enter your API keys
 
 # Run examples
-python examples/llm_function_example.py
-python examples/llm_chat_example.py
+python examples/llm_function_pydantic_example.py
+python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
 ```
 
@@ -831,11 +877,11 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
 ```bibtex
 @software{ni2025simplellmfunc,
   author = {Jingzhe Ni},
-  month = {October},
+  month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.5.0.beta1},
-  year = {2025}
+  version = {0.6.0},
+  year = {2026}
 }
 ```
 

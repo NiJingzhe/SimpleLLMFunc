@@ -7,52 +7,59 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-11-10 02:53+0800\n"
+"POT-Creation-Date: 2026-02-22 18:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/index.md:5
 msgid "    项目介绍"
-msgstr ""
+msgstr "    项目介绍"
 
 #: ../../source/index.md:5
 msgid "    快速开始"
-msgstr ""
+msgstr "    快速开始"
 
 #: ../../source/index.md:5
 msgid "    使用指南"
-msgstr ""
+msgstr "    使用指南"
+
+#: ../../source/index.md:5
+msgid "    终端TUI"
+msgstr "    终端TUI"
 
 #: ../../source/index.md:5
 msgid "    示例代码"
-msgstr ""
+msgstr "    示例代码"
 
 #: ../../source/index.md:5
 msgid "    Langfuse集成"
-msgstr ""
+msgstr "    Langfuse集成"
+
+#: ../../source/index.md:5
+msgid "    iPython内核"
+msgstr "    iPython内核"
 
 #: ../../source/index.md:5
 msgid "    贡献指南"
-msgstr ""
+msgstr "    贡献指南"
 
 #: ../../source/index.md:5
 msgid "目录："
-msgstr ""
+msgstr "目录："
 
 #: ../../source/index.md:1
 msgid "SimpleLLMFunc documentation"
-msgstr ""
+msgstr "SimpleLLMFunc documentation"
 
 #: ../../source/index.md:3
 msgid "SimpleLLMFunc 是一个轻量级、可配置的 LLM 应用开发框架。"
-msgstr ""
-
+msgstr "SimpleLLMFunc 是一个轻量级、可配置的 LLM 应用开发框架。"

@@ -237,6 +237,7 @@ asyncio.run(main())
 - **API 密钥管理**: 智能负载均衡多个 API 密钥。
 - **流量控制**: 集成令牌桶算法，实现智能流量平滑。
 - **工具系统**: 支持 LLM tool use，具有简单易用的工具定义和调用机制，支持多模态工具返回。
+- **开箱即用终端 TUI**: 提供 `@tui` 装饰器，可直接将 `@llm_chat` Agent 包装为 Textual 终端聊天界面。
 - **日志完备**: 支持 `trace_id` 跟踪和搜索，方便调试和监控。
 
 ## 项目架构
@@ -247,13 +248,18 @@ SimpleLLMFunc 的目录结构如下：
 SimpleLLMFunc/
 ├── __init__.py                  # 包初始化
 ├── config.py                    # 全局配置
-├── utils.py                     # 通用工具函数
 ├── base/                        # 核心执行引擎
 │   ├── messages/                # 消息构建与多模态内容生成
 │   ├── tool_call/               # 工具调用参数转换、执行与校验
 │   ├── type_resolve/            # 类型描述、示例与多模态类型解析
 │   ├── post_process.py          # 响应解析与类型转换
 │   └── ReAct.py                 # ReAct 协调器
+├── builtin/                     # 内置工具
+│   └── pyrepl.py                # Python REPL 工具集
+├── hooks/                       # 事件流系统
+│   ├── events.py                # 事件类型定义
+│   ├── stream.py                # 事件/响应流封装
+│   └── event_emitter.py         # 工具自定义事件发射器
 ├── interface/                   # LLM 接口层
 │   ├── llm_interface.py         # 抽象基类
 │   ├── openai_compatible.py     # OpenAI 兼容实现
@@ -267,7 +273,11 @@ SimpleLLMFunc/
 │   │   ├── common/
 │   │   ├── function/
 │   │   └── chat/
-│   └── utils/tools.py
+│   └── utils/
+│       └── tools.py
+├── utils/                       # 通用工具与 TUI 组件
+│   ├── __init__.py
+│   └── tui/
 ├── tool/                        # 工具定义与序列化
 │   └── tool.py
 ├── type/                        # 类型与多模态辅助
@@ -300,6 +310,10 @@ SimpleLLMFunc/
 #### 工具系统
 
 `tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。
+
+#### 事件系统与终端 TUI
+
+`hooks` 模块提供统一事件流（LLM 调用、工具调用、自定义事件），`utils/tui` 在此基础上实现 `@tui` 装饰器，可直接把 `@llm_chat` Agent 包装为可交互终端界面；`builtin/pyrepl.py` 提供默认可用的代码执行工具集。
 
 ## 适用人群
 

@@ -7,34 +7,36 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-08 01:12+0800\n"
+"POT-Creation-Date: 2026-02-22 18:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/introduction.md:1
-msgid "![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)"
+msgid ""
+"![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)"
 msgstr ""
+"![cover](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)"
 
 #: ../../source/introduction.md:1
 msgid "cover"
-msgstr ""
+msgstr "cover"
 
 #: ../../source/introduction.md:3
 msgid "项目介绍"
-msgstr ""
+msgstr "项目介绍"
 
 #: ../../source/introduction.md:5
 msgid "SimpleLLMFunc 是什么?"
-msgstr ""
+msgstr "SimpleLLMFunc 是什么?"
 
 #: ../../source/introduction.md:7
 msgid ""
@@ -42,317 +44,356 @@ msgid ""
 "在应用中的集成过程。本框架的设计理念是“**LLM as Function, Prompt as "
 "Code**”，提供类型安全的装饰器，让开发者能以一种自然、直观的方式利用大语言模型的能力。"
 msgstr ""
+"SimpleLLMFunc 是一个轻量级的大语言模型（Large Language Model, LLM）应用开发框架，旨在简化 LLM "
+"在应用中的集成过程。本框架的设计理念是“**LLM as Function, Prompt as "
+"Code**”，提供类型安全的装饰器，让开发者能以一种自然、直观的方式利用大语言模型的能力。"
 
 #: ../../source/introduction.md:9
 msgid "为什么需要 SimpleLLMFunc?"
-msgstr ""
+msgstr "为什么需要 SimpleLLMFunc?"
 
 #: ../../source/introduction.md:11
 msgid "在开发基于大语言模型的应用时，我们常常面临以下挑战："
-msgstr ""
+msgstr "在开发基于大语言模型的应用时，我们常常面临以下挑战："
 
 #: ../../source/introduction.md:13
 msgid "需要不断编写重复的 API 调用代码"
-msgstr ""
+msgstr "需要不断编写重复的 API 调用代码"
 
 #: ../../source/introduction.md:14
 msgid "Prompt 作为字符串变量存在于代码中，不够直观"
-msgstr ""
+msgstr "Prompt 作为字符串变量存在于代码中，不够直观"
 
 #: ../../source/introduction.md:15
 msgid "流程编排受到框架约束，缺乏灵活性"
-msgstr ""
+msgstr "流程编排受到框架约束，缺乏灵活性"
 
 #: ../../source/introduction.md:16
 msgid "调试和监控 LLM 调用过程困难"
-msgstr ""
+msgstr "调试和监控 LLM 调用过程困难"
 
 #: ../../source/introduction.md:18
 msgid "SimpleLLMFunc 旨在解决这些问题，使得开发者可以："
-msgstr ""
+msgstr "SimpleLLMFunc 旨在解决这些问题，使得开发者可以："
 
 #: ../../source/introduction.md:20
 msgid ""
 "装饰器驱动：提供 `@llm_function`、`@llm_chat` 等装饰器，所有装饰器仅支持异步函数 (`async def`) "
 "并原生适配异步调用。"
 msgstr ""
+"装饰器驱动：提供 `@llm_function`、`@llm_chat` 等装饰器，所有装饰器仅支持异步函数 (`async def`) "
+"并原生适配异步调用。"
 
 #: ../../source/introduction.md:21
 msgid "Prompt 即逻辑：Prompt 就是代码，是这个函数的逻辑实现。"
-msgstr ""
+msgstr "Prompt 即逻辑：Prompt 就是代码，是这个函数的逻辑实现。"
 
 #: ../../source/introduction.md:22
 msgid "类型安全：支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。"
-msgstr ""
+msgstr "类型安全：支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。"
 
 #: ../../source/introduction.md:23
 msgid "多模态支持：支持文本、图片 URL 和本地图片路径的混合输入，创新性地支持工具的多模态返回。"
-msgstr ""
+msgstr "多模态支持：支持文本、图片 URL 和本地图片路径的混合输入，创新性地支持工具的多模态返回。"
 
 #: ../../source/introduction.md:24
 msgid "通用模型接口：兼容任何符合 OpenAI API 格式的模型服务，易于扩展。"
-msgstr ""
+msgstr "通用模型接口：兼容任何符合 OpenAI API 格式的模型服务，易于扩展。"
 
 #: ../../source/introduction.md:25
 msgid "API 密钥管理：智能负载均衡多个 API 密钥。"
-msgstr ""
+msgstr "API 密钥管理：智能负载均衡多个 API 密钥。"
 
 #: ../../source/introduction.md:26
 msgid "流量控制：集成令牌桶算法，实现智能流量平滑。"
-msgstr ""
+msgstr "流量控制：集成令牌桶算法，实现智能流量平滑。"
 
 #: ../../source/introduction.md:27
 msgid "工具系统：支持 LLM 工具使用，具有简单易用的工具定义和调用机制，支持多模态工具返回。"
-msgstr ""
+msgstr "工具系统：支持 LLM 工具使用，具有简单易用的工具定义和调用机制，支持多模态工具返回。"
 
 #: ../../source/introduction.md:28
 msgid "日志完备：支持 trace_id 跟踪和搜索，方便调试和监控。"
-msgstr ""
+msgstr "日志完备：支持 trace_id 跟踪和搜索，方便调试和监控。"
 
 #: ../../source/introduction.md
 msgid "特性"
-msgstr ""
+msgstr "特性"
 
 #: ../../source/introduction.md
 msgid "SimpleLLMFunc"
-msgstr ""
+msgstr "SimpleLLMFunc"
 
 #: ../../source/introduction.md
 msgid "LangChain"
-msgstr ""
+msgstr "LangChain"
 
 #: ../../source/introduction.md
 msgid "Dify"
-msgstr ""
+msgstr "Dify"
 
 #: ../../source/introduction.md
 msgid "易用性（学习曲线）"
-msgstr ""
+msgstr "易用性（学习曲线）"
 
 #: ../../source/introduction.md
 msgid "✅"
-msgstr ""
+msgstr "✅"
 
 #: ../../source/introduction.md
 msgid "❌"
-msgstr ""
+msgstr "❌"
 
 #: ../../source/introduction.md
 msgid "直观性"
-msgstr ""
+msgstr "直观性"
 
 #: ../../source/introduction.md
 msgid "⭕️"
-msgstr ""
+msgstr "⭕️"
 
 #: ../../source/introduction.md
 msgid "灵活性"
-msgstr ""
+msgstr "灵活性"
 
 #: ../../source/introduction.md
 msgid "开发速度"
-msgstr ""
+msgstr "开发速度"
 
 #: ../../source/introduction.md
 msgid "调试性"
-msgstr ""
+msgstr "调试性"
 
 #: ../../source/introduction.md
 msgid "异步支持"
-msgstr ""
+msgstr "异步支持"
 
 #: ../../source/introduction.md
 msgid "多模态支持"
-msgstr ""
+msgstr "多模态支持"
 
 #: ../../source/introduction.md
 msgid "流量控制"
-msgstr ""
+msgstr "流量控制"
 
 #: ../../source/introduction.md
 msgid "类型安全"
-msgstr ""
+msgstr "类型安全"
 
 #: ../../source/introduction.md
 msgid "工具集成"
-msgstr ""
+msgstr "工具集成"
 
 #: ../../source/introduction.md
 msgid "✅🌟"
-msgstr ""
+msgstr "✅🌟"
 
 #: ../../source/introduction.md
 msgid "社区与生态系统"
-msgstr ""
+msgstr "社区与生态系统"
 
 #: ../../source/introduction.md:44
 msgid "样例展示"
-msgstr ""
+msgstr "样例展示"
 
 #: ../../source/introduction.md:46
 msgid "下面是一个简单的示例，展示了 SimpleLLMFunc 的基本用法："
-msgstr ""
+msgstr "下面是一个简单的示例，展示了 SimpleLLMFunc 的基本用法："
 
 #: ../../source/introduction.md:48
 msgid ""
-"⚠️ SimpleLLMFunc 中的 `@llm_function`、`@llm_chat`、`@tool` 等装饰器只能装饰 `async "
-"def` 定义的函数，请在异步上下文中通过 `await` 调用。"
+"⚠️ SimpleLLMFunc 中的 `@llm_function`、`@llm_chat`、`@tool` 等装饰器只能装饰 `async def`"
+" 定义的函数，请在异步上下文中通过 `await` 调用。"
 msgstr ""
+"⚠️ SimpleLLMFunc 中的 `@llm_function`、`@llm_chat`、`@tool` 等装饰器只能装饰 `async def`"
+" 定义的函数，请在异步上下文中通过 `await` 调用。"
 
 #: ../../source/introduction.md:95
 msgid "异步支持示例"
-msgstr ""
+msgstr "异步支持示例"
 
 #: ../../source/introduction.md:126
 msgid "多模态支持示例"
-msgstr ""
+msgstr "多模态支持示例"
 
 #: ../../source/introduction.md:160
 msgid "动态模板参数示例"
-msgstr ""
+msgstr "动态模板参数示例"
 
 #: ../../source/introduction.md:226
 msgid "核心特性"
-msgstr ""
+msgstr "核心特性"
 
 #: ../../source/introduction.md:228
 msgid "**装饰器驱动**: 使用 `@llm_function`、`@llm_chat` 构建 LLM 驱动的功能，均为原生异步实现。"
-msgstr ""
+msgstr "**装饰器驱动**: 使用 `@llm_function`、`@llm_chat` 构建 LLM 驱动的功能，均为原生异步实现。"
 
 #: ../../source/introduction.md:229
 msgid "**DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。"
-msgstr ""
+msgstr "**DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。"
 
 #: ../../source/introduction.md:230
-msgid "**动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。"
+msgid ""
+"**动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。"
 msgstr ""
+"**动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。"
 
 #: ../../source/introduction.md:231
 msgid "**类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。"
-msgstr ""
+msgstr "**类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。"
 
 #: ../../source/introduction.md:232
 msgid "**异步支持**: `@llm_function` 与 `@llm_chat` 原生支持异步调用，无需额外别名。"
-msgstr ""
+msgstr "**异步支持**: `@llm_function` 与 `@llm_chat` 原生支持异步调用，无需额外别名。"
 
 #: ../../source/introduction.md:233
 msgid "**多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。"
-msgstr ""
+msgstr "**多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。"
 
 #: ../../source/introduction.md:234
 msgid ""
 "**步骤化装饰器流水线**：`llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct "
 "和响应解析拆分为可组合的步骤，便于调试与扩展。"
 msgstr ""
+"**步骤化装饰器流水线**：`llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct "
+"和响应解析拆分为可组合的步骤，便于调试与扩展。"
 
 #: ../../source/introduction.md:235
 msgid ""
 "**基础引擎模块化**：`base/messages`、`base/tool_call`、`base/type_resolve` "
 "独立演进，类型解析和多模态处理更稳健。"
 msgstr ""
+"**基础引擎模块化**：`base/messages`、`base/tool_call`、`base/type_resolve` "
+"独立演进，类型解析和多模态处理更稳健。"
 
 #: ../../source/introduction.md:236
 msgid "**通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。"
-msgstr ""
+msgstr "**通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。"
 
 #: ../../source/introduction.md:237
 msgid "**API 密钥管理**: 智能负载均衡多个 API 密钥。"
-msgstr ""
+msgstr "**API 密钥管理**: 智能负载均衡多个 API 密钥。"
 
 #: ../../source/introduction.md:238
 msgid "**流量控制**: 集成令牌桶算法，实现智能流量平滑。"
-msgstr ""
+msgstr "**流量控制**: 集成令牌桶算法，实现智能流量平滑。"
 
 #: ../../source/introduction.md:239
 msgid "**工具系统**: 支持 LLM tool use，具有简单易用的工具定义和调用机制，支持多模态工具返回。"
-msgstr ""
+msgstr "**工具系统**: 支持 LLM tool use，具有简单易用的工具定义和调用机制，支持多模态工具返回。"
 
 #: ../../source/introduction.md:240
+msgid ""
+"**开箱即用终端 TUI**: 提供 `@tui` 装饰器，可直接将 `@llm_chat` Agent 包装为 Textual 终端聊天界面。"
+msgstr ""
+"**开箱即用终端 TUI**: 提供 `@tui` 装饰器，可直接将 `@llm_chat` Agent 包装为 Textual 终端聊天界面。"
+
+#: ../../source/introduction.md:241
 msgid "**日志完备**: 支持 `trace_id` 跟踪和搜索，方便调试和监控。"
-msgstr ""
+msgstr "**日志完备**: 支持 `trace_id` 跟踪和搜索，方便调试和监控。"
 
-#: ../../source/introduction.md:242
+#: ../../source/introduction.md:243
 msgid "项目架构"
-msgstr ""
+msgstr "项目架构"
 
-#: ../../source/introduction.md:244
+#: ../../source/introduction.md:245
 msgid "SimpleLLMFunc 的目录结构如下："
-msgstr ""
+msgstr "SimpleLLMFunc 的目录结构如下："
 
-#: ../../source/introduction.md:282
+#: ../../source/introduction.md:292
 msgid "模块介绍"
-msgstr ""
+msgstr "模块介绍"
 
-#: ../../source/introduction.md:284
+#: ../../source/introduction.md:294
 msgid "LLM 接口模块"
-msgstr ""
+msgstr "LLM 接口模块"
 
-#: ../../source/introduction.md:286
+#: ../../source/introduction.md:296
 msgid ""
 "`interface` 模块提供了与各种 LLM 服务通信的标准接口，支持任何符合 OpenAI API 格式的服务，包括 "
 "OpenAI/Deepseek/Claude 及自建兼容 API。`token_bucket.py` 负责流量控制，`key_pool.py` "
 "负责密钥负载均衡。"
 msgstr ""
+"`interface` 模块提供了与各种 LLM 服务通信的标准接口，支持任何符合 OpenAI API 格式的服务，包括 "
+"OpenAI/Deepseek/Claude 及自建兼容 API。`token_bucket.py` 负责流量控制，`key_pool.py` "
+"负责密钥负载均衡。"
 
-#: ../../source/introduction.md:288
+#: ../../source/introduction.md:298
 msgid "LLM 装饰器模块"
-msgstr ""
+msgstr "LLM 装饰器模块"
 
-#: ../../source/introduction.md:290
+#: ../../source/introduction.md:300
 msgid ""
 "`llm_decorator` 模块是框架的核心，提供 `@llm_function` 与 `@llm_chat`，并在 `steps/` 中将 "
 "Prompt 构建、签名解析、ReAct 执行、响应解析等环节拆分为可组合步骤。`multimodal_types.py` 定义了 "
 "`Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图片混合输入。"
 msgstr ""
+"`llm_decorator` 模块是框架的核心，提供 `@llm_function` 与 `@llm_chat`，并在 `steps/` 中将 "
+"Prompt 构建、签名解析、ReAct 执行、响应解析等环节拆分为可组合步骤。`multimodal_types.py` 定义了 "
+"`Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图片混合输入。"
 
-#: ../../source/introduction.md:292
+#: ../../source/introduction.md:302
 msgid "类型定义模块"
-msgstr ""
+msgstr "类型定义模块"
 
-#: ../../source/introduction.md:294
+#: ../../source/introduction.md:304
 msgid "`type` 模块专门用于导出多模态类型定义，使开发者可以方便地使用类型标注来创建支持多模态输入的 LLM 函数。"
-msgstr ""
+msgstr "`type` 模块专门用于导出多模态类型定义，使开发者可以方便地使用类型标注来创建支持多模态输入的 LLM 函数。"
 
-#: ../../source/introduction.md:296
+#: ../../source/introduction.md:306
 msgid "日志系统"
-msgstr ""
+msgstr "日志系统"
 
-#: ../../source/introduction.md:298
+#: ../../source/introduction.md:308
 msgid ""
 "`logger` 模块提供了全面的日志记录功能，包括 trace_id 跟踪、token "
 "使用统计、系统和用户提示的记录等。特别地，日志系统会自动记录所有 LLM 的输入输出对话，生成结构化的 trace "
 "索引文件以按照函数调用归类日志，开发者可以直接从这些日志中快速整理出高质量的对话语料，用于后续的模型微调和优化。"
 msgstr ""
-
-#: ../../source/introduction.md:300
-msgid "工具系统"
-msgstr ""
-
-#: ../../source/introduction.md:302
-msgid "`tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。"
-msgstr ""
-
-#: ../../source/introduction.md:304
-msgid "适用人群"
-msgstr ""
-
-#: ../../source/introduction.md:306
-msgid "SimpleLLMFunc 特别适合以下朋友："
-msgstr ""
-
-#: ../../source/introduction.md:308
-msgid "**LLM应用开发的入门创客玩家**: 学习曲线平缓，内容简单，快速上手，直观易懂。"
-msgstr ""
-
-#: ../../source/introduction.md:309
-msgid "**快速原型开发的创业者**: 需要快速验证 LLM 应用想法，缩短开发周期和迭代时间。"
-msgstr ""
+"`logger` 模块提供了全面的日志记录功能，包括 trace_id 跟踪、token "
+"使用统计、系统和用户提示的记录等。特别地，日志系统会自动记录所有 LLM 的输入输出对话，生成结构化的 trace "
+"索引文件以按照函数调用归类日志，开发者可以直接从这些日志中快速整理出高质量的对话语料，用于后续的模型微调和优化。"
 
 #: ../../source/introduction.md:310
-msgid "**会Python的PM**: 需要快速实现 LLM 应用原型，验证产品想法。"
-msgstr ""
+msgid "工具系统"
+msgstr "工具系统"
 
 #: ../../source/introduction.md:312
-msgid "当然我们也欢迎任何一位对 LLM 应用开发感兴趣的小白，老手或者专家加入我们的社区，一起探索 LLM 应用的无限可能！"
-msgstr ""
+msgid "`tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。"
+msgstr "`tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。"
 
+#: ../../source/introduction.md:314
+msgid "事件系统与终端 TUI"
+msgstr "事件系统与终端 TUI"
+
+#: ../../source/introduction.md:316
+msgid ""
+"`hooks` 模块提供统一事件流（LLM 调用、工具调用、自定义事件），`utils/tui` 在此基础上实现 `@tui` 装饰器，可直接把 "
+"`@llm_chat` Agent 包装为可交互终端界面；`builtin/pyrepl.py` 提供默认可用的代码执行工具集。"
+msgstr ""
+"`hooks` 模块提供统一事件流（LLM 调用、工具调用、自定义事件），`utils/tui` 在此基础上实现 `@tui` 装饰器，可直接把 "
+"`@llm_chat` Agent 包装为可交互终端界面；`builtin/pyrepl.py` 提供默认可用的代码执行工具集。"
+
+#: ../../source/introduction.md:318
+msgid "适用人群"
+msgstr "适用人群"
+
+#: ../../source/introduction.md:320
+msgid "SimpleLLMFunc 特别适合以下朋友："
+msgstr "SimpleLLMFunc 特别适合以下朋友："
+
+#: ../../source/introduction.md:322
+msgid "**LLM应用开发的入门创客玩家**: 学习曲线平缓，内容简单，快速上手，直观易懂。"
+msgstr "**LLM应用开发的入门创客玩家**: 学习曲线平缓，内容简单，快速上手，直观易懂。"
+
+#: ../../source/introduction.md:323
+msgid "**快速原型开发的创业者**: 需要快速验证 LLM 应用想法，缩短开发周期和迭代时间。"
+msgstr "**快速原型开发的创业者**: 需要快速验证 LLM 应用想法，缩短开发周期和迭代时间。"
+
+#: ../../source/introduction.md:324
+msgid "**会Python的PM**: 需要快速实现 LLM 应用原型，验证产品想法。"
+msgstr "**会Python的PM**: 需要快速实现 LLM 应用原型，验证产品想法。"
+
+#: ../../source/introduction.md:326
+msgid "当然我们也欢迎任何一位对 LLM 应用开发感兴趣的小白，老手或者专家加入我们的社区，一起探索 LLM 应用的无限可能！"
+msgstr "当然我们也欢迎任何一位对 LLM 应用开发感兴趣的小白，老手或者专家加入我们的社区，一起探索 LLM 应用的无限可能！"

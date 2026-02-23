@@ -16,16 +16,16 @@
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![PyPI Version](https://img.shields.io/pypi/v/SimpleLLMFunc)](https://pypi.org/project/SimpleLLMFunc/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.5.0.beta1)
+### 更新说明 (0.6.0)
 
-🚀 **新功能：事件流系统** - 实时观察 ReAct 执行循环。查看 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** 了解详情。
+🚀 **重大版本发布：PyRepl + Textual TUI + 持久化 Agent 记忆** - `SimpleLLMFunc` 现已提供基于子进程的持久化 `PyRepl`、开箱即用的 Textual `@tui`（支持 `llm_chat` 流式显示），以及面向有状态 Agent 的 `SelfReference` 持久记忆契约。
 
-⚠️ **注意**：这是 beta 版本，可能引入可选的破坏性更改。请查看更新日志了解迁移指南。
+📝 **同时包含**：自定义工具事件发射、工具输入路由优化、更完整的测试覆盖，以及文档与示例的全面更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -278,6 +278,33 @@ Output:
 - 灵活的返回模式（文本或原始响应）
 
 如果你想构建完整的 Agent 框架，可以参考我们的姊妹项目 [SimpleManus](https://github.com/NiJingzhe/SimpleManus)。
+
+#### @tui - 开箱即用终端 UI（llm_chat）
+
+SimpleLLMFunc 提供了基于 Textual + Event Stream 的终端 TUI：
+
+- 用户/助手交替消息流
+- 流式 Markdown 渲染
+- 工具调用参数/结果面板
+- 模型与工具统计（耗时、Token）
+- 支持 `custom_event_hook` 实时更新工具输出
+- 内置退出方式：`/exit`、`/quit`、`/q`、`Ctrl+Q`、`Ctrl+C`
+
+```python
+from SimpleLLMFunc import llm_chat, tui
+
+
+@tui(custom_event_hook=[...])
+@llm_chat(llm_interface=my_llm_interface, stream=True, enable_event=True)
+async def agent(message: str, history=None):
+    """Your agent prompt"""
+
+
+if __name__ == "__main__":
+    agent()
+```
+
+完整示例见：`examples/tui_chat_example.py`
 
 #### 异步原生设计
 
@@ -660,9 +687,16 @@ SimpleLLMFunc/
 │   ├── llm_decorator/         # LLM 装饰器模块
 │   │   ├── llm_function_decorator.py    # @llm_function 实现
 │   │   ├── llm_chat_decorator.py        # @llm_chat 实现
-│   │   └── utils.py                     # 装饰器工具
+│   │   ├── steps/                       # 步骤化执行流水线
+│   │   └── utils/                       # 装饰器工具
 │   ├── tool/                  # 工具系统
 │   │   └── tool.py            # @tool 装饰器和 Tool 基类
+│   ├── builtin/               # 内置工具
+│   │   └── pyrepl.py          # Python REPL 工具集
+│   ├── hooks/                 # 事件流系统
+│   │   ├── events.py          # ReAct 事件定义
+│   │   ├── stream.py          # 事件/响应流封装
+│   │   └── event_emitter.py   # 工具自定义事件发射器
 │   ├── interface/             # LLM 接口层
 │   │   ├── llm_interface.py   # 抽象基类
 │   │   ├── openai_compatible.py    # OpenAI 兼容实现
@@ -670,9 +704,10 @@ SimpleLLMFunc/
 │   │   └── token_bucket.py    # 流量控制
 │   ├── base/                  # 核心执行引擎
 │   │   ├── ReAct.py           # ReAct 引擎和工具调用
-│   │   ├── messages.py        # 消息构建
+│   │   ├── messages/          # 消息构建
 │   │   ├── post_process.py    # 响应解析和类型转换
-│   │   └── type_resolve.py    # 类型解析
+│   │   ├── tool_call/         # 工具调用提取/执行/校验
+│   │   └── type_resolve/      # 类型解析
 │   ├── logger/                # 日志和可观测性
 │   │   ├── logger.py          # 日志 API
 │   │   ├── logger_config.py   # 日志配置
@@ -681,13 +716,21 @@ SimpleLLMFunc/
 │   │   └── langfuse_client.py # Langfuse 集成
 │   ├── type/                  # 多模态类型
 │   │   └── __init__.py        # Text, ImgUrl, ImgPath 等
+│   ├── utils/                 # 通用工具与 Textual TUI
+│   │   ├── __init__.py        # 通用工具导出
+│   │   └── tui/               # 终端聊天界面
 │   ├── config.py              # 全局配置
 │   └── __init__.py            # 包初始化和 API 导出
 ├── examples/                  # 使用示例
-│   ├── llm_function_example.py      # 基础示例
-│   ├── llm_chat_example.py          # 对话示例
+│   ├── llm_function_pydantic_example.py  # 结构化输出示例
+│   ├── event_stream_chatbot.py      # 对话 + 事件流示例
 │   ├── parallel_toolcall_example.py # 并发示例
 │   ├── multi_modality_toolcall.py   # 多模态示例
+│   ├── pyrepl_example.py            # 内置 PyRepl 示例
+│   ├── self_reference_basic_example.py # 本地 SelfReference 示例
+│   ├── tui_self_reference_example.py # TUI SelfReference 示例
+│   ├── custom_tool_event_example.py # 自定义工具事件示例
+│   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例
 │   └── provider_template.json # 配置模板
 ├── pyproject.toml             # Poetry 配置
@@ -702,11 +745,14 @@ SimpleLLMFunc/
 |------|------|
 | **llm_decorator** | 提供 @llm_function 和 @llm_chat 装饰器 |
 | **tool** | 工具系统，@tool 装饰器和 Tool 基类 |
+| **builtin** | 内置工具（如持久化 Python REPL） |
+| **hooks** | 事件流定义、事件发射器与流封装 |
 | **interface** | LLM 接口抽象和 OpenAI 兼容实现 |
 | **base** | ReAct 引擎、消息处理、类型转换 |
 | **logger** | 结构化日志、trace_id 追踪 |
 | **observability** | Langfuse 集成，完整 LLM 可观测性 |
 | **type** | 多模态类型定义（Text、ImgUrl、ImgPath）|
+| **utils** | 通用工具与 Textual TUI 集成 |
 | **config** | 全局配置和环境变量管理 |
 
 ### 配置和环境变量
@@ -797,8 +843,8 @@ cp env_template .env
 # 编辑 .env 文件，填入你的 API 密钥
 
 # 运行示例
-python examples/llm_function_example.py
-python examples/llm_chat_example.py
+python examples/llm_function_pydantic_example.py
+python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
 ```
 
@@ -817,7 +863,7 @@ python examples/parallel_toolcall_example.py
 - 🔄 [更新日志](CHANGELOG.md)
 - 🔗 [GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc)
 - 🤖 [SimpleManus (Agent 框架)](https://github.com/NiJingzhe/SimpleManus)
-- 🌍 [English README](README_EN.md)
+- 🌍 [English README](README.md)
 
 ## Star History
 
@@ -836,11 +882,11 @@ python examples/parallel_toolcall_example.py
 ```bibtex
 @software{ni2025simplellmfunc,
   author = {Jingzhe Ni},
-  month = {October},
+  month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.5.0.beta1},
-  year = {2025}
+  version = {0.6.0},
+  year = {2026}
 }
 ```
 

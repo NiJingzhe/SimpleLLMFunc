@@ -5,7 +5,17 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
-from typing import Any, Awaitable, Callable, Dict, List, get_type_hints, get_origin, get_args, Union as TypingUnion
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    get_type_hints,
+    get_origin,
+    get_args,
+    Union as TypingUnion,
+)
 
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
@@ -18,7 +28,7 @@ def _convert_tool_arguments(
     tool_func: Callable[..., Awaitable[Any]],
 ) -> Dict[str, Any]:
     """转换工具参数，将字符串列表转换为多模态对象列表。
-    
+
     根据工具函数的类型注解，自动将 LLM 传递的字符串数组转换为对应的多模态对象数组。
     支持的类型：
     - List[ImgPath] -> List[ImgPath对象]
@@ -26,11 +36,11 @@ def _convert_tool_arguments(
     - List[Text] -> List[Text对象]
     - Optional[List[...]] -> 处理 None 值
     - Union 类型 -> 提取非 None 类型
-    
+
     Args:
         arguments: LLM 传递的原始参数字典（JSON 解析后）
         tool_func: 工具函数对象
-        
+
     Returns:
         转换后的参数字典
     """
@@ -38,22 +48,22 @@ def _convert_tool_arguments(
         # 获取函数签名和类型注解
         signature = inspect.signature(tool_func)
         type_hints = get_type_hints(tool_func)
-        
+
         converted_args = {}
-        
+
         for param_name, param_value in arguments.items():
             if param_name not in signature.parameters:
                 # 参数不在签名中，保持原样
                 converted_args[param_name] = param_value
                 continue
-            
+
             param_type = type_hints.get(param_name, Any)
-            
+
             # 处理 None 值
             if param_value is None:
                 converted_args[param_name] = None
                 continue
-            
+
             # 处理 Optional 类型
             origin = get_origin(param_type)
             if origin is TypingUnion:
@@ -63,7 +73,7 @@ def _convert_tool_arguments(
                 if non_none_types:
                     param_type = non_none_types[0]
                     origin = get_origin(param_type)
-            
+
             # 处理列表类型
             if origin is list:
                 args = get_args(param_type)
@@ -71,14 +81,16 @@ def _convert_tool_arguments(
                     # List 没有类型参数，保持原样
                     converted_args[param_name] = param_value
                     continue
-                
+
                 element_type = args[0]
-                
+
                 # 检查是否为多模态列表类型
                 if element_type is ImgPath:
                     if isinstance(param_value, list):
                         try:
-                            converted_args[param_name] = [ImgPath(path) for path in param_value]
+                            converted_args[param_name] = [
+                                ImgPath(path) for path in param_value
+                            ]
                         except Exception as e:
                             push_warning(
                                 f"工具参数 '{param_name}' 转换为 List[ImgPath] 失败: {e}，使用原始值",
@@ -90,7 +102,9 @@ def _convert_tool_arguments(
                 elif element_type is ImgUrl:
                     if isinstance(param_value, list):
                         try:
-                            converted_args[param_name] = [ImgUrl(url) for url in param_value]
+                            converted_args[param_name] = [
+                                ImgUrl(url) for url in param_value
+                            ]
                         except Exception as e:
                             push_warning(
                                 f"工具参数 '{param_name}' 转换为 List[ImgUrl] 失败: {e}，使用原始值",
@@ -102,7 +116,9 @@ def _convert_tool_arguments(
                 elif element_type is Text:
                     if isinstance(param_value, list):
                         try:
-                            converted_args[param_name] = [Text(text) for text in param_value]
+                            converted_args[param_name] = [
+                                Text(text) for text in param_value
+                            ]
                         except Exception as e:
                             push_warning(
                                 f"工具参数 '{param_name}' 转换为 List[Text] 失败: {e}，使用原始值",
@@ -154,7 +170,7 @@ def _convert_tool_arguments(
             else:
                 # 其他类型，保持原样
                 converted_args[param_name] = param_value
-        
+
         return converted_args
     except Exception as e:
         push_warning(
@@ -167,6 +183,7 @@ def _convert_tool_arguments(
 async def _execute_single_tool_call(
     tool_call: Dict[str, Any],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
+    event_emitter: Any = None,
 ) -> tuple[Dict[str, Any], List[Dict[str, Any]], bool]:
     """Execute a single tool call and return its results.
 
@@ -175,7 +192,7 @@ async def _execute_single_tool_call(
        - 返回 is_multimodal=False
        - 消息列表包含标准的 tool role message
        - 这些结果会直接添加到消息历史中
-    
+
     2. 多模态工具调用（返回图像、文件等）
        - 返回 is_multimodal=True
        - 消息列表包含 user role message，带有多模态内容（图像、文件等）
@@ -222,10 +239,32 @@ async def _execute_single_tool_call(
             push_debug(f"执行工具 '{tool_name}' 参数: {arguments_str}")
 
             tool_func = tool_map[tool_name]
-            
+
+            # 获取原始函数和 Tool 对象（用于检查参数）
+            # tool_func 是 tool.run，是一个绑定方法，__self__ 就是 Tool 对象
+            original_func = None
+            tool_obj = None
+            has_event_emitter_param = False
+
+            # 尝试从绑定方法获取 Tool 对象
+            if hasattr(tool_func, "__self__"):
+                tool_obj = tool_func.__self__
+                original_func = getattr(tool_obj, "func", None)
+                if tool_obj and hasattr(tool_obj, "parameters"):
+                    has_event_emitter_param = "event_emitter" in [
+                        p.name for p in tool_obj.parameters
+                    ]
+
+            if original_func is None:
+                original_func = tool_func
+
             # 转换参数：将字符串列表转换为多模态对象列表
-            converted_arguments = _convert_tool_arguments(arguments, tool_func)
-            
+            converted_arguments = _convert_tool_arguments(arguments, original_func)
+
+            # 注入 event_emitter：如果工具函数有 event_emitter 参数
+            if event_emitter is not None and has_event_emitter_param:
+                converted_arguments["event_emitter"] = event_emitter
+
             tool_result = await tool_func(**converted_arguments)
 
             # 更新工具调用观测数据，序列化输出以便langfuse记录
@@ -422,30 +461,31 @@ async def process_tool_calls(
     tool_calls: List[Dict[str, Any]],
     messages: List[Dict[str, Any]],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
+    event_emitter: Any = None,
 ) -> List[Dict[str, Any]]:
     """Execute tool calls concurrently and append results to the message history.
 
     All tool calls are executed in parallel using structured concurrency with asyncio.gather(),
     then results are appended to messages in the original order.
-    
+
     对于多模态工具调用，会先插入一个 assistant message 说明将使用该工具，
     然后再插入工具结果的 user message。
 
     IMPORTANT: 此函数会修改 `messages` 参数中的原始字典对象（特别是 assistant message），
     这是**必需的行为**，而非 bug，原因如下：
-    
+
     1. 多模态工具调用处理：
        - OpenAI API 的 tool_call 机制无法传输图像等多模态内容
        - 对于多模态工具调用（返回图片、文件等），我们需要：
          a) 从原始 assistant message 中移除该工具的 tool_call 定义
          b) 用自定义的 assistant + user 消息对替代（用户在 user message 中提供多模态内容）
        - 这就是为什么需要修改原始 messages 中的 assistant message 对象
-    
+
     2. 为什么不用 deep copy：
        - deep copy 会增加内存开销
        - 业务逻辑本身需要改变消息结构
        - 调用者最终收到的 messages 就包含了这些必要的修改
-    
+
     Args:
         tool_calls: 要执行的工具调用列表
         messages: 消息历史列表。**会被就地修改**（仅修改 assistant message，不改变列表本身）
@@ -459,14 +499,17 @@ async def process_tool_calls(
         return messages
 
     # Execute all tool calls concurrently
-    tasks = [_execute_single_tool_call(tool_call, tool_map) for tool_call in tool_calls]
+    tasks = [
+        _execute_single_tool_call(tool_call, tool_map, event_emitter)
+        for tool_call in tool_calls
+    ]
     results = await asyncio.gather(*tasks)
 
     # 分类结果：普通工具调用和多模态工具调用
     normal_results: List[List[Dict[str, Any]]] = []
     multimodal_results: List[tuple[Dict[str, Any], List[Dict[str, Any]]]] = []
     multimodal_tool_call_ids: set[str] = set()
-    
+
     for tool_call_dict, messages_to_append, is_multimodal in results:
         if is_multimodal:
             multimodal_results.append((tool_call_dict, messages_to_append))
@@ -493,10 +536,11 @@ async def process_tool_calls(
                 original_tool_calls = msg["tool_calls"]
                 # 过滤掉多模态工具调用，保留普通工具调用
                 filtered_tool_calls = [
-                    tc for tc in original_tool_calls
+                    tc
+                    for tc in original_tool_calls
                     if tc.get("id") not in multimodal_tool_call_ids
                 ]
-                
+
                 if not filtered_tool_calls:
                     # 如果所有tool_calls都是多模态的，移除tool_calls字段
                     # 并用空字符串替代content（不能是None，因为那是tool_call专用格式）
@@ -518,7 +562,7 @@ async def process_tool_calls(
     current_messages = messages.copy()
     for msgs in normal_results:
         current_messages.extend(msgs)
-    
+
     # =========================================================================
     # 阶段 3: 处理多模态工具调用结果
     # =========================================================================
@@ -530,16 +574,15 @@ async def process_tool_calls(
     for tool_call_dict, user_messages in multimodal_results:
         tool_name = tool_call_dict.get("function", {}).get("name", "unknown")
         arguments = tool_call_dict.get("function", {}).get("arguments", "{}")
-        
+
         # 创建assistant message说明将使用该工具
         assistant_message = {
             "role": "assistant",
             "content": f"我将求助用户使用 {tool_name} 工具来获取结果，使用参数为：{arguments}，请用户按照工具的描述和参数要求，提供符合要求的结果。",
         }
         current_messages.append(assistant_message)
-        
+
         # 添加工具返回的user message（包含多模态内容）
         current_messages.extend(user_messages)
 
     return current_messages
-

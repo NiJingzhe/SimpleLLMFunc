@@ -7,346 +7,349 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc \n"
+"Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-01-09 06:03+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: zh_CN\n"
 "Language-Team: zh_CN <LL@li.org>\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
+"Language: zh_CN\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/guide.md:7
 msgid "配置与环境"
-msgstr ""
+msgstr "配置与环境"
 
 #: ../../source/guide.md:7
 msgid "LLM 接口层"
-msgstr ""
+msgstr "LLM 接口层"
 
 #: ../../source/guide.md:7
 msgid "llm_function 装饰器"
-msgstr ""
+msgstr "llm_function 装饰器"
 
 #: ../../source/guide.md:7
 msgid "llm_chat 装饰器"
-msgstr ""
+msgstr "llm_chat 装饰器"
 
 #: ../../source/guide.md:7
 msgid "事件流系统"
-msgstr ""
+msgstr "事件流系统"
 
 #: ../../source/guide.md:7
 msgid "工具系统"
-msgstr ""
+msgstr "工具系统"
 
 #: ../../source/guide.md:7
 msgid "核心功能"
-msgstr ""
+msgstr "核心功能"
 
 #: ../../source/guide.md:1
 msgid "使用指南"
-msgstr ""
+msgstr "使用指南"
 
 #: ../../source/guide.md:3
 msgid "本指南提供了 SimpleLLMFunc 框架各个功能模块的详细文档。请根据你的需求选择相应的文档进行阅读。"
-msgstr ""
+msgstr "本指南提供了 SimpleLLMFunc 框架各个功能模块的详细文档。请根据你的需求选择相应的文档进行阅读。"
 
 #: ../../source/guide.md:5
 msgid "📚 详细文档导航"
-msgstr ""
+msgstr "📚 详细文档导航"
 
 #: ../../source/guide.md:19
 msgid "🎯 按使用场景查找文档"
-msgstr ""
+msgstr "🎯 按使用场景查找文档"
 
 #: ../../source/guide.md:21
 msgid "我想要快速上手"
-msgstr ""
+msgstr "我想要快速上手"
 
 #: ../../source/guide.md:22
 msgid "👉 [快速开始](quickstart.md) - 5分钟内运行你的第一个示例"
-msgstr ""
+msgstr "👉 [快速开始](quickstart.md) - 5分钟内运行你的第一个示例"
 
 #: ../../source/guide.md:24
 msgid "我想要配置 API 和环境"
-msgstr ""
+msgstr "我想要配置 API 和环境"
 
 #: ../../source/guide.md:25
 msgid "👉 [配置与环境](detailed_guide/config.md) - 学习如何设置 provider.json 和环境变量"
-msgstr ""
+msgstr "👉 [配置与环境](detailed_guide/config.md) - 学习如何设置 provider.json 和环境变量"
 
 #: ../../source/guide.md:27
 msgid "我想要创建 LLM 函数"
-msgstr ""
+msgstr "我想要创建 LLM 函数"
 
 #: ../../source/guide.md:28
 msgid "👉 [llm_function 装饰器](detailed_guide/llm_function.md) - 创建无状态的 LLM 驱动函数"
 msgstr ""
+"👉 [llm_function 装饰器](detailed_guide/llm_function.md) - 创建无状态的 LLM 驱动函数"
 
 #: ../../source/guide.md:30
 msgid "我想要构建聊天应用"
-msgstr ""
+msgstr "我想要构建聊天应用"
 
 #: ../../source/guide.md:31
 msgid "👉 [llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建多轮对话和 Agent 应用"
-msgstr ""
+msgstr "👉 [llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建多轮对话和 Agent 应用"
 
 #: ../../source/guide.md:33
 msgid "我想要观察执行过程"
-msgstr ""
+msgstr "我想要观察执行过程"
 
 #: ../../source/guide.md:34
 msgid "👉 [事件流系统](detailed_guide/event_stream.md) - 实时观察 ReAct 循环的执行过程"
-msgstr ""
+msgstr "👉 [事件流系统](detailed_guide/event_stream.md) - 实时观察 ReAct 循环的执行过程"
 
 #: ../../source/guide.md:36
 msgid "我想要整合工具/API"
-msgstr ""
+msgstr "我想要整合工具/API"
 
 #: ../../source/guide.md:37
 msgid "👉 [工具系统](detailed_guide/tool.md) - 让 LLM 调用外部函数和 API"
-msgstr ""
+msgstr "👉 [工具系统](detailed_guide/tool.md) - 让 LLM 调用外部函数和 API"
 
 #: ../../source/guide.md:39
 msgid "我想要理解接口设计"
-msgstr ""
+msgstr "我想要理解接口设计"
 
 #: ../../source/guide.md:40
 msgid "👉 [LLM 接口层](detailed_guide/llm_interface.md) - 了解密钥管理和流量控制"
-msgstr ""
+msgstr "👉 [LLM 接口层](detailed_guide/llm_interface.md) - 了解密钥管理和流量控制"
 
 #: ../../source/guide.md:42
 msgid "我想要查看代码示例"
-msgstr ""
+msgstr "我想要查看代码示例"
 
 #: ../../source/guide.md:43
 msgid "👉 [示例代码](examples.md) - 浏览各种使用场景的完整示例"
-msgstr ""
+msgstr "👉 [示例代码](examples.md) - 浏览各种使用场景的完整示例"
 
 #: ../../source/guide.md:45
 msgid "🚀 推荐学习路径"
-msgstr ""
+msgstr "🚀 推荐学习路径"
 
 #: ../../source/guide.md:47
 msgid "初级用户（刚开始使用）"
-msgstr ""
+msgstr "初级用户（刚开始使用）"
 
 #: ../../source/guide.md:48
 msgid "[快速开始](quickstart.md) - 环境配置和第一个示例"
-msgstr ""
+msgstr "[快速开始](quickstart.md) - 环境配置和第一个示例"
 
 #: ../../source/guide.md:49
 msgid "[llm_function 装饰器](detailed_guide/llm_function.md) - 基础功能"
-msgstr ""
+msgstr "[llm_function 装饰器](detailed_guide/llm_function.md) - 基础功能"
 
 #: ../../source/guide.md:50
 msgid "[示例代码](examples.md) - 学习实际用法"
-msgstr ""
+msgstr "[示例代码](examples.md) - 学习实际用法"
 
 #: ../../source/guide.md:52
 msgid "中级用户（已掌握基础）"
-msgstr ""
+msgstr "中级用户（已掌握基础）"
 
 #: ../../source/guide.md:53
 msgid "[llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建交互应用"
-msgstr ""
+msgstr "[llm_chat 装饰器](detailed_guide/llm_chat.md) - 构建交互应用"
 
 #: ../../source/guide.md:54
 msgid "[工具系统](detailed_guide/tool.md) - 整合外部能力"
-msgstr ""
+msgstr "[工具系统](detailed_guide/tool.md) - 整合外部能力"
 
 #: ../../source/guide.md:55
 msgid "[配置与环境](detailed_guide/config.md) - 优化配置"
-msgstr ""
+msgstr "[配置与环境](detailed_guide/config.md) - 优化配置"
 
 #: ../../source/guide.md:57
 msgid "高级用户（深入理解框架）"
-msgstr ""
+msgstr "高级用户（深入理解框架）"
 
 #: ../../source/guide.md:58
 msgid "[LLM 接口层](detailed_guide/llm_interface.md) - 密钥管理和流量控制"
-msgstr ""
+msgstr "[LLM 接口层](detailed_guide/llm_interface.md) - 密钥管理和流量控制"
 
 #: ../../source/guide.md:59
 msgid "自定义 LLM 接口和工具"
-msgstr ""
+msgstr "自定义 LLM 接口和工具"
 
 #: ../../source/guide.md:60
 msgid "[示例代码](examples.md) - 生产级别的实现参考"
-msgstr ""
+msgstr "[示例代码](examples.md) - 生产级别的实现参考"
 
 #: ../../source/guide.md:62
 msgid "📖 按功能模块查找"
-msgstr ""
+msgstr "📖 按功能模块查找"
 
 #: ../../source/guide.md:7
 msgid "功能"
-msgstr ""
+msgstr "功能"
 
 #: ../../source/guide.md:7
 msgid "文档"
-msgstr ""
+msgstr "文档"
 
 #: ../../source/guide.md:7
 msgid "说明"
-msgstr ""
+msgstr "说明"
 
 #: ../../source/guide.md:7
 msgid "基础配置"
-msgstr ""
+msgstr "基础配置"
 
 #: ../../source/guide.md:7
 msgid "[配置与环境](detailed_guide/config.md)"
-msgstr ""
+msgstr "[配置与环境](detailed_guide/config.md)"
 
 #: ../../source/guide.md:7
 msgid "API 密钥、环境变量、provider.json"
-msgstr ""
+msgstr "API 密钥、环境变量、provider.json"
 
 #: ../../source/guide.md:7
 msgid "简单任务"
-msgstr ""
+msgstr "简单任务"
 
 #: ../../source/guide.md:7
 msgid "[llm_function 装饰器](detailed_guide/llm_function.md)"
-msgstr ""
+msgstr "[llm_function 装饰器](detailed_guide/llm_function.md)"
 
 #: ../../source/guide.md:7
 msgid "无状态函数、文本处理、数据转换"
-msgstr ""
+msgstr "无状态函数、文本处理、数据转换"
 
 #: ../../source/guide.md:7
 msgid "对话应用"
-msgstr ""
+msgstr "对话应用"
 
 #: ../../source/guide.md:7
 msgid "[llm_chat 装饰器](detailed_guide/llm_chat.md)"
-msgstr ""
+msgstr "[llm_chat 装饰器](detailed_guide/llm_chat.md)"
 
 #: ../../source/guide.md:7
 msgid "多轮对话、历史管理、流式响应"
-msgstr ""
+msgstr "多轮对话、历史管理、流式响应"
 
 #: ../../source/guide.md:7
 msgid "事件流"
-msgstr ""
+msgstr "事件流"
 
 #: ../../source/guide.md:7
 msgid "[事件流系统](detailed_guide/event_stream.md)"
-msgstr ""
+msgstr "[事件流系统](detailed_guide/event_stream.md)"
 
 #: ../../source/guide.md:7
 msgid "实时观察、工具调用监控、性能分析"
-msgstr ""
+msgstr "实时观察、工具调用监控、性能分析"
 
 #: ../../source/guide.md:7
 msgid "工具集成"
-msgstr ""
+msgstr "工具集成"
 
 #: ../../source/guide.md:7
 msgid "[工具系统](detailed_guide/tool.md)"
-msgstr ""
+msgstr "[工具系统](detailed_guide/tool.md)"
 
 #: ../../source/guide.md:7
 msgid "工具定义、调用、多模态返回"
-msgstr ""
+msgstr "工具定义、调用、多模态返回"
 
 #: ../../source/guide.md:7
 msgid "系统设计"
-msgstr ""
+msgstr "系统设计"
 
 #: ../../source/guide.md:7
 msgid "[LLM 接口层](detailed_guide/llm_interface.md)"
-msgstr ""
+msgstr "[LLM 接口层](detailed_guide/llm_interface.md)"
 
 #: ../../source/guide.md:7
 msgid "接口抽象、密钥池、流量控制"
-msgstr ""
+msgstr "接口抽象、密钥池、流量控制"
 
 #: ../../source/guide.md:7
 msgid "实战示例"
-msgstr ""
+msgstr "实战示例"
 
 #: ../../source/guide.md:7
 msgid "[示例代码](examples.md)"
-msgstr ""
+msgstr "[示例代码](examples.md)"
 
 #: ../../source/guide.md:7
 msgid "各种场景的完整代码"
-msgstr ""
+msgstr "各种场景的完整代码"
 
 #: ../../source/guide.md:74
 msgid "❓ 常见问题速查"
-msgstr ""
+msgstr "❓ 常见问题速查"
 
 #: ../../source/guide.md:76
 msgid "**如何配置 API 密钥？** → [配置与环境](detailed_guide/config.md)"
-msgstr ""
+msgstr "**如何配置 API 密钥？** → [配置与环境](detailed_guide/config.md)"
 
 #: ../../source/guide.md:77
 msgid ""
-"**装饰器支持同步函数吗？** → [llm_function 装饰器 - "
-"重要说明](detailed_guide/llm_function.md)"
+"**装饰器支持同步函数吗？** → [llm_function 装饰器 - 重要说明](detailed_guide/llm_function.md)"
 msgstr ""
+"**装饰器支持同步函数吗？** → [llm_function 装饰器 - 重要说明](detailed_guide/llm_function.md)"
 
 #: ../../source/guide.md:78
 msgid "**如何做多轮对话？** → [llm_chat 装饰器](detailed_guide/llm_chat.md)"
-msgstr ""
+msgstr "**如何做多轮对话？** → [llm_chat 装饰器](detailed_guide/llm_chat.md)"
 
 #: ../../source/guide.md:79
 msgid "**如何让 LLM 调用函数？** → [工具系统](detailed_guide/tool.md)"
-msgstr ""
+msgstr "**如何让 LLM 调用函数？** → [工具系统](detailed_guide/tool.md)"
 
 #: ../../source/guide.md:80
 msgid ""
 "**支持哪些 LLM 提供商？** → [LLM 接口层 - OpenAICompatible "
 "实现](detailed_guide/llm_interface.md)"
 msgstr ""
+"**支持哪些 LLM 提供商？** → [LLM 接口层 - OpenAICompatible "
+"实现](detailed_guide/llm_interface.md)"
 
 #: ../../source/guide.md:81
 msgid "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md)"
-msgstr ""
+msgstr "**如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md)"
 
 #: ../../source/guide.md:83
 msgid "🔗 其他资源"
-msgstr ""
+msgstr "🔗 其他资源"
 
 #: ../../source/guide.md:85
 msgid "[项目介绍](introduction.md) - 了解 SimpleLLMFunc 的设计理念"
-msgstr ""
+msgstr "[项目介绍](introduction.md) - 了解 SimpleLLMFunc 的设计理念"
 
 #: ../../source/guide.md:86
 msgid "[示例代码](examples.md) - 各种场景的完整代码示例"
-msgstr ""
+msgstr "[示例代码](examples.md) - 各种场景的完整代码示例"
 
 #: ../../source/guide.md:87
 msgid "[贡献指南](contributing.md) - 如何为项目做出贡献"
-msgstr ""
+msgstr "[贡献指南](contributing.md) - 如何为项目做出贡献"
 
 #: ../../source/guide.md:88
 msgid "[GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc) - 源代码和问题追踪"
-msgstr ""
+msgstr "[GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc) - 源代码和问题追踪"
 
 #: ../../source/guide.md:90
 msgid "💡 提示"
-msgstr ""
+msgstr "💡 提示"
 
 #: ../../source/guide.md:92
 msgid "每个文档都包含完整的代码示例，可以直接复制使用"
-msgstr ""
+msgstr "每个文档都包含完整的代码示例，可以直接复制使用"
 
 #: ../../source/guide.md:93
 msgid "使用浏览器的搜索功能（Ctrl+F）快速定位内容"
-msgstr ""
+msgstr "使用浏览器的搜索功能（Ctrl+F）快速定位内容"
 
 #: ../../source/guide.md:94
 msgid "遇到问题时，先查看对应文档的\"故障排除\"或\"常见问题\"部分"
-msgstr ""
+msgstr "遇到问题时，先查看对应文档的\"故障排除\"或\"常见问题\"部分"
 
 #: ../../source/guide.md:95
 msgid ""
@@ -354,4 +357,6 @@ msgid ""
 "[examples/](https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples)"
 " 目录"
 msgstr ""
-
+"所有示例代码都位于 "
+"[examples/](https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples)"
+" 目录"

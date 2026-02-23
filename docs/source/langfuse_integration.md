@@ -290,7 +290,10 @@ logging.getLogger("langfuse").setLevel(logging.DEBUG)
 
 ## 示例项目
 
-查看 `examples/langfuse_integration_example.py` 获取完整的使用示例。
+可参考以下示例了解完整链路：
+
+- `examples/llm_function_token_usage.py`（事件流 + 用量统计）
+- `examples/event_stream_chatbot.py`（对话 + 工具调用 + 事件流）
 
 ## 相关链接
 

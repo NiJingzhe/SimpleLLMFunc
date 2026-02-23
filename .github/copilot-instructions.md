@@ -29,7 +29,7 @@ SimpleLLMFunc is a lightweight LLM application framework enabling developers to 
 ### 2. **Async-First Architecture**
 - **All LLM decorators ONLY support `async def` functions** (non-negotiable requirement)
 - Use `await` when calling decorated functions or `asyncio.run()` at top level
-- Example from examples/llm_chat_example.py: `async for content, updated_history in async_simple_chat(...)`
+- Example from examples/event_stream_chatbot.py: consume `ResponseYield` / `EventYield` in an async loop
 - Enables high-concurrency API calls via native asyncio integration
 
 ### 3. **Three-Tier Component Stack**
@@ -50,11 +50,11 @@ SimpleLLMFunc is a lightweight LLM application framework enabling developers to 
 - **`TokenBucket`**: Rate limiting to prevent API throttling
 
 #### **Tier 3: Base Modules** (`base/`)
-- **`messages.py`**: Constructs system/user prompts + handles multimodal content
+- **`messages/`**: Constructs system/user prompts + handles multimodal content
 - **`post_process.py`**: Deserializes LLM responses to target types
-- **`type_resolve.py`**: Analyzes function signatures for type information
+- **`type_resolve/`**: Analyzes function signatures for type information
 - **`ReAct.py`**: Orchestrates LLM calls with tool execution loops (max 5 by default)
-- **`tool_call.py`**: Tool invocation and result formatting
+- **`tool_call/`**: Tool extraction, invocation, and result validation
 
 ### 4. **Configuration & Providers** 
 - `.env` file: `LOG_LEVEL=DEBUG` setting
@@ -234,9 +234,9 @@ async with async_log_context(trace_id="custom_id", function_name="my_func"):
 | Add new LLM provider | `interface/openai_compatible.py`, update `provider.json` |
 | Create LLM function | `llm_decorator/llm_function_decorator.py` (see flow 219-260) |
 | Create agent with tools | `llm_decorator/llm_chat_decorator.py`, `tool/tool.py` |
-| Debug tool invocation | `base/ReAct.py` (tool loop orchestration), `base/tool_call.py` |
-| Extend return types | `base/post_process.py`, `base/type_resolve.py` |
-| Customize prompts | `base/messages.py` (lines 1-80 for template logic) |
+| Debug tool invocation | `base/ReAct.py` (tool loop orchestration), `base/tool_call/execution.py` |
+| Extend return types | `base/post_process.py`, `base/type_resolve/` |
+| Customize prompts | `base/messages/` (template and message assembly logic) |
 
 ## ⚠️ Common Pitfalls
 
