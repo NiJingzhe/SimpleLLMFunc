@@ -49,6 +49,39 @@ class OpenAICompatible(LLM_Interface):
             # 如果无法获取token计数,返回0
             return 0, 0
 
+    async def _close_stream_response(self, response: Any) -> None:
+        """Best-effort close for streaming responses.
+
+        Some providers keep stream connections open after a terminal chunk.
+        If we stop consuming early (e.g. finish grace timeout), explicitly
+        closing the stream prevents leaked HTTP connections/background tasks.
+        """
+
+        close_method = getattr(response, "close", None)
+        if callable(close_method):
+            try:
+                close_result = close_method()
+                if hasattr(close_result, "__await__"):
+                    await close_result
+            except Exception as close_exc:
+                push_warning(
+                    f"{self.model_name} failed to close stream response: {close_exc}",
+                    location=get_location(),
+                )
+            return
+
+        aclose_method = getattr(response, "aclose", None)
+        if callable(aclose_method):
+            try:
+                aclose_result = aclose_method()
+                if hasattr(aclose_result, "__await__"):
+                    await aclose_result
+            except Exception as close_exc:
+                push_warning(
+                    f"{self.model_name} failed to close stream response: {close_exc}",
+                    location=get_location(),
+                )
+
     @classmethod
     def load_from_json_file(
         cls, json_path: str
@@ -462,6 +495,8 @@ class OpenAICompatible(LLM_Interface):
                         merged_stream_options.setdefault("include_usage", True)
                         request_kwargs["stream_options"] = merged_stream_options
 
+                response = None
+
                 try:
                     response = await client.chat.completions.create(  # type: ignore
                         messages=messages,  # type: ignore
@@ -489,71 +524,75 @@ class OpenAICompatible(LLM_Interface):
                     else:
                         raise
 
-                total_prompt_tokens = 0
-                total_completion_tokens = 0
-                saw_finish_reason = False
-                saw_usage_chunk = False
-                finish_deadline: Optional[float] = None
+                try:
+                    total_prompt_tokens = 0
+                    total_completion_tokens = 0
+                    saw_finish_reason = False
+                    saw_usage_chunk = False
+                    finish_deadline: Optional[float] = None
 
-                loop = asyncio.get_running_loop()
+                    loop = asyncio.get_running_loop()
 
-                response_iter = response.__aiter__()
+                    response_iter = response.__aiter__()
 
-                while True:
-                    try:
-                        if saw_finish_reason:
-                            if finish_deadline is None:
-                                finish_deadline = (
-                                    loop.time() + self._stream_finish_grace_timeout
+                    while True:
+                        try:
+                            if saw_finish_reason:
+                                if finish_deadline is None:
+                                    finish_deadline = (
+                                        loop.time() + self._stream_finish_grace_timeout
+                                    )
+
+                                remaining = finish_deadline - loop.time()
+                                if remaining <= 0:
+                                    break
+
+                                chunk = await asyncio.wait_for(
+                                    response_iter.__anext__(),
+                                    timeout=remaining,
                                 )
-
-                            remaining = finish_deadline - loop.time()
-                            if remaining <= 0:
-                                break
-
-                            chunk = await asyncio.wait_for(
-                                response_iter.__anext__(),
-                                timeout=remaining,
-                            )
-                        else:
-                            chunk = await response_iter.__anext__()
-                    except StopAsyncIteration:
-                        break
-                    except asyncio.TimeoutError:
-                        break
-
-                    yield chunk  # 按块返回生成器中的数据
-                    first_choice = chunk.choices[0] if chunk.choices else None
-                    usage = getattr(chunk, "usage", None)
-
-                    if usage is not None:
-                        saw_usage_chunk = True
-                        prompt_tokens, completion_tokens = self._count_tokens(chunk)
-                        # stream usage 是累计值（整次请求总量），应覆盖为最新值，
-                        # 而不是逐块相加，否则在多次 usage chunk 场景下会重复计数。
-                        total_prompt_tokens = prompt_tokens
-                        total_completion_tokens = completion_tokens
-
-                    if saw_finish_reason and saw_usage_chunk:
-                        break
-
-                    if first_choice and first_choice.finish_reason is not None:
-                        if usage is not None:
+                            else:
+                                chunk = await response_iter.__anext__()
+                        except StopAsyncIteration:
                             break
-                        # 某些供应商会在 finish_reason 之后再发送 usage chunk。
-                        # 进入短暂 grace 模式等待收尾 chunk，避免 UI 卡住且保留 token 统计。
-                        saw_finish_reason = True
+                        except asyncio.TimeoutError:
+                            break
 
-                # 在整个流结束后统计token
-                input_tokens = get_current_context_attribute("input_tokens") or 0
-                output_tokens = get_current_context_attribute("output_tokens") or 0
+                        yield chunk  # 按块返回生成器中的数据
+                        first_choice = chunk.choices[0] if chunk.choices else None
+                        usage = getattr(chunk, "usage", None)
 
-                set_current_context_attribute(
-                    "input_tokens", input_tokens + total_prompt_tokens
-                )
-                set_current_context_attribute(
-                    "output_tokens", output_tokens + total_completion_tokens
-                )
+                        if usage is not None:
+                            saw_usage_chunk = True
+                            prompt_tokens, completion_tokens = self._count_tokens(chunk)
+                            # stream usage 是累计值（整次请求总量），应覆盖为最新值，
+                            # 而不是逐块相加，否则在多次 usage chunk 场景下会重复计数。
+                            total_prompt_tokens = prompt_tokens
+                            total_completion_tokens = completion_tokens
+
+                        if saw_finish_reason and saw_usage_chunk:
+                            break
+
+                        if first_choice and first_choice.finish_reason is not None:
+                            if usage is not None:
+                                break
+                            # 某些供应商会在 finish_reason 之后再发送 usage chunk。
+                            # 进入短暂 grace 模式等待收尾 chunk，避免 UI 卡住且保留 token 统计。
+                            saw_finish_reason = True
+
+                    # 在整个流结束后统计token
+                    input_tokens = get_current_context_attribute("input_tokens") or 0
+                    output_tokens = get_current_context_attribute("output_tokens") or 0
+
+                    set_current_context_attribute(
+                        "input_tokens", input_tokens + total_prompt_tokens
+                    )
+                    set_current_context_attribute(
+                        "output_tokens", output_tokens + total_completion_tokens
+                    )
+                finally:
+                    if response is not None:
+                        await self._close_stream_response(response)
 
                 self.key_pool.decrement_task_count(key)
                 break  # 如果成功，跳出重试循环

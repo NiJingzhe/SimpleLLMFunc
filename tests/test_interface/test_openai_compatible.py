@@ -58,6 +58,8 @@ class _NeverEndingStream:
 
     def __init__(self, chunks: list[ChatCompletionChunk]) -> None:
         self._chunks = chunks
+        self.closed = False
+        self.close_call_count = 0
 
     def __aiter__(self):
         return self._gen()
@@ -68,6 +70,10 @@ class _NeverEndingStream:
 
         # Simulate providers that keep SSE open after finish_reason.
         await asyncio.Event().wait()
+
+    async def close(self) -> None:
+        self.close_call_count += 1
+        self.closed = True
 
 
 @pytest.mark.asyncio
@@ -113,6 +119,8 @@ async def test_chat_stream_stops_after_finish_reason() -> None:
 
     assert len(chunks) == 2
     assert chunks[-1].choices[0].finish_reason == "stop"
+    assert stream_response.closed is True
+    assert stream_response.close_call_count == 1
     create_mock.assert_awaited_once()
     create_kwargs = create_mock.await_args_list[0].kwargs
     assert create_kwargs["stream_options"]["include_usage"] is True
