@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 import asyncio
+import json
+import sys
+from pathlib import Path
+
+import pytest
 
 from SimpleLLMFunc.hooks.events import CustomEvent
 
@@ -198,6 +202,122 @@ class TestPyReplExecute:
 
         assert result["success"] is True
         assert result["return_value"] == "2"
+
+    @pytest.mark.asyncio
+    async def test_execute_runtime_error_includes_structured_details(self):
+        """Runtime errors should provide line-aware structured diagnostics."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("x = 1\ny = 0\nx / y")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "ZeroDivisionError" in result["error"]
+
+        details = result["error_details"]
+        assert isinstance(details, dict)
+        assert details["error_type"] == "ZeroDivisionError"
+        assert details["line"] == 3
+        assert details["snippet"] == "x / y"
+
+    @pytest.mark.asyncio
+    async def test_execute_syntax_error_includes_snippet_and_pointer(self):
+        """Syntax errors should expose exact snippet location information."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("for i in range(2)\n    print(i)")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "SyntaxError" in result["error"]
+
+        details = result["error_details"]
+        assert isinstance(details, dict)
+        assert details["error_type"] == "SyntaxError"
+        assert details["line"] == 1
+        assert details["column"] == 18
+        assert details["snippet"] == "for i in range(2)"
+        assert details["pointer"] == " " * 17 + "^"
+
+    @pytest.mark.asyncio
+    async def test_execute_handles_stderr_with_invalid_fileno(self, monkeypatch):
+        """Worker startup should survive environments where stderr has fileno=-1."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        class _InvalidStderr:
+            def fileno(self) -> int:
+                return -1
+
+            def write(self, _text: str) -> int:
+                return 0
+
+            def flush(self) -> None:
+                return None
+
+        monkeypatch.setattr(sys, "stderr", _InvalidStderr())
+
+        repl = PyRepl()
+        try:
+            result = await repl.execute("print('ok')")
+        finally:
+            repl.close()
+
+        assert result["success"] is True
+        assert "ok" in result["stdout"]
+
+
+class TestPyReplAudit:
+    """Test per-instance audit log persistence behavior."""
+
+    @pytest.mark.asyncio
+    async def test_each_instance_writes_isolated_audit_log(self, monkeypatch, tmp_path):
+        """Each PyRepl instance should persist execution history separately."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.logger.logger_config import logger_config
+
+        monkeypatch.setattr(logger_config, "LOG_DIR", str(tmp_path))
+
+        repl_a = PyRepl()
+        repl_b = PyRepl()
+
+        try:
+            result_a = await repl_a.execute("print('A')")
+            result_b = await repl_b.execute("print('B')")
+        finally:
+            repl_a.close()
+            repl_b.close()
+
+        assert result_a["success"] is True
+        assert result_b["success"] is True
+
+        audit_dir_a = Path(repl_a.audit_log_dir)
+        audit_dir_b = Path(repl_b.audit_log_dir)
+        assert audit_dir_a != audit_dir_b
+        assert audit_dir_a.parent == tmp_path / "pyrepl"
+        assert audit_dir_b.parent == tmp_path / "pyrepl"
+
+        audit_file_a = Path(repl_a.audit_log_file)
+        audit_file_b = Path(repl_b.audit_log_file)
+        assert audit_file_a.exists()
+        assert audit_file_b.exists()
+
+        records_a = [
+            json.loads(line)
+            for line in audit_file_a.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        records_b = [
+            json.loads(line)
+            for line in audit_file_b.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert records_a[-1]["code"] == "print('A')"
+        assert records_b[-1]["code"] == "print('B')"
+        assert records_a[-1]["result"]["success"] is True
+        assert records_b[-1]["result"]["success"] is True
 
 
 class TestPyReplReset:
