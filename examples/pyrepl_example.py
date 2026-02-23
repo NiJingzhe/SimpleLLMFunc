@@ -5,13 +5,13 @@ PyRepl 代码执行示例
 PyRepl 的核心优势是保持连续上下文，变量可以在多次调用间持久化。
 
 关键特性：
-- 轻量实现：仅依赖 Python 内置模块，无需 jupyter_client
+- 独立进程后端：每个实例运行在独立 subprocess，内部使用 IPython InteractiveShell
 - 变量持久化：定义的变量可以在后续调用中使用
 - 实时输出：通过 event_emitter 实时获取 stdout/stderr
 - Session 隔离：不同的 PyRepl 实例相互独立
 
 运行要求：
-    无需额外依赖（仅 Python 内置模块）
+    安装 SimpleLLMFunc 依赖（包含 IPython）
 
 使用示例：
     python pyrepl_example.py
