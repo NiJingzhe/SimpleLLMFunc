@@ -108,6 +108,7 @@ class PyRepl:
         self._self_reference: Optional[SelfReference] = None
         self._tools: Optional[List[Tool]] = None
         self._lock = threading.RLock()
+        self._operation_lock = asyncio.Lock()
 
         self._ctx = mp.get_context("spawn")
         self._command_queue: Any = None
@@ -339,15 +340,17 @@ class PyRepl:
         self,
         timeout_seconds: float,
     ) -> Optional[dict[str, Any]]:
-        if self._prefetched_events:
-            return self._prefetched_events.pop(0)
+        with self._lock:
+            if self._prefetched_events:
+                return self._prefetched_events.pop(0)
+            event_queue = self._event_queue
 
-        if self._event_queue is None:
+        if event_queue is None:
             return None
 
         try:
             return await asyncio.to_thread(
-                self._event_queue.get,
+                event_queue.get,
                 True,
                 timeout_seconds,
             )
@@ -516,42 +519,42 @@ class PyRepl:
             error, error_details, and execution_time_ms.
         """
 
-        start_time = time.time()
-        timeout_seconds = self.execution_timeout_seconds
+        async with self._operation_lock:
+            start_time = time.time()
+            timeout_seconds = self.execution_timeout_seconds
 
-        stdout_parts: List[str] = []
-        stderr_parts: List[str] = []
-        error_message: Optional[str] = None
-        error_details: Optional[dict[str, Any]] = None
-        return_value: Optional[str] = None
+            stdout_parts: List[str] = []
+            stderr_parts: List[str] = []
+            error_message: Optional[str] = None
+            error_details: Optional[dict[str, Any]] = None
+            return_value: Optional[str] = None
 
-        pending_input_requests: dict[str, queue.Queue[str]] = {}
-        pending_input_waiters = 0
+            pending_input_requests: dict[str, queue.Queue[str]] = {}
+            pending_input_waiters = 0
 
-        poll_interval_seconds = 0.05
-        execution_deadline = time.monotonic() + timeout_seconds
+            poll_interval_seconds = 0.05
+            execution_deadline = time.monotonic() + timeout_seconds
 
-        timed_out = False
-        interrupt_sent = False
-        interrupt_deadline = 0.0
-        received_execute_result = False
+            timed_out = False
+            interrupt_sent = False
+            interrupt_deadline = 0.0
+            received_execute_result = False
 
-        execution_id = uuid.uuid4().hex
+            execution_id = uuid.uuid4().hex
 
-        try:
-            with self._lock:
-                self._ensure_worker_locked()
-                self._drain_event_queue_locked()
-
-                self._send_worker_command_locked(
-                    {
-                        "type": COMMAND_EXECUTE,
-                        "exec_id": execution_id,
-                        "code": code,
-                        "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
-                        "self_reference_enabled": self._self_reference is not None,
-                    }
-                )
+            try:
+                with self._lock:
+                    self._ensure_worker_locked()
+                    self._drain_event_queue_locked()
+                    self._send_worker_command_locked(
+                        {
+                            "type": COMMAND_EXECUTE,
+                            "exec_id": execution_id,
+                            "code": code,
+                            "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
+                            "self_reference_enabled": self._self_reference is not None,
+                        }
+                    )
 
                 while True:
                     for request_id, request_queue in list(
@@ -562,13 +565,14 @@ class PyRepl:
                         except queue.Empty:
                             continue
 
-                        self._send_worker_command_locked(
-                            {
-                                "type": COMMAND_INPUT_REPLY,
-                                "request_id": request_id,
-                                "value": submitted_value,
-                            }
-                        )
+                        with self._lock:
+                            self._send_worker_command_locked(
+                                {
+                                    "type": COMMAND_INPUT_REPLY,
+                                    "request_id": request_id,
+                                    "value": submitted_value,
+                                }
+                            )
                         pending_input_requests.pop(request_id, None)
                         self._pop_input_queue(request_id)
 
@@ -581,7 +585,8 @@ class PyRepl:
 
                         if event_type == EVENT_SELF_REFERENCE_CALL:
                             response = self._execute_self_reference_call(event)
-                            self._send_worker_command_locked(response)
+                            with self._lock:
+                                self._send_worker_command_locked(response)
                             continue
 
                         if event_type == EVENT_WORKER_ERROR:
@@ -645,13 +650,14 @@ class PyRepl:
                                 input_value = await asyncio.to_thread(
                                     builtins.input, prompt
                                 )
-                                self._send_worker_command_locked(
-                                    {
-                                        "type": COMMAND_INPUT_REPLY,
-                                        "request_id": request_id,
-                                        "value": input_value,
-                                    }
-                                )
+                                with self._lock:
+                                    self._send_worker_command_locked(
+                                        {
+                                            "type": COMMAND_INPUT_REPLY,
+                                            "request_id": request_id,
+                                            "value": input_value,
+                                        }
+                                    )
                                 pending_input_requests.pop(request_id, None)
                                 self._pop_input_queue(request_id)
 
@@ -698,108 +704,112 @@ class PyRepl:
                         timed_out = True
                         interrupt_sent = True
                         interrupt_deadline = now + self.INTERRUPT_GRACE_SECONDS
-                        self._interrupt_worker_locked()
+                        with self._lock:
+                            self._interrupt_worker_locked()
 
                     if (
                         interrupt_sent
                         and not received_execute_result
                         and now >= interrupt_deadline
                     ):
-                        self._restart_worker_locked()
+                        with self._lock:
+                            self._restart_worker_locked()
                         break
 
                 for request_id in list(pending_input_requests.keys()):
                     pending_input_requests.pop(request_id, None)
                     self._pop_input_queue(request_id)
-        except Exception as exc:
-            error_message = f"PyRepl worker failed: {exc}"
-            error_details = {
-                "error_type": type(exc).__name__,
-                "message": str(exc),
-                "filename": None,
-                "line": None,
-                "column": None,
-                "snippet": None,
-                "pointer": None,
-                "summary": error_message,
-                "user_traceback": "",
-                "full_traceback": "",
-            }
-            stderr_parts.append(error_message + "\n")
-            await self._emit_custom_event(
-                event_emitter,
-                "kernel_stderr",
-                {"text": error_message + "\n"},
-            )
-            for request_id in list(pending_input_requests.keys()):
-                pending_input_requests.pop(request_id, None)
-                self._pop_input_queue(request_id)
-
-        if timed_out:
-            timeout_message = (
-                "Execution timed out after "
-                f"{self._format_timeout_seconds(timeout_seconds)} seconds"
-            )
-            error_message = timeout_message
-            error_details = self._build_timeout_error_details(timeout_message)
-            if timeout_message + "\n" not in stderr_parts:
-                stderr_parts.append(timeout_message + "\n")
+            except Exception as exc:
+                error_message = f"PyRepl worker failed: {exc}"
+                error_details = {
+                    "error_type": type(exc).__name__,
+                    "message": str(exc),
+                    "filename": None,
+                    "line": None,
+                    "column": None,
+                    "snippet": None,
+                    "pointer": None,
+                    "summary": error_message,
+                    "user_traceback": "",
+                    "full_traceback": "",
+                }
+                stderr_parts.append(error_message + "\n")
                 await self._emit_custom_event(
                     event_emitter,
                     "kernel_stderr",
-                    {"text": timeout_message + "\n"},
+                    {"text": error_message + "\n"},
                 )
+                for request_id in list(pending_input_requests.keys()):
+                    pending_input_requests.pop(request_id, None)
+                    self._pop_input_queue(request_id)
 
-        execution_time_ms = (time.time() - start_time) * 1000
+            if timed_out:
+                timeout_message = (
+                    "Execution timed out after "
+                    f"{self._format_timeout_seconds(timeout_seconds)} seconds"
+                )
+                error_message = timeout_message
+                error_details = self._build_timeout_error_details(timeout_message)
+                if timeout_message + "\n" not in stderr_parts:
+                    stderr_parts.append(timeout_message + "\n")
+                    await self._emit_custom_event(
+                        event_emitter,
+                        "kernel_stderr",
+                        {"text": timeout_message + "\n"},
+                    )
 
-        result = {
-            "success": error_message is None,
-            "stdout": "".join(stdout_parts),
-            "stderr": "".join(stderr_parts),
-            "return_value": return_value,
-            "error": error_message,
-            "error_details": error_details,
-            "execution_time_ms": execution_time_ms,
-        }
+            execution_time_ms = (time.time() - start_time) * 1000
 
-        self._append_audit_entry(
-            {
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "instance_id": self._instance_id,
-                "execution_id": execution_id,
-                "code": code,
-                "result": result,
-                "timeout_seconds": timeout_seconds,
-                "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
-                "self_reference_attached": self._self_reference is not None,
+            result = {
+                "success": error_message is None,
+                "stdout": "".join(stdout_parts),
+                "stderr": "".join(stderr_parts),
+                "return_value": return_value,
+                "error": error_message,
+                "error_details": error_details,
+                "execution_time_ms": execution_time_ms,
             }
-        )
 
-        return result
+            self._append_audit_entry(
+                {
+                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "instance_id": self._instance_id,
+                    "execution_id": execution_id,
+                    "code": code,
+                    "result": result,
+                    "timeout_seconds": timeout_seconds,
+                    "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
+                    "self_reference_attached": self._self_reference is not None,
+                }
+            )
+
+            return result
 
     async def reset(self) -> str:
         """Reset REPL runtime variables for this session."""
         request_id = uuid.uuid4().hex
 
-        with self._lock:
-            self.namespace.clear()
-            if self._self_reference is not None:
-                self.namespace[SELF_REFERENCE_GLOBAL_NAME] = self._self_reference
+        async with self._operation_lock:
+            with self._lock:
+                self.namespace.clear()
+                if self._self_reference is not None:
+                    self.namespace[SELF_REFERENCE_GLOBAL_NAME] = self._self_reference
 
-            self._ensure_worker_locked()
-            self._send_worker_command_locked(
-                {
-                    "type": COMMAND_RESET,
-                    "request_id": request_id,
-                    "self_reference_enabled": self._self_reference is not None,
-                }
-            )
+                self._ensure_worker_locked()
+                self._send_worker_command_locked(
+                    {
+                        "type": COMMAND_RESET,
+                        "request_id": request_id,
+                        "self_reference_enabled": self._self_reference is not None,
+                    }
+                )
 
             deadline = time.monotonic() + 5.0
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    self._restart_worker_locked()
+                    with self._lock:
+                        self._restart_worker_locked()
                     return "REPL 已重置，所有变量已清除"
 
                 event = await self._receive_worker_event(min(0.1, remaining))
@@ -809,7 +819,8 @@ class PyRepl:
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
                     response = self._execute_self_reference_call(event)
-                    self._send_worker_command_locked(response)
+                    with self._lock:
+                        self._send_worker_command_locked(response)
                     continue
 
                 if (
@@ -827,21 +838,23 @@ class PyRepl:
         """List currently defined user variables in REPL namespace."""
         request_id = uuid.uuid4().hex
 
-        with self._lock:
-            self._ensure_worker_locked()
-            self._send_worker_command_locked(
-                {
-                    "type": COMMAND_LIST_VARIABLES,
-                    "request_id": request_id,
-                    "self_reference_enabled": self._self_reference is not None,
-                }
-            )
+        async with self._operation_lock:
+            with self._lock:
+                self._ensure_worker_locked()
+                self._send_worker_command_locked(
+                    {
+                        "type": COMMAND_LIST_VARIABLES,
+                        "request_id": request_id,
+                        "self_reference_enabled": self._self_reference is not None,
+                    }
+                )
 
             deadline = time.monotonic() + 5.0
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    self._restart_worker_locked()
+                    with self._lock:
+                        self._restart_worker_locked()
                     return []
 
                 event = await self._receive_worker_event(min(0.1, remaining))
@@ -851,7 +864,8 @@ class PyRepl:
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
                     response = self._execute_self_reference_call(event)
-                    self._send_worker_command_locked(response)
+                    with self._lock:
+                        self._send_worker_command_locked(response)
                     continue
 
                 if (
