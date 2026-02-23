@@ -16,16 +16,16 @@
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![PyPI Version](https://img.shields.io/pypi/v/SimpleLLMFunc)](https://pypi.org/project/SimpleLLMFunc/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.5.0.beta1)
+### 更新说明 (0.6.0)
 
-🚀 **新功能：事件流系统** - 实时观察 ReAct 执行循环。查看 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** 了解详情。
+🚀 **重大版本发布：PyRepl + Textual TUI + 持久化 Agent 记忆** - `SimpleLLMFunc` 现已提供基于子进程的持久化 `PyRepl`、开箱即用的 Textual `@tui`（支持 `llm_chat` 流式显示），以及面向有状态 Agent 的 `SelfReference` 持久记忆契约。
 
-⚠️ **注意**：这是 beta 版本，可能引入可选的破坏性更改。请查看更新日志了解迁移指南。
+📝 **同时包含**：自定义工具事件发射、工具输入路由优化、更完整的测试覆盖，以及文档与示例的全面更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -882,11 +882,11 @@ python examples/parallel_toolcall_example.py
 ```bibtex
 @software{ni2025simplellmfunc,
   author = {Jingzhe Ni},
-  month = {October},
+  month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.5.0.beta1},
-  year = {2025}
+  version = {0.6.0},
+  year = {2026}
 }
 ```
 

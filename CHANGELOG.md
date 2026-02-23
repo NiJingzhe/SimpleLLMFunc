@@ -1,5 +1,56 @@
 # Change log for SimpleLLMFunc
 
+## 0.6.0 (2026-02-24) - PyRepl, Textual TUI, and Durable Agent Memory
+
+### 🎉 Major Features
+
+1. **Builtin PyRepl Toolchain**: Added a production-ready Python REPL builtin based on a subprocess IPython runtime.
+   - Introduced `SimpleLLMFunc.builtin.PyRepl` for persistent code execution across tool calls.
+   - Added startup, active, and idle timeout controls for long-running agent workflows.
+   - Improved execution reliability with worker supervision and richer runtime diagnostics.
+
+2. **Textual TUI for `llm_chat`**: Added an out-of-the-box terminal UI powered by event stream updates.
+   - New `@tui` integration with streaming markdown conversation rendering.
+   - Added tool call arguments/results panels and model/tool usage statistics.
+   - Added built-in quit controls and improved multi-turn interaction stability.
+
+3. **Durable `SelfReference` Memory Contract**: Added self-reference memory controls for stateful agents.
+   - Supports local durable memory semantics shared by chat loops and tools.
+   - Enables safer prompt-level memory ownership and lifecycle control.
+
+### ✨ New Features
+
+1. **Tool Event Emission Pipeline**:
+   - Added custom tool event emission support via event emitter hooks.
+   - Improved event injection behavior in tool execution and ReAct orchestration.
+
+2. **Input Stream Routing**:
+   - Added tool input stream hooks to route pending tool input before normal chat turns.
+   - Improved agent interactivity for tools that require follow-up user input.
+
+3. **Examples and Developer Experience**:
+   - Added dedicated examples for PyRepl, Textual TUI, custom tool events, and SelfReference.
+   - Added translation and locale workflow scripts for documentation maintenance.
+
+### 🔧 Improvements
+
+1. **ReAct and Interface Reliability**:
+   - Improved OpenAI-compatible interface behavior and response handling.
+   - Refined ReAct message and tool-call execution flows to better support streaming and tool-event scenarios.
+
+2. **Documentation Refresh**:
+   - Added a dedicated PyRepl guide and expanded examples documentation.
+   - Updated both English and Chinese docs for new runtime, hooks, and TUI capabilities.
+
+### 🧪 Testing
+
+- Added comprehensive test coverage for PyRepl runtime, TUI modules, event emitter/input stream hooks, self-reference behaviors, and OpenAI-compatible execution paths.
+
+### ⚠️ Compatibility Notes
+
+- The previous builtin `Kernel` workflow is superseded by `PyRepl`. If you referenced legacy kernel APIs, migrate imports and usage to `SimpleLLMFunc.builtin.PyRepl`.
+- For full TUI observability, enable event streaming in `@llm_chat` (for example, `enable_event=True`).
+
 ## 0.5.0.beta1 (2025-01-09) - Event Stream & Type System Refactoring
 
 > ⚠️ **Beta Release Notice**: This is a beta release. Optional breaking changes may be introduced. Please review the migration guide below if you encounter any issues.

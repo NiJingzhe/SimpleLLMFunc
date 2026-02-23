@@ -16,16 +16,16 @@
 ![Github Forks](https://img.shields.io/github/forks/NiJingzhe/SimpleLLMFunc.svg?style=social)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python Version](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
 [![PyPI Version](https://img.shields.io/pypi/v/SimpleLLMFunc)](https://pypi.org/project/SimpleLLMFunc/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.5.0.beta1)
+### Update Notes (0.6.0)
 
-🚀 **New Feature: Event Stream System** - Real-time observability for ReAct execution cycles. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+🚀 **Major Release: PyRepl + Textual TUI + Durable Agent Memory** - `SimpleLLMFunc` now ships with a subprocess-based persistent `PyRepl`, an out-of-the-box Textual `@tui` integration for streaming `llm_chat`, and a durable `SelfReference` memory contract for stateful agent workflows.
 
-⚠️ **Note**: This is a beta release. Optional breaking changes may be introduced. See CHANGELOG for migration guide.
+📝 **Also Included**: Custom tool event emission, improved tool input routing, expanded tests, and refreshed docs/examples. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for migration and details.
 
 ### 📚 Complete Documentation
 
@@ -877,11 +877,11 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
 ```bibtex
 @software{ni2025simplellmfunc,
   author = {Jingzhe Ni},
-  month = {October},
+  month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.5.0.beta1},
-  year = {2025}
+  version = {0.6.0},
+  year = {2026}
 }
 ```
 
