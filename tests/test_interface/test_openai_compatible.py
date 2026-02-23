@@ -16,6 +16,10 @@ from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
+from SimpleLLMFunc.logger.context_manager import (
+    get_current_context_attribute,
+    set_current_context_attribute,
+)
 
 
 def _make_chunk(content: str | None, finish_reason: str | None) -> ChatCompletionChunk:
@@ -262,3 +266,55 @@ async def test_chat_stream_fallback_without_stream_options() -> None:
     second_kwargs = create_mock.await_args_list[1].kwargs
     assert first_kwargs["stream_options"]["include_usage"] is True
     assert "stream_options" not in second_kwargs
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_usage_chunks_should_not_double_count_tokens() -> None:
+    """Later cumulative usage chunk should overwrite earlier usage totals."""
+
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-openai-compatible-stream-usage-double-count",
+    )
+    llm = OpenAICompatible(
+        api_key_pool=key_pool,
+        model_name="test-model",
+        base_url="https://example.com/v1",
+        max_retries=1,
+        retry_delay=0.0,
+    )
+
+    llm.token_bucket.acquire = AsyncMock(return_value=True)
+    llm._stream_finish_grace_timeout = 0.05
+
+    stream_response = _NeverEndingStream(
+        chunks=[
+            _make_usage_chunk(prompt_tokens=3, completion_tokens=1, total_tokens=4),
+            _make_chunk(content=None, finish_reason="stop"),
+            _make_usage_chunk(prompt_tokens=8, completion_tokens=3, total_tokens=11),
+        ]
+    )
+    create_mock = AsyncMock(return_value=stream_response)
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create_mock))
+    )
+    llm._get_or_create_client = AsyncMock(return_value=fake_client)
+
+    before_input = int(get_current_context_attribute("input_tokens") or 0)
+    before_output = int(get_current_context_attribute("output_tokens") or 0)
+    set_current_context_attribute("input_tokens", before_input)
+    set_current_context_attribute("output_tokens", before_output)
+
+    async def _consume_stream() -> None:
+        async for _chunk in llm.chat_stream(
+            messages=[{"role": "user", "content": "hi"}]
+        ):
+            pass
+
+    await asyncio.wait_for(_consume_stream(), timeout=0.3)
+
+    after_input = int(get_current_context_attribute("input_tokens") or 0)
+    after_output = int(get_current_context_attribute("output_tokens") or 0)
+
+    assert after_input - before_input == 8
+    assert after_output - before_output == 3

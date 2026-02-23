@@ -529,13 +529,10 @@ class OpenAICompatible(LLM_Interface):
                     if usage is not None:
                         saw_usage_chunk = True
                         prompt_tokens, completion_tokens = self._count_tokens(chunk)
-                        total_prompt_tokens += prompt_tokens
-                        total_completion_tokens += completion_tokens
-                    elif first_choice and first_choice.delta:  # type: ignore
-                        if not first_choice.delta.tool_calls:  # type: ignore
-                            prompt_tokens, completion_tokens = self._count_tokens(chunk)
-                            total_prompt_tokens += prompt_tokens
-                            total_completion_tokens += completion_tokens
+                        # stream usage 是累计值（整次请求总量），应覆盖为最新值，
+                        # 而不是逐块相加，否则在多次 usage chunk 场景下会重复计数。
+                        total_prompt_tokens = prompt_tokens
+                        total_completion_tokens = completion_tokens
 
                     if saw_finish_reason and saw_usage_chunk:
                         break
