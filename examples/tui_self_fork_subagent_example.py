@@ -5,7 +5,7 @@ Run:
 
 What this example demonstrates:
 1. One agent can decide when to act directly or fork itself.
-2. Fork is triggered from REPL with ``self_reference.instance.fork(...)``.
+2. Fork is triggered from REPL with ``fork(...)`` or ``fork_spawn(...)``.
 3. Forked context inherits current ``self_reference`` memory snapshot.
 4. Forked context can continue forking when deeper decomposition is useful.
 
@@ -61,15 +61,25 @@ async def agent(message: str, history: HistoryList):
     1. Call ``execute_code``.
     2. In code, invoke:
 
-       fork_result = self_reference.instance.fork(
-            "<one concrete executable task>",
-       )
+       # Blocking fork:
+       fork_result = self_reference.instance.fork("<one concrete executable task>")
+
+       # Or concurrent pattern:
+       handle = self_reference.instance.fork_spawn("<task A>")
+       fork_result = self_reference.instance.fork_wait(handle["fork_id"])
+
+       # Multiple spawned forks:
+       # handles = [self_reference.instance.fork_spawn("<task A>"), ...]
+       # fork_results = self_reference.instance.fork_wait_all(
+       #     [item["fork_id"] for item in handles]
+       # )
+
        print("FORK_MEMORY_KEY:", fork_result["memory_key"])
        print("FORK_RESPONSE:", fork_result["response"])
 
-       Replace ``<one concrete executable task>`` with real delegated work.
-       In forked context, calling ``fork(...)`` without ``source_memory_key``
-       continues from current fork memory key.
+       Replace ``<...>`` placeholders with concrete delegated work.
+        In forked context, calling ``fork(...)`` without ``source_memory_key``
+        continues from current fork memory key.
 
     Execution guidance:
     - Use inherited memory as context, then decide the next best action.
