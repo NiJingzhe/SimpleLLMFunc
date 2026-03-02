@@ -156,6 +156,23 @@ Run:
 poetry run python examples/tui_self_reference_example.py
 ```
 
+### Adaptive Self-Fork Agent (subagent-like)
+
+**File**: [examples/tui_self_fork_subagent_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_self_fork_subagent_example.py)
+
+Shows a single-agent adaptive delegation pattern:
+
+- Agent decides whether to answer directly, plan, or fork.
+- Agent can call `execute_code` to run `self_reference.instance.fork(...)`.
+- Forked context inherits parent memory snapshot and handles delegated tasks.
+- Forked contexts can continue to fork deeper when decomposition is needed.
+
+Run:
+
+```bash
+poetry run python examples/tui_self_fork_subagent_example.py
+```
+
 ### llm_function 事件流与 Token 用量监控
 
 **文件**: [examples/llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)
