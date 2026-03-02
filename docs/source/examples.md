@@ -163,7 +163,8 @@ poetry run python examples/tui_self_reference_example.py
 Shows a single-agent adaptive delegation pattern:
 
 - Agent decides whether to answer directly, plan, or fork.
-- Agent can call `execute_code` to run `self_reference.instance.fork(...)`.
+- Agent can call `execute_code` to run `self_reference.instance.fork(...)` for blocking delegation.
+- For concurrent delegation, agent can use `fork_spawn(...)`, `fork_wait(...)`, and `fork_wait_all(...)`.
 - Forked context inherits parent memory snapshot and handles delegated tasks.
 - Forked contexts can continue to fork deeper when decomposition is needed.
 
