@@ -13,6 +13,7 @@ from SimpleLLMFunc.hooks.events import ReActEventType, ReactEndEvent
 from SimpleLLMFunc.hooks.stream import EventYield, ReactOutput
 from SimpleLLMFunc.llm_decorator.llm_chat_decorator import llm_chat
 from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.tool import Tool
 
 
 class _DummyObservation:
@@ -101,6 +102,75 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
             pass
 
     assert repl.namespace.get("self_reference") is None
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
+    """Forked child should run with a cloned PyRepl toolkit session."""
+
+    observed_toolkits: list[Any] = []
+
+    async def fake_execute_react_loop_streaming(*args: Any, **kwargs: Any):
+        _ = args
+        observed_toolkits.append(kwargs.get("toolkit"))
+        yield "ok", kwargs["messages"]
+
+    async def passthrough_process_chat_response_stream(
+        response_stream: AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+        return_mode: str,
+        messages: list[dict[str, Any]],
+        func_name: str,
+        stream: bool,
+    ) -> AsyncGenerator[tuple[str, list[dict[str, Any]]], None]:
+        _ = (return_mode, messages, func_name, stream)
+        async for response, updated_history in response_stream:
+            yield response, updated_history
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    self_reference = SelfReference()
+    root_repl = PyRepl(self_reference=self_reference)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.execute_react_loop_streaming",
+            new=fake_execute_react_loop_streaming,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.process_chat_response_stream",
+            new=passthrough_process_chat_response_stream,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, root_repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        self_reference.bind_history("agent_main", [])
+        await self_reference.instance.fork("hello")
+
+    assert observed_toolkits
+    toolkit_used = observed_toolkits[-1]
+    assert isinstance(toolkit_used, list)
+
+    execute_tool = next(
+        tool
+        for tool in toolkit_used
+        if isinstance(tool, Tool) and tool.name == "execute_code"
+    )
+    child_repl = getattr(execute_tool.func, "__self__", None)
+
+    assert isinstance(child_repl, PyRepl)
+    assert child_repl is not root_repl
 
 
 @pytest.mark.asyncio

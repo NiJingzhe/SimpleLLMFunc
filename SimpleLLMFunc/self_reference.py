@@ -6,6 +6,7 @@ shared between ``llm_chat`` and tool runtimes (for example ``PyRepl``).
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import contextvars
 import inspect
@@ -16,7 +17,9 @@ _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
 MemoryHistory = List[Dict[str, Any]]
 HISTORY_PARAM_NAMES = ("history", "chat_history")
 SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM = "__self_reference_key_override"
+SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM = "__self_reference_toolkit_override"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
+_AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
 
 
 def _normalize_key(key: str) -> str:
@@ -250,6 +253,55 @@ def _agent_supports_template_params(agent_instance: Any) -> bool:
     return False
 
 
+def _get_agent_fork_toolkit_factory(
+    agent_instance: Any,
+) -> Optional[Callable[[Any], Any]]:
+    maybe_factory = getattr(agent_instance, _AGENT_FORK_TOOLKIT_FACTORY_ATTR, None)
+    if callable(maybe_factory):
+        return cast(Optional[Callable[[Any], Any]], maybe_factory)
+    return None
+
+
+def _build_fork_error_result(
+    *,
+    fork_id: str,
+    source_memory_key: str,
+    memory_key: str,
+    parent_fork_id: Optional[str],
+    depth: int,
+    error: BaseException,
+) -> Dict[str, Any]:
+    return {
+        "fork_id": fork_id,
+        "parent_fork_id": parent_fork_id,
+        "depth": depth,
+        "source_memory_key": source_memory_key,
+        "memory_key": memory_key,
+        "status": "error",
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "response": None,
+        "history": [],
+    }
+
+
+async def _emit_fork_custom_event(
+    event_emitter: Any,
+    event_name: str,
+    payload: Dict[str, Any],
+) -> None:
+    if event_emitter is None:
+        return
+
+    emit = getattr(event_emitter, "emit", None)
+    if not callable(emit):
+        return
+
+    maybe_awaitable = emit(event_name, payload)
+    if inspect.isawaitable(maybe_awaitable):
+        await cast(Awaitable[Any], maybe_awaitable)
+
+
 class SelfReferenceMemoryHandle:
     """Keyed memory view used by ``self_reference.memory[<key>]``."""
 
@@ -334,14 +386,41 @@ class SelfReferenceInstanceHandle:
         *agent_args: Any,
         source_memory_key: Optional[str] = None,
         fork_memory_key: Optional[str] = None,
+        _event_emitter: Any = None,
         **agent_kwargs: Any,
     ) -> Dict[str, Any]:
         return await self._owner.fork_agent_instance(
             *agent_args,
             source_memory_key=source_memory_key,
             fork_memory_key=fork_memory_key,
+            _event_emitter=_event_emitter,
             **agent_kwargs,
         )
+
+    async def fork_spawn(
+        self,
+        *agent_args: Any,
+        source_memory_key: Optional[str] = None,
+        fork_memory_key: Optional[str] = None,
+        _event_emitter: Any = None,
+        **agent_kwargs: Any,
+    ) -> Dict[str, Any]:
+        return await self._owner.spawn_agent_instance(
+            *agent_args,
+            source_memory_key=source_memory_key,
+            fork_memory_key=fork_memory_key,
+            _event_emitter=_event_emitter,
+            **agent_kwargs,
+        )
+
+    async def fork_wait(self, fork_id: str) -> Dict[str, Any]:
+        return await self._owner.wait_fork_result(fork_id)
+
+    async def fork_wait_all(
+        self,
+        fork_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        return await self._owner.wait_all_fork_results(fork_ids)
 
 
 class SelfReference:
@@ -355,9 +434,30 @@ class SelfReference:
         self._agent_instance: Optional[Any] = None
         self._agent_default_memory_key: Optional[str] = None
         self._fork_counter = 0
+        self._fork_id_counter = 0
+        self._fork_tasks: Dict[str, asyncio.Task[Dict[str, Any]]] = {}
+        self._fork_results: Dict[str, Dict[str, Any]] = {}
         self._active_memory_key_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar(
                 f"simplellmfunc_self_reference_active_key_{id(self)}",
+                default=None,
+            )
+        )
+        self._active_fork_id_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar(
+                f"simplellmfunc_self_reference_active_fork_id_{id(self)}",
+                default=None,
+            )
+        )
+        self._active_fork_depth_var: contextvars.ContextVar[int] = (
+            contextvars.ContextVar(
+                f"simplellmfunc_self_reference_active_fork_depth_{id(self)}",
+                default=0,
+            )
+        )
+        self._active_runtime_toolkit_var: contextvars.ContextVar[Any] = (
+            contextvars.ContextVar(
+                f"simplellmfunc_self_reference_active_toolkit_{id(self)}",
                 default=None,
             )
         )
@@ -404,6 +504,38 @@ class SelfReference:
 
     def _get_active_memory_key(self) -> Optional[str]:
         return self._active_memory_key_var.get()
+
+    def _set_active_fork_context(
+        self,
+        fork_id: str,
+        depth: int,
+    ) -> tuple[contextvars.Token[Optional[str]], contextvars.Token[int]]:
+        fork_token = self._active_fork_id_var.set(fork_id)
+        depth_token = self._active_fork_depth_var.set(depth)
+        return fork_token, depth_token
+
+    def _reset_active_fork_context(
+        self,
+        tokens: tuple[contextvars.Token[Optional[str]], contextvars.Token[int]],
+    ) -> None:
+        fork_token, depth_token = tokens
+        self._active_fork_id_var.reset(fork_token)
+        self._active_fork_depth_var.reset(depth_token)
+
+    def _get_active_fork_id(self) -> Optional[str]:
+        return self._active_fork_id_var.get()
+
+    def _get_active_fork_depth(self) -> int:
+        return self._active_fork_depth_var.get()
+
+    def _set_active_runtime_toolkit(self, toolkit: Any) -> contextvars.Token[Any]:
+        return self._active_runtime_toolkit_var.set(toolkit)
+
+    def _reset_active_runtime_toolkit(self, token: contextvars.Token[Any]) -> None:
+        self._active_runtime_toolkit_var.reset(token)
+
+    def _get_active_runtime_toolkit(self) -> Any:
+        return self._active_runtime_toolkit_var.get()
 
     def bind_history(self, key: str, history: List[Dict[str, Any]]) -> None:
         normalized_key = _normalize_key(key)
@@ -591,10 +723,27 @@ class SelfReference:
                 if candidate not in self._history_store:
                     return candidate
 
+    def _build_fork_id(self) -> str:
+        with self._lock:
+            self._fork_id_counter += 1
+            return f"fork_{self._fork_id_counter}"
+
+    def _resolve_child_toolkit_override(self, agent_instance: Any) -> Any:
+        parent_runtime_toolkit = self._get_active_runtime_toolkit()
+        toolkit_factory = _get_agent_fork_toolkit_factory(agent_instance)
+        if toolkit_factory is None:
+            return parent_runtime_toolkit
+
+        try:
+            return toolkit_factory(parent_runtime_toolkit)
+        except Exception:
+            return parent_runtime_toolkit
+
     def _build_fork_template_params(
         self,
         existing_template_params: Any,
         fork_memory_key: str,
+        toolkit_override: Any,
     ) -> Dict[str, Any]:
         if existing_template_params is None:
             merged_template_params: Dict[str, Any] = {}
@@ -606,6 +755,10 @@ class SelfReference:
         merged_template_params[SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM] = (
             fork_memory_key
         )
+        if toolkit_override is not None:
+            merged_template_params[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM] = (
+                toolkit_override
+            )
         return merged_template_params
 
     async def fork_agent_instance(
@@ -613,6 +766,10 @@ class SelfReference:
         *agent_args: Any,
         source_memory_key: Optional[str] = None,
         fork_memory_key: Optional[str] = None,
+        _event_emitter: Any = None,
+        _fork_id: Optional[str] = None,
+        _parent_fork_id: Optional[str] = None,
+        _fork_depth: Optional[int] = None,
         **agent_kwargs: Any,
     ) -> Dict[str, Any]:
         with self._lock:
@@ -629,6 +786,31 @@ class SelfReference:
         else:
             target_key = _normalize_key(fork_memory_key)
 
+        fork_id = _fork_id if _fork_id is not None else self._build_fork_id()
+        parent_fork_id = (
+            _parent_fork_id
+            if _parent_fork_id is not None
+            else self._get_active_fork_id()
+        )
+        fork_depth = (
+            _fork_depth
+            if _fork_depth is not None
+            else self._get_active_fork_depth() + 1
+        )
+
+        await _emit_fork_custom_event(
+            _event_emitter,
+            "selfref_fork_start",
+            {
+                "fork_id": fork_id,
+                "parent_fork_id": parent_fork_id,
+                "depth": fork_depth,
+                "source_memory_key": source_key,
+                "memory_key": target_key,
+                "status": "running",
+            },
+        )
+
         self.bind_history(target_key, inherited_history)
 
         call_kwargs = dict(agent_kwargs)
@@ -636,28 +818,223 @@ class SelfReference:
         if history_param_name is not None and history_param_name not in call_kwargs:
             call_kwargs[history_param_name] = self.snapshot_history(target_key)
 
+        child_toolkit_override = self._resolve_child_toolkit_override(agent_instance)
+
         if _agent_supports_template_params(agent_instance):
             call_kwargs["_template_params"] = self._build_fork_template_params(
                 call_kwargs.get("_template_params"),
                 target_key,
+                child_toolkit_override,
             )
 
         active_key_token = self._set_active_memory_key(target_key)
+        active_fork_tokens = self._set_active_fork_context(
+            fork_id=fork_id,
+            depth=fork_depth,
+        )
+        active_toolkit_token = self._set_active_runtime_toolkit(child_toolkit_override)
         try:
             call_output = agent_instance(*agent_args, **call_kwargs)
             response, final_history = await _consume_agent_call_output(call_output)
+        except Exception as exc:
+            await _emit_fork_custom_event(
+                _event_emitter,
+                "selfref_fork_error",
+                {
+                    "fork_id": fork_id,
+                    "parent_fork_id": parent_fork_id,
+                    "depth": fork_depth,
+                    "source_memory_key": source_key,
+                    "memory_key": target_key,
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            )
+            raise
         finally:
             self._reset_active_memory_key(active_key_token)
+            self._reset_active_fork_context(active_fork_tokens)
+            self._reset_active_runtime_toolkit(active_toolkit_token)
 
         if final_history is not None:
             self.bind_history(target_key, final_history)
 
-        return {
+        completed_result = {
+            "fork_id": fork_id,
+            "parent_fork_id": parent_fork_id,
+            "depth": fork_depth,
             "source_memory_key": source_key,
             "memory_key": target_key,
+            "status": "completed",
             "response": response,
             "history": self.snapshot_history(target_key),
         }
+
+        await _emit_fork_custom_event(
+            _event_emitter,
+            "selfref_fork_end",
+            {
+                "fork_id": fork_id,
+                "parent_fork_id": parent_fork_id,
+                "depth": fork_depth,
+                "source_memory_key": source_key,
+                "memory_key": target_key,
+                "status": "completed",
+            },
+        )
+
+        return completed_result
+
+    async def spawn_agent_instance(
+        self,
+        *agent_args: Any,
+        source_memory_key: Optional[str] = None,
+        fork_memory_key: Optional[str] = None,
+        _event_emitter: Any = None,
+        **agent_kwargs: Any,
+    ) -> Dict[str, Any]:
+        with self._lock:
+            if self._agent_instance is None:
+                raise RuntimeError("No agent instance is bound to self_reference")
+
+        source_key = self._resolve_source_memory_key_for_fork(source_memory_key)
+        if fork_memory_key is None:
+            target_key = self._build_fork_memory_key(source_key)
+        else:
+            target_key = _normalize_key(fork_memory_key)
+
+        fork_id = self._build_fork_id()
+        parent_fork_id = self._get_active_fork_id()
+        fork_depth = self._get_active_fork_depth() + 1
+
+        fork_task = asyncio.create_task(
+            self.fork_agent_instance(
+                *agent_args,
+                source_memory_key=source_key,
+                fork_memory_key=target_key,
+                _event_emitter=_event_emitter,
+                _fork_id=fork_id,
+                _parent_fork_id=parent_fork_id,
+                _fork_depth=fork_depth,
+                **agent_kwargs,
+            )
+        )
+
+        def on_fork_task_done(done_task: asyncio.Task[Dict[str, Any]]) -> None:
+            try:
+                done_result = done_task.result()
+            except BaseException as exc:
+                done_result = _build_fork_error_result(
+                    fork_id=fork_id,
+                    source_memory_key=source_key,
+                    memory_key=target_key,
+                    parent_fork_id=parent_fork_id,
+                    depth=fork_depth,
+                    error=exc,
+                )
+
+            with self._lock:
+                self._fork_results[fork_id] = done_result
+                self._fork_tasks.pop(fork_id, None)
+
+        fork_task.add_done_callback(on_fork_task_done)
+
+        with self._lock:
+            self._fork_tasks[fork_id] = fork_task
+            self._fork_results.pop(fork_id, None)
+
+        await _emit_fork_custom_event(
+            _event_emitter,
+            "selfref_fork_spawned",
+            {
+                "fork_id": fork_id,
+                "parent_fork_id": parent_fork_id,
+                "depth": fork_depth,
+                "source_memory_key": source_key,
+                "memory_key": target_key,
+                "status": "running",
+            },
+        )
+
+        return {
+            "fork_id": fork_id,
+            "parent_fork_id": parent_fork_id,
+            "depth": fork_depth,
+            "source_memory_key": source_key,
+            "memory_key": target_key,
+            "status": "running",
+        }
+
+    async def wait_fork_result(self, fork_id: str) -> Dict[str, Any]:
+        normalized_fork_id = _normalize_key(fork_id)
+
+        with self._lock:
+            completed_result = self._fork_results.get(normalized_fork_id)
+            running_task = self._fork_tasks.get(normalized_fork_id)
+
+        if completed_result is not None:
+            return copy.deepcopy(completed_result)
+
+        if running_task is None:
+            raise KeyError(f"fork_id '{normalized_fork_id}' is not found")
+
+        try:
+            await running_task
+        except Exception:
+            pass
+
+        await asyncio.sleep(0)
+
+        with self._lock:
+            result_after_wait = self._fork_results.get(normalized_fork_id)
+
+        if result_after_wait is None and running_task.done():
+            try:
+                direct_result = running_task.result()
+            except Exception as exc:
+                result_after_wait = {
+                    "fork_id": normalized_fork_id,
+                    "parent_fork_id": None,
+                    "depth": 0,
+                    "source_memory_key": "",
+                    "memory_key": "",
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                    "response": None,
+                    "history": [],
+                }
+            else:
+                result_after_wait = copy.deepcopy(direct_result)
+
+            with self._lock:
+                self._fork_results[normalized_fork_id] = copy.deepcopy(
+                    result_after_wait
+                )
+
+        if result_after_wait is None:
+            raise KeyError(f"fork_id '{normalized_fork_id}' has no result")
+
+        return copy.deepcopy(result_after_wait)
+
+    async def wait_all_fork_results(
+        self,
+        fork_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        if fork_ids is None:
+            with self._lock:
+                target_ids = sorted(
+                    set(self._fork_tasks.keys()) | set(self._fork_results.keys())
+                )
+        else:
+            target_ids = [_normalize_key(item) for item in fork_ids]
+
+        collected: Dict[str, Dict[str, Any]] = {}
+        for target_id in target_ids:
+            collected[target_id] = await self.wait_fork_result(target_id)
+
+        return collected
 
     def _mutate_messages(
         self,
@@ -684,4 +1061,5 @@ __all__ = [
     "SelfReferenceMemoryProxy",
     "SelfReferenceInstanceHandle",
     "SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM",
+    "SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM",
 ]

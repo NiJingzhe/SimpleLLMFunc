@@ -400,6 +400,7 @@ class PyRepl:
     async def _execute_self_reference_call(
         self,
         message: dict[str, Any],
+        event_emitter: Optional[ToolEventEmitter] = None,
     ) -> dict[str, Any]:
         call_id = str(message.get("call_id", ""))
         operation = str(message.get("op", ""))
@@ -422,7 +423,24 @@ class PyRepl:
             elif operation == "instance_is_bound":
                 result = self._self_reference.instance.is_bound()
             elif operation == "instance_fork":
-                result = await self._self_reference.instance.fork(*args, **kwargs)
+                result = await self._self_reference.instance.fork(
+                    *args,
+                    _event_emitter=event_emitter,
+                    **kwargs,
+                )
+            elif operation == "instance_fork_spawn":
+                result = await self._self_reference.instance.fork_spawn(
+                    *args,
+                    _event_emitter=event_emitter,
+                    **kwargs,
+                )
+            elif operation == "instance_fork_wait":
+                result = await self._self_reference.instance.fork_wait(*args, **kwargs)
+            elif operation == "instance_fork_wait_all":
+                result = await self._self_reference.instance.fork_wait_all(
+                    *args,
+                    **kwargs,
+                )
             else:
                 if not isinstance(key, str):
                     raise ValueError("memory key must be a non-empty string")
@@ -595,7 +613,10 @@ class PyRepl:
                         event_type = str(event.get("type", ""))
 
                         if event_type == EVENT_SELF_REFERENCE_CALL:
-                            response = await self._execute_self_reference_call(event)
+                            response = await self._execute_self_reference_call(
+                                event,
+                                event_emitter=event_emitter,
+                            )
                             with self._lock:
                                 self._send_worker_command_locked(response)
                             continue
@@ -829,7 +850,10 @@ class PyRepl:
 
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = await self._execute_self_reference_call(event)
+                    response = await self._execute_self_reference_call(
+                        event,
+                        event_emitter=None,
+                    )
                     with self._lock:
                         self._send_worker_command_locked(response)
                     continue
@@ -874,7 +898,10 @@ class PyRepl:
 
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = await self._execute_self_reference_call(event)
+                    response = await self._execute_self_reference_call(
+                        event,
+                        event_emitter=None,
+                    )
                     with self._lock:
                         self._send_worker_command_locked(response)
                     continue

@@ -83,3 +83,52 @@ def test_pyrepl_tool_event_hook_handles_input_request() -> None:
     assert update is not None
     assert update.status == "waiting-input"
     assert update.append_output == "Name: \n"
+
+
+def test_pyrepl_tool_event_hook_renders_fork_start() -> None:
+    """PyRepl hook should render fork start lifecycle output."""
+    snapshot = ToolRenderSnapshot(
+        tool_name="execute_code",
+        tool_call_id="call-1",
+        arguments={"code": "self_reference.instance.fork_spawn('x')"},
+    )
+    event = _build_event(
+        "selfref_fork_start",
+        {
+            "fork_id": "fork_1",
+            "depth": 1,
+            "memory_key": "agent_main::fork::1",
+        },
+    )
+
+    update = pyrepl_tool_event_hook(event, snapshot)
+
+    assert update is not None
+    assert update.status == "running"
+    assert "[fork start]" in update.append_output
+    assert "fork_1" in update.append_output
+
+
+def test_pyrepl_tool_event_hook_renders_fork_error() -> None:
+    """PyRepl hook should render fork error lifecycle output."""
+    snapshot = ToolRenderSnapshot(
+        tool_name="execute_code",
+        tool_call_id="call-1",
+        arguments={"code": "self_reference.instance.fork_wait('fork_1')"},
+    )
+    event = _build_event(
+        "selfref_fork_error",
+        {
+            "fork_id": "fork_1",
+            "depth": 2,
+            "error_type": "RuntimeError",
+            "error_message": "boom",
+        },
+    )
+
+    update = pyrepl_tool_event_hook(event, snapshot)
+
+    assert update is not None
+    assert update.status == "error"
+    assert "[fork error]" in update.append_output
+    assert "boom" in update.append_output

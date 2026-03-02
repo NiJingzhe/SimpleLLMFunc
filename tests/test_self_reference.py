@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
@@ -205,3 +206,59 @@ class TestSelfReferenceInstanceProxy:
             "role": "assistant",
             "content": "leaf done",
         }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_spawn_and_wait(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            await asyncio.sleep(0.01)
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"child:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        spawned = await self_reference.instance.fork_spawn("task-a")
+        assert spawned["status"] == "running"
+        assert spawned["fork_id"].startswith("fork_")
+
+        completed = await self_reference.instance.fork_wait(spawned["fork_id"])
+        assert completed["status"] == "completed"
+        assert completed["response"] == "done:task-a"
+        assert completed["memory_key"] == spawned["memory_key"]
+        assert self_reference.snapshot_history(completed["memory_key"])[-1] == {
+            "role": "assistant",
+            "content": "child:task-a",
+        }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_wait_all_collects_spawned_children(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            await asyncio.sleep(0.01)
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"child:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        first = await self_reference.instance.fork_spawn("task-a")
+        second = await self_reference.instance.fork_spawn("task-b")
+
+        all_results = await self_reference.instance.fork_wait_all(
+            [first["fork_id"], second["fork_id"]]
+        )
+        assert set(all_results.keys()) == {first["fork_id"], second["fork_id"]}
+        assert all(result["status"] == "completed" for result in all_results.values())

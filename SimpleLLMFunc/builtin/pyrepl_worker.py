@@ -152,6 +152,33 @@ class _WorkerSelfReferenceInstanceProxy:
             kwargs=kwargs,
         )
 
+    def fork_spawn(self, *args: Any, **kwargs: Any) -> Any:
+        return self._owner._call(
+            "instance_fork_spawn",
+            key=None,
+            args=list(args),
+            kwargs=kwargs,
+        )
+
+    def fork_wait(self, fork_id: str) -> Any:
+        return self._owner._call(
+            "instance_fork_wait",
+            key=None,
+            args=[fork_id],
+            kwargs={},
+        )
+
+    def fork_wait_all(self, fork_ids: Optional[list[str]] = None) -> Any:
+        args: list[Any] = []
+        if fork_ids is not None:
+            args.append(fork_ids)
+        return self._owner._call(
+            "instance_fork_wait_all",
+            key=None,
+            args=args,
+            kwargs={},
+        )
+
 
 class _WorkerSelfReferenceProxy:
     """Worker-side self_reference proxy that RPCs to parent process."""

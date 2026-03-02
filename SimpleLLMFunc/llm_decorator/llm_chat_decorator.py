@@ -30,6 +30,7 @@ from SimpleLLMFunc.llm_decorator.steps.chat.message import HISTORY_PARAM_NAMES
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.self_reference import (
     SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
+    SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
     SelfReference,
 )
 from SimpleLLMFunc.tool import Tool
@@ -50,6 +51,7 @@ DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
 _SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
 _SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
+_AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
 
 
 def _extract_raw_history_reference(arguments: dict[str, Any]) -> Optional[HistoryList]:
@@ -84,6 +86,61 @@ def _set_history_argument(
             arguments[history_param_name] = history
             return True
     return False
+
+
+def _clone_toolkit_for_fork(
+    base_toolkit: Optional[ToolkitList],
+    self_reference: SelfReference,
+) -> Optional[ToolkitList]:
+    if base_toolkit is None:
+        return None
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    cloned_toolkit: ToolkitList = []
+    repl_clones: Dict[int, PyRepl] = {}
+
+    for item in base_toolkit:
+        if isinstance(item, Tool):
+            bound_instance = getattr(item.func, "__self__", None)
+            if isinstance(bound_instance, PyRepl):
+                original_repl_id = id(bound_instance)
+                if original_repl_id not in repl_clones:
+                    repl_clones[original_repl_id] = PyRepl(
+                        execution_timeout_seconds=bound_instance.execution_timeout_seconds,
+                        input_idle_timeout_seconds=bound_instance.input_idle_timeout_seconds,
+                        self_reference=self_reference,
+                    )
+
+                replacement_repl = repl_clones[original_repl_id]
+                replacement_tool = next(
+                    tool for tool in replacement_repl.toolset if tool.name == item.name
+                )
+                cloned_toolkit.append(replacement_tool)
+                continue
+
+        cloned_toolkit.append(item)
+
+    return cloned_toolkit
+
+
+def _resolve_runtime_toolkit(
+    default_toolkit: Optional[ToolkitList],
+    template_params: Optional[Dict[str, Any]],
+) -> Optional[ToolkitList]:
+    if template_params is None:
+        return default_toolkit
+
+    override_toolkit = template_params.get(
+        SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM
+    )
+    if override_toolkit is None:
+        return default_toolkit
+
+    if not isinstance(override_toolkit, list):
+        raise ValueError("self_reference toolkit override must be a list")
+
+    return cast(Optional[ToolkitList], override_toolkit)
 
 
 def _resolve_self_reference_key(
@@ -127,6 +184,15 @@ def _build_self_reference_prompt_block(memory_key: str) -> str:
                 "  self_reference.instance.fork(message, "
                 f'source_memory_key="{memory_key}"): '
                 "fork this agent with inherited memory snapshot."
+            ),
+            (
+                "  self_reference.instance.fork_spawn(message, ...): "
+                "spawn a child fork asynchronously and return fork handle metadata."
+            ),
+            "  self_reference.instance.fork_wait(fork_id): wait for one spawned fork.",
+            (
+                "  self_reference.instance.fork_wait_all([fork_id, ...]): "
+                "wait for multiple spawned forks."
             ),
             "- Forgetting memory:",
             "  reset_repl only clears Python variables in REPL.",
@@ -334,6 +400,7 @@ def llm_chat(
                 args,
                 kwargs,
             )
+            runtime_toolkit = _resolve_runtime_toolkit(toolkit, template_params)
 
             # 构建用户任务提示（用于事件）
             user_task_prompt = json.dumps(
@@ -342,213 +409,232 @@ def llm_chat(
                 ensure_ascii=False,
             )
 
-            # Step 2: 设置日志上下文
-            async with setup_log_context(
-                func_name=function_signature.func_name,
-                trace_id=function_signature.trace_id,
-                arguments=function_signature.bound_args.arguments,
-            ):
-                # 创建 Langfuse parent span
-                with langfuse_client.start_as_current_observation(
-                    as_type="span",
-                    name=f"{function_signature.func_name}_chat_call",
-                    input=function_signature.bound_args.arguments,
-                    metadata={
-                        "function_name": function_signature.func_name,
-                        "trace_id": function_signature.trace_id,
-                        "tools_available": len(toolkit) if toolkit else 0,
-                        "max_tool_calls": max_tool_calls,
-                        "stream": stream,
-                        "return_mode": return_mode,
-                        "enable_event": enable_event,
-                        "self_reference_enabled": self_reference is not None,
-                        "self_reference_key": self_reference_key,
-                    },
-                ) as chat_span:
-                    try:
-                        raw_history_reference = _extract_raw_history_reference(
-                            function_signature.bound_args.arguments
-                        )
+            toolkit_context_token = None
+            if self_reference is not None:
+                toolkit_context_token = self_reference._set_active_runtime_toolkit(
+                    runtime_toolkit
+                )
 
-                        resolved_self_reference_key: Optional[str] = None
-                        baseline_history_count = 0
-
-                        if self_reference is not None:
-                            runtime_self_reference_key = self_reference_key
-                            if template_params is not None:
-                                override_key = template_params.get(
-                                    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM
-                                )
-                                if override_key is not None:
-                                    if not isinstance(override_key, str):
-                                        raise ValueError(
-                                            "self_reference key override must be a non-empty string"
-                                        )
-                                    runtime_self_reference_key = override_key
-
-                            resolved_self_reference_key = _resolve_self_reference_key(
-                                runtime_self_reference_key,
-                                function_signature.func_name,
+            try:
+                # Step 2: 设置日志上下文
+                async with setup_log_context(
+                    func_name=function_signature.func_name,
+                    trace_id=function_signature.trace_id,
+                    arguments=function_signature.bound_args.arguments,
+                ):
+                    # 创建 Langfuse parent span
+                    with langfuse_client.start_as_current_observation(
+                        as_type="span",
+                        name=f"{function_signature.func_name}_chat_call",
+                        input=function_signature.bound_args.arguments,
+                        metadata={
+                            "function_name": function_signature.func_name,
+                            "trace_id": function_signature.trace_id,
+                            "tools_available": len(runtime_toolkit)
+                            if runtime_toolkit
+                            else 0,
+                            "max_tool_calls": max_tool_calls,
+                            "stream": stream,
+                            "return_mode": return_mode,
+                            "enable_event": enable_event,
+                            "self_reference_enabled": self_reference is not None,
+                            "self_reference_key": self_reference_key,
+                        },
+                    ) as chat_span:
+                        try:
+                            raw_history_reference = _extract_raw_history_reference(
+                                function_signature.bound_args.arguments
                             )
 
-                            if raw_history_reference is not None:
-                                self_reference.bind_history(
-                                    resolved_self_reference_key,
-                                    cast(List[Dict[str, Any]], raw_history_reference),
-                                )
-                            elif not self_reference.has_history(
-                                resolved_self_reference_key
-                            ):
-                                self_reference.bind_history(
-                                    resolved_self_reference_key,
-                                    [],
+                            resolved_self_reference_key: Optional[str] = None
+                            baseline_history_count = 0
+
+                            if self_reference is not None:
+                                runtime_self_reference_key = self_reference_key
+                                if template_params is not None:
+                                    override_key = template_params.get(
+                                        SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM
+                                    )
+                                    if override_key is not None:
+                                        if not isinstance(override_key, str):
+                                            raise ValueError(
+                                                "self_reference key override must be a non-empty string"
+                                            )
+                                        runtime_self_reference_key = override_key
+
+                                resolved_self_reference_key = (
+                                    _resolve_self_reference_key(
+                                        runtime_self_reference_key,
+                                        function_signature.func_name,
+                                    )
                                 )
 
-                            history_snapshot = self_reference.snapshot_history(
-                                resolved_self_reference_key
-                            )
-                            _set_history_argument(
-                                function_signature.bound_args.arguments,
-                                history_snapshot,
-                            )
-                            baseline_history_count = (
-                                self_reference.filtered_history_count(
+                                if raw_history_reference is not None:
+                                    self_reference.bind_history(
+                                        resolved_self_reference_key,
+                                        cast(
+                                            List[Dict[str, Any]], raw_history_reference
+                                        ),
+                                    )
+                                elif not self_reference.has_history(
+                                    resolved_self_reference_key
+                                ):
+                                    self_reference.bind_history(
+                                        resolved_self_reference_key,
+                                        [],
+                                    )
+
+                                history_snapshot = self_reference.snapshot_history(
                                     resolved_self_reference_key
                                 )
-                            )
-
-                        # Step 3: 构建聊天消息
-                        messages = build_chat_messages(
-                            signature=function_signature,
-                            toolkit=toolkit,
-                            exclude_params=HISTORY_PARAM_NAMES,
-                        )
-
-                        if (
-                            self_reference is not None
-                            and resolved_self_reference_key is not None
-                        ):
-                            _append_self_reference_prompt_to_messages(
-                                messages,
-                                resolved_self_reference_key,
-                            )
-                            _seed_self_reference_system_prompt_if_missing(
-                                self_reference,
-                                resolved_self_reference_key,
-                                messages,
-                            )
-
-                        # Step 4: 执行 ReAct 循环（流式）
-                        response_stream = execute_react_loop_streaming(
-                            llm_interface=llm_interface,
-                            messages=messages,
-                            toolkit=toolkit,
-                            max_tool_calls=max_tool_calls,
-                            stream=stream,
-                            llm_kwargs=llm_kwargs,
-                            func_name=function_signature.func_name,
-                            enable_event=enable_event,
-                            trace_id=function_signature.trace_id,
-                            user_task_prompt=user_task_prompt,
-                        )
-
-                        collected_responses = []
-                        final_history = None
-
-                        if enable_event:
-                            # 事件模式：直接 yield ReactOutput
-                            typed_event_stream = cast(
-                                AsyncGenerator[ReactOutput, None],
-                                response_stream,
-                            )
-                            async for output in typed_event_stream:
-                                if (
-                                    self_reference is not None
-                                    and resolved_self_reference_key is not None
-                                    and is_event_yield(output)
-                                    and isinstance(output.event, ReactEndEvent)
-                                ):
-                                    merged_history = self_reference.merge_turn_history(
-                                        key=resolved_self_reference_key,
-                                        baseline_history_count=baseline_history_count,
-                                        updated_history=cast(
-                                            List[Dict[str, Any]],
-                                            output.event.final_messages,
-                                        ),
-                                        commit=True,
+                                _set_history_argument(
+                                    function_signature.bound_args.arguments,
+                                    history_snapshot,
+                                )
+                                baseline_history_count = (
+                                    self_reference.filtered_history_count(
+                                        resolved_self_reference_key
                                     )
-                                    output.event.final_messages = merged_history
-                                    if raw_history_reference is not None:
-                                        raw_history_reference[:] = merged_history
+                                )
 
-                                yield output
-                        else:
-                            # 向后兼容模式：处理响应流
-                            # 类型断言：当 enable_event=False 时，response_stream 只包含 Tuple[Any, MessageList]
-                            typed_response_stream = cast(
-                                AsyncGenerator[Tuple[Any, MessageList], None],
-                                response_stream,
+                            # Step 3: 构建聊天消息
+                            messages = build_chat_messages(
+                                signature=function_signature,
+                                toolkit=runtime_toolkit,
+                                exclude_params=HISTORY_PARAM_NAMES,
                             )
-                            latest_merged_history: Optional[HistoryList] = None
-                            async for content, history in process_chat_response_stream(
-                                response_stream=typed_response_stream,
-                                return_mode=return_mode,
-                                messages=messages,
-                                func_name=function_signature.func_name,
-                                stream=stream,
-                            ):
-                                history_to_yield: MessageList = history
-                                if (
-                                    self_reference is not None
-                                    and resolved_self_reference_key is not None
-                                ):
-                                    merged_history = self_reference.merge_turn_history(
-                                        key=resolved_self_reference_key,
-                                        baseline_history_count=baseline_history_count,
-                                        updated_history=cast(
-                                            List[Dict[str, Any]],
-                                            history,
-                                        ),
-                                        commit=False,
-                                    )
-                                    history_to_yield = merged_history
-                                    latest_merged_history = merged_history
-
-                                collected_responses.append(content)
-                                final_history = history_to_yield
-                                yield content, history_to_yield
 
                             if (
                                 self_reference is not None
                                 and resolved_self_reference_key is not None
-                                and latest_merged_history is not None
                             ):
-                                self_reference.replace_history(
-                                    key=resolved_self_reference_key,
-                                    messages=cast(
-                                        List[Dict[str, Any]],
-                                        latest_merged_history,
-                                    ),
-                                    strict=False,
+                                _append_self_reference_prompt_to_messages(
+                                    messages,
+                                    resolved_self_reference_key,
                                 )
-                                if raw_history_reference is not None:
-                                    raw_history_reference[:] = latest_merged_history
+                                _seed_self_reference_system_prompt_if_missing(
+                                    self_reference,
+                                    resolved_self_reference_key,
+                                    messages,
+                                )
 
-                        # 更新 Langfuse span（仅在非事件模式或收集到响应时）
-                        if not enable_event or collected_responses:
-                            chat_span.update(
-                                output={
-                                    "responses": collected_responses,
-                                    "final_history": final_history,
-                                    "total_responses": len(collected_responses),
-                                },
+                            # Step 4: 执行 ReAct 循环（流式）
+                            response_stream = execute_react_loop_streaming(
+                                llm_interface=llm_interface,
+                                messages=messages,
+                                toolkit=runtime_toolkit,
+                                max_tool_calls=max_tool_calls,
+                                stream=stream,
+                                llm_kwargs=llm_kwargs,
+                                func_name=function_signature.func_name,
+                                enable_event=enable_event,
+                                trace_id=function_signature.trace_id,
+                                user_task_prompt=user_task_prompt,
                             )
-                    except Exception as exc:
-                        # 更新 span 错误信息
-                        chat_span.update(
-                            output={"error": str(exc)},
-                        )
-                        raise
+
+                            collected_responses = []
+                            final_history = None
+
+                            if enable_event:
+                                # 事件模式：直接 yield ReactOutput
+                                typed_event_stream = cast(
+                                    AsyncGenerator[ReactOutput, None],
+                                    response_stream,
+                                )
+                                async for output in typed_event_stream:
+                                    if (
+                                        self_reference is not None
+                                        and resolved_self_reference_key is not None
+                                        and is_event_yield(output)
+                                        and isinstance(output.event, ReactEndEvent)
+                                    ):
+                                        merged_history = self_reference.merge_turn_history(
+                                            key=resolved_self_reference_key,
+                                            baseline_history_count=baseline_history_count,
+                                            updated_history=cast(
+                                                List[Dict[str, Any]],
+                                                output.event.final_messages,
+                                            ),
+                                            commit=True,
+                                        )
+                                        output.event.final_messages = merged_history
+                                        if raw_history_reference is not None:
+                                            raw_history_reference[:] = merged_history
+
+                                    yield output
+                            else:
+                                # 向后兼容模式：处理响应流
+                                # 类型断言：当 enable_event=False 时，response_stream 只包含 Tuple[Any, MessageList]
+                                typed_response_stream = cast(
+                                    AsyncGenerator[Tuple[Any, MessageList], None],
+                                    response_stream,
+                                )
+                                latest_merged_history: Optional[HistoryList] = None
+                                async for (
+                                    content,
+                                    history,
+                                ) in process_chat_response_stream(
+                                    response_stream=typed_response_stream,
+                                    return_mode=return_mode,
+                                    messages=messages,
+                                    func_name=function_signature.func_name,
+                                    stream=stream,
+                                ):
+                                    history_to_yield: MessageList = history
+                                    if (
+                                        self_reference is not None
+                                        and resolved_self_reference_key is not None
+                                    ):
+                                        merged_history = self_reference.merge_turn_history(
+                                            key=resolved_self_reference_key,
+                                            baseline_history_count=baseline_history_count,
+                                            updated_history=cast(
+                                                List[Dict[str, Any]],
+                                                history,
+                                            ),
+                                            commit=False,
+                                        )
+                                        history_to_yield = merged_history
+                                        latest_merged_history = merged_history
+
+                                    collected_responses.append(content)
+                                    final_history = history_to_yield
+                                    yield content, history_to_yield
+
+                                if (
+                                    self_reference is not None
+                                    and resolved_self_reference_key is not None
+                                    and latest_merged_history is not None
+                                ):
+                                    self_reference.replace_history(
+                                        key=resolved_self_reference_key,
+                                        messages=cast(
+                                            List[Dict[str, Any]],
+                                            latest_merged_history,
+                                        ),
+                                        strict=False,
+                                    )
+                                    if raw_history_reference is not None:
+                                        raw_history_reference[:] = latest_merged_history
+
+                            # 更新 Langfuse span（仅在非事件模式或收集到响应时）
+                            if not enable_event or collected_responses:
+                                chat_span.update(
+                                    output={
+                                        "responses": collected_responses,
+                                        "final_history": final_history,
+                                        "total_responses": len(collected_responses),
+                                    },
+                                )
+                        except Exception as exc:
+                            # 更新 span 错误信息
+                            chat_span.update(
+                                output={"error": str(exc)},
+                            )
+                            raise
+            finally:
+                if self_reference is not None and toolkit_context_token is not None:
+                    self_reference._reset_active_runtime_toolkit(toolkit_context_token)
 
         # Preserve original function metadata
         wrapper.__name__ = func.__name__
@@ -558,6 +644,21 @@ def llm_chat(
         setattr(wrapper, _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR, True)
 
         if self_reference is not None:
+            bound_self_reference = self_reference
+
+            def fork_toolkit_factory(parent_toolkit: Any) -> Optional[ToolkitList]:
+                candidate_toolkit: Optional[ToolkitList]
+                if isinstance(parent_toolkit, list):
+                    candidate_toolkit = cast(Optional[ToolkitList], parent_toolkit)
+                else:
+                    candidate_toolkit = toolkit
+
+                return _clone_toolkit_for_fork(
+                    candidate_toolkit,
+                    bound_self_reference,
+                )
+
+            setattr(wrapper, _AGENT_FORK_TOOLKIT_FACTORY_ATTR, fork_toolkit_factory)
             self_reference.bind_agent_instance(
                 wrapper,
                 default_memory_key=resolved_default_self_reference_key,

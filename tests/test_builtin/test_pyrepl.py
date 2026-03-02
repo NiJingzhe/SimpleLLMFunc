@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -517,6 +518,119 @@ class TestPyReplSelfReference:
             {"role": "user", "content": "seed"},
             {"role": "assistant", "content": "child done"},
         ]
+
+    @pytest.mark.asyncio
+    async def test_execute_can_spawn_and_wait_fork_from_code_act(self):
+        """Code-act fork should be runtime-hooked and support spawn/wait APIs."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            return (
+                {"task": message, "runtime_pid": os.getpid()},
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"done:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+        repl = PyRepl(self_reference=self_reference)
+
+        result = await repl.execute(
+            "spawned = self_reference.instance.fork_spawn('task-a')\n"
+            "print(spawned['status'])\n"
+            "final = self_reference.instance.fork_wait(spawned['fork_id'])\n"
+            "print(final['status'])\n"
+            "print(final['response']['runtime_pid'])\n"
+        )
+
+        assert result["success"] is True
+        assert "running" in result["stdout"]
+        assert "completed" in result["stdout"]
+        assert str(os.getpid()) in result["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_execute_can_wait_all_spawned_forks(self):
+        """Code-act fork_wait_all should collect multiple spawned forks."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            return (
+                message,
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"done:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+        repl = PyRepl(self_reference=self_reference)
+
+        result = await repl.execute(
+            "handles = [\n"
+            "    self_reference.instance.fork_spawn('task-a'),\n"
+            "    self_reference.instance.fork_spawn('task-b'),\n"
+            "]\n"
+            "ids = [item['fork_id'] for item in handles]\n"
+            "all_results = self_reference.instance.fork_wait_all(ids)\n"
+            "print(len(all_results))\n"
+            "print(sorted(all_results.keys()) == sorted(ids))\n"
+            "print(all(v['status'] == 'completed' for v in all_results.values()))\n"
+        )
+
+        assert result["success"] is True
+        assert "2" in result["stdout"]
+        assert "True" in result["stdout"]
+
+    @pytest.mark.asyncio
+    async def test_execute_emits_fork_lifecycle_events(self):
+        """Code-act fork should emit structured lifecycle custom events."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+        repl = PyRepl(self_reference=self_reference)
+        emitter = ToolEventEmitter()
+
+        result = await repl.execute(
+            "handle = self_reference.instance.fork_spawn('task-a')\n"
+            "_ = self_reference.instance.fork_wait(handle['fork_id'])\n",
+            event_emitter=emitter,
+        )
+
+        assert result["success"] is True
+
+        events = await emitter.get_events()
+        event_names = [
+            event.event.event_name
+            for event in events
+            if isinstance(event.event, CustomEvent)
+        ]
+
+        assert "selfref_fork_spawned" in event_names
+        assert "selfref_fork_start" in event_names
+        assert "selfref_fork_end" in event_names
 
 
 class TestPyReplStreaming:
