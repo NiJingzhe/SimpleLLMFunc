@@ -463,6 +463,61 @@ class TestPyReplSelfReference:
         with pytest.raises(RuntimeError, match="No self_reference attached"):
             repl.bind_history("agent_main", [{"role": "user", "content": "x"}])
 
+    @pytest.mark.asyncio
+    async def test_execute_can_fork_bound_agent_instance_with_memory_snapshot(self):
+        """REPL self_reference.instance.fork should inherit memory as child context."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        observed_calls: list[dict[str, object]] = []
+
+        async def fake_agent(message: str, history=None):
+            observed_calls.append(
+                {
+                    "message": message,
+                    "history": list(history or []),
+                }
+            )
+            yield (
+                f"forked:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "child done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+        repl = PyRepl(self_reference=self_reference)
+
+        result = await repl.execute(
+            "fork_result = self_reference.instance.fork('sub-task')\n"
+            "print(fork_result['source_memory_key'])\n"
+            "print(fork_result['memory_key'])\n"
+            "print(fork_result['response'])\n"
+        )
+
+        assert result["success"] is True
+        assert "agent_main" in result["stdout"]
+        assert "forked:sub-task" in result["stdout"]
+        assert observed_calls[0]["history"] == [{"role": "user", "content": "seed"}]
+
+        fork_keys = [
+            key
+            for key in self_reference.list_history_keys()
+            if key.startswith("agent_main::fork::")
+        ]
+        assert len(fork_keys) == 1
+        assert self_reference.snapshot_history("agent_main") == [
+            {"role": "user", "content": "seed"}
+        ]
+        assert self_reference.snapshot_history(fork_keys[0]) == [
+            {"role": "user", "content": "seed"},
+            {"role": "assistant", "content": "child done"},
+        ]
+
 
 class TestPyReplStreaming:
     """Test PyRepl streaming with event_emitter."""

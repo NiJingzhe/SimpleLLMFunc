@@ -135,15 +135,46 @@ class _WorkerSelfReferenceMemoryProxy:
         return key in self.keys()
 
 
+class _WorkerSelfReferenceInstanceProxy:
+    """self_reference.instance proxy inside worker process."""
+
+    def __init__(self, owner: "_WorkerSelfReferenceProxy"):
+        self._owner = owner
+
+    def is_bound(self) -> bool:
+        return bool(self._owner._call("instance_is_bound", key=None, args=[]))
+
+    def fork(self, *args: Any, **kwargs: Any) -> Any:
+        return self._owner._call(
+            "instance_fork",
+            key=None,
+            args=list(args),
+            kwargs=kwargs,
+        )
+
+
 class _WorkerSelfReferenceProxy:
     """Worker-side self_reference proxy that RPCs to parent process."""
 
     def __init__(self, call_transport: "_PyReplWorker"):
         self._call_transport = call_transport
         self.memory = _WorkerSelfReferenceMemoryProxy(self)
+        self.instance = _WorkerSelfReferenceInstanceProxy(self)
 
-    def _call(self, op: str, key: Optional[str], args: list[Any]) -> Any:
-        return self._call_transport.call_self_reference(op=op, key=key, args=args)
+    def _call(
+        self,
+        op: str,
+        key: Optional[str],
+        args: list[Any],
+        kwargs: Optional[dict[str, Any]] = None,
+    ) -> Any:
+        payload_kwargs = kwargs if isinstance(kwargs, dict) else {}
+        return self._call_transport.call_self_reference(
+            op=op,
+            key=key,
+            args=args,
+            kwargs=payload_kwargs,
+        )
 
 
 class _PyReplWorker:
@@ -362,8 +393,15 @@ class _PyReplWorker:
         exc_type = mapping.get(error_type, RuntimeError)
         return exc_type(message)
 
-    def call_self_reference(self, op: str, key: Optional[str], args: list[Any]) -> Any:
+    def call_self_reference(
+        self,
+        op: str,
+        key: Optional[str],
+        args: list[Any],
+        kwargs: Optional[dict[str, Any]] = None,
+    ) -> Any:
         call_id = uuid.uuid4().hex
+        payload_kwargs = kwargs if isinstance(kwargs, dict) else {}
         self._emit(
             EVENT_SELF_REFERENCE_CALL,
             exec_id=self._active_exec_id,
@@ -371,6 +409,7 @@ class _PyReplWorker:
             op=op,
             key=key,
             args=args,
+            kwargs=payload_kwargs,
         )
 
         command = self._wait_for_command(

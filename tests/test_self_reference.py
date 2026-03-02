@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from SimpleLLMFunc.self_reference import SelfReference
@@ -107,3 +109,99 @@ class TestSelfReferenceTurnMerge:
         )
 
         assert merged[0] == {"role": "system", "content": "runtime system"}
+
+
+class TestSelfReferenceInstanceProxy:
+    """Validate self instance binding and fork behavior."""
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_requires_bound_agent_instance(self) -> None:
+        self_reference = SelfReference()
+
+        with pytest.raises(RuntimeError, match="No agent instance"):
+            await self_reference.instance.fork("sub-task")
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_inherits_memory_snapshot_to_child_key(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        observed_calls: list[dict[str, Any]] = []
+
+        async def fake_agent(message: str, history=None):
+            observed_calls.append(
+                {
+                    "message": message,
+                    "history": list(history or []),
+                }
+            )
+            yield (
+                f"forked:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "child done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        fork_result = await self_reference.instance.fork("sub-task")
+
+        assert fork_result["source_memory_key"] == "agent_main"
+        assert fork_result["response"] == "forked:sub-task"
+        assert observed_calls[0]["history"] == [{"role": "user", "content": "seed"}]
+
+        fork_memory_key = fork_result["memory_key"]
+        assert isinstance(fork_memory_key, str)
+        assert fork_memory_key.startswith("agent_main::fork::")
+
+        assert self_reference.snapshot_history("agent_main") == [
+            {"role": "user", "content": "seed"}
+        ]
+        assert self_reference.snapshot_history(fork_memory_key) == [
+            {"role": "user", "content": "seed"},
+            {"role": "assistant", "content": "child done"},
+        ]
+
+    @pytest.mark.asyncio
+    async def test_nested_fork_defaults_to_current_fork_memory_key(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history(
+            "agent_main",
+            [{"role": "user", "content": "root seed"}],
+        )
+
+        async def fake_agent(message: str, history=None):
+            if message == "spawn-child":
+                nested = await self_reference.instance.fork("leaf-task")
+                yield (
+                    nested,
+                    list(history or []),
+                )
+                return
+
+            yield (
+                "leaf-done",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "leaf done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        parent_fork = await self_reference.instance.fork("spawn-child")
+        child_fork = parent_fork["response"]
+
+        assert parent_fork["source_memory_key"] == "agent_main"
+        assert parent_fork["memory_key"].startswith("agent_main::fork::")
+
+        assert isinstance(child_fork, dict)
+        assert child_fork["source_memory_key"] == parent_fork["memory_key"]
+        assert child_fork["memory_key"].startswith(
+            f"{parent_fork['memory_key']}::fork::"
+        )
+        assert self_reference.snapshot_history(child_fork["memory_key"])[-1] == {
+            "role": "assistant",
+            "content": "leaf done",
+        }

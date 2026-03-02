@@ -397,14 +397,21 @@ class PyRepl:
         self._shutdown_worker_locked()
         self._ensure_worker_locked()
 
-    def _execute_self_reference_call(self, message: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_self_reference_call(
+        self,
+        message: dict[str, Any],
+    ) -> dict[str, Any]:
         call_id = str(message.get("call_id", ""))
         operation = str(message.get("op", ""))
         key = message.get("key")
         args = message.get("args", [])
+        kwargs = message.get("kwargs", {})
 
         if not isinstance(args, list):
             args = []
+
+        if not isinstance(kwargs, dict):
+            kwargs = {}
 
         try:
             if self._self_reference is None:
@@ -412,6 +419,10 @@ class PyRepl:
 
             if operation == "keys":
                 result = self._self_reference.memory.keys()
+            elif operation == "instance_is_bound":
+                result = self._self_reference.instance.is_bound()
+            elif operation == "instance_fork":
+                result = await self._self_reference.instance.fork(*args, **kwargs)
             else:
                 if not isinstance(key, str):
                     raise ValueError("memory key must be a non-empty string")
@@ -423,25 +434,25 @@ class PyRepl:
                 elif operation == "all":
                     result = memory.all()
                 elif operation == "get":
-                    result = memory.get(*args)
+                    result = memory.get(*args, **kwargs)
                 elif operation == "append":
-                    result = memory.append(*args)
+                    result = memory.append(*args, **kwargs)
                 elif operation == "insert":
-                    result = memory.insert(*args)
+                    result = memory.insert(*args, **kwargs)
                 elif operation == "update":
-                    result = memory.update(*args)
+                    result = memory.update(*args, **kwargs)
                 elif operation == "delete":
-                    result = memory.delete(*args)
+                    result = memory.delete(*args, **kwargs)
                 elif operation == "replace":
-                    result = memory.replace(*args)
+                    result = memory.replace(*args, **kwargs)
                 elif operation == "clear":
                     result = memory.clear()
                 elif operation == "get_system_prompt":
                     result = memory.get_system_prompt()
                 elif operation == "set_system_prompt":
-                    result = memory.set_system_prompt(*args)
+                    result = memory.set_system_prompt(*args, **kwargs)
                 elif operation == "append_system_prompt":
-                    result = memory.append_system_prompt(*args)
+                    result = memory.append_system_prompt(*args, **kwargs)
                 else:
                     raise ValueError(f"Unsupported self_reference op: {operation}")
 
@@ -584,7 +595,7 @@ class PyRepl:
                         event_type = str(event.get("type", ""))
 
                         if event_type == EVENT_SELF_REFERENCE_CALL:
-                            response = self._execute_self_reference_call(event)
+                            response = await self._execute_self_reference_call(event)
                             with self._lock:
                                 self._send_worker_command_locked(response)
                             continue
@@ -818,7 +829,7 @@ class PyRepl:
 
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = self._execute_self_reference_call(event)
+                    response = await self._execute_self_reference_call(event)
                     with self._lock:
                         self._send_worker_command_locked(response)
                     continue
@@ -863,7 +874,7 @@ class PyRepl:
 
                 event_type = str(event.get("type", ""))
                 if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = self._execute_self_reference_call(event)
+                    response = await self._execute_self_reference_call(event)
                     with self._lock:
                         self._send_worker_command_locked(response)
                     continue

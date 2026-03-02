@@ -28,7 +28,10 @@ from SimpleLLMFunc.llm_decorator.steps.chat import (
 )
 from SimpleLLMFunc.llm_decorator.steps.chat.message import HISTORY_PARAM_NAMES
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.self_reference import (
+    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
+    SelfReference,
+)
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
 from SimpleLLMFunc.hooks.events import ReactEndEvent
@@ -46,6 +49,7 @@ P = ParamSpec("P")
 DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
 _SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
 _SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
+_AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 
 
 def _extract_raw_history_reference(arguments: dict[str, Any]) -> Optional[HistoryList]:
@@ -116,6 +120,13 @@ def _build_self_reference_prompt_block(memory_key: str) -> str:
             (
                 "  append_system_prompt(text): append text to current system "
                 "prompt with a newline."
+            ),
+            "- Self instance methods:",
+            "  self_reference.instance.is_bound(): check if recursive fork is available.",
+            (
+                "  self_reference.instance.fork(message, "
+                f'source_memory_key="{memory_key}"): '
+                "fork this agent with inherited memory snapshot."
             ),
             "- Forgetting memory:",
             "  reset_repl only clears Python variables in REPL.",
@@ -308,13 +319,21 @@ def llm_chat(
         docstring = func.__doc__ or ""
         func_name = func.__name__
 
+        resolved_default_self_reference_key: Optional[str] = None
         if self_reference is not None:
-            self_reference.bind_agent_instance(func)
+            resolved_default_self_reference_key = _resolve_self_reference_key(
+                self_reference_key,
+                func_name,
+            )
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Step 1: 解析函数签名
-            function_signature, _ = parse_function_signature(func, args, kwargs)
+            function_signature, template_params = parse_function_signature(
+                func,
+                args,
+                kwargs,
+            )
 
             # 构建用户任务提示（用于事件）
             user_task_prompt = json.dumps(
@@ -355,8 +374,20 @@ def llm_chat(
                         baseline_history_count = 0
 
                         if self_reference is not None:
+                            runtime_self_reference_key = self_reference_key
+                            if template_params is not None:
+                                override_key = template_params.get(
+                                    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM
+                                )
+                                if override_key is not None:
+                                    if not isinstance(override_key, str):
+                                        raise ValueError(
+                                            "self_reference key override must be a non-empty string"
+                                        )
+                                    runtime_self_reference_key = override_key
+
                             resolved_self_reference_key = _resolve_self_reference_key(
-                                self_reference_key,
+                                runtime_self_reference_key,
                                 function_signature.func_name,
                             )
 
@@ -524,6 +555,13 @@ def llm_chat(
         wrapper.__doc__ = func.__doc__
         wrapper.__annotations__ = func.__annotations__
         wrapper.__signature__ = signature_meta  # type: ignore
+        setattr(wrapper, _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR, True)
+
+        if self_reference is not None:
+            self_reference.bind_agent_instance(
+                wrapper,
+                default_memory_key=resolved_default_self_reference_key,
+            )
 
         return cast(
             Callable[

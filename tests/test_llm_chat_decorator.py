@@ -28,6 +28,24 @@ class _DummyObservation:
         return None
 
 
+def test_llm_chat_binds_wrapped_agent_instance_to_self_reference() -> None:
+    """SelfReference should mount the decorated callable for recursive fork use."""
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    self_reference = SelfReference()
+
+    @llm_chat(
+        llm_interface=mock_llm,
+        self_reference=self_reference,
+        self_reference_key="agent_main",
+    )
+    async def agent(message: str, history=None):
+        """test agent"""
+
+    assert self_reference.get_agent_instance() is agent
+
+
 @pytest.mark.asyncio
 async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     """Decorator stays decoupled and does not inject self_reference by itself."""

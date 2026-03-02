@@ -7,11 +7,16 @@ shared between ``llm_chat`` and tool runtimes (for example ``PyRepl``).
 from __future__ import annotations
 
 import copy
+import contextvars
+import inspect
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
 MemoryHistory = List[Dict[str, Any]]
+HISTORY_PARAM_NAMES = ("history", "chat_history")
+SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM = "__self_reference_key_override"
+_AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 
 
 def _normalize_key(key: str) -> str:
@@ -164,6 +169,87 @@ def _extract_latest_system_prompt(messages: MemoryHistory) -> Optional[str]:
     return None
 
 
+def _extract_history_from_any(value: Any) -> Optional[MemoryHistory]:
+    if not isinstance(value, list):
+        return None
+    if not all(isinstance(item, dict) for item in value):
+        return None
+    return _coerce_history_list(value)
+
+
+def _extract_response_and_history_from_output(
+    output: Any,
+) -> tuple[Any, Optional[MemoryHistory]]:
+    if isinstance(output, tuple) and len(output) == 2:
+        maybe_history = _extract_history_from_any(output[1])
+        if maybe_history is not None:
+            return output[0], maybe_history
+
+    event = getattr(output, "event", None)
+    if event is not None:
+        maybe_history = _extract_history_from_any(
+            getattr(event, "final_messages", None)
+        )
+        if maybe_history is not None:
+            return getattr(event, "final_response", None), maybe_history
+
+    return output, None
+
+
+async def _consume_agent_call_output(
+    call_output: Any,
+) -> tuple[Any, Optional[MemoryHistory]]:
+    if inspect.isawaitable(call_output):
+        awaited_output = await cast(Awaitable[Any], call_output)
+        return _extract_response_and_history_from_output(awaited_output)
+
+    if hasattr(call_output, "__aiter__"):
+        last_response: Any = None
+        last_history: Optional[MemoryHistory] = None
+
+        async for output in call_output:
+            response, history = _extract_response_and_history_from_output(output)
+            last_response = response
+            if history is not None:
+                last_history = history
+
+        return last_response, last_history
+
+    return _extract_response_and_history_from_output(call_output)
+
+
+def _extract_history_param_name(agent_instance: Any) -> Optional[str]:
+    try:
+        signature = inspect.signature(agent_instance)
+    except (TypeError, ValueError):
+        return None
+
+    for candidate in HISTORY_PARAM_NAMES:
+        if candidate in signature.parameters:
+            return candidate
+
+    return None
+
+
+def _agent_supports_template_params(agent_instance: Any) -> bool:
+    if bool(getattr(agent_instance, _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR, False)):
+        return True
+
+    try:
+        signature = inspect.signature(agent_instance)
+    except (TypeError, ValueError):
+        return False
+
+    if "_template_params" in signature.parameters:
+        return True
+
+    for parameter in signature.parameters.values():
+        if parameter.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+
+    return False
+
+
 class SelfReferenceMemoryHandle:
     """Keyed memory view used by ``self_reference.memory[<key>]``."""
 
@@ -231,6 +317,33 @@ class SelfReferenceMemoryProxy:
         return isinstance(key, str) and self._owner.has_history(key)
 
 
+class SelfReferenceInstanceHandle:
+    """Container object exposed as ``self_reference.instance``."""
+
+    def __init__(self, owner: "SelfReference"):
+        self._owner = owner
+
+    def is_bound(self) -> bool:
+        return self._owner.get_agent_instance() is not None
+
+    def get(self) -> Optional[Any]:
+        return self._owner.get_agent_instance()
+
+    async def fork(
+        self,
+        *agent_args: Any,
+        source_memory_key: Optional[str] = None,
+        fork_memory_key: Optional[str] = None,
+        **agent_kwargs: Any,
+    ) -> Dict[str, Any]:
+        return await self._owner.fork_agent_instance(
+            *agent_args,
+            source_memory_key=source_memory_key,
+            fork_memory_key=fork_memory_key,
+            **agent_kwargs,
+        )
+
+
 class SelfReference:
     """Shared self-reference state object for agent memory operations."""
 
@@ -238,20 +351,59 @@ class SelfReference:
         self._lock = threading.RLock()
         self._history_store: Dict[str, MemoryHistory] = {}
         self._memory_proxy = SelfReferenceMemoryProxy(self)
+        self._instance_proxy = SelfReferenceInstanceHandle(self)
         self._agent_instance: Optional[Any] = None
+        self._agent_default_memory_key: Optional[str] = None
+        self._fork_counter = 0
+        self._active_memory_key_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar(
+                f"simplellmfunc_self_reference_active_key_{id(self)}",
+                default=None,
+            )
+        )
 
     @property
     def memory(self) -> SelfReferenceMemoryProxy:
         return self._memory_proxy
 
-    def bind_agent_instance(self, agent_instance: Any) -> None:
-        """Bind top-level agent instance for future recursive use-cases."""
+    @property
+    def instance(self) -> SelfReferenceInstanceHandle:
+        return self._instance_proxy
+
+    def bind_agent_instance(
+        self,
+        agent_instance: Any,
+        default_memory_key: Optional[str] = None,
+    ) -> None:
+        """Bind top-level agent callable for recursive self-fork use-cases."""
+
+        if not callable(agent_instance):
+            raise ValueError("agent_instance must be callable")
+
+        normalized_default_key: Optional[str] = None
+        if default_memory_key is not None:
+            normalized_default_key = _normalize_key(default_memory_key)
+
         with self._lock:
             self._agent_instance = agent_instance
+            self._agent_default_memory_key = normalized_default_key
 
     def get_agent_instance(self) -> Optional[Any]:
         with self._lock:
             return self._agent_instance
+
+    def get_agent_default_memory_key(self) -> Optional[str]:
+        with self._lock:
+            return self._agent_default_memory_key
+
+    def _set_active_memory_key(self, key: str) -> contextvars.Token[Optional[str]]:
+        return self._active_memory_key_var.set(_normalize_key(key))
+
+    def _reset_active_memory_key(self, token: contextvars.Token[Optional[str]]) -> None:
+        self._active_memory_key_var.reset(token)
+
+    def _get_active_memory_key(self) -> Optional[str]:
+        return self._active_memory_key_var.get()
 
     def bind_history(self, key: str, history: List[Dict[str, Any]]) -> None:
         normalized_key = _normalize_key(key)
@@ -366,7 +518,10 @@ class SelfReference:
         self._mutate_messages(key, mutate)
 
     def delete_message(self, key: str, index: int) -> None:
-        self._mutate_messages(key, lambda msgs: msgs.pop(index))
+        def mutate(messages: MemoryHistory) -> None:
+            messages.pop(index)
+
+        self._mutate_messages(key, mutate)
 
     def get_system_prompt(self, key: str) -> Optional[str]:
         messages = self.snapshot_history(key)
@@ -395,6 +550,115 @@ class SelfReference:
             updated = text
         self.set_system_prompt(key, updated)
 
+    def _resolve_source_memory_key_for_fork(
+        self,
+        source_memory_key: Optional[str],
+    ) -> str:
+        if source_memory_key is not None:
+            normalized = _normalize_key(source_memory_key)
+            if not self.has_history(normalized):
+                raise KeyError(f"Memory key '{normalized}' is not bound")
+            return normalized
+
+        active_key = self._get_active_memory_key()
+        if active_key is not None and self.has_history(active_key):
+            return active_key
+
+        default_key = self.get_agent_default_memory_key()
+        if default_key is not None:
+            if not self.has_history(default_key):
+                self.bind_history(default_key, [])
+            return default_key
+
+        keys = self.list_history_keys()
+        if len(keys) == 1:
+            return keys[0]
+
+        if not keys:
+            raise ValueError(
+                "source_memory_key is required because no memory key is available"
+            )
+
+        raise ValueError(
+            "source_memory_key is required when multiple memory keys are bound"
+        )
+
+    def _build_fork_memory_key(self, source_memory_key: str) -> str:
+        with self._lock:
+            while True:
+                self._fork_counter += 1
+                candidate = f"{source_memory_key}::fork::{self._fork_counter}"
+                if candidate not in self._history_store:
+                    return candidate
+
+    def _build_fork_template_params(
+        self,
+        existing_template_params: Any,
+        fork_memory_key: str,
+    ) -> Dict[str, Any]:
+        if existing_template_params is None:
+            merged_template_params: Dict[str, Any] = {}
+        elif isinstance(existing_template_params, dict):
+            merged_template_params = copy.deepcopy(existing_template_params)
+        else:
+            raise ValueError("_template_params must be a dict when provided")
+
+        merged_template_params[SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM] = (
+            fork_memory_key
+        )
+        return merged_template_params
+
+    async def fork_agent_instance(
+        self,
+        *agent_args: Any,
+        source_memory_key: Optional[str] = None,
+        fork_memory_key: Optional[str] = None,
+        **agent_kwargs: Any,
+    ) -> Dict[str, Any]:
+        with self._lock:
+            agent_instance = self._agent_instance
+
+        if agent_instance is None:
+            raise RuntimeError("No agent instance is bound to self_reference")
+
+        source_key = self._resolve_source_memory_key_for_fork(source_memory_key)
+        inherited_history = self.snapshot_history(source_key)
+
+        if fork_memory_key is None:
+            target_key = self._build_fork_memory_key(source_key)
+        else:
+            target_key = _normalize_key(fork_memory_key)
+
+        self.bind_history(target_key, inherited_history)
+
+        call_kwargs = dict(agent_kwargs)
+        history_param_name = _extract_history_param_name(agent_instance)
+        if history_param_name is not None and history_param_name not in call_kwargs:
+            call_kwargs[history_param_name] = self.snapshot_history(target_key)
+
+        if _agent_supports_template_params(agent_instance):
+            call_kwargs["_template_params"] = self._build_fork_template_params(
+                call_kwargs.get("_template_params"),
+                target_key,
+            )
+
+        active_key_token = self._set_active_memory_key(target_key)
+        try:
+            call_output = agent_instance(*agent_args, **call_kwargs)
+            response, final_history = await _consume_agent_call_output(call_output)
+        finally:
+            self._reset_active_memory_key(active_key_token)
+
+        if final_history is not None:
+            self.bind_history(target_key, final_history)
+
+        return {
+            "source_memory_key": source_key,
+            "memory_key": target_key,
+            "response": response,
+            "history": self.snapshot_history(target_key),
+        }
+
     def _mutate_messages(
         self,
         key: str,
@@ -414,4 +678,10 @@ class SelfReference:
             self._history_store[normalized_key] = messages
 
 
-__all__ = ["SelfReference", "SelfReferenceMemoryHandle", "SelfReferenceMemoryProxy"]
+__all__ = [
+    "SelfReference",
+    "SelfReferenceMemoryHandle",
+    "SelfReferenceMemoryProxy",
+    "SelfReferenceInstanceHandle",
+    "SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM",
+]
