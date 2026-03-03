@@ -22,6 +22,10 @@ from typing import Any, Dict, List, Optional
 
 from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
 from SimpleLLMFunc.logger.logger_config import logger_config
+from SimpleLLMFunc.runtime import PrimitiveCallContext, PrimitiveRegistry
+from SimpleLLMFunc.runtime.builtin_self_reference import (
+    register_self_reference_primitives,
+)
 from SimpleLLMFunc.self_reference import SelfReference
 from SimpleLLMFunc.tool import Tool
 
@@ -29,20 +33,19 @@ from .pyrepl_worker import (
     COMMAND_EXECUTE,
     COMMAND_INPUT_REPLY,
     COMMAND_LIST_VARIABLES,
+    COMMAND_PRIMITIVE_RESULT,
     COMMAND_RESET,
-    COMMAND_SELF_REFERENCE_RESPONSE,
     COMMAND_SHUTDOWN,
     EVENT_EXECUTE_RESULT,
     EVENT_INPUT_ACCEPTED,
     EVENT_INPUT_REQUEST,
     EVENT_LIST_VARIABLES_RESULT,
+    EVENT_PRIMITIVE_CALL,
     EVENT_RESET_RESULT,
-    EVENT_SELF_REFERENCE_CALL,
     EVENT_STDERR,
     EVENT_STDOUT,
     EVENT_WORKER_READY,
     EVENT_WORKER_ERROR,
-    SELF_REFERENCE_GLOBAL_NAME,
     run_pyrepl_worker,
 )
 
@@ -76,22 +79,23 @@ class PyRepl:
         "calls). Write direct executable snippets, not standalone scripts. "
         'Do not include `if __name__ == "__main__":` blocks. Interactive '
         "`input()` is supported. `reset_repl` only clears REPL variables and "
-        "does not delete self-reference conversation memory."
+        "does not delete runtime memory managed by registered primitives."
     )
     RESET_TOOL_DESCRIPTION = (
         "Reset REPL runtime variables in the current session. This clears "
-        "Python variables only and preserves attached self_reference object."
+        "Python variables only and preserves registered runtime primitive backends."
     )
     LIST_VARIABLES_TOOL_DESCRIPTION = (
         "List user-defined variables currently available in REPL namespace "
-        "(excluding private names and self_reference)."
+        "(excluding private names and runtime)."
     )
+
+    DEFAULT_SELF_REFERENCE_BACKEND_NAME = "self_reference"
 
     def __init__(
         self,
         execution_timeout_seconds: float = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         input_idle_timeout_seconds: float = DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS,
-        self_reference: Optional[SelfReference] = None,
     ):
         execution_timeout = float(execution_timeout_seconds)
         if execution_timeout <= 0:
@@ -105,7 +109,8 @@ class PyRepl:
         self.input_idle_timeout_seconds = input_idle_timeout
 
         self.namespace: Dict[str, Any] = {}
-        self._self_reference: Optional[SelfReference] = None
+        self._runtime_backends: Dict[str, Any] = {}
+        self._primitive_pack_installers: Dict[str, Any] = {}
         self._tools: Optional[List[Tool]] = None
         self._lock = threading.RLock()
         self._operation_lock = asyncio.Lock()
@@ -117,14 +122,14 @@ class PyRepl:
         self._prefetched_events: List[dict[str, Any]] = []
         self._closed = False
 
+        self._primitive_registry = PrimitiveRegistry()
+        self._register_builtin_primitives()
+
         self._instance_id = uuid.uuid4().hex
         self._audit_lock = threading.Lock()
         self._audit_dir = Path(logger_config.LOG_DIR) / "pyrepl" / self._instance_id
         self._audit_dir.mkdir(parents=True, exist_ok=True)
         self._audit_file = self._audit_dir / "executions.jsonl"
-
-        if self_reference is not None:
-            self.attach_self_reference(self_reference)
 
     @property
     def instance_id(self) -> str:
@@ -138,22 +143,170 @@ class PyRepl:
     def audit_log_file(self) -> str:
         return str(self._audit_file)
 
-    def attach_self_reference(self, self_reference: SelfReference) -> None:
-        """Attach shared self-reference object into REPL global namespace."""
+    @staticmethod
+    def _normalize_backend_name(name: str) -> str:
+        if not isinstance(name, str):
+            raise ValueError("backend name must be a non-empty string")
 
-        if not isinstance(self_reference, SelfReference):
-            raise ValueError("self_reference must be a SelfReference instance")
+        normalized = name.strip()
+        if not normalized:
+            raise ValueError("backend name must be a non-empty string")
+
+        if "." in normalized:
+            raise ValueError("backend name must be a single segment")
+
+        return normalized
+
+    def register_runtime_backend(
+        self,
+        name: str,
+        backend: Any,
+        *,
+        replace: bool = False,
+    ) -> None:
+        """Register one runtime backend object by name."""
+
+        normalized = self._normalize_backend_name(name)
+        if backend is None:
+            raise ValueError("backend must not be None")
 
         with self._lock:
-            self._self_reference = self_reference
-            self.namespace[SELF_REFERENCE_GLOBAL_NAME] = self_reference
+            if normalized in self._runtime_backends and not replace:
+                raise ValueError(
+                    f"runtime backend '{normalized}' is already registered"
+                )
+            self._runtime_backends[normalized] = backend
 
-    def detach_self_reference(self) -> None:
-        """Detach previously attached self-reference object from namespace."""
+    def unregister_runtime_backend(self, name: str) -> None:
+        """Unregister one runtime backend by name if it exists."""
+
+        normalized = self._normalize_backend_name(name)
+        with self._lock:
+            self._runtime_backends.pop(normalized, None)
+
+    def get_runtime_backend(self, name: str) -> Optional[Any]:
+        """Get one runtime backend by name."""
+
+        normalized = self._normalize_backend_name(name)
+        with self._lock:
+            return self._runtime_backends.get(normalized)
+
+    def list_runtime_backends(self) -> List[str]:
+        """List registered runtime backend names."""
 
         with self._lock:
-            self._self_reference = None
-            self.namespace.pop(SELF_REFERENCE_GLOBAL_NAME, None)
+            names = list(self._runtime_backends.keys())
+        names.sort()
+        return names
+
+    def register_primitive_pack_installer(
+        self,
+        pack_name: str,
+        installer: Any,
+        *,
+        replace: bool = False,
+    ) -> None:
+        """Register one primitive-pack installer callable."""
+
+        normalized = self._normalize_backend_name(pack_name)
+        if not callable(installer):
+            raise ValueError("primitive pack installer must be callable")
+
+        with self._lock:
+            if normalized in self._primitive_pack_installers and not replace:
+                raise ValueError(
+                    f"primitive pack installer '{normalized}' is already registered"
+                )
+            self._primitive_pack_installers[normalized] = installer
+
+    def _install_self_reference_pack(
+        self,
+        *,
+        backend: Any,
+        backend_name: str = DEFAULT_SELF_REFERENCE_BACKEND_NAME,
+        replace: bool = False,
+    ) -> None:
+        if not isinstance(backend, SelfReference):
+            raise ValueError(
+                "self_reference primitive pack requires SelfReference backend"
+            )
+
+        normalized_backend_name = self._normalize_backend_name(backend_name)
+        self.register_runtime_backend(normalized_backend_name, backend, replace=True)
+
+        def get_self_reference() -> Optional[SelfReference]:
+            current_backend = self.get_runtime_backend(normalized_backend_name)
+            if current_backend is None:
+                return None
+            if not isinstance(current_backend, SelfReference):
+                raise RuntimeError(
+                    f"runtime backend '{normalized_backend_name}' must be SelfReference"
+                )
+            return current_backend
+
+        register_self_reference_primitives(
+            self._primitive_registry,
+            get_self_reference=get_self_reference,
+            replace=replace,
+        )
+
+    def install_primitive_pack(self, pack_name: str, **options: Any) -> None:
+        """Install one registered primitive pack into this REPL."""
+
+        normalized = self._normalize_backend_name(pack_name)
+        with self._lock:
+            installer = self._primitive_pack_installers.get(normalized)
+
+        if installer is None:
+            raise KeyError(f"primitive pack '{normalized}' is not registered")
+
+        installer(**options)
+
+    def _register_builtin_primitives(self) -> None:
+        self.register_primitive_pack_installer(
+            "self_reference",
+            self._install_self_reference_pack,
+            replace=True,
+        )
+
+        self._primitive_registry.register(
+            "runtime.list_primitives",
+            lambda _ctx: self._primitive_registry.list_names(),
+            description="List all registered runtime primitive names.",
+        )
+
+        self._primitive_registry.register(
+            "runtime.list_backends",
+            lambda _ctx: self.list_runtime_backends(),
+            description="List registered runtime backend names.",
+        )
+
+    def register_primitive(
+        self,
+        name: str,
+        handler: Any,
+        *,
+        description: str = "",
+        replace: bool = False,
+    ) -> None:
+        """Register one host primitive for worker-side runtime calls."""
+
+        self._primitive_registry.register(
+            name,
+            handler,
+            description=description,
+            replace=replace,
+        )
+
+    def unregister_primitive(self, name: str) -> None:
+        """Unregister one host primitive by name."""
+
+        self._primitive_registry.unregister(name)
+
+    def list_primitives(self) -> List[str]:
+        """List currently registered runtime primitive names."""
+
+        return self._primitive_registry.list_names()
 
     @classmethod
     def _register_input_queue(cls, request_id: str) -> queue.Queue[str]:
@@ -397,14 +550,14 @@ class PyRepl:
         self._shutdown_worker_locked()
         self._ensure_worker_locked()
 
-    async def _execute_self_reference_call(
+    async def _execute_primitive_call(
         self,
         message: dict[str, Any],
         event_emitter: Optional[ToolEventEmitter] = None,
     ) -> dict[str, Any]:
         call_id = str(message.get("call_id", ""))
-        operation = str(message.get("op", ""))
-        key = message.get("key")
+        primitive_name = str(message.get("name", ""))
+        execution_id = str(message.get("exec_id", ""))
         args = message.get("args", [])
         kwargs = message.get("kwargs", {})
 
@@ -414,75 +567,31 @@ class PyRepl:
         if not isinstance(kwargs, dict):
             kwargs = {}
 
+        context = PrimitiveCallContext(
+            primitive_name=primitive_name,
+            call_id=call_id,
+            execution_id=execution_id,
+            event_emitter=event_emitter,
+            metadata={"pyrepl_instance_id": self._instance_id},
+        )
+
         try:
-            if self._self_reference is None:
-                raise RuntimeError("No self_reference attached")
-
-            if operation == "keys":
-                result = self._self_reference.memory.keys()
-            elif operation == "instance_is_bound":
-                result = self._self_reference.instance.is_bound()
-            elif operation == "instance_fork":
-                result = await self._self_reference.instance.fork(
-                    *args,
-                    _event_emitter=event_emitter,
-                    **kwargs,
-                )
-            elif operation == "instance_fork_spawn":
-                result = await self._self_reference.instance.fork_spawn(
-                    *args,
-                    _event_emitter=event_emitter,
-                    **kwargs,
-                )
-            elif operation == "instance_fork_wait":
-                result = await self._self_reference.instance.fork_wait(*args, **kwargs)
-            elif operation == "instance_fork_wait_all":
-                result = await self._self_reference.instance.fork_wait_all(
-                    *args,
-                    **kwargs,
-                )
-            else:
-                if not isinstance(key, str):
-                    raise ValueError("memory key must be a non-empty string")
-
-                memory = self._self_reference.memory[key]
-
-                if operation == "count":
-                    result = memory.count()
-                elif operation == "all":
-                    result = memory.all()
-                elif operation == "get":
-                    result = memory.get(*args, **kwargs)
-                elif operation == "append":
-                    result = memory.append(*args, **kwargs)
-                elif operation == "insert":
-                    result = memory.insert(*args, **kwargs)
-                elif operation == "update":
-                    result = memory.update(*args, **kwargs)
-                elif operation == "delete":
-                    result = memory.delete(*args, **kwargs)
-                elif operation == "replace":
-                    result = memory.replace(*args, **kwargs)
-                elif operation == "clear":
-                    result = memory.clear()
-                elif operation == "get_system_prompt":
-                    result = memory.get_system_prompt()
-                elif operation == "set_system_prompt":
-                    result = memory.set_system_prompt(*args, **kwargs)
-                elif operation == "append_system_prompt":
-                    result = memory.append_system_prompt(*args, **kwargs)
-                else:
-                    raise ValueError(f"Unsupported self_reference op: {operation}")
+            result = await self._primitive_registry.call(
+                primitive_name,
+                args=args,
+                kwargs=kwargs,
+                context=context,
+            )
 
             return {
-                "type": COMMAND_SELF_REFERENCE_RESPONSE,
+                "type": COMMAND_PRIMITIVE_RESULT,
                 "call_id": call_id,
                 "ok": True,
                 "result": result,
             }
         except Exception as exc:
             return {
-                "type": COMMAND_SELF_REFERENCE_RESPONSE,
+                "type": COMMAND_PRIMITIVE_RESULT,
                 "call_id": call_id,
                 "ok": False,
                 "error_type": type(exc).__name__,
@@ -581,7 +690,7 @@ class PyRepl:
                             "exec_id": execution_id,
                             "code": code,
                             "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
-                            "self_reference_enabled": self._self_reference is not None,
+                            "runtime_enabled": True,
                         }
                     )
 
@@ -612,8 +721,8 @@ class PyRepl:
                     if event is not None:
                         event_type = str(event.get("type", ""))
 
-                        if event_type == EVENT_SELF_REFERENCE_CALL:
-                            response = await self._execute_self_reference_call(
+                        if event_type == EVENT_PRIMITIVE_CALL:
+                            response = await self._execute_primitive_call(
                                 event,
                                 event_emitter=event_emitter,
                             )
@@ -705,6 +814,14 @@ class PyRepl:
                             continue
 
                         if event_type == EVENT_EXECUTE_RESULT:
+                            now = time.monotonic()
+                            if (
+                                not timed_out
+                                and pending_input_waiters == 0
+                                and now >= execution_deadline
+                            ):
+                                timed_out = True
+
                             received_execute_result = True
                             raw_error = event.get("error")
                             error_message = (
@@ -811,7 +928,7 @@ class PyRepl:
                     "result": result,
                     "timeout_seconds": timeout_seconds,
                     "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
-                    "self_reference_attached": self._self_reference is not None,
+                    "runtime_backends": self.list_runtime_backends(),
                 }
             )
 
@@ -824,15 +941,13 @@ class PyRepl:
         async with self._operation_lock:
             with self._lock:
                 self.namespace.clear()
-                if self._self_reference is not None:
-                    self.namespace[SELF_REFERENCE_GLOBAL_NAME] = self._self_reference
 
                 self._ensure_worker_locked()
                 self._send_worker_command_locked(
                     {
                         "type": COMMAND_RESET,
                         "request_id": request_id,
-                        "self_reference_enabled": self._self_reference is not None,
+                        "runtime_enabled": True,
                     }
                 )
 
@@ -849,8 +964,8 @@ class PyRepl:
                     continue
 
                 event_type = str(event.get("type", ""))
-                if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = await self._execute_self_reference_call(
+                if event_type == EVENT_PRIMITIVE_CALL:
+                    response = await self._execute_primitive_call(
                         event,
                         event_emitter=None,
                     )
@@ -880,7 +995,7 @@ class PyRepl:
                     {
                         "type": COMMAND_LIST_VARIABLES,
                         "request_id": request_id,
-                        "self_reference_enabled": self._self_reference is not None,
+                        "runtime_enabled": True,
                     }
                 )
 
@@ -897,8 +1012,8 @@ class PyRepl:
                     continue
 
                 event_type = str(event.get("type", ""))
-                if event_type == EVENT_SELF_REFERENCE_CALL:
-                    response = await self._execute_self_reference_call(
+                if event_type == EVENT_PRIMITIVE_CALL:
+                    response = await self._execute_primitive_call(
                         event,
                         event_emitter=None,
                     )
@@ -921,43 +1036,6 @@ class PyRepl:
                             if isinstance(item, dict)
                         ]
                     return []
-
-    def bind_history(self, key: str, history: List[Dict[str, Any]]) -> None:
-        """Bind a history list to attached self-reference memory store."""
-
-        with self._lock:
-            self_reference = self._self_reference
-
-        if self_reference is None:
-            raise RuntimeError(
-                "No self_reference attached. Call attach_self_reference()"
-            )
-
-        self_reference.bind_history(key, history)
-
-    def unbind_history(self, key: str) -> None:
-        """Unbind a history key from attached self-reference memory store."""
-
-        with self._lock:
-            self_reference = self._self_reference
-
-        if self_reference is None:
-            raise RuntimeError(
-                "No self_reference attached. Call attach_self_reference()"
-            )
-
-        self_reference.unbind_history(key)
-
-    def list_history_keys(self) -> List[str]:
-        """List history keys from attached self-reference memory store."""
-
-        with self._lock:
-            self_reference = self._self_reference
-
-        if self_reference is None:
-            return []
-
-        return self_reference.list_history_keys()
 
     def close(self) -> None:
         """Close worker process and release resources."""

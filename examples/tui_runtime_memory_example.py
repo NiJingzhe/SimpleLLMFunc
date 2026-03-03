@@ -1,19 +1,18 @@
-"""TUI demo for explicit SelfReference memory operations.
+"""TUI demo for runtime memory primitives.
 
 Run:
-    poetry run python examples/tui_self_reference_example.py
+    poetry run python examples/tui_runtime_memory_example.py
 
 What this example shows:
     1. Shared ``SelfReference`` injected into ``llm_chat``.
-    2. Manual REPL binding via ``repl.attach_self_reference(self_reference)``.
-    3. Agent-side memory operations with
-       ``self_reference.memory["agent_main"].<method>()``.
-    4. ``llm_chat`` auto-appends a SelfReference memory contract to system prompt.
+    2. Runtime bridge exposed inside ``execute_code`` as ``runtime``.
+    3. Agent-side memory operations with ``runtime.memory.<method>(...)``.
+    4. ``llm_chat`` auto-appends memory contract guidance into system prompt.
 
 Try these prompts in the chat UI:
-    - "Use execute_code to print self_reference.memory.keys()"
+    - "Use execute_code to print runtime.memory.keys()"
     - "Set your system memory to always answer in one short paragraph"
-    - "Append a note into self memory and print memory count"
+    - "Append a note into runtime memory and print memory count"
 """
 
 from __future__ import annotations
@@ -38,10 +37,10 @@ def load_llm():
 llm = load_llm()
 self_reference = SelfReference()
 repl = PyRepl()
-repl.attach_self_reference(self_reference)
+repl.install_primitive_pack("self_reference", backend=self_reference)
 
 
-@tui(title="Self Reference Demo")
+@tui(title="Runtime Memory Demo")
 @llm_chat(
     llm_interface=llm,
     toolkit=[*repl.toolset],
@@ -53,25 +52,26 @@ repl.attach_self_reference(self_reference)
 async def agent(message: str, history: HistoryList):
     """You are a practical coding assistant with a persistent Python REPL.
 
-    Self-reference memory contract (strict):
-    - Your memory handle is self_reference.memory["agent_main"].
+    Runtime memory contract (strict):
+    - Your memory key is "agent_main".
+    - Use runtime.memory.* primitives for memory operations.
     - Do not read or write any other memory key.
-    - Never reassign the ``self_reference`` variable.
-    - Modify memory only through memory-handle methods.
+    - Never reassign the ``runtime`` variable.
 
-    Memory methods available:
-    - count(): return number of messages in this memory key.
-    - all(): return a deep-copied snapshot of all messages.
-    - get(index): read one message by index.
-    - append(message): append one message at tail.
-    - insert(index, message): insert one message at index.
-    - update(index, message): replace one message at index.
-    - delete(index): remove one message by index.
-    - clear(): clear all messages for this key.
-    - replace(messages): replace full history with validated messages.
-    - get_system_prompt(): read current system prompt memory.
-    - set_system_prompt(text): overwrite system prompt memory.
-    - append_system_prompt(text): append text to system prompt memory.
+    Memory primitives available:
+    - runtime.memory.keys()
+    - runtime.memory.count("agent_main")
+    - runtime.memory.all("agent_main")
+    - runtime.memory.get("agent_main", index)
+    - runtime.memory.append("agent_main", message)
+    - runtime.memory.insert("agent_main", index, message)
+    - runtime.memory.update("agent_main", index, message)
+    - runtime.memory.delete("agent_main", index)
+    - runtime.memory.clear("agent_main")
+    - runtime.memory.replace("agent_main", messages)
+    - runtime.memory.get_system_prompt("agent_main")
+    - runtime.memory.set_system_prompt("agent_main", text)
+    - runtime.memory.append_system_prompt("agent_main", text)
 
     Message validity requirements:
     - Keep OpenAI message format valid.

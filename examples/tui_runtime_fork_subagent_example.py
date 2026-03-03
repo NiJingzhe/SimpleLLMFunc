@@ -1,12 +1,12 @@
-"""Adaptive self-fork demo (subagent-like pattern).
+"""Adaptive runtime-fork demo (subagent-like pattern).
 
 Run:
-    poetry run python examples/tui_self_fork_subagent_example.py
+    poetry run python examples/tui_runtime_fork_subagent_example.py
 
 What this example demonstrates:
 1. One agent can decide when to act directly or fork itself.
-2. Fork is triggered from REPL with ``fork(...)`` or ``fork_spawn(...)``.
-3. Forked context inherits current ``self_reference`` memory snapshot.
+2. Fork is triggered from REPL via ``runtime.fork.run(...)`` or ``runtime.fork.spawn(...)``.
+3. Forked context inherits current memory snapshot.
 4. Forked context can continue forking when deeper decomposition is useful.
 
 Try prompts:
@@ -36,10 +36,11 @@ def load_llm():
 
 llm = load_llm()
 self_reference = SelfReference()
-repl = PyRepl(self_reference=self_reference)
+repl = PyRepl()
+repl.install_primitive_pack("self_reference", backend=self_reference)
 
 
-@tui(title="Adaptive Self-Fork Agent")  # type: ignore[misc]
+@tui(title="Adaptive Runtime-Fork Agent")  # type: ignore[misc]
 @llm_chat(
     llm_interface=llm,
     toolkit=[*repl.toolset],
@@ -49,7 +50,7 @@ repl = PyRepl(self_reference=self_reference)
     self_reference_key=MEMORY_KEY,
 )
 async def agent(message: str, history: HistoryList):
-    """You are one adaptive agent that can self-fork when needed.
+    """You are one adaptive agent that can runtime-fork when needed.
 
     Decision policy:
     - You decide whether to answer directly, plan first, or fork.
@@ -62,24 +63,22 @@ async def agent(message: str, history: HistoryList):
     2. In code, invoke:
 
        # Blocking fork:
-       fork_result = self_reference.instance.fork("<one concrete executable task>")
+       fork_result = runtime.fork.run("<one concrete executable task>")
 
        # Or concurrent pattern:
-       handle = self_reference.instance.fork_spawn("<task A>")
-       fork_result = self_reference.instance.fork_wait(handle["fork_id"])
+       handle = runtime.fork.spawn("<task A>")
+       fork_result = runtime.fork.wait(handle["fork_id"])
 
        # Multiple spawned forks:
-       # handles = [self_reference.instance.fork_spawn("<task A>"), ...]
-       # fork_results = self_reference.instance.fork_wait_all(
-       #     [item["fork_id"] for item in handles]
-       # )
+       # handles = [runtime.fork.spawn("<task A>"), ...]
+       # fork_results = runtime.fork.wait_all([item["fork_id"] for item in handles])
 
        print("FORK_MEMORY_KEY:", fork_result["memory_key"])
        print("FORK_RESPONSE:", fork_result["response"])
 
        Replace ``<...>`` placeholders with concrete delegated work.
-        In forked context, calling ``fork(...)`` without ``source_memory_key``
-        continues from current fork memory key.
+       In forked context, calling ``runtime.fork.run(...)`` without
+       ``source_memory_key`` continues from current fork memory key.
 
     Execution guidance:
     - Use inherited memory as context, then decide the next best action.

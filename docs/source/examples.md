@@ -124,54 +124,55 @@ Run:
 poetry run python examples/tui_chat_example.py
 ```
 
-### SelfReference memory operations (local, no model)
+### Runtime memory primitives (local, no model)
 
-**File**: [examples/self_reference_basic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/self_reference_basic_example.py)
+**File**: [examples/runtime_primitives_basic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/runtime_primitives_basic_example.py)
 
-Shows how to use `SelfReference` without any LLM provider:
+Shows how to use runtime primitives without any LLM provider:
 
-- Explicitly wire `SelfReference` with `PyRepl`
-- Perform CRUD operations through `self_reference.memory["agent_main"]`
-- Persist durable preferences into system prompt via `append_system_prompt(...)`
+- Explicitly wire `SelfReference` with `PyRepl` as memory backend
+- Register one custom runtime backend + primitive (`constants.get`) as extension example
+- Perform CRUD operations through `runtime.memory.*`
+- Persist durable preferences into system prompt via `runtime.memory.append_system_prompt(...)`
 
 Run:
 
 ```bash
-poetry run python examples/self_reference_basic_example.py
+poetry run python examples/runtime_primitives_basic_example.py
 ```
 
-### SelfReference + TUI Agent
+### Runtime memory + TUI Agent
 
-**File**: [examples/tui_self_reference_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_self_reference_example.py)
+**File**: [examples/tui_runtime_memory_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_memory_example.py)
 
-Shows full agent behavior when `@llm_chat` receives `self_reference`:
+Shows full agent behavior when `@llm_chat` receives `self_reference` and REPL runtime primitives:
 
-- `llm_chat` automatically appends the SelfReference Memory Contract to system prompt
-- Agent mutates memory via memory handles inside `execute_code`
+- `llm_chat` automatically appends the memory contract to system prompt
+- Agent mutates memory via `runtime.memory.*` inside `execute_code`
 - Per-turn memory edits are merged into `updated_history` / `ReactEndEvent.final_messages`
 
 Run:
 
 ```bash
-poetry run python examples/tui_self_reference_example.py
+poetry run python examples/tui_runtime_memory_example.py
 ```
 
-### Adaptive Self-Fork Agent (subagent-like)
+### Adaptive Runtime-Fork Agent (subagent-like)
 
-**File**: [examples/tui_self_fork_subagent_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_self_fork_subagent_example.py)
+**File**: [examples/tui_runtime_fork_subagent_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_fork_subagent_example.py)
 
 Shows a single-agent adaptive delegation pattern:
 
 - Agent decides whether to answer directly, plan, or fork.
-- Agent can call `execute_code` to run `self_reference.instance.fork(...)` for blocking delegation.
-- For concurrent delegation, agent can use `fork_spawn(...)`, `fork_wait(...)`, and `fork_wait_all(...)`.
+- Agent can call `execute_code` to run `runtime.fork.run(...)` for blocking delegation.
+- For concurrent delegation, agent can use `runtime.fork.spawn(...)`, `runtime.fork.wait(...)`, and `runtime.fork.wait_all(...)`.
 - Forked context inherits parent memory snapshot and handles delegated tasks.
 - Forked contexts can continue to fork deeper when decomposition is needed.
 
 Run:
 
 ```bash
-poetry run python examples/tui_self_fork_subagent_example.py
+poetry run python examples/tui_runtime_fork_subagent_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控

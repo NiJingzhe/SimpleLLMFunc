@@ -723,8 +723,9 @@ SimpleLLMFunc/
 │   ├── parallel_toolcall_example.py # Concurrency examples
 │   ├── multi_modality_toolcall.py   # Multimodal examples
 │   ├── pyrepl_example.py            # Builtin PyRepl usage
-│   ├── self_reference_basic_example.py # Local SelfReference usage
-│   ├── tui_self_reference_example.py # TUI SelfReference demo
+│   ├── runtime_primitives_basic_example.py # Local runtime memory primitives
+│   ├── tui_runtime_memory_example.py # TUI runtime memory demo
+│   ├── tui_runtime_fork_subagent_example.py # TUI runtime fork demo
 │   ├── custom_tool_event_example.py # Custom tool event examples
 │   ├── tui_chat_example.py          # Textual TUI example
 │   ├── provider.json          # Provider configuration examples

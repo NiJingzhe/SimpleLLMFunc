@@ -15,16 +15,17 @@ import sys
 import time
 import traceback
 import uuid
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
 from IPython.core.interactiveshell import InteractiveShell
+from SimpleLLMFunc.runtime.worker_proxy import WorkerRuntimeProxy
 
 
 EVENT_STDOUT = "stdout"
 EVENT_STDERR = "stderr"
 EVENT_INPUT_REQUEST = "input_request"
 EVENT_INPUT_ACCEPTED = "input_accepted"
-EVENT_SELF_REFERENCE_CALL = "self_reference_call"
+EVENT_PRIMITIVE_CALL = "primitive_call"
 EVENT_EXECUTE_RESULT = "execute_result"
 EVENT_RESET_RESULT = "reset_result"
 EVENT_LIST_VARIABLES_RESULT = "list_variables_result"
@@ -35,10 +36,10 @@ COMMAND_EXECUTE = "execute"
 COMMAND_RESET = "reset"
 COMMAND_LIST_VARIABLES = "list_variables"
 COMMAND_INPUT_REPLY = "input_reply"
-COMMAND_SELF_REFERENCE_RESPONSE = "self_reference_response"
+COMMAND_PRIMITIVE_RESULT = "primitive_result"
 COMMAND_SHUTDOWN = "shutdown"
 
-SELF_REFERENCE_GLOBAL_NAME = "self_reference"
+RUNTIME_GLOBAL_NAME = "runtime"
 
 
 class _InputRequestTimeoutError(TimeoutError):
@@ -69,141 +70,6 @@ class _LineCapture(io.TextIOBase):
             self._buffer = ""
 
 
-class _WorkerSelfReferenceMemoryHandle:
-    """self_reference.memory[<key>] handle inside worker process."""
-
-    def __init__(self, owner: "_WorkerSelfReferenceProxy", key: str):
-        self._owner = owner
-        self._key = key
-
-    def count(self) -> int:
-        return int(self._owner._call("count", key=self._key, args=[]))
-
-    def all(self) -> list[dict[str, Any]]:
-        return self._owner._call("all", key=self._key, args=[])
-
-    def get(self, index: int) -> dict[str, Any]:
-        return self._owner._call("get", key=self._key, args=[index])
-
-    def append(self, message: dict[str, Any]) -> None:
-        self._owner._call("append", key=self._key, args=[message])
-
-    def insert(self, index: int, message: dict[str, Any]) -> None:
-        self._owner._call("insert", key=self._key, args=[index, message])
-
-    def update(self, index: int, message: dict[str, Any]) -> None:
-        self._owner._call("update", key=self._key, args=[index, message])
-
-    def delete(self, index: int) -> None:
-        self._owner._call("delete", key=self._key, args=[index])
-
-    def replace(self, messages: list[dict[str, Any]]) -> None:
-        self._owner._call("replace", key=self._key, args=[messages])
-
-    def clear(self) -> None:
-        self._owner._call("clear", key=self._key, args=[])
-
-    def get_system_prompt(self) -> Optional[str]:
-        result = self._owner._call("get_system_prompt", key=self._key, args=[])
-        return result if isinstance(result, str) else None
-
-    def set_system_prompt(self, text: str) -> None:
-        self._owner._call("set_system_prompt", key=self._key, args=[text])
-
-    def append_system_prompt(self, text: str) -> None:
-        self._owner._call("append_system_prompt", key=self._key, args=[text])
-
-
-class _WorkerSelfReferenceMemoryProxy:
-    """self_reference.memory proxy inside worker process."""
-
-    def __init__(self, owner: "_WorkerSelfReferenceProxy"):
-        self._owner = owner
-
-    def __getitem__(self, key: str) -> _WorkerSelfReferenceMemoryHandle:
-        if not isinstance(key, str) or not key.strip():
-            raise ValueError("key must be a non-empty string")
-        return _WorkerSelfReferenceMemoryHandle(self._owner, key.strip())
-
-    def keys(self) -> list[str]:
-        result = self._owner._call("keys", key=None, args=[])
-        return result if isinstance(result, list) else []
-
-    def __contains__(self, key: object) -> bool:
-        if not isinstance(key, str):
-            return False
-        return key in self.keys()
-
-
-class _WorkerSelfReferenceInstanceProxy:
-    """self_reference.instance proxy inside worker process."""
-
-    def __init__(self, owner: "_WorkerSelfReferenceProxy"):
-        self._owner = owner
-
-    def is_bound(self) -> bool:
-        return bool(self._owner._call("instance_is_bound", key=None, args=[]))
-
-    def fork(self, *args: Any, **kwargs: Any) -> Any:
-        return self._owner._call(
-            "instance_fork",
-            key=None,
-            args=list(args),
-            kwargs=kwargs,
-        )
-
-    def fork_spawn(self, *args: Any, **kwargs: Any) -> Any:
-        return self._owner._call(
-            "instance_fork_spawn",
-            key=None,
-            args=list(args),
-            kwargs=kwargs,
-        )
-
-    def fork_wait(self, fork_id: str) -> Any:
-        return self._owner._call(
-            "instance_fork_wait",
-            key=None,
-            args=[fork_id],
-            kwargs={},
-        )
-
-    def fork_wait_all(self, fork_ids: Optional[list[str]] = None) -> Any:
-        args: list[Any] = []
-        if fork_ids is not None:
-            args.append(fork_ids)
-        return self._owner._call(
-            "instance_fork_wait_all",
-            key=None,
-            args=args,
-            kwargs={},
-        )
-
-
-class _WorkerSelfReferenceProxy:
-    """Worker-side self_reference proxy that RPCs to parent process."""
-
-    def __init__(self, call_transport: "_PyReplWorker"):
-        self._call_transport = call_transport
-        self.memory = _WorkerSelfReferenceMemoryProxy(self)
-        self.instance = _WorkerSelfReferenceInstanceProxy(self)
-
-    def _call(
-        self,
-        op: str,
-        key: Optional[str],
-        args: list[Any],
-        kwargs: Optional[dict[str, Any]] = None,
-    ) -> Any:
-        payload_kwargs = kwargs if isinstance(kwargs, dict) else {}
-        return self._call_transport.call_self_reference(
-            op=op,
-            key=key,
-            args=args,
-            kwargs=payload_kwargs,
-        )
-
-
 class _PyReplWorker:
     """Process-local worker that executes code in a persistent shell."""
 
@@ -220,8 +86,8 @@ class _PyReplWorker:
         self._shell.colors = "NoColor"
         self._baseline_names = set(self._namespace.keys())
 
-        self._self_reference_proxy = _WorkerSelfReferenceProxy(self)
-        self._self_reference_enabled = False
+        self._runtime_proxy = WorkerRuntimeProxy(self)
+        self._runtime_enabled = True
 
     def run_forever(self) -> None:
         self._emit(EVENT_WORKER_READY)
@@ -252,7 +118,7 @@ class _PyReplWorker:
                 self._handle_list_variables(command)
                 continue
 
-            if command_type in {COMMAND_INPUT_REPLY, COMMAND_SELF_REFERENCE_RESPONSE}:
+            if command_type in {COMMAND_INPUT_REPLY, COMMAND_PRIMITIVE_RESULT}:
                 self._pending_commands.append(command)
                 continue
 
@@ -299,12 +165,17 @@ class _PyReplWorker:
 
             self._pending_commands.append(command)
 
-    def _sync_self_reference_binding(self, enabled: bool) -> None:
-        self._self_reference_enabled = bool(enabled)
-        if self._self_reference_enabled:
-            self._namespace[SELF_REFERENCE_GLOBAL_NAME] = self._self_reference_proxy
+    def _sync_runtime_binding(
+        self,
+        *,
+        runtime_enabled: bool,
+    ) -> None:
+        self._runtime_enabled = bool(runtime_enabled)
+
+        if self._runtime_enabled:
+            self._namespace[RUNTIME_GLOBAL_NAME] = self._runtime_proxy
         else:
-            self._namespace.pop(SELF_REFERENCE_GLOBAL_NAME, None)
+            self._namespace.pop(RUNTIME_GLOBAL_NAME, None)
 
     def _new_cell_filename(self) -> str:
         self._cell_counter += 1
@@ -420,44 +291,40 @@ class _PyReplWorker:
         exc_type = mapping.get(error_type, RuntimeError)
         return exc_type(message)
 
-    def call_self_reference(
+    def call_primitive(
         self,
-        op: str,
-        key: Optional[str],
+        name: str,
         args: list[Any],
         kwargs: Optional[dict[str, Any]] = None,
     ) -> Any:
         call_id = uuid.uuid4().hex
         payload_kwargs = kwargs if isinstance(kwargs, dict) else {}
         self._emit(
-            EVENT_SELF_REFERENCE_CALL,
+            EVENT_PRIMITIVE_CALL,
             exec_id=self._active_exec_id,
             call_id=call_id,
-            op=op,
-            key=key,
+            name=name,
             args=args,
             kwargs=payload_kwargs,
         )
 
         command = self._wait_for_command(
             predicate=lambda item: (
-                item.get("type") == COMMAND_SELF_REFERENCE_RESPONSE
+                item.get("type") == COMMAND_PRIMITIVE_RESULT
                 and item.get("call_id") == call_id
             ),
             timeout=None,
         )
 
         if command is None:
-            raise _WorkerControlInterruptedError(
-                "self_reference response was interrupted"
-            )
+            raise _WorkerControlInterruptedError("primitive response was interrupted")
 
         ok = bool(command.get("ok"))
         if ok:
             return command.get("result")
 
         error_type = str(command.get("error_type", "RuntimeError"))
-        error_message = str(command.get("error_message", "self_reference call failed"))
+        error_message = str(command.get("error_message", "primitive call failed"))
         raise self._make_remote_error(error_type, error_message)
 
     def _execute_python_code(self, code: str, filename: str) -> Optional[str]:
@@ -504,7 +371,9 @@ class _PyReplWorker:
             input_idle_timeout = 300.0
 
         self._input_idle_timeout_seconds = input_idle_timeout
-        self._sync_self_reference_binding(bool(command.get("self_reference_enabled")))
+        self._sync_runtime_binding(
+            runtime_enabled=bool(command.get("runtime_enabled", True)),
+        )
 
         filename = self._new_cell_filename()
         self._cache_source(filename, code)
@@ -629,23 +498,25 @@ class _PyReplWorker:
 
     def _handle_reset(self, command: dict[str, Any]) -> None:
         request_id = str(command.get("request_id", ""))
-        self._sync_self_reference_binding(bool(command.get("self_reference_enabled")))
+        self._sync_runtime_binding(
+            runtime_enabled=bool(command.get("runtime_enabled", True)),
+        )
 
         to_remove = []
         for name in list(self._namespace.keys()):
             if name in self._baseline_names:
                 continue
-            if self._self_reference_enabled and name == SELF_REFERENCE_GLOBAL_NAME:
+            if self._runtime_enabled and name == RUNTIME_GLOBAL_NAME:
                 continue
             to_remove.append(name)
 
         for name in to_remove:
             self._namespace.pop(name, None)
 
-        if self._self_reference_enabled:
-            self._namespace[SELF_REFERENCE_GLOBAL_NAME] = self._self_reference_proxy
+        if self._runtime_enabled:
+            self._namespace[RUNTIME_GLOBAL_NAME] = self._runtime_proxy
         else:
-            self._namespace.pop(SELF_REFERENCE_GLOBAL_NAME, None)
+            self._namespace.pop(RUNTIME_GLOBAL_NAME, None)
 
         self._emit(
             EVENT_RESET_RESULT,
@@ -655,7 +526,9 @@ class _PyReplWorker:
 
     def _handle_list_variables(self, command: dict[str, Any]) -> None:
         request_id = str(command.get("request_id", ""))
-        self._sync_self_reference_binding(bool(command.get("self_reference_enabled")))
+        self._sync_runtime_binding(
+            runtime_enabled=bool(command.get("runtime_enabled", True)),
+        )
 
         variables = []
         for name, value in self._namespace.items():
@@ -663,7 +536,7 @@ class _PyReplWorker:
                 continue
             if name in self._baseline_names:
                 continue
-            if name == SELF_REFERENCE_GLOBAL_NAME:
+            if name == RUNTIME_GLOBAL_NAME:
                 continue
             variables.append({"name": name, "type": type(value).__name__})
 
@@ -686,7 +559,7 @@ __all__ = [
     "EVENT_STDERR",
     "EVENT_INPUT_REQUEST",
     "EVENT_INPUT_ACCEPTED",
-    "EVENT_SELF_REFERENCE_CALL",
+    "EVENT_PRIMITIVE_CALL",
     "EVENT_EXECUTE_RESULT",
     "EVENT_RESET_RESULT",
     "EVENT_LIST_VARIABLES_RESULT",
@@ -696,8 +569,8 @@ __all__ = [
     "COMMAND_RESET",
     "COMMAND_LIST_VARIABLES",
     "COMMAND_INPUT_REPLY",
-    "COMMAND_SELF_REFERENCE_RESPONSE",
+    "COMMAND_PRIMITIVE_RESULT",
     "COMMAND_SHUTDOWN",
-    "SELF_REFERENCE_GLOBAL_NAME",
+    "RUNTIME_GLOBAL_NAME",
     "run_pyrepl_worker",
 ]

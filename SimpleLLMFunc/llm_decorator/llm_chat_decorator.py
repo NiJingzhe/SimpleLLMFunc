@@ -106,11 +106,31 @@ def _clone_toolkit_for_fork(
             if isinstance(bound_instance, PyRepl):
                 original_repl_id = id(bound_instance)
                 if original_repl_id not in repl_clones:
-                    repl_clones[original_repl_id] = PyRepl(
+                    replacement_repl = PyRepl(
                         execution_timeout_seconds=bound_instance.execution_timeout_seconds,
                         input_idle_timeout_seconds=bound_instance.input_idle_timeout_seconds,
-                        self_reference=self_reference,
                     )
+
+                    runtime_backends = bound_instance.list_runtime_backends()
+                    for backend_name in runtime_backends:
+                        backend_value = bound_instance.get_runtime_backend(backend_name)
+                        if backend_value is None:
+                            continue
+                        if isinstance(backend_value, SelfReference):
+                            replacement_repl.install_primitive_pack(
+                                "self_reference",
+                                backend=self_reference,
+                                backend_name=backend_name,
+                                replace=True,
+                            )
+                            continue
+                        replacement_repl.register_runtime_backend(
+                            backend_name,
+                            backend_value,
+                            replace=True,
+                        )
+
+                    repl_clones[original_repl_id] = replacement_repl
 
                 replacement_repl = repl_clones[original_repl_id]
                 replacement_tool = next(
@@ -161,46 +181,65 @@ def _build_self_reference_prompt_block(memory_key: str) -> str:
         [
             _SELF_REFERENCE_PROMPT_BLOCK_START,
             "Self-reference memory is enabled for this agent.",
-            f'- Use memory handle: self_reference.memory["{memory_key}"]',
-            "- Method purposes:",
-            "  count(): number of messages currently stored.",
-            "  all(): deep-copy snapshot of all messages.",
-            "  get(index): read one message by index.",
-            "  append(message): add one message at the end.",
-            "  insert(index, message): insert one message at index.",
-            "  update(index, message): replace one message at index.",
-            "  delete(index): remove one message at index.",
-            "  replace(messages): replace entire history with validated messages.",
-            "  clear(): remove all messages for this key.",
-            "  get_system_prompt(): read latest system prompt text.",
-            "  set_system_prompt(text): overwrite system prompt text.",
+            f'- Use runtime memory key: "{memory_key}"',
+            "- Runtime memory primitive purposes:",
+            f'  runtime.memory.count("{memory_key}"): number of stored messages.',
+            f'  runtime.memory.all("{memory_key}"): deep-copy snapshot of messages.',
+            f'  runtime.memory.get("{memory_key}", index): read one message by index.',
+            f'  runtime.memory.append("{memory_key}", message): append one message.',
             (
-                "  append_system_prompt(text): append text to current system "
-                "prompt with a newline."
+                f'  runtime.memory.insert("{memory_key}", index, message): insert one '
+                "message at index."
             ),
-            "- Self instance methods:",
-            "  self_reference.instance.is_bound(): check if recursive fork is available.",
             (
-                "  self_reference.instance.fork(message, "
+                f'  runtime.memory.update("{memory_key}", index, message): replace one '
+                "message at index."
+            ),
+            (
+                f'  runtime.memory.delete("{memory_key}", index): remove one message at '
+                "index."
+            ),
+            (
+                f'  runtime.memory.replace("{memory_key}", messages): replace entire '
+                "history with validated messages."
+            ),
+            f'  runtime.memory.clear("{memory_key}"): remove all messages for this key.',
+            (
+                f'  runtime.memory.get_system_prompt("{memory_key}"): read latest system '
+                "prompt text."
+            ),
+            (
+                f'  runtime.memory.set_system_prompt("{memory_key}", text): overwrite '
+                "system prompt text."
+            ),
+            (
+                f'  runtime.memory.append_system_prompt("{memory_key}", text): append '
+                "text to current system prompt with a newline."
+            ),
+            "- Runtime fork primitive purposes:",
+            "  runtime.fork.is_bound(): check if recursive fork is available.",
+            (
+                "  runtime.fork.run(message, "
                 f'source_memory_key="{memory_key}"): '
                 "fork this agent with inherited memory snapshot."
             ),
             (
-                "  self_reference.instance.fork_spawn(message, ...): "
-                "spawn a child fork asynchronously and return fork handle metadata."
+                "  runtime.fork.spawn(message, ...): spawn a child fork asynchronously "
+                "and return fork handle metadata."
             ),
-            "  self_reference.instance.fork_wait(fork_id): wait for one spawned fork.",
-            (
-                "  self_reference.instance.fork_wait_all([fork_id, ...]): "
-                "wait for multiple spawned forks."
-            ),
+            "  runtime.fork.wait(fork_id): wait for one spawned fork.",
+            "  runtime.fork.wait_all([fork_id, ...]): wait for multiple spawned forks.",
             "- Forgetting memory:",
             "  reset_repl only clears Python variables in REPL.",
-            "  It does NOT delete conversation memory in self_reference.",
+            "  It does NOT delete conversation memory in runtime backends.",
             "  To forget memory, delete message records via memory methods:",
-            "  delete(index), replace(messages), or clear().",
+            (
+                f'  runtime.memory.delete("{memory_key}", index), '
+                f'runtime.memory.replace("{memory_key}", messages), or '
+                f'runtime.memory.clear("{memory_key}").'
+            ),
             "- Durable preference example:",
-            (f'  self_reference.memory["{memory_key}"].append_system_prompt("...")'),
+            (f'  runtime.memory.append_system_prompt("{memory_key}", "...")'),
             _SELF_REFERENCE_PROMPT_BLOCK_END,
         ]
     )

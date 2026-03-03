@@ -129,7 +129,8 @@ async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
     self_reference = SelfReference()
-    root_repl = PyRepl(self_reference=self_reference)
+    root_repl = PyRepl()
+    root_repl.install_primitive_pack("self_reference", backend=self_reference)
 
     with (
         patch(
@@ -171,6 +172,7 @@ async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
 
     assert isinstance(child_repl, PyRepl)
     assert child_repl is not root_repl
+    assert child_repl.get_runtime_backend("self_reference") is self_reference
 
 
 @pytest.mark.asyncio
@@ -414,21 +416,15 @@ async def test_llm_chat_uses_function_name_as_default_self_reference_key() -> No
     assert self_reference.snapshot_history("agent") == history
     assert captured_system_prompt is not None
     assert "[SelfReference Memory Contract]" in captured_system_prompt
-    assert 'self_reference.memory["agent"]' in captured_system_prompt
+    assert 'runtime.memory.count("agent")' in captured_system_prompt
+    assert "runtime.fork.run(message" in captured_system_prompt
 
     expected_method_lines = [
-        "count(): number of messages currently stored.",
-        "all(): deep-copy snapshot of all messages.",
-        "get(index): read one message by index.",
-        "append(message): add one message at the end.",
-        "insert(index, message): insert one message at index.",
-        "update(index, message): replace one message at index.",
-        "delete(index): remove one message at index.",
-        "replace(messages): replace entire history with validated messages.",
-        "clear(): remove all messages for this key.",
-        "get_system_prompt(): read latest system prompt text.",
-        "set_system_prompt(text): overwrite system prompt text.",
-        "append_system_prompt(text): append text to current system prompt with a newline.",
+        'runtime.memory.count("agent")',
+        'runtime.memory.all("agent")',
+        'runtime.memory.get("agent", index)',
+        'runtime.memory.append("agent", message)',
+        'runtime.memory.append_system_prompt("agent", text)',
     ]
     for line in expected_method_lines:
         assert line in captured_system_prompt
@@ -436,9 +432,10 @@ async def test_llm_chat_uses_function_name_as_default_self_reference_key() -> No
     expected_forgetting_lines = [
         "- Forgetting memory:",
         "reset_repl only clears Python variables in REPL.",
-        "It does NOT delete conversation memory in self_reference.",
-        "To forget memory, delete message records via memory methods:",
-        "delete(index), replace(messages), or clear().",
+        "It does NOT delete conversation memory in runtime backends.",
+        'runtime.memory.delete("agent", index)',
+        'runtime.memory.replace("agent", messages)',
+        'runtime.memory.clear("agent")',
     ]
     for line in expected_forgetting_lines:
         assert line in captured_system_prompt
@@ -536,7 +533,7 @@ async def test_llm_chat_persists_runtime_system_prompt_across_turns() -> None:
     assert "runtime system" in observed_system_prompts[1]
     assert observed_system_prompts[0].count("[SelfReference Memory Contract]") == 1
     assert observed_system_prompts[1].count("[SelfReference Memory Contract]") == 1
-    assert 'self_reference.memory["agent_main"]' in observed_system_prompts[1]
+    assert 'runtime.memory.count("agent_main")' in observed_system_prompts[1]
     assert history[0] == {"role": "system", "content": "runtime system"}
     assert self_reference.snapshot_history("agent_main")[0] == {
         "role": "system",

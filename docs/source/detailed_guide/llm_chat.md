@@ -254,24 +254,27 @@ asyncio.run(demo())
 
 ## 高级特性
 
-### SelfReference auto system-prompt contract
+### SelfReference + runtime memory contract
 
-When `@llm_chat(...)` is provided with `self_reference`, the framework automatically appends a SelfReference Memory Contract to the current system prompt (with deduplication to avoid repeated blocks).
+When `@llm_chat(...)` is provided with `self_reference`, the framework automatically appends a memory contract to the current system prompt (with deduplication to avoid repeated blocks).
 
 The contract is runtime guidance for each turn; durable system-prompt memory remains clean and can be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
 
 The contract tells the agent:
 
-- which `self_reference.memory["<key>"]` handle to use
-- how to persist durable preferences with `append_system_prompt(...)`
-- which common memory methods are available (`append`, `update`, `delete`, `replace`, etc.)
+- which memory key to use for this chat function
+- how to persist durable preferences with system-prompt memory methods
+- which common memory operations are available (`append`, `update`, `delete`, `replace`, etc.)
 
 Example:
 
 ```python
 from SimpleLLMFunc import SelfReference, llm_chat
+from SimpleLLMFunc.builtin import PyRepl
 
 self_reference = SelfReference()
+repl = PyRepl()
+repl.install_primitive_pack("self_reference", backend=self_reference)
 
 @llm_chat(
     llm_interface=llm,
@@ -283,33 +286,36 @@ async def agent(message: str, history=None):
     """You are a practical coding assistant."""
 ```
 
-Write durable memory into system prompt from tools (for example in `execute_code`):
+Inside `execute_code`, prefer runtime primitives for memory operations:
 
 ```python
-mem = self_reference.memory["agent_main"]
-mem.append_system_prompt("User preference: answer in concise bullet points.")
+runtime.memory.append_system_prompt(
+    "agent_main",
+    "User preference: answer in concise bullet points.",
+)
 ```
 
-Method reference (purpose of each memory method):
+Runtime memory primitive reference:
 
-- `count()`: return number of messages in this memory key.
-- `all()`: return deep-copied full message list.
-- `get(index)`: read one message at index.
-- `append(message)`: append one message.
-- `insert(index, message)`: insert one message at index.
-- `update(index, message)`: replace one message at index.
-- `delete(index)`: delete one message at index.
-- `replace(messages)`: replace entire history with validated messages.
-- `clear()`: clear all messages.
-- `get_system_prompt()`: read latest system prompt.
-- `set_system_prompt(text)`: overwrite system prompt.
-- `append_system_prompt(text)`: append text to existing system prompt memory.
+- `runtime.memory.keys()`: list all bound memory keys.
+- `runtime.memory.count(key)`: return number of messages in `key`.
+- `runtime.memory.all(key)`: return deep-copied full message list.
+- `runtime.memory.get(key, index)`: read one message at index.
+- `runtime.memory.append(key, message)`: append one message.
+- `runtime.memory.insert(key, index, message)`: insert one message at index.
+- `runtime.memory.update(key, index, message)`: replace one message at index.
+- `runtime.memory.delete(key, index)`: delete one message at index.
+- `runtime.memory.replace(key, messages)`: replace entire history with validated messages.
+- `runtime.memory.clear(key)`: clear all messages.
+- `runtime.memory.get_system_prompt(key)`: read latest system prompt.
+- `runtime.memory.set_system_prompt(key, text)`: overwrite system prompt.
+- `runtime.memory.append_system_prompt(key, text)`: append text to existing system prompt memory.
 
 Forgetting memory:
 
 - Do not treat `reset_repl` as memory forgetting.
 - `reset_repl` only clears Python runtime variables.
-- Forget memory by deleting records through memory methods (`delete`, `replace`, `clear`).
+- Forget memory by deleting records through runtime memory primitives (`runtime.memory.delete`, `runtime.memory.replace`, `runtime.memory.clear`).
 
 ### 返回模式
 
