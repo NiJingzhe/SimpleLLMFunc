@@ -31,7 +31,7 @@ from SimpleLLMFunc.hooks.events import (
     ToolCallEndEvent,
     ToolCallStartEvent,
 )
-from SimpleLLMFunc.hooks.stream import EventYield, ReactOutput
+from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield, ReactOutput
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
 from SimpleLLMFunc.utils.tui.hooks import ToolEventRenderUpdate, ToolRenderSnapshot
 
@@ -70,6 +70,7 @@ class FakeAdapter:
     tool_stats: dict[str, str] = field(default_factory=dict)
     tool_status: dict[str, str] = field(default_factory=dict)
     tool_results: dict[str, str] = field(default_factory=dict)
+    tool_parent_model: dict[str, str] = field(default_factory=dict)
     model_start_order: list[str] = field(default_factory=list)
     tool_input_requests: list[tuple[str, str, str]] = field(default_factory=list)
     tool_input_cleared: list[str] = field(default_factory=list)
@@ -101,6 +102,7 @@ class FakeAdapter:
     ) -> None:
         self.tool_output[tool_call_id] = ""
         self.tool_status[tool_call_id] = "running"
+        self.tool_parent_model[tool_call_id] = model_call_id
 
     async def append_tool_output(self, tool_call_id: str, output_delta: str) -> None:
         self.tool_output[tool_call_id] += output_delta
@@ -474,3 +476,433 @@ async def test_consume_react_stream_stops_after_react_end_event() -> None:
     )
 
     assert history == final_messages
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_routes_fork_stream_to_peer_model_block() -> None:
+    """Fork stream events should render as separate peer model cards."""
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+    tool_call = ChatCompletionMessageToolCall(
+        id="call-parent",
+        type="function",
+        function=OpenAIFunction(
+            name="execute_code",
+            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+        ),
+    )
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=LLMCallStartEvent(
+                event_type=ReActEventType.LLM_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=0,
+                messages=[],
+                tools=None,
+                llm_kwargs={},
+                stream=True,
+            )
+        )
+        yield EventYield(
+            event=ToolCallStartEvent(
+                event_type=ReActEventType.TOOL_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+                arguments={"code": "runtime.selfref.fork.run('task')"},
+                tool_call=tool_call,
+            )
+        )
+        yield EventYield(
+            event=CustomEvent(
+                event_type=ReActEventType.CUSTOM_EVENT,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                event_name="selfref_fork_stream_open",
+                data={
+                    "fork_id": "fork_1",
+                    "depth": 1,
+                    "memory_key": "agent_main::fork::1",
+                    "status": "running",
+                },
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+            )
+        )
+        yield EventYield(
+            event=CustomEvent(
+                event_type=ReActEventType.CUSTOM_EVENT,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                event_name="selfref_fork_stream_delta",
+                data={
+                    "fork_id": "fork_1",
+                    "depth": 1,
+                    "memory_key": "agent_main::fork::1",
+                    "text": "child says hi\n",
+                },
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+            )
+        )
+        yield EventYield(
+            event=CustomEvent(
+                event_type=ReActEventType.CUSTOM_EVENT,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                event_name="selfref_fork_stream_close",
+                data={
+                    "fork_id": "fork_1",
+                    "depth": 1,
+                    "memory_key": "agent_main::fork::1",
+                    "status": "completed",
+                },
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+            )
+        )
+        yield EventYield(
+            event=ToolCallEndEvent(
+                event_type=ReActEventType.TOOL_CALL_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+                arguments={"code": "runtime.selfref.fork.run('task')"},
+                result={
+                    "success": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "return_value": None,
+                    "error": None,
+                },
+                execution_time=0.2,
+                success=True,
+            )
+        )
+        yield EventYield(
+            event=ReactEndEvent(
+                event_type=ReActEventType.REACT_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                final_response="done",
+                final_messages=[],
+                total_iterations=1,
+                total_execution_time=0.5,
+                total_tool_calls=1,
+                total_llm_calls=1,
+                total_token_usage=None,
+            )
+        )
+
+    await consume_react_stream(_stream(), adapter=adapter)
+
+    assert "fork::fork_1" in adapter.model_start_order
+    assert adapter.model_content["fork::fork_1"] == "child says hi\n"
+    assert adapter.tool_output["call-parent"] == ""
+    assert adapter.tool_results["call-parent"] == ""
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_routes_origin_scoped_fork_tool_events() -> None:
+    """Child tool events with fork origin should render inside fork cards."""
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+    parent_tool_call = ChatCompletionMessageToolCall(
+        id="call-parent",
+        type="function",
+        function=OpenAIFunction(
+            name="execute_code",
+            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+        ),
+    )
+    child_tool_call = ChatCompletionMessageToolCall(
+        id="child-call",
+        type="function",
+        function=OpenAIFunction(name="execute_code", arguments='{"code": "print(1)"}'),
+    )
+
+    forwarded_start = ToolCallStartEvent(
+        event_type=ReActEventType.TOOL_CALL_START,
+        timestamp=ts,
+        trace_id="trace-child",
+        func_name="agent",
+        iteration=1,
+        tool_name="execute_code",
+        tool_call_id="child-call",
+        arguments={"code": "print(1)"},
+        tool_call=child_tool_call,
+    )
+    forwarded_stdout = CustomEvent(
+        event_type=ReActEventType.CUSTOM_EVENT,
+        timestamp=ts,
+        trace_id="trace-child",
+        func_name="agent",
+        iteration=1,
+        event_name="kernel_stdout",
+        data={"text": "1\n"},
+        tool_name="execute_code",
+        tool_call_id="child-call",
+    )
+    forwarded_end = ToolCallEndEvent(
+        event_type=ReActEventType.TOOL_CALL_END,
+        timestamp=ts,
+        trace_id="trace-child",
+        func_name="agent",
+        iteration=1,
+        tool_name="execute_code",
+        tool_call_id="child-call",
+        arguments={"code": "print(1)"},
+        result={
+            "success": True,
+            "stdout": "1\n",
+            "stderr": "",
+            "return_value": None,
+            "error": None,
+        },
+        execution_time=0.1,
+        success=True,
+    )
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=LLMCallStartEvent(
+                event_type=ReActEventType.LLM_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=0,
+                messages=[],
+                tools=None,
+                llm_kwargs={},
+                stream=True,
+            )
+        )
+        yield EventYield(
+            event=ToolCallStartEvent(
+                event_type=ReActEventType.TOOL_CALL_START,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+                arguments={"code": "runtime.selfref.fork.run('task')"},
+                tool_call=parent_tool_call,
+            )
+        )
+        fork_origin = EventOrigin(
+            session_id="trace-1",
+            agent_call_id="agent-root",
+            event_seq=1,
+            fork_id="fork_1",
+            fork_depth=1,
+            memory_key="agent_main::fork::1",
+            source_memory_key="agent_main",
+        )
+        yield EventYield(event=forwarded_start, origin=fork_origin)
+        yield EventYield(
+            event=forwarded_stdout,
+            origin=EventOrigin(
+                session_id=fork_origin.session_id,
+                agent_call_id=fork_origin.agent_call_id,
+                event_seq=2,
+                fork_id=fork_origin.fork_id,
+                fork_depth=fork_origin.fork_depth,
+                memory_key=fork_origin.memory_key,
+                source_memory_key=fork_origin.source_memory_key,
+            ),
+        )
+        yield EventYield(
+            event=forwarded_end,
+            origin=EventOrigin(
+                session_id=fork_origin.session_id,
+                agent_call_id=fork_origin.agent_call_id,
+                event_seq=3,
+                fork_id=fork_origin.fork_id,
+                fork_depth=fork_origin.fork_depth,
+                memory_key=fork_origin.memory_key,
+                source_memory_key=fork_origin.source_memory_key,
+            ),
+        )
+        yield EventYield(
+            event=ToolCallEndEvent(
+                event_type=ReActEventType.TOOL_CALL_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+                arguments={"code": "runtime.selfref.fork.run('task')"},
+                result={
+                    "success": True,
+                    "stdout": "",
+                    "stderr": "",
+                    "return_value": None,
+                    "error": None,
+                },
+                execution_time=0.2,
+                success=True,
+            )
+        )
+        yield EventYield(
+            event=ReactEndEvent(
+                event_type=ReActEventType.REACT_END,
+                timestamp=ts,
+                trace_id="trace-1",
+                func_name="agent",
+                iteration=1,
+                final_response="done",
+                final_messages=[],
+                total_iterations=1,
+                total_execution_time=0.5,
+                total_tool_calls=1,
+                total_llm_calls=1,
+                total_token_usage=None,
+            )
+        )
+
+    await consume_react_stream(_stream(), adapter=adapter)
+
+    mapped_child_tool_call_id = "fork::fork_1::tool::child-call"
+    assert adapter.tool_parent_model[mapped_child_tool_call_id] == "fork::fork_1"
+    assert adapter.tool_output[mapped_child_tool_call_id] == "1\n"
+    assert adapter.tool_results[mapped_child_tool_call_id] == ""
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_routes_nested_origin_fork_events() -> None:
+    """Nested fork-origin events should route into the nested fork card."""
+
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+
+    parent_tool_call = ChatCompletionMessageToolCall(
+        id="call-parent",
+        type="function",
+        function=OpenAIFunction(
+            name="execute_code",
+            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+        ),
+    )
+    child_tool_call = ChatCompletionMessageToolCall(
+        id="child-call",
+        type="function",
+        function=OpenAIFunction(name="execute_code", arguments='{"code": "pass"}'),
+    )
+
+    forwarded_child_start = ToolCallStartEvent(
+        event_type=ReActEventType.TOOL_CALL_START,
+        timestamp=ts,
+        trace_id="trace-child",
+        func_name="agent",
+        iteration=1,
+        tool_name="execute_code",
+        tool_call_id="child-call",
+        arguments={"code": "pass"},
+        tool_call=child_tool_call,
+    )
+
+    nested_child_llm_start = LLMCallStartEvent(
+        event_type=ReActEventType.LLM_CALL_START,
+        timestamp=ts,
+        trace_id="trace-grandchild",
+        func_name="agent",
+        iteration=0,
+        messages=[],
+        tools=None,
+        llm_kwargs={},
+        stream=True,
+    )
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=LLMCallStartEvent(
+                event_type=ReActEventType.LLM_CALL_START,
+                timestamp=ts,
+                trace_id="trace-main",
+                func_name="agent",
+                iteration=0,
+                messages=[],
+                tools=None,
+                llm_kwargs={},
+                stream=True,
+            )
+        )
+        yield EventYield(
+            event=ToolCallStartEvent(
+                event_type=ReActEventType.TOOL_CALL_START,
+                timestamp=ts,
+                trace_id="trace-main",
+                func_name="agent",
+                iteration=1,
+                tool_name="execute_code",
+                tool_call_id="call-parent",
+                arguments={"code": "runtime.selfref.fork.run('task')"},
+                tool_call=parent_tool_call,
+            )
+        )
+        yield EventYield(
+            event=forwarded_child_start,
+            origin=EventOrigin(
+                session_id="trace-main",
+                agent_call_id="agent-root",
+                event_seq=1,
+                fork_id="fork_2",
+                fork_depth=2,
+                memory_key="agent_main::fork::1::fork::2",
+                source_memory_key="agent_main::fork::1",
+            ),
+        )
+        yield EventYield(
+            event=nested_child_llm_start,
+            origin=EventOrigin(
+                session_id="trace-main",
+                agent_call_id="agent-root",
+                event_seq=2,
+                fork_id="fork_3",
+                fork_depth=3,
+                memory_key="agent_main::fork::1::fork::2::fork::3",
+                source_memory_key="agent_main::fork::1::fork::2",
+            ),
+        )
+        yield EventYield(
+            event=ReactEndEvent(
+                event_type=ReActEventType.REACT_END,
+                timestamp=ts,
+                trace_id="trace-main",
+                func_name="agent",
+                iteration=1,
+                final_response="done",
+                final_messages=[],
+                total_iterations=1,
+                total_execution_time=0.3,
+                total_tool_calls=1,
+                total_llm_calls=1,
+                total_token_usage=None,
+            )
+        )
+
+    await consume_react_stream(_stream(), adapter=adapter)
+
+    mapped_child_tool_call_id = "fork::fork_2::tool::child-call"
+    assert adapter.tool_parent_model[mapped_child_tool_call_id] == "fork::fork_2"
+    assert adapter.tool_output[mapped_child_tool_call_id] == ""
+    assert "fork::fork_3" in adapter.model_start_order

@@ -16,7 +16,7 @@ from SimpleLLMFunc.hooks.events import (
     ToolCallErrorEvent,
     ToolCallStartEvent,
 )
-from SimpleLLMFunc.hooks.stream import ReactOutput, is_event_yield
+from SimpleLLMFunc.hooks.stream import EventOrigin, ReactOutput, is_event_yield
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.formatters import (
     extract_reasoning_delta,
@@ -94,7 +94,35 @@ class _StreamConsumeState:
     model_has_chunk_text: dict[str, bool] = field(default_factory=dict)
     tool_snapshots: dict[str, ToolRenderSnapshot] = field(default_factory=dict)
     running_tool_call_ids: list[str] = field(default_factory=list)
+    fork_sessions: dict[str, "_ForkSessionState"] = field(default_factory=dict)
     final_history: MessageList = field(default_factory=list)
+
+
+@dataclass
+class _ForkSessionState:
+    """Per-fork render state for fork UI cards."""
+
+    fork_id: str
+    model_call_id: str
+    parent_fork_id: Optional[str] = None
+    depth: Optional[int] = None
+    memory_key: str = ""
+    metadata_rendered: bool = False
+    running_tool_call_ids: list[str] = field(default_factory=list)
+    tool_call_id_map: dict[str, str] = field(default_factory=dict)
+
+
+_FORK_STREAM_EVENT_NAMES = {
+    "selfref_fork_stream_open",
+    "selfref_fork_stream_delta",
+    "selfref_fork_stream_close",
+}
+_FORK_LIFECYCLE_EVENT_NAMES = {
+    "selfref_fork_start",
+    "selfref_fork_spawned",
+    "selfref_fork_end",
+    "selfref_fork_error",
+}
 
 
 async def _ensure_active_model_call(
@@ -128,12 +156,488 @@ def _extract_input_request(data: object) -> tuple[Optional[str], str]:
     return request_id, prompt
 
 
-async def _handle_event(
-    event: ReActEvent,
+def _parse_optional_int(value: object) -> Optional[int]:
+    if value is None:
+        return None
+
+    if isinstance(value, bool):
+        return int(value)
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(value)
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return int(stripped)
+        except ValueError:
+            return None
+
+    return None
+
+
+def _compose_fork_model_call_id(fork_id: str) -> str:
+    return f"fork::{fork_id}"
+
+
+def _compose_fork_tool_call_id(fork_id: str, tool_call_id: str) -> str:
+    return f"fork::{fork_id}::tool::{tool_call_id}"
+
+
+def _format_execute_code_result_markdown(result: object) -> str:
+    if not isinstance(result, dict):
+        return format_tool_result_markdown(result)
+
+    blocks: list[str] = []
+
+    return_value = result.get("return_value")
+    if return_value is not None:
+        rendered_return_value = format_tool_result_markdown(return_value)
+        if rendered_return_value:
+            blocks.append(f"Return value:\n{rendered_return_value}")
+
+    success = bool(result.get("success", False))
+    error = result.get("error")
+    if (not success) and isinstance(error, str) and error:
+        blocks.append(f"Error: {error}")
+
+    return "\n\n".join(blocks)
+
+
+def _format_tool_result_for_display(tool_name: str, result: object) -> str:
+    if tool_name == "execute_code":
+        return _format_execute_code_result_markdown(result)
+    return format_tool_result_markdown(result)
+
+
+async def _ensure_fork_session(
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+    *,
+    fork_id: str,
+    parent_fork_id: Optional[str],
+    depth: Optional[int],
+    memory_key: str,
+) -> _ForkSessionState:
+    existing = state.fork_sessions.get(fork_id)
+    if existing is not None:
+        if parent_fork_id is not None:
+            existing.parent_fork_id = parent_fork_id
+        if depth is not None:
+            existing.depth = depth
+        if memory_key:
+            existing.memory_key = memory_key
+        return existing
+
+    model_call_id = _compose_fork_model_call_id(fork_id)
+    await adapter.start_model_response(model_call_id)
+    session = _ForkSessionState(
+        fork_id=fork_id,
+        model_call_id=model_call_id,
+        parent_fork_id=parent_fork_id,
+        depth=depth,
+        memory_key=memory_key,
+    )
+    state.fork_sessions[fork_id] = session
+    return session
+
+
+def _resolve_fork_session_tool_call_id(
+    session: _ForkSessionState,
+    child_tool_call_id: str,
+) -> str:
+    mapped = session.tool_call_id_map.get(child_tool_call_id)
+    if mapped is not None:
+        return mapped
+
+    mapped = _compose_fork_tool_call_id(session.fork_id, child_tool_call_id)
+    session.tool_call_id_map[child_tool_call_id] = mapped
+    return mapped
+
+
+async def _apply_custom_tool_event(
+    *,
+    event: CustomEvent,
+    resolved_tool_call_id: Optional[str],
+    running_tool_call_ids: list[str],
     adapter: TUIStreamAdapter,
     state: _StreamConsumeState,
     custom_hooks: Sequence[ToolCustomEventHook],
 ) -> None:
+    tool_call_id = resolved_tool_call_id
+    if not tool_call_id and running_tool_call_ids:
+        tool_call_id = running_tool_call_ids[-1]
+
+    if not tool_call_id:
+        return
+
+    snapshot = state.tool_snapshots.get(tool_call_id)
+    if snapshot is None:
+        return
+
+    if event.event_name == "kernel_input_request":
+        request_id, prompt = _extract_input_request(event.data)
+        if request_id:
+            await adapter.request_tool_input(
+                tool_call_id=tool_call_id,
+                request_id=request_id,
+                prompt=prompt,
+            )
+
+    update = apply_tool_event_hooks(
+        event=event,
+        snapshot=snapshot,
+        custom_hooks=custom_hooks,
+    )
+
+    if update is None:
+        update_text = format_custom_event_fallback(event.event_name, event.data)
+        await adapter.append_tool_output(tool_call_id, update_text)
+        snapshot.output += update_text
+        return
+
+    if update.replace_output is not None:
+        snapshot.output = update.replace_output
+        await adapter.append_tool_output(tool_call_id, update.replace_output)
+    elif update.append_output:
+        snapshot.output += update.append_output
+        await adapter.append_tool_output(tool_call_id, update.append_output)
+
+    if update.status:
+        snapshot.status = update.status
+        await adapter.set_tool_status(tool_call_id, update.status)
+
+
+async def _handle_fork_stream_custom_event(
+    event: CustomEvent,
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+) -> bool:
+    if event.event_name not in _FORK_STREAM_EVENT_NAMES:
+        return False
+
+    if not isinstance(event.data, dict):
+        return True
+
+    fork_id_raw = event.data.get("fork_id")
+    if not isinstance(fork_id_raw, str) or not fork_id_raw:
+        return True
+
+    parent_fork_id = event.data.get("parent_fork_id")
+    if not isinstance(parent_fork_id, str):
+        parent_fork_id = None
+
+    depth = _parse_optional_int(event.data.get("depth"))
+    memory_key = event.data.get("memory_key")
+    if not isinstance(memory_key, str):
+        memory_key = ""
+
+    session = await _ensure_fork_session(
+        adapter=adapter,
+        state=state,
+        fork_id=fork_id_raw,
+        parent_fork_id=parent_fork_id,
+        depth=depth,
+        memory_key=memory_key,
+    )
+
+    if event.event_name == "selfref_fork_stream_open":
+        if not session.metadata_rendered:
+            parts: list[str] = []
+            if session.depth is not None:
+                parts.append(f"depth={session.depth}")
+            if session.memory_key:
+                parts.append(f"memory={session.memory_key}")
+            if session.parent_fork_id:
+                parts.append(f"parent={session.parent_fork_id}")
+            if parts:
+                await adapter.append_model_reasoning(
+                    session.model_call_id,
+                    " | ".join(parts),
+                )
+            session.metadata_rendered = True
+        return True
+
+    if event.event_name == "selfref_fork_stream_delta":
+        text = event.data.get("text")
+        if isinstance(text, str) and text:
+            await adapter.append_model_content(session.model_call_id, text)
+        return True
+
+    status = event.data.get("status")
+    if isinstance(status, str) and status:
+        stats_line = f"fork | {status}"
+    else:
+        stats_line = "fork | completed"
+    await adapter.finish_model_response(session.model_call_id, stats_line)
+    return True
+
+
+async def _handle_fork_lifecycle_custom_event(
+    event: CustomEvent,
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+) -> bool:
+    if event.event_name not in _FORK_LIFECYCLE_EVENT_NAMES:
+        return False
+
+    if not isinstance(event.data, dict):
+        return True
+
+    fork_id_raw = event.data.get("fork_id")
+    if not isinstance(fork_id_raw, str) or not fork_id_raw:
+        return True
+
+    parent_fork_id = event.data.get("parent_fork_id")
+    if not isinstance(parent_fork_id, str):
+        parent_fork_id = None
+
+    depth = _parse_optional_int(event.data.get("depth"))
+    memory_key = event.data.get("memory_key")
+    if not isinstance(memory_key, str):
+        memory_key = ""
+
+    session = await _ensure_fork_session(
+        adapter=adapter,
+        state=state,
+        fork_id=fork_id_raw,
+        parent_fork_id=parent_fork_id,
+        depth=depth,
+        memory_key=memory_key,
+    )
+
+    if event.event_name == "selfref_fork_error":
+        error_type = event.data.get("error_type")
+        error_message = event.data.get("error_message")
+        if isinstance(error_type, str) and isinstance(error_message, str):
+            await adapter.append_model_reasoning(
+                session.model_call_id,
+                f"{error_type}: {error_message}",
+            )
+        await adapter.finish_model_response(session.model_call_id, "fork | error")
+        return True
+
+    if event.event_name == "selfref_fork_end":
+        await adapter.finish_model_response(session.model_call_id, "fork | completed")
+        return True
+
+    return True
+
+
+def _extract_origin_payload(
+    *,
+    event: ReActEvent,
+    origin: Optional[EventOrigin],
+) -> dict[str, object]:
+    if origin is not None:
+        return origin.as_dict()
+
+    event_extra = getattr(event, "extra", None)
+    if isinstance(event_extra, dict):
+        raw_origin = event_extra.get("origin")
+        if isinstance(raw_origin, dict):
+            return raw_origin
+
+    return {}
+
+
+def _resolve_fork_origin_context(
+    *,
+    event: ReActEvent,
+    origin: Optional[EventOrigin],
+) -> tuple[Optional[str], Optional[str], Optional[int], str]:
+    if origin is not None and origin.fork_id:
+        return (
+            origin.fork_id,
+            None,
+            origin.fork_depth,
+            origin.memory_key or "",
+        )
+
+    origin_payload = _extract_origin_payload(event=event, origin=origin)
+    fork_id_raw = origin_payload.get("fork_id")
+    if not isinstance(fork_id_raw, str) or not fork_id_raw:
+        return None, None, None, ""
+
+    parent_fork_id_raw = origin_payload.get("parent_fork_id")
+    parent_fork_id = parent_fork_id_raw if isinstance(parent_fork_id_raw, str) else None
+
+    depth = _parse_optional_int(origin_payload.get("fork_depth"))
+    memory_key_raw = origin_payload.get("memory_key")
+    memory_key = memory_key_raw if isinstance(memory_key_raw, str) else ""
+    return fork_id_raw, parent_fork_id, depth, memory_key
+
+
+async def _handle_origin_scoped_fork_event(
+    *,
+    event: ReActEvent,
+    origin: Optional[EventOrigin],
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+    custom_hooks: Sequence[ToolCustomEventHook],
+) -> bool:
+    if isinstance(event, CustomEvent) and (
+        event.event_name in _FORK_STREAM_EVENT_NAMES
+        or event.event_name in _FORK_LIFECYCLE_EVENT_NAMES
+    ):
+        return False
+
+    fork_id, parent_fork_id, depth, memory_key = _resolve_fork_origin_context(
+        event=event,
+        origin=origin,
+    )
+    if fork_id is None:
+        return False
+
+    session = await _ensure_fork_session(
+        adapter=adapter,
+        state=state,
+        fork_id=fork_id,
+        parent_fork_id=parent_fork_id,
+        depth=depth,
+        memory_key=memory_key,
+    )
+
+    if isinstance(event, LLMCallStartEvent):
+        state.model_has_chunk_text[session.model_call_id] = False
+        return True
+
+    if isinstance(event, LLMChunkArriveEvent):
+        content_delta = extract_stream_text(event.chunk)
+        if content_delta:
+            state.model_has_chunk_text[session.model_call_id] = True
+            await adapter.append_model_content(session.model_call_id, content_delta)
+
+        reasoning_delta = extract_reasoning_delta(event.chunk)
+        if reasoning_delta:
+            await adapter.append_model_reasoning(session.model_call_id, reasoning_delta)
+        return True
+
+    if isinstance(event, LLMCallEndEvent):
+        if not state.model_has_chunk_text.get(session.model_call_id, False):
+            text = extract_text_from_response(event.response)
+            if text:
+                await adapter.append_model_content(session.model_call_id, text)
+
+        model_name = getattr(event.response, "model", None)
+        stats_line = format_model_stats(
+            execution_time=event.execution_time,
+            usage=event.usage,
+            model_name=model_name,
+        )
+        await adapter.finish_model_response(session.model_call_id, stats_line)
+        return True
+
+    if isinstance(event, ToolCallStartEvent):
+        mapped_tool_call_id = _resolve_fork_session_tool_call_id(
+            session,
+            event.tool_call_id,
+        )
+        await adapter.start_tool_call(
+            model_call_id=session.model_call_id,
+            tool_call_id=mapped_tool_call_id,
+            tool_name=event.tool_name,
+            arguments=event.arguments,
+        )
+        state.tool_snapshots[mapped_tool_call_id] = ToolRenderSnapshot(
+            tool_name=event.tool_name,
+            tool_call_id=mapped_tool_call_id,
+            arguments=event.arguments,
+        )
+        session.running_tool_call_ids.append(mapped_tool_call_id)
+        return True
+
+    if isinstance(event, CustomEvent):
+        resolved_tool_call_id: Optional[str] = None
+        if event.tool_call_id:
+            resolved_tool_call_id = _resolve_fork_session_tool_call_id(
+                session,
+                event.tool_call_id,
+            )
+
+        await _apply_custom_tool_event(
+            event=event,
+            resolved_tool_call_id=resolved_tool_call_id,
+            running_tool_call_ids=session.running_tool_call_ids,
+            adapter=adapter,
+            state=state,
+            custom_hooks=custom_hooks,
+        )
+        return True
+
+    if isinstance(event, ToolCallEndEvent):
+        mapped_tool_call_id = _resolve_fork_session_tool_call_id(
+            session,
+            event.tool_call_id,
+        )
+        snapshot = state.tool_snapshots.get(mapped_tool_call_id)
+        tool_name = snapshot.tool_name if snapshot is not None else event.tool_name
+        result_markdown = _format_tool_result_for_display(tool_name, event.result)
+        stats_line = format_tool_stats(event.execution_time, event.success)
+        await adapter.finish_tool_call(
+            tool_call_id=mapped_tool_call_id,
+            result_markdown=result_markdown,
+            stats_line=stats_line,
+            success=event.success,
+        )
+        await adapter.clear_tool_input(mapped_tool_call_id)
+        if mapped_tool_call_id in session.running_tool_call_ids:
+            session.running_tool_call_ids.remove(mapped_tool_call_id)
+        if snapshot is not None:
+            snapshot.status = "success" if event.success else "error"
+        return True
+
+    if isinstance(event, ToolCallErrorEvent):
+        mapped_tool_call_id = _resolve_fork_session_tool_call_id(
+            session,
+            event.tool_call_id,
+        )
+        result_markdown = format_tool_result_markdown(
+            {
+                "error": event.error_message,
+                "error_type": event.error_type,
+            }
+        )
+        stats_line = format_tool_stats(event.execution_time, False)
+        await adapter.finish_tool_call(
+            tool_call_id=mapped_tool_call_id,
+            result_markdown=result_markdown,
+            stats_line=stats_line,
+            success=False,
+        )
+        await adapter.clear_tool_input(mapped_tool_call_id)
+        if mapped_tool_call_id in session.running_tool_call_ids:
+            session.running_tool_call_ids.remove(mapped_tool_call_id)
+        snapshot = state.tool_snapshots.get(mapped_tool_call_id)
+        if snapshot is not None:
+            snapshot.status = "error"
+        return True
+
+    return True
+
+
+async def _handle_event(
+    event: ReActEvent,
+    origin: Optional[EventOrigin],
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+    custom_hooks: Sequence[ToolCustomEventHook],
+) -> None:
+    handled_origin_scoped_fork_event = await _handle_origin_scoped_fork_event(
+        event=event,
+        origin=origin,
+        adapter=adapter,
+        state=state,
+        custom_hooks=custom_hooks,
+    )
+    if handled_origin_scoped_fork_event:
+        return
+
     if isinstance(event, LLMCallStartEvent):
         state.llm_call_count += 1
         state.active_model_call_id = f"llm_call_{state.llm_call_count}"
@@ -188,55 +692,36 @@ async def _handle_event(
         return
 
     if isinstance(event, CustomEvent):
-        tool_call_id = event.tool_call_id
-        if not tool_call_id and state.running_tool_call_ids:
-            tool_call_id = state.running_tool_call_ids[-1]
-
-        if not tool_call_id:
-            return
-
-        snapshot = state.tool_snapshots.get(tool_call_id)
-        if snapshot is None:
-            return
-
-        if event.event_name == "kernel_input_request":
-            request_id, prompt = _extract_input_request(event.data)
-            if request_id:
-                await adapter.request_tool_input(
-                    tool_call_id=tool_call_id,
-                    request_id=request_id,
-                    prompt=prompt,
-                )
-
-        update = apply_tool_event_hooks(
+        handled_fork_stream = await _handle_fork_stream_custom_event(
             event=event,
-            snapshot=snapshot,
+            adapter=adapter,
+            state=state,
+        )
+        if handled_fork_stream:
+            return
+
+        handled_fork_lifecycle = await _handle_fork_lifecycle_custom_event(
+            event=event,
+            adapter=adapter,
+            state=state,
+        )
+        if handled_fork_lifecycle:
+            return
+
+        await _apply_custom_tool_event(
+            event=event,
+            resolved_tool_call_id=event.tool_call_id,
+            running_tool_call_ids=state.running_tool_call_ids,
+            adapter=adapter,
+            state=state,
             custom_hooks=custom_hooks,
         )
-
-        if update is None:
-            update_text = format_custom_event_fallback(event.event_name, event.data)
-            await adapter.append_tool_output(tool_call_id, update_text)
-            snapshot.output += update_text
-            return
-
-        if update.replace_output is not None:
-            snapshot.output = update.replace_output
-            await adapter.append_tool_output(
-                tool_call_id,
-                update.replace_output,
-            )
-        elif update.append_output:
-            snapshot.output += update.append_output
-            await adapter.append_tool_output(tool_call_id, update.append_output)
-
-        if update.status:
-            snapshot.status = update.status
-            await adapter.set_tool_status(tool_call_id, update.status)
         return
 
     if isinstance(event, ToolCallEndEvent):
-        result_markdown = format_tool_result_markdown(event.result)
+        snapshot = state.tool_snapshots.get(event.tool_call_id)
+        tool_name = snapshot.tool_name if snapshot is not None else event.tool_name
+        result_markdown = _format_tool_result_for_display(tool_name, event.result)
         stats_line = format_tool_stats(event.execution_time, event.success)
         await adapter.finish_tool_call(
             tool_call_id=event.tool_call_id,
@@ -247,7 +732,6 @@ async def _handle_event(
         await adapter.clear_tool_input(event.tool_call_id)
         if event.tool_call_id in state.running_tool_call_ids:
             state.running_tool_call_ids.remove(event.tool_call_id)
-        snapshot = state.tool_snapshots.get(event.tool_call_id)
         if snapshot is not None:
             snapshot.status = "success" if event.success else "error"
         return
@@ -297,6 +781,7 @@ async def consume_react_stream(
 
         await _handle_event(
             event=output.event,
+            origin=output.origin,
             adapter=adapter,
             state=state,
             custom_hooks=hooks,
