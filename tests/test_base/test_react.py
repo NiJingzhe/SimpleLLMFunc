@@ -10,7 +10,11 @@ from openai.types.chat import ChatCompletionChunk
 from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.base.ReAct import execute_llm
-from SimpleLLMFunc.hooks.events import LLMCallEndEvent, ReactEndEvent
+from SimpleLLMFunc.hooks.events import (
+    LLMCallEndEvent,
+    ReactEndEvent,
+    ReActEventType,
+)
 from SimpleLLMFunc.hooks.stream import EventYield
 
 
@@ -409,3 +413,76 @@ class TestExecuteLLM:
         event_seqs = [origin.event_seq for origin in origins]
         assert event_seqs == sorted(event_seqs)
         assert event_seqs[0] == 1
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_event_mode_tool_phase_uses_event_bus_origin(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion_with_tool_calls: Any,
+    ) -> None:
+        """Tool-phase events should carry monotonic origin and tool context."""
+        mock_get_context.return_value = "test_func"
+
+        final_response = MagicMock()
+        final_response.choices = [MagicMock()]
+        final_response.choices[0].message = MagicMock()
+        final_response.choices[0].message.content = "Final response"
+        final_response.choices[0].message.tool_calls = None
+
+        mock_llm_interface.chat = AsyncMock(
+            side_effect=[mock_chat_completion_with_tool_calls, final_response]
+        )
+
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        async def _tool_impl(arg1: str, event_emitter: Any = None) -> str:
+            return "tool-result"
+
+        tools = [{"type": "function", "function": {"name": "test_tool"}}]
+        tool_map = {"test_tool": _tool_impl}
+
+        outputs: list[EventYield] = []
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=tools,
+            tool_map=tool_map,
+            max_tool_calls=5,
+            stream=False,
+            enable_event=True,
+        ):
+            if isinstance(output, EventYield):
+                outputs.append(output)
+
+        assert outputs
+        session_ids = {output.origin.session_id for output in outputs}
+        assert len(session_ids) == 1
+        assert "legacy" not in session_ids
+
+        event_seqs = [output.origin.event_seq for output in outputs]
+        assert event_seqs == sorted(event_seqs)
+        assert event_seqs[0] == 1
+
+        tool_events = [
+            output
+            for output in outputs
+            if output.event.event_type
+            in {
+                ReActEventType.TOOL_CALL_START,
+                ReActEventType.TOOL_CALL_END,
+                ReActEventType.TOOL_CALL_ERROR,
+            }
+        ]
+        assert tool_events
+        for output in tool_events:
+            assert output.origin.tool_name == "test_tool"
+            assert output.origin.tool_call_id == "call_123"

@@ -117,6 +117,7 @@ async def _process_tool_calls_with_events_gen(
     messages: MessageList,
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
     enable_event: bool,
+    event_bus: Optional[EventBus],
     trace_id: str,
     func_name: str,
     iteration: int,
@@ -144,27 +145,43 @@ async def _process_tool_calls_with_events_gen(
     from SimpleLLMFunc.base.tool_call.execution import _execute_single_tool_call
     import asyncio
 
+    fallback_event_queue: asyncio.Queue[EventYield] = asyncio.Queue()
+
+    async def _publish_tool_event(
+        event: Any,
+        *,
+        origin_overrides: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if event_bus is not None:
+            await event_bus.emit_event(
+                cast(Any, event),
+                origin_overrides=origin_overrides,
+            )
+            return
+
+        await fallback_event_queue.put(EventYield(event=event))
+
     # 发射工具调用批次开始事件
     if enable_event:
         try:
             tool_calls_typed: List[ToolCall] = [
                 dict_to_tool_call(tc) for tc in tool_calls
             ]
-            yield EventYield(
-                event=ToolCallsBatchStartEvent(
-                    event_type=ReActEventType.TOOL_CALLS_BATCH_START,
-                    timestamp=datetime.now(timezone.utc),
-                    trace_id=trace_id,
-                    func_name=func_name,
-                    iteration=iteration,
-                    tool_calls=tool_calls_typed,
-                    batch_size=len(tool_calls),
-                )
+            batch_start_event = ToolCallsBatchStartEvent(
+                event_type=ReActEventType.TOOL_CALLS_BATCH_START,
+                timestamp=datetime.now(timezone.utc),
+                trace_id=trace_id,
+                func_name=func_name,
+                iteration=iteration,
+                tool_calls=tool_calls_typed,
+                batch_size=len(tool_calls),
             )
+            if event_bus is not None:
+                yield await event_bus.emit_and_get(batch_start_event)
+            else:
+                yield EventYield(event=batch_start_event)
         except Exception:
             pass
-
-    event_queue: asyncio.Queue[Optional[EventYield]] = asyncio.Queue()
 
     async def _execute_with_events_task(
         tool_call: Dict[str, Any],
@@ -187,20 +204,22 @@ async def _process_tool_calls_with_events_gen(
             try:
                 arguments_start: ToolCallArguments = json.loads(arguments_str)
                 tool_call_typed_start = dict_to_tool_call(tool_call)
-                event_queue.put_nowait(
-                    EventYield(
-                        event=ToolCallStartEvent(
-                            event_type=ReActEventType.TOOL_CALL_START,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=trace_id,
-                            func_name=func_name,
-                            iteration=iteration,
-                            tool_name=tool_name,
-                            tool_call_id=tool_call_id,
-                            arguments=arguments_start,
-                            tool_call=tool_call_typed_start,
-                        )
-                    )
+                await _publish_tool_event(
+                    ToolCallStartEvent(
+                        event_type=ReActEventType.TOOL_CALL_START,
+                        timestamp=datetime.now(timezone.utc),
+                        trace_id=trace_id,
+                        func_name=func_name,
+                        iteration=iteration,
+                        tool_name=tool_name,
+                        tool_call_id=tool_call_id,
+                        arguments=arguments_start,
+                        tool_call=tool_call_typed_start,
+                    ),
+                    origin_overrides={
+                        "tool_name": tool_name,
+                        "tool_call_id": tool_call_id,
+                    },
                 )
             except Exception:
                 pass
@@ -212,12 +231,13 @@ async def _process_tool_calls_with_events_gen(
 
         # 为每个 tool call 创建独立 emitter，携带 tool 上下文用于 UI 定位
         tool_event_emitter = ToolEventEmitter(
-            _queue=cast(Any, event_queue),
+            _queue=cast(Any, fallback_event_queue),
             _trace_id=trace_id,
             _func_name=func_name,
             _iteration=iteration,
             _tool_name=tool_name,
             _tool_call_id=tool_call_id,
+            _event_bus=event_bus,
         )
 
         try:
@@ -261,41 +281,45 @@ async def _process_tool_calls_with_events_gen(
             try:
                 arguments_end: ToolCallArguments = json.loads(arguments_str)
                 if tool_error:
-                    event_queue.put_nowait(
-                        EventYield(
-                            event=ToolCallErrorEvent(
-                                event_type=ReActEventType.TOOL_CALL_ERROR,
-                                timestamp=datetime.now(timezone.utc),
-                                trace_id=trace_id,
-                                func_name=func_name,
-                                iteration=iteration,
-                                tool_name=tool_name,
-                                tool_call_id=tool_call_id,
-                                arguments=arguments_end,
-                                error=tool_error,
-                                error_message=str(tool_error),
-                                error_type=type(tool_error).__name__,
-                                execution_time=tool_execution_time,
-                            )
-                        )
+                    await _publish_tool_event(
+                        ToolCallErrorEvent(
+                            event_type=ReActEventType.TOOL_CALL_ERROR,
+                            timestamp=datetime.now(timezone.utc),
+                            trace_id=trace_id,
+                            func_name=func_name,
+                            iteration=iteration,
+                            tool_name=tool_name,
+                            tool_call_id=tool_call_id,
+                            arguments=arguments_end,
+                            error=tool_error,
+                            error_message=str(tool_error),
+                            error_type=type(tool_error).__name__,
+                            execution_time=tool_execution_time,
+                        ),
+                        origin_overrides={
+                            "tool_name": tool_name,
+                            "tool_call_id": tool_call_id,
+                        },
                     )
                 else:
-                    event_queue.put_nowait(
-                        EventYield(
-                            event=ToolCallEndEvent(
-                                event_type=ReActEventType.TOOL_CALL_END,
-                                timestamp=datetime.now(timezone.utc),
-                                trace_id=trace_id,
-                                func_name=func_name,
-                                iteration=iteration,
-                                tool_name=tool_name,
-                                tool_call_id=tool_call_id,
-                                arguments=arguments_end,
-                                result=tool_result if tool_result is not None else "",
-                                execution_time=tool_execution_time,
-                                success=tool_error is None,
-                            )
-                        )
+                    await _publish_tool_event(
+                        ToolCallEndEvent(
+                            event_type=ReActEventType.TOOL_CALL_END,
+                            timestamp=datetime.now(timezone.utc),
+                            trace_id=trace_id,
+                            func_name=func_name,
+                            iteration=iteration,
+                            tool_name=tool_name,
+                            tool_call_id=tool_call_id,
+                            arguments=arguments_end,
+                            result=tool_result if tool_result is not None else "",
+                            execution_time=tool_execution_time,
+                            success=tool_error is None,
+                        ),
+                        origin_overrides={
+                            "tool_name": tool_name,
+                            "tool_call_id": tool_call_id,
+                        },
                     )
             except Exception:
                 pass
@@ -313,24 +337,29 @@ async def _process_tool_calls_with_events_gen(
     tasks = [asyncio.create_task(_execute_with_events_task(tc)) for tc in tool_calls]
     batch_start_time = time.time()
 
-    # 创建一个任务来监控所有工具任务的完成，并发送终止信号
-    async def monitor_completion():
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await event_queue.put(None)
-
-    # 启动监控任务（不等待它）
-    monitor_task = asyncio.create_task(monitor_completion())
-
     # 实时消费事件流（与工具执行并发）
-    # 当工具执行时，事件会被放入队列，我们立即 yield 出去
-    while True:
-        event = await event_queue.get()
-        if event is None:
-            break
-        yield event
+    if enable_event:
+        while True:
+            queue_empty = (
+                event_bus.empty()
+                if event_bus is not None
+                else fallback_event_queue.empty()
+            )
+            if all(task.done() for task in tasks) and queue_empty:
+                break
 
-    # 确保监控任务完成
-    await monitor_task
+            try:
+                if event_bus is not None:
+                    event = await asyncio.wait_for(event_bus.get(), timeout=0.01)
+                else:
+                    event = await asyncio.wait_for(
+                        fallback_event_queue.get(),
+                        timeout=0.01,
+                    )
+            except asyncio.TimeoutError:
+                continue
+
+            yield event
 
     # 收集结果
     tool_results: List[ToolCallResult] = []
@@ -367,20 +396,22 @@ async def _process_tool_calls_with_events_gen(
         try:
             success_count = sum(1 for tr in tool_results if tr["success"])
             error_count = len(tool_results) - success_count
-            yield EventYield(
-                event=ToolCallsBatchEndEvent(
-                    event_type=ReActEventType.TOOL_CALLS_BATCH_END,
-                    timestamp=datetime.now(timezone.utc),
-                    trace_id=trace_id,
-                    func_name=func_name,
-                    iteration=iteration,
-                    tool_results=tool_results,
-                    batch_size=len(tool_calls),
-                    total_execution_time=total_execution_time,
-                    success_count=success_count,
-                    error_count=error_count,
-                )
+            batch_end_event = ToolCallsBatchEndEvent(
+                event_type=ReActEventType.TOOL_CALLS_BATCH_END,
+                timestamp=datetime.now(timezone.utc),
+                trace_id=trace_id,
+                func_name=func_name,
+                iteration=iteration,
+                tool_results=tool_results,
+                batch_size=len(tool_calls),
+                total_execution_time=total_execution_time,
+                success_count=success_count,
+                error_count=error_count,
             )
+            if event_bus is not None:
+                yield await event_bus.emit_and_get(batch_end_event)
+            else:
+                yield EventYield(event=batch_end_event)
         except Exception:
             pass
 
@@ -595,8 +626,8 @@ async def execute_llm(
                 # 发射 chunk 事件
                 if enable_event:
                     try:
-                        yield EventYield(
-                            event=LLMChunkArriveEvent(
+                        yield await _emit_event(
+                            LLMChunkArriveEvent(
                                 event_type=ReActEventType.LLM_CHUNK_ARRIVE,
                                 timestamp=datetime.now(timezone.utc),
                                 trace_id=current_trace_id,
@@ -800,6 +831,7 @@ async def execute_llm(
             messages=current_messages,
             tool_map=tool_map,
             enable_event=enable_event,
+            event_bus=event_bus,
             trace_id=current_trace_id,
             func_name=func_name,
             iteration=iteration,
@@ -825,8 +857,8 @@ async def execute_llm(
         # 发射迭代开始事件
         if enable_event:
             try:
-                yield EventYield(
-                    event=ReactIterationStartEvent(
+                yield await _emit_event(
+                    ReactIterationStartEvent(
                         event_type=ReActEventType.REACT_ITERATION_START,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
@@ -847,8 +879,8 @@ async def execute_llm(
         iteration_llm_start_time = time.time()
         if enable_event:
             try:
-                yield EventYield(
-                    event=LLMCallStartEvent(
+                yield await _emit_event(
+                    LLMCallStartEvent(
                         event_type=ReActEventType.LLM_CALL_START,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
@@ -914,8 +946,8 @@ async def execute_llm(
                     # 发射 chunk 事件
                     if enable_event:
                         try:
-                            yield EventYield(
-                                event=LLMChunkArriveEvent(
+                            yield await _emit_event(
+                                LLMChunkArriveEvent(
                                     event_type=ReActEventType.LLM_CHUNK_ARRIVE,
                                     timestamp=datetime.now(timezone.utc),
                                     trace_id=current_trace_id,
@@ -985,8 +1017,8 @@ async def execute_llm(
                         if tool_calls
                         else []
                     )
-                    yield EventYield(
-                        event=LLMCallEndEvent(
+                    yield await _emit_event(
+                        LLMCallEndEvent(
                             event_type=ReActEventType.LLM_CALL_END,
                             timestamp=datetime.now(timezone.utc),
                             trace_id=current_trace_id,
@@ -1043,8 +1075,8 @@ async def execute_llm(
             iteration_time = time.time() - iteration_llm_start_time
             if enable_event:
                 try:
-                    yield EventYield(
-                        event=ReactIterationEndEvent(
+                    yield await _emit_event(
+                        ReactIterationEndEvent(
                             event_type=ReActEventType.REACT_ITERATION_END,
                             timestamp=datetime.now(timezone.utc),
                             trace_id=current_trace_id,
@@ -1076,8 +1108,8 @@ async def execute_llm(
                             if last_response
                             else ""
                         )
-                    yield EventYield(
-                        event=ReactEndEvent(
+                    yield await _emit_event(
+                        ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
                             timestamp=datetime.now(timezone.utc),
                             trace_id=current_trace_id,
@@ -1118,6 +1150,7 @@ async def execute_llm(
                 messages=current_messages,
                 tool_map=tool_map,
                 enable_event=enable_event,
+                event_bus=event_bus,
                 trace_id=current_trace_id,
                 func_name=func_name,
                 iteration=iteration,
@@ -1140,8 +1173,8 @@ async def execute_llm(
         iteration_time = time.time() - iteration_llm_start_time
         if enable_event:
             try:
-                yield EventYield(
-                    event=ReactIterationEndEvent(
+                yield await _emit_event(
+                    ReactIterationEndEvent(
                         event_type=ReActEventType.REACT_ITERATION_END,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
@@ -1167,8 +1200,8 @@ async def execute_llm(
     final_llm_start_time = time.time()
     if enable_event:
         try:
-            yield EventYield(
-                event=LLMCallStartEvent(
+            yield await _emit_event(
+                LLMCallStartEvent(
                     event_type=ReActEventType.LLM_CALL_START,
                     timestamp=datetime.now(timezone.utc),
                     trace_id=current_trace_id,
@@ -1225,8 +1258,8 @@ async def execute_llm(
         final_llm_execution_time = time.time() - final_llm_start_time
         if enable_event:
             try:
-                yield EventYield(
-                    event=LLMCallEndEvent(
+                yield await _emit_event(
+                    LLMCallEndEvent(
                         event_type=ReActEventType.LLM_CALL_END,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
@@ -1272,8 +1305,8 @@ async def execute_llm(
         total_execution_time = time.time() - start_time
         if enable_event:
             try:
-                yield EventYield(
-                    event=ReactEndEvent(
+                yield await _emit_event(
+                    ReactEndEvent(
                         event_type=ReActEventType.REACT_END,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
