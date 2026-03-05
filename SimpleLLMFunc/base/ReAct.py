@@ -39,6 +39,7 @@ from SimpleLLMFunc.type import (
 from SimpleLLMFunc.logger import app_log, push_debug
 from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_location
 from SimpleLLMFunc.logger.context_manager import get_current_trace_id
+from SimpleLLMFunc.hooks.event_bus import EventBus
 from SimpleLLMFunc.hooks.stream import EventYield, ReactOutput, ResponseYield
 from SimpleLLMFunc.hooks.events import (
     ReActEventType,
@@ -489,6 +490,13 @@ async def execute_llm(
     total_llm_calls = 0
     total_tool_calls = 0
     start_time = time.time()
+    event_bus = EventBus(
+        session_id=current_trace_id,
+        agent_call_id=f"agent_{current_trace_id}",
+    )
+
+    async def _emit_event(event: Any) -> EventYield:
+        return await event_bus.emit_and_get(cast(Any, event))
 
     push_debug(
         f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
@@ -498,8 +506,8 @@ async def execute_llm(
     # 发射 ReAct 开始事件
     if enable_event:
         try:
-            yield EventYield(
-                event=ReactStartEvent(
+            yield await _emit_event(
+                ReactStartEvent(
                     event_type=ReActEventType.REACT_START,
                     timestamp=datetime.now(timezone.utc),
                     trace_id=current_trace_id,
@@ -530,8 +538,8 @@ async def execute_llm(
     llm_call_start_time = time.time()
     if enable_event:
         try:
-            yield EventYield(
-                event=LLMCallStartEvent(
+            yield await _emit_event(
+                LLMCallStartEvent(
                     event_type=ReActEventType.LLM_CALL_START,
                     timestamp=datetime.now(timezone.utc),
                     trace_id=current_trace_id,
@@ -658,8 +666,8 @@ async def execute_llm(
                     [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
                 )
 
-                yield EventYield(
-                    event=LLMCallEndEvent(
+                yield await _emit_event(
+                    LLMCallEndEvent(
                         event_type=ReActEventType.LLM_CALL_END,
                         timestamp=datetime.now(timezone.utc),
                         trace_id=current_trace_id,
@@ -702,13 +710,16 @@ async def execute_llm(
                             llm_input_tokens_before,
                             llm_output_tokens_before,
                         )
-                    final_content = (
-                        extract_content_from_response(last_response, func_name)
-                        if last_response
-                        else content
-                    )
-                    yield EventYield(
-                        event=ReactEndEvent(
+                    if stream:
+                        final_content = content
+                    else:
+                        final_content = (
+                            extract_content_from_response(last_response, func_name)
+                            if last_response
+                            else content
+                        )
+                    yield await _emit_event(
+                        ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
                             timestamp=datetime.now(timezone.utc),
                             trace_id=current_trace_id,
@@ -1057,11 +1068,14 @@ async def execute_llm(
                             iteration_input_tokens_before,
                             iteration_output_tokens_before,
                         )
-                    final_content = (
-                        extract_content_from_response(last_response, func_name)
-                        if last_response
-                        else ""
-                    )
+                    if stream:
+                        final_content = content
+                    else:
+                        final_content = (
+                            extract_content_from_response(last_response, func_name)
+                            if last_response
+                            else ""
+                        )
                     yield EventYield(
                         event=ReactEndEvent(
                             event_type=ReActEventType.REACT_END,

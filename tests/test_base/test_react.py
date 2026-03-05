@@ -6,10 +6,11 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from openai.types.chat import ChatCompletionChunk
 from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.base.ReAct import execute_llm
-from SimpleLLMFunc.hooks.events import LLMCallEndEvent
+from SimpleLLMFunc.hooks.events import LLMCallEndEvent, ReactEndEvent
 from SimpleLLMFunc.hooks.stream import EventYield
 
 
@@ -311,3 +312,100 @@ class TestExecuteLLM:
         assert llm_end_usage is not None
         assert llm_end_usage.total_tokens == 17
         assert mock_usage_from_context_delta.called
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_streaming_react_end_uses_accumulated_content_when_tail_chunk_has_no_choices(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion_chunk: Any,
+    ) -> None:
+        """ReactEndEvent should keep accumulated stream content from prior chunks."""
+
+        mock_get_context.return_value = "test_func"
+
+        usage_tail_chunk = ChatCompletionChunk(
+            id="test-id-usage",
+            choices=[],
+            created=1234567891,
+            model="test-model",
+            object="chat.completion.chunk",
+            usage=CompletionUsage(
+                prompt_tokens=10,
+                completion_tokens=2,
+                total_tokens=12,
+            ),
+        )
+
+        async def stream_generator(**kwargs):
+            yield mock_chat_completion_chunk
+            yield usage_tail_chunk
+
+        mock_llm_interface.chat_stream = stream_generator
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        final_response = None
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=True,
+            enable_event=True,
+        ):
+            if isinstance(output, EventYield) and isinstance(
+                output.event, ReactEndEvent
+            ):
+                final_response = output.event.final_response
+
+        assert final_response == "chunk"
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_event_mode_attaches_origin_metadata(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+    ) -> None:
+        """Event mode should provide monotonic origin metadata."""
+        mock_get_context.return_value = "test_func"
+        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion)
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        origins = []
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=False,
+            enable_event=True,
+        ):
+            if isinstance(output, EventYield):
+                origins.append(output.origin)
+
+        assert origins
+        session_ids = {origin.session_id for origin in origins}
+        assert len(session_ids) == 1
+        assert "" not in session_ids
+        event_seqs = [origin.event_seq for origin in origins]
+        assert event_seqs == sorted(event_seqs)
+        assert event_seqs[0] == 1

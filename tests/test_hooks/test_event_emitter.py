@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import pytest
 
 from SimpleLLMFunc.hooks.events import (
     CustomEvent,
+    ReactStartEvent,
     ReActEventType,
 )
+from SimpleLLMFunc.hooks.stream import EventOrigin
 from SimpleLLMFunc.hooks.event_emitter import (
     ToolEventEmitter,
     NoOpEventEmitter,
@@ -109,6 +112,39 @@ class TestToolEventEmitter:
         emitter = ToolEventEmitter()
         assert not emitter.has_events()
 
+    @pytest.mark.asyncio
+    async def test_emit_event_keeps_event_and_origin(self):
+        """emit_event should push event with explicit origin metadata."""
+        emitter = ToolEventEmitter(
+            _trace_id="test-trace-123",
+            _func_name="test_func",
+            _iteration=1,
+        )
+        event = ReactStartEvent(
+            event_type=ReActEventType.REACT_START,
+            timestamp=datetime.now(timezone.utc),
+            trace_id="test-trace-123",
+            func_name="test_func",
+            iteration=0,
+            user_task_prompt="hello",
+            initial_messages=[],
+            available_tools=None,
+        )
+        origin = EventOrigin(
+            session_id="session-1",
+            agent_call_id="agent-root",
+            event_seq=2,
+            fork_depth=0,
+        )
+
+        await emitter.emit_event(event, origin=origin)
+
+        events = await emitter.get_events()
+        assert len(events) == 1
+        assert events[0].event is event
+        assert events[0].origin.agent_call_id == "agent-root"
+        assert events[0].origin.event_seq == 2
+
 
 class TestNoOpEventEmitter:
     """Test NoOpEventEmitter class."""
@@ -126,6 +162,22 @@ class TestNoOpEventEmitter:
         emitter = NoOpEventEmitter()
         await emitter.emit_batch([("test", {})])
         # Should not raise any error
+
+    @pytest.mark.asyncio
+    async def test_emit_event_does_nothing(self):
+        """Test that emit_event does nothing."""
+        emitter = NoOpEventEmitter()
+        event = ReactStartEvent(
+            event_type=ReActEventType.REACT_START,
+            timestamp=datetime.now(timezone.utc),
+            trace_id="test-trace",
+            func_name="test_func",
+            iteration=0,
+            user_task_prompt="hello",
+            initial_messages=[],
+            available_tools=None,
+        )
+        await emitter.emit_event(event)
 
     @pytest.mark.asyncio
     async def test_get_events_returns_empty(self):

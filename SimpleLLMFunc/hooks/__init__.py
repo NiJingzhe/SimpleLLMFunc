@@ -25,6 +25,7 @@ from SimpleLLMFunc.hooks.event_emitter import (
     ToolEventEmitter,
     NoOpEventEmitter,
 )
+from SimpleLLMFunc.hooks.event_bus import EventBus
 from SimpleLLMFunc.hooks.input_stream import (
     AgentInputRouter,
     InputRouteResult,
@@ -33,6 +34,7 @@ from SimpleLLMFunc.hooks.input_stream import (
 )
 from SimpleLLMFunc.hooks.stream import (
     EventYield,
+    EventOrigin,
     ReactOutput,
     ResponseYield,
     events_only,
@@ -65,6 +67,7 @@ __all__ = [
     # Stream 类型
     "ResponseYield",
     "EventYield",
+    "EventOrigin",
     "ReactOutput",
     # 类型守卫
     "is_response_yield",
@@ -78,6 +81,7 @@ __all__ = [
     # 事件发射器
     "ToolEventEmitter",
     "NoOpEventEmitter",
+    "EventBus",
     # 输入流
     "UserInputEvent",
     "ToolInputRequest",
