@@ -199,8 +199,130 @@ def _extract_response_and_history_from_output(
     return output, None
 
 
+def _extract_text_from_model_like_response(response: Any) -> str:
+    if isinstance(response, str):
+        return response
+
+    if isinstance(response, dict):
+        content = response.get("content")
+        if isinstance(content, str):
+            return content
+
+    choices = getattr(response, "choices", None)
+    if not isinstance(choices, list) or not choices:
+        return ""
+
+    first_choice = choices[0]
+
+    delta = getattr(first_choice, "delta", None)
+    if delta is not None:
+        delta_content = getattr(delta, "content", None)
+        if isinstance(delta_content, str):
+            return delta_content
+
+    message = getattr(first_choice, "message", None)
+    if message is not None:
+        message_content = getattr(message, "content", None)
+        if isinstance(message_content, str):
+            return message_content
+
+    return ""
+
+
+def _extract_stream_text_from_agent_output(output: Any) -> str:
+    if isinstance(output, tuple) and len(output) == 2 and isinstance(output[0], str):
+        return output[0]
+
+    if getattr(output, "type", None) == "response":
+        return _extract_text_from_model_like_response(getattr(output, "response", None))
+
+    return ""
+
+
+def _extract_event_from_agent_output(output: Any) -> Any:
+    if getattr(output, "type", None) != "event":
+        return None
+    return getattr(output, "event", None)
+
+
+async def _flush_fork_stream_buffer(
+    *,
+    event_emitter: Any,
+    fork_id: str,
+    parent_fork_id: Optional[str],
+    depth: int,
+    source_memory_key: str,
+    memory_key: str,
+    buffer: str,
+    force: bool,
+) -> str:
+    remaining = buffer
+    flush_threshold = 120
+
+    while True:
+        newline_index = remaining.find("\n")
+        if newline_index >= 0:
+            chunk = remaining[: newline_index + 1]
+            remaining = remaining[newline_index + 1 :]
+            await _emit_fork_custom_event(
+                event_emitter,
+                "selfref_fork_stream_delta",
+                {
+                    "fork_id": fork_id,
+                    "parent_fork_id": parent_fork_id,
+                    "depth": depth,
+                    "source_memory_key": source_memory_key,
+                    "memory_key": memory_key,
+                    "text": chunk,
+                },
+            )
+            continue
+
+        if force:
+            if remaining:
+                await _emit_fork_custom_event(
+                    event_emitter,
+                    "selfref_fork_stream_delta",
+                    {
+                        "fork_id": fork_id,
+                        "parent_fork_id": parent_fork_id,
+                        "depth": depth,
+                        "source_memory_key": source_memory_key,
+                        "memory_key": memory_key,
+                        "text": remaining,
+                    },
+                )
+            return ""
+
+        if len(remaining) >= flush_threshold:
+            chunk = remaining[:flush_threshold]
+            remaining = remaining[flush_threshold:]
+            await _emit_fork_custom_event(
+                event_emitter,
+                "selfref_fork_stream_delta",
+                {
+                    "fork_id": fork_id,
+                    "parent_fork_id": parent_fork_id,
+                    "depth": depth,
+                    "source_memory_key": source_memory_key,
+                    "memory_key": memory_key,
+                    "text": chunk,
+                },
+            )
+            continue
+
+        return remaining
+
+
 async def _consume_agent_call_output(
     call_output: Any,
+    *,
+    event_emitter: Any = None,
+    fork_id: Optional[str] = None,
+    parent_fork_id: Optional[str] = None,
+    depth: Optional[int] = None,
+    source_memory_key: Optional[str] = None,
+    memory_key: Optional[str] = None,
 ) -> tuple[Any, Optional[MemoryHistory]]:
     if inspect.isawaitable(call_output):
         awaited_output = await cast(Awaitable[Any], call_output)
@@ -209,12 +331,57 @@ async def _consume_agent_call_output(
     if hasattr(call_output, "__aiter__"):
         last_response: Any = None
         last_history: Optional[MemoryHistory] = None
+        stream_buffer = ""
+        stream_forwarding_enabled = (
+            fork_id is not None
+            and depth is not None
+            and source_memory_key is not None
+            and memory_key is not None
+        )
 
         async for output in call_output:
+            if stream_forwarding_enabled:
+                forwarded_event = _extract_event_from_agent_output(output)
+                if forwarded_event is not None:
+                    await _emit_fork_agent_event(
+                        event_emitter,
+                        forwarded_event,
+                        fork_id=cast(str, fork_id),
+                        depth=cast(int, depth),
+                        source_memory_key=cast(str, source_memory_key),
+                        memory_key=cast(str, memory_key),
+                    )
+
+                stream_text = _extract_stream_text_from_agent_output(output)
+                if stream_text:
+                    stream_buffer += stream_text
+                    stream_buffer = await _flush_fork_stream_buffer(
+                        event_emitter=event_emitter,
+                        fork_id=cast(str, fork_id),
+                        parent_fork_id=parent_fork_id,
+                        depth=cast(int, depth),
+                        source_memory_key=cast(str, source_memory_key),
+                        memory_key=cast(str, memory_key),
+                        buffer=stream_buffer,
+                        force=True,
+                    )
+
             response, history = _extract_response_and_history_from_output(output)
             last_response = response
             if history is not None:
                 last_history = history
+
+        if stream_forwarding_enabled and stream_buffer:
+            await _flush_fork_stream_buffer(
+                event_emitter=event_emitter,
+                fork_id=cast(str, fork_id),
+                parent_fork_id=parent_fork_id,
+                depth=cast(int, depth),
+                source_memory_key=cast(str, source_memory_key),
+                memory_key=cast(str, memory_key),
+                buffer=stream_buffer,
+                force=True,
+            )
 
         return last_response, last_history
 
@@ -298,6 +465,35 @@ async def _emit_fork_custom_event(
         return
 
     maybe_awaitable = emit(event_name, payload)
+    if inspect.isawaitable(maybe_awaitable):
+        await cast(Awaitable[Any], maybe_awaitable)
+
+
+async def _emit_fork_agent_event(
+    event_emitter: Any,
+    event: Any,
+    *,
+    fork_id: str,
+    depth: int,
+    source_memory_key: str,
+    memory_key: str,
+) -> None:
+    if event_emitter is None:
+        return
+
+    emit_event = getattr(event_emitter, "emit_event", None)
+    if not callable(emit_event):
+        return
+
+    maybe_awaitable = emit_event(
+        event,
+        origin_overrides={
+            "fork_id": fork_id,
+            "fork_depth": depth,
+            "source_memory_key": source_memory_key,
+            "memory_key": memory_key,
+        },
+    )
     if inspect.isawaitable(maybe_awaitable):
         await cast(Awaitable[Any], maybe_awaitable)
 
@@ -682,12 +878,17 @@ class SelfReference:
             updated = text
         self.set_system_prompt(key, updated)
 
-    def _resolve_source_memory_key_for_fork(
-        self,
-        source_memory_key: Optional[str],
-    ) -> str:
-        if source_memory_key is not None:
-            normalized = _normalize_key(source_memory_key)
+    def resolve_history_key(self, key: Optional[str] = None) -> str:
+        """Resolve one usable history key for runtime self-reference operations.
+
+        Resolution order when ``key`` is omitted:
+        1. Active key in current execution context.
+        2. Bound default key from ``bind_agent_instance``.
+        3. The only bound key when exactly one exists.
+        """
+
+        if key is not None:
+            normalized = _normalize_key(key)
             if not self.has_history(normalized):
                 raise KeyError(f"Memory key '{normalized}' is not bound")
             return normalized
@@ -708,12 +909,28 @@ class SelfReference:
 
         if not keys:
             raise ValueError(
-                "source_memory_key is required because no memory key is available"
+                "history key is required because no memory key is available"
             )
 
-        raise ValueError(
-            "source_memory_key is required when multiple memory keys are bound"
-        )
+        raise ValueError("history key is required when multiple memory keys are bound")
+
+    def _resolve_source_memory_key_for_fork(
+        self,
+        source_memory_key: Optional[str],
+    ) -> str:
+        try:
+            return self.resolve_history_key(source_memory_key)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "history key is required because no memory key is available":
+                raise ValueError(
+                    "source_memory_key is required because no memory key is available"
+                ) from exc
+            if message == "history key is required when multiple memory keys are bound":
+                raise ValueError(
+                    "source_memory_key is required when multiple memory keys are bound"
+                ) from exc
+            raise
 
     def _build_fork_memory_key(self, source_memory_key: str) -> str:
         with self._lock:
@@ -811,6 +1028,19 @@ class SelfReference:
             },
         )
 
+        await _emit_fork_custom_event(
+            _event_emitter,
+            "selfref_fork_stream_open",
+            {
+                "fork_id": fork_id,
+                "parent_fork_id": parent_fork_id,
+                "depth": fork_depth,
+                "source_memory_key": source_key,
+                "memory_key": target_key,
+                "status": "running",
+            },
+        )
+
         self.bind_history(target_key, inherited_history)
 
         call_kwargs = dict(agent_kwargs)
@@ -835,8 +1065,30 @@ class SelfReference:
         active_toolkit_token = self._set_active_runtime_toolkit(child_toolkit_override)
         try:
             call_output = agent_instance(*agent_args, **call_kwargs)
-            response, final_history = await _consume_agent_call_output(call_output)
+            response, final_history = await _consume_agent_call_output(
+                call_output,
+                event_emitter=_event_emitter,
+                fork_id=fork_id,
+                parent_fork_id=parent_fork_id,
+                depth=fork_depth,
+                source_memory_key=source_key,
+                memory_key=target_key,
+            )
         except Exception as exc:
+            await _emit_fork_custom_event(
+                _event_emitter,
+                "selfref_fork_stream_close",
+                {
+                    "fork_id": fork_id,
+                    "parent_fork_id": parent_fork_id,
+                    "depth": fork_depth,
+                    "source_memory_key": source_key,
+                    "memory_key": target_key,
+                    "status": "error",
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            )
             await _emit_fork_custom_event(
                 _event_emitter,
                 "selfref_fork_error",
@@ -859,6 +1111,19 @@ class SelfReference:
 
         if final_history is not None:
             self.bind_history(target_key, final_history)
+
+        await _emit_fork_custom_event(
+            _event_emitter,
+            "selfref_fork_stream_close",
+            {
+                "fork_id": fork_id,
+                "parent_fork_id": parent_fork_id,
+                "depth": fork_depth,
+                "source_memory_key": source_key,
+                "memory_key": target_key,
+                "status": "completed",
+            },
+        )
 
         completed_result = {
             "fork_id": fork_id,
