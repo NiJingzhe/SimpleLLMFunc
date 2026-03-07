@@ -264,6 +264,7 @@ The guidance tells the agent:
 
 - how to discover mounted runtime capabilities (`runtime.list_primitives()` / `runtime.list_primitive_specs()`)
 - which primitive names are currently available with short descriptions
+- how to read selfref namespace guidance (`runtime.selfref.guide()`)
 - reset semantics (`reset_repl` clears REPL variables, not runtime backend state)
 - (when SelfReference memory is bound) the memory key scope for this chat function
 
@@ -271,8 +272,7 @@ Example:
 
 ```python
 from SimpleLLMFunc import llm_chat
-from SimpleLLMFunc.builtin import PyRepl
-from SimpleLLMFunc.builtin.primitive import SelfReference
+from SimpleLLMFunc.builtin import PyRepl, SelfReference
 
 self_reference = SelfReference()
 repl = PyRepl()
@@ -297,6 +297,7 @@ runtime.selfref.history.append_system_prompt(
 
 Runtime self-reference primitive reference:
 
+- `runtime.selfref.guide()`: return namespace overview and fork/memory best-practice checklist.
 - `runtime.selfref.history.keys()`: list all bound memory keys.
 - `runtime.selfref.history.active_key()`: resolve active history key in current context.
 - `runtime.selfref.history.count(key=None)`: return number of messages in resolved key.
@@ -315,6 +316,20 @@ Runtime self-reference primitive reference:
 - `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
 - `runtime.selfref.fork.wait(fork_id)`: wait one spawned fork.
 - `runtime.selfref.fork.wait_all([fork_id, ...])`: wait multiple forks.
+
+When `enable_event=True`, you can route main/fork events by origin metadata:
+
+```python
+from SimpleLLMFunc.hooks import is_event_yield
+
+async for output in agent("analyze and split"):
+    if not is_event_yield(output):
+        continue
+    if output.origin.fork_id:
+        print(f"fork={output.origin.fork_id} type={output.event.event_type}")
+    else:
+        print(f"main type={output.event.event_type}")
+```
 
 Forgetting memory:
 

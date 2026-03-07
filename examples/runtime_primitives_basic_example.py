@@ -33,8 +33,7 @@ from __future__ import annotations
 
 import asyncio
 
-from SimpleLLMFunc.builtin import PyRepl
-from SimpleLLMFunc.builtin.primitive import SelfReference
+from SimpleLLMFunc.builtin import PyRepl, SelfReference
 
 
 MEMORY_KEY = "agent_main"

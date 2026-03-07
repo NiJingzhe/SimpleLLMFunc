@@ -25,7 +25,9 @@
 
 🚀 **Major Release: PyRepl + Textual TUI + Durable Agent Memory** - `SimpleLLMFunc` now ships with a subprocess-based persistent `PyRepl`, an out-of-the-box Textual `@tui` integration for streaming `llm_chat`, and runtime-primitive-guided durable `SelfReference` memory workflows for stateful agents.
 
-📝 **Also Included**: Custom tool event emission, improved tool input routing, expanded tests, and refreshed docs/examples. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for migration and details.
+🧭 **Event Stream Refactor**: event outputs now carry normalized origin metadata (`EventYield.origin`) including `session_id`, `agent_call_id`, `fork_id`, `fork_depth`, and tool linkage, so parent/fork streams can be routed deterministically in custom UIs.
+
+📝 **Also Included**: Custom tool event emission, improved tool input routing, self-fork lifecycle streaming (`selfref_fork_*`), expanded tests, and refreshed docs/examples. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for migration and details.
 
 ### 📚 Complete Documentation
 
@@ -284,6 +286,8 @@ SimpleLLMFunc provides a ready-to-use Textual TUI powered by event streaming:
 - Tool call argument/result panels
 - Model and tool stats (latency, token usage)
 - Custom tool-event hooks for live tool output updates
+- Origin-aware event routing for parent and forked agent calls
+- Built-in selfref fork lifecycle and stream visualization
 - Built-in quit controls: `/exit` `/quit` `/q`, `Ctrl+Q`, `Ctrl+C`
 
 ```python
@@ -301,6 +305,24 @@ if __name__ == "__main__":
 ```
 
 See `examples/tui_chat_example.py` for a full example.
+
+When `enable_event=True`, each `EventYield` includes `origin` metadata. This is especially useful for forked agent trees:
+
+```python
+from SimpleLLMFunc.hooks import is_event_yield
+
+async for output in agent("split this into parallel subtasks"):
+    if not is_event_yield(output):
+        continue
+
+    if output.origin.fork_id:
+        print(
+            f"[fork:{output.origin.fork_id} depth={output.origin.fork_depth}] "
+            f"{output.event.event_type}"
+        )
+    else:
+        print(f"[main] {output.event.event_type}")
+```
 
 #### Async Native Design
 
@@ -688,11 +710,13 @@ SimpleLLMFunc/
 │   ├── tool/                  # Tool system
 │   │   └── tool.py            # @tool decorator and Tool base class
 │   ├── builtin/               # Builtin tools
-│   │   └── pyrepl.py          # Python REPL toolset
+│   │   ├── pyrepl.py          # Python REPL toolset
+│   │   └── self_reference.py  # SelfReference memory/fork backend
 │   ├── hooks/                 # Event stream system
 │   │   ├── events.py          # ReAct event definitions
 │   │   ├── stream.py          # Event/response stream wrappers
-│   │   └── event_emitter.py   # Tool custom event emitter
+│   │   ├── event_emitter.py   # Tool custom event emitter
+│   │   └── event_bus.py       # Unified event ingress + origin metadata
 │   ├── interface/             # LLM interface layer
 │   │   ├── llm_interface.py   # Abstract base class
 │   │   ├── openai_compatible.py    # OpenAI compatible implementation
@@ -842,6 +866,8 @@ cp env_template .env
 python examples/llm_function_pydantic_example.py
 python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
+python examples/runtime_primitives_basic_example.py
+python examples/tui_runtime_selfref_example.py
 ```
 
 ## 🤝 Contributing Guide

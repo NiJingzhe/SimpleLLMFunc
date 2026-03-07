@@ -48,6 +48,7 @@
 - 🔧 **工具调用可视化**：实时显示工具调用的参数、执行过程和结果
 - 📊 **完整执行统计**：Token 使用量、执行耗时、调用次数等详细信息
 - 🎯 **事件驱动架构**：在外部函数中处理事件，实现自定义 UI 和逻辑
+- 🧭 **Origin 元数据路由**：通过 `output.origin` 区分主链路与 fork 子链路
 
 **关键代码片段**：
 
@@ -74,6 +75,9 @@ async for output in chat(user_message="帮我计算 25 * 4 + 18"):
     if isinstance(output, EventYield):
         # 处理事件：LLM 调用、工具调用等
         event = output.event
+        origin = output.origin
+        if origin.fork_id:
+            print(f"fork={origin.fork_id} depth={origin.fork_depth}")
         if isinstance(event, ToolCallStartEvent):
             print(f"工具调用: {event.tool_name}")
             print(f"参数: {event.arguments}")
@@ -152,6 +156,7 @@ Recommended single entry for runtime self-reference workflow:
 - One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
 - `llm_chat` appends runtime primitive guidance automatically
 - Forked contexts inherit parent memory snapshot from the same selfref key
+- Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
 
 Run:
 

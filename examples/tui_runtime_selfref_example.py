@@ -25,8 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from SimpleLLMFunc import OpenAICompatible, llm_chat, tui
-from SimpleLLMFunc.builtin import PyRepl
-from SimpleLLMFunc.builtin.primitive import SelfReference
+from SimpleLLMFunc.builtin import PyRepl, SelfReference
 from SimpleLLMFunc.hooks.events import CustomEvent
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.utils.tui import ToolRenderSnapshot
