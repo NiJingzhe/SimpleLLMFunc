@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, cast, get_origin
+from typing import Any, Dict, List, Optional, Union, cast, get_origin
 
 from SimpleLLMFunc.base.messages import build_multimodal_content
 from SimpleLLMFunc.base.type_resolve.multimodal import has_multimodal_content
@@ -18,7 +18,12 @@ from SimpleLLMFunc.llm_decorator.steps.common.prompt import (
     process_docstring_template,
 )
 from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+from SimpleLLMFunc.llm_decorator.utils import (
+    append_tool_best_practices_prompt_to_messages,
+    collect_tool_prompt_specs,
+)
 from SimpleLLMFunc.type.message import MessageList, MessageParam
+from SimpleLLMFunc.tool import Tool
 
 # Default prompt templates
 # 简单返回类型（str/int/float/bool/None）使用纯文本约束
@@ -93,9 +98,7 @@ def build_parameter_type_descriptions(
     descriptions = []
     for param_name, param_type in param_type_hints.items():
         type_str = (
-            get_detailed_type_description(param_type)
-            if param_type
-            else "Unknown Type"
+            get_detailed_type_description(param_type) if param_type else "Unknown Type"
         )
         descriptions.append(f"  - {param_name}: {type_str}")
     return descriptions
@@ -103,20 +106,20 @@ def build_parameter_type_descriptions(
 
 def build_return_type_description(return_type: Any) -> str:
     """构建返回类型描述
-    
+
     对于简单类型：使用文本描述
     对于复杂类型（BaseModel, List, Dict, Union）：使用 XML Schema 格式 + 示例
     """
     from typing import Union as TypingUnion
     from pydantic import BaseModel
-    
+
     if return_type is None:
         return "未知类型"
-    
+
     # 简单类型：使用文本描述
     if return_type in (str, int, float, bool, type(None)):
         return get_detailed_type_description(return_type)
-    
+
     # 复杂类型：检查是否为 BaseModel、List、Dict、Union
     is_complex = False
     if isinstance(return_type, type) and issubclass(return_type, BaseModel):
@@ -125,23 +128,20 @@ def build_return_type_description(return_type: Any) -> str:
         origin = getattr(return_type, "__origin__", None) or get_origin(return_type)
         if origin in (list, List, dict, Dict, TypingUnion):
             is_complex = True
-    
+
     if is_complex:
         # 使用 XML Schema 格式描述 + 示例
         try:
             type_xml_schema = build_type_description_xml(return_type)
             example_xml = generate_example_xml(return_type)
-            
+
             return (
-                "XML Schema:\n"
-                + type_xml_schema
-                + "\n\nExample XML:\n"
-                + example_xml
+                "XML Schema:\n" + type_xml_schema + "\n\nExample XML:\n" + example_xml
             )
         except Exception as e:
             from SimpleLLMFunc.logger import push_warning
             from SimpleLLMFunc.logger.logger import get_location
-            
+
             push_warning(
                 f"Failed to generate structured XML type description, falling back to text format: {str(e)}",
                 location=get_location(),
@@ -215,6 +215,7 @@ def build_initial_prompts(
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
     template_params: Optional[Dict[str, Any]] = None,
+    toolkit: Optional[List[Union[Tool, Any]]] = None,
 ) -> MessageList:
     """构建初始提示的完整流程"""
     # 1. 处理 docstring 模板参数
@@ -263,7 +264,9 @@ def build_initial_prompts(
         # 提取 system prompt 内容
         system_prompt_content = text_messages[0].get("content", "")
         if not isinstance(system_prompt_content, str):
-            system_prompt_content = str(system_prompt_content) if system_prompt_content else ""
+            system_prompt_content = (
+                str(system_prompt_content) if system_prompt_content else ""
+            )
         system_prompt = system_prompt_content
 
         # 构建多模态消息
@@ -283,5 +286,7 @@ def build_initial_prompts(
             user_template,
         )
 
-    return messages
+    tool_prompt_specs = collect_tool_prompt_specs(toolkit)
+    append_tool_best_practices_prompt_to_messages(messages, tool_prompt_specs)
 
+    return messages

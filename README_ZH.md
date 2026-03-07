@@ -728,8 +728,7 @@ SimpleLLMFunc/
 │   ├── multi_modality_toolcall.py   # 多模态示例
 │   ├── pyrepl_example.py            # 内置 PyRepl 示例
 │   ├── runtime_primitives_basic_example.py # 本地 runtime memory primitive 示例
-│   ├── tui_runtime_memory_example.py # TUI runtime memory 示例
-│   ├── tui_runtime_fork_subagent_example.py # TUI runtime fork 示例
+│   ├── tui_runtime_selfref_example.py # 统一 TUI selfref 示例（memory + fork）
 │   ├── custom_tool_event_example.py # 自定义工具事件示例
 │   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例

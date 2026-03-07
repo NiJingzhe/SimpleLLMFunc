@@ -12,6 +12,7 @@ from SimpleLLMFunc.hooks.events import (
     LLMChunkArriveEvent,
     ReactEndEvent,
     ReActEvent,
+    ToolCallArgumentsDeltaEvent,
     ToolCallEndEvent,
     ToolCallErrorEvent,
     ToolCallStartEvent,
@@ -65,6 +66,13 @@ class TUIStreamAdapter(Protocol):
         self, tool_call_id: str, output_delta: str
     ) -> None: ...
 
+    async def append_tool_argument(
+        self,
+        tool_call_id: str,
+        argname: str,
+        argcontent_delta: str,
+    ) -> None: ...
+
     async def set_tool_status(self, tool_call_id: str, status: str) -> None: ...
 
     async def request_tool_input(
@@ -108,6 +116,7 @@ class _ForkSessionState:
     depth: Optional[int] = None
     memory_key: str = ""
     metadata_rendered: bool = False
+    llm_call_count: int = 0
     running_tool_call_ids: list[str] = field(default_factory=list)
     tool_call_id_map: dict[str, str] = field(default_factory=dict)
 
@@ -258,6 +267,47 @@ def _resolve_fork_session_tool_call_id(
     mapped = _compose_fork_tool_call_id(session.fork_id, child_tool_call_id)
     session.tool_call_id_map[child_tool_call_id] = mapped
     return mapped
+
+
+def _append_argument_delta_to_snapshot(
+    snapshot: ToolRenderSnapshot,
+    *,
+    argname: str,
+    argcontent_delta: str,
+) -> None:
+    previous = snapshot.arguments.get(argname, "")
+    if not isinstance(previous, str):
+        previous = str(previous)
+    snapshot.arguments[argname] = previous + argcontent_delta
+
+
+async def _ensure_tool_snapshot(
+    *,
+    adapter: TUIStreamAdapter,
+    state: _StreamConsumeState,
+    model_call_id: str,
+    tool_call_id: str,
+    tool_name: str,
+) -> ToolRenderSnapshot:
+    snapshot = state.tool_snapshots.get(tool_call_id)
+    if snapshot is not None:
+        if tool_name and snapshot.tool_name != tool_name:
+            snapshot.tool_name = tool_name
+        return snapshot
+
+    await adapter.start_tool_call(
+        model_call_id=model_call_id,
+        tool_call_id=tool_call_id,
+        tool_name=tool_name,
+        arguments={},
+    )
+    snapshot = ToolRenderSnapshot(
+        tool_name=tool_name,
+        tool_call_id=tool_call_id,
+        arguments={},
+    )
+    state.tool_snapshots[tool_call_id] = snapshot
+    return snapshot
 
 
 async def _apply_custom_tool_event(
@@ -504,6 +554,9 @@ async def _handle_origin_scoped_fork_event(
     )
 
     if isinstance(event, LLMCallStartEvent):
+        session.llm_call_count += 1
+        if session.llm_call_count > 1:
+            await adapter.start_model_response(session.model_call_id)
         state.model_has_chunk_text[session.model_call_id] = False
         return True
 
@@ -533,23 +586,58 @@ async def _handle_origin_scoped_fork_event(
         await adapter.finish_model_response(session.model_call_id, stats_line)
         return True
 
+    if isinstance(event, ToolCallArgumentsDeltaEvent):
+        mapped_tool_call_id = _resolve_fork_session_tool_call_id(
+            session,
+            event.tool_call_id,
+        )
+        snapshot = await _ensure_tool_snapshot(
+            adapter=adapter,
+            state=state,
+            model_call_id=session.model_call_id,
+            tool_call_id=mapped_tool_call_id,
+            tool_name=event.tool_name,
+        )
+        _append_argument_delta_to_snapshot(
+            snapshot,
+            argname=event.argname,
+            argcontent_delta=event.argcontent_delta,
+        )
+        await adapter.append_tool_argument(
+            mapped_tool_call_id,
+            event.argname,
+            event.argcontent_delta,
+        )
+        if mapped_tool_call_id not in session.running_tool_call_ids:
+            session.running_tool_call_ids.append(mapped_tool_call_id)
+        return True
+
     if isinstance(event, ToolCallStartEvent):
         mapped_tool_call_id = _resolve_fork_session_tool_call_id(
             session,
             event.tool_call_id,
         )
-        await adapter.start_tool_call(
-            model_call_id=session.model_call_id,
-            tool_call_id=mapped_tool_call_id,
-            tool_name=event.tool_name,
-            arguments=event.arguments,
-        )
-        state.tool_snapshots[mapped_tool_call_id] = ToolRenderSnapshot(
-            tool_name=event.tool_name,
-            tool_call_id=mapped_tool_call_id,
-            arguments=event.arguments,
-        )
-        session.running_tool_call_ids.append(mapped_tool_call_id)
+        existing_snapshot = state.tool_snapshots.get(mapped_tool_call_id)
+        if existing_snapshot is None:
+            await adapter.start_tool_call(
+                model_call_id=session.model_call_id,
+                tool_call_id=mapped_tool_call_id,
+                tool_name=event.tool_name,
+                arguments=event.arguments,
+            )
+            state.tool_snapshots[mapped_tool_call_id] = ToolRenderSnapshot(
+                tool_name=event.tool_name,
+                tool_call_id=mapped_tool_call_id,
+                arguments=dict(event.arguments),
+            )
+        else:
+            if event.tool_name:
+                existing_snapshot.tool_name = event.tool_name
+            existing_snapshot.arguments = dict(event.arguments)
+            await adapter.set_tool_status(mapped_tool_call_id, "running")
+
+        if mapped_tool_call_id not in session.running_tool_call_ids:
+            session.running_tool_call_ids.append(mapped_tool_call_id)
         return True
 
     if isinstance(event, CustomEvent):
@@ -675,20 +763,52 @@ async def _handle_event(
         await adapter.finish_model_response(model_call_id, stats_line)
         return
 
-    if isinstance(event, ToolCallStartEvent):
+    if isinstance(event, ToolCallArgumentsDeltaEvent):
         model_call_id = await _ensure_active_model_call(adapter, state)
-        await adapter.start_tool_call(
+        snapshot = await _ensure_tool_snapshot(
+            adapter=adapter,
+            state=state,
             model_call_id=model_call_id,
             tool_call_id=event.tool_call_id,
             tool_name=event.tool_name,
-            arguments=event.arguments,
         )
-        state.tool_snapshots[event.tool_call_id] = ToolRenderSnapshot(
-            tool_name=event.tool_name,
-            tool_call_id=event.tool_call_id,
-            arguments=event.arguments,
+        _append_argument_delta_to_snapshot(
+            snapshot,
+            argname=event.argname,
+            argcontent_delta=event.argcontent_delta,
         )
-        state.running_tool_call_ids.append(event.tool_call_id)
+        await adapter.append_tool_argument(
+            event.tool_call_id,
+            event.argname,
+            event.argcontent_delta,
+        )
+        if event.tool_call_id not in state.running_tool_call_ids:
+            state.running_tool_call_ids.append(event.tool_call_id)
+        return
+
+    if isinstance(event, ToolCallStartEvent):
+        model_call_id = await _ensure_active_model_call(adapter, state)
+        existing_snapshot = state.tool_snapshots.get(event.tool_call_id)
+        if existing_snapshot is None:
+            await adapter.start_tool_call(
+                model_call_id=model_call_id,
+                tool_call_id=event.tool_call_id,
+                tool_name=event.tool_name,
+                arguments=event.arguments,
+            )
+            state.tool_snapshots[event.tool_call_id] = ToolRenderSnapshot(
+                tool_name=event.tool_name,
+                tool_call_id=event.tool_call_id,
+                arguments=dict(event.arguments),
+            )
+        else:
+            if event.tool_name:
+                existing_snapshot.tool_name = event.tool_name
+            existing_snapshot.arguments = dict(event.arguments)
+            await adapter.set_tool_status(event.tool_call_id, "running")
+
+        if event.tool_call_id not in state.running_tool_call_ids:
+            state.running_tool_call_ids.append(event.tool_call_id)
         return
 
     if isinstance(event, CustomEvent):
@@ -788,9 +908,13 @@ async def consume_react_stream(
         )
 
         # ReactEndEvent already carries the final history for this turn.
-        # Stop waiting for stream exhaustion to avoid UI stalls when upstream
-        # generators delay cleanup after emitting the terminal event.
-        if isinstance(output.event, ReactEndEvent):
+        # Stop waiting for stream exhaustion once the top-level agent ends.
+        # Fork-scoped ReactEndEvent must not terminate parent stream handling.
+        fork_id, _, _, _ = _resolve_fork_origin_context(
+            event=output.event,
+            origin=output.origin,
+        )
+        if isinstance(output.event, ReactEndEvent) and fork_id is None:
             break
 
     if not saw_event:

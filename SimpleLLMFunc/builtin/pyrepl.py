@@ -26,8 +26,9 @@ from SimpleLLMFunc.runtime import PrimitiveCallContext, PrimitiveRegistry
 from SimpleLLMFunc.runtime.builtin_self_reference import (
     register_self_reference_primitives,
 )
-from SimpleLLMFunc.self_reference import SelfReference
 from SimpleLLMFunc.tool import Tool
+
+from .primitive import SelfReference
 
 from .pyrepl_worker import (
     COMMAND_EXECUTE,
@@ -70,7 +71,7 @@ class PyRepl:
     _input_registry_lock = threading.Lock()
     _pending_input_queues: Dict[str, queue.Queue[str]] = {}
 
-    DEFAULT_EXECUTION_TIMEOUT_SECONDS = 120.0
+    DEFAULT_EXECUTION_TIMEOUT_SECONDS = 600.0
     DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS = 300.0
     INTERRUPT_GRACE_SECONDS = 1.0
 
@@ -78,8 +79,16 @@ class PyRepl:
         "Run Python code in a persistent REPL session (state persists across "
         "calls). Write direct executable snippets, not standalone scripts. "
         'Do not include `if __name__ == "__main__":` blocks. Interactive '
-        "`input()` is supported. `reset_repl` only clears REPL variables and "
-        "does not delete runtime memory managed by registered primitives."
+        "`input()` is supported. Runtime primitives are available via "
+        "`runtime.*`; call `runtime.list_primitives()` and "
+        "`runtime.list_primitive_specs()` to inspect mounted primitive "
+        "contracts (input/output types, parameter docs, best practices). "
+        "You may set per-call active timeout via "
+        "`timeout_seconds` (defaults to 600 seconds). "
+        "Self-reference operations are grouped under "
+        "`runtime.selfref.*` (`runtime.selfref.history.*` and "
+        "`runtime.selfref.fork.*`). `reset_repl` only clears REPL variables "
+        "and does not delete runtime memory managed by registered primitives."
     )
     RESET_TOOL_DESCRIPTION = (
         "Reset REPL runtime variables in the current session. This clears "
@@ -89,8 +98,20 @@ class PyRepl:
         "List user-defined variables currently available in REPL namespace "
         "(excluding private names and runtime)."
     )
+    EXECUTE_TOOL_BEST_PRACTICES = [
+        "Call runtime.list_primitive_specs() before complex runtime usage to inspect argument and output contracts.",
+        "Keep snippets directly executable and avoid script wrappers such as if __name__ == '__main__'.",
+        "Use runtime.selfref.history.* for memory management and runtime.selfref.fork.* for delegation.",
+    ]
+    RESET_TOOL_BEST_PRACTICES = [
+        "Use reset_repl only for variable cleanup; runtime backend state remains unchanged.",
+        "Clear selfref memory with runtime.selfref.history.delete/replace/clear when needed.",
+    ]
+    LIST_VARIABLES_TOOL_BEST_PRACTICES = [
+        "Use this to confirm REPL state before reusing variables across execute_code calls.",
+    ]
 
-    DEFAULT_SELF_REFERENCE_BACKEND_NAME = "self_reference"
+    DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
 
     def __init__(
         self,
@@ -227,9 +248,7 @@ class PyRepl:
         replace: bool = False,
     ) -> None:
         if not isinstance(backend, SelfReference):
-            raise ValueError(
-                "self_reference primitive pack requires SelfReference backend"
-            )
+            raise ValueError("selfref primitive pack requires SelfReference backend")
 
         normalized_backend_name = self._normalize_backend_name(backend_name)
         self.register_runtime_backend(normalized_backend_name, backend, replace=True)
@@ -264,7 +283,7 @@ class PyRepl:
 
     def _register_builtin_primitives(self) -> None:
         self.register_primitive_pack_installer(
-            "self_reference",
+            "selfref",
             self._install_self_reference_pack,
             replace=True,
         )
@@ -273,12 +292,40 @@ class PyRepl:
             "runtime.list_primitives",
             lambda _ctx: self._primitive_registry.list_names(),
             description="List all registered runtime primitive names.",
+            input_type="No arguments.",
+            output_type="list[str]",
+            parameters=[],
+            best_practices=[
+                "Use this for quick discovery, then call runtime.list_primitive_specs() for full contracts.",
+            ],
+        )
+
+        self._primitive_registry.register(
+            "runtime.list_primitive_specs",
+            lambda _ctx: self.list_primitive_specs(),
+            description=(
+                "List all registered runtime primitive contracts, including "
+                "parameter docs, input/output types, and best practices."
+            ),
+            input_type="No arguments.",
+            output_type="list[dict[str, Any]]",
+            parameters=[],
+            best_practices=[
+                "Read parameter and output contracts here before invoking unfamiliar primitives.",
+                "Prefer this interface when building multi-step plans that involve runtime primitives.",
+            ],
         )
 
         self._primitive_registry.register(
             "runtime.list_backends",
             lambda _ctx: self.list_runtime_backends(),
             description="List registered runtime backend names.",
+            input_type="No arguments.",
+            output_type="list[str]",
+            parameters=[],
+            best_practices=[
+                "Check backend availability before using backend-dependent primitives.",
+            ],
         )
 
     def register_primitive(
@@ -287,6 +334,10 @@ class PyRepl:
         handler: Any,
         *,
         description: str = "",
+        input_type: str = "",
+        output_type: str = "",
+        parameters: Optional[List[Dict[str, Any]]] = None,
+        best_practices: Optional[List[str]] = None,
         replace: bool = False,
     ) -> None:
         """Register one host primitive for worker-side runtime calls."""
@@ -295,6 +346,10 @@ class PyRepl:
             name,
             handler,
             description=description,
+            input_type=input_type,
+            output_type=output_type,
+            parameters=parameters,
+            best_practices=best_practices,
             replace=replace,
         )
 
@@ -307,6 +362,11 @@ class PyRepl:
         """List currently registered runtime primitive names."""
 
         return self._primitive_registry.list_names()
+
+    def list_primitive_specs(self) -> List[Dict[str, Any]]:
+        """List structured primitive contracts and usage guidance."""
+
+        return self._primitive_registry.list_spec_payloads()
 
     @classmethod
     def _register_input_queue(cls, request_id: str) -> queue.Queue[str]:
@@ -358,6 +418,7 @@ class PyRepl:
             name="execute_code",
             description=self.EXECUTE_TOOL_DESCRIPTION,
             func=self.execute,
+            best_practices=self.EXECUTE_TOOL_BEST_PRACTICES,
         )
         tools.append(execute_tool)
 
@@ -365,6 +426,7 @@ class PyRepl:
             name="reset_repl",
             description=self.RESET_TOOL_DESCRIPTION,
             func=self.reset,
+            best_practices=self.RESET_TOOL_BEST_PRACTICES,
         )
         tools.append(reset_tool)
 
@@ -372,6 +434,7 @@ class PyRepl:
             name="list_variables",
             description=self.LIST_VARIABLES_TOOL_DESCRIPTION,
             func=self.list_variables,
+            best_practices=self.LIST_VARIABLES_TOOL_BEST_PRACTICES,
         )
         tools.append(list_vars_tool)
 
@@ -401,6 +464,25 @@ class PyRepl:
             return int(value)
         except Exception:
             return None
+
+    @staticmethod
+    def _close_queue_handle(queue_handle: Any) -> None:
+        if queue_handle is None:
+            return
+
+        close = getattr(queue_handle, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+
+        join_thread = getattr(queue_handle, "join_thread", None)
+        if callable(join_thread):
+            try:
+                join_thread()
+            except Exception:
+                pass
 
     @contextlib.contextmanager
     def _temporary_valid_stderr(self):
@@ -526,25 +608,29 @@ class PyRepl:
 
     def _shutdown_worker_locked(self) -> None:
         process = self._process
-        if process is None:
-            return
+        command_queue = self._command_queue
+        event_queue = self._event_queue
 
-        if process.is_alive():
-            try:
-                self._send_worker_command_locked({"type": COMMAND_SHUTDOWN})
-            except Exception:
-                pass
+        if process is not None:
+            if process.is_alive():
+                try:
+                    self._send_worker_command_locked({"type": COMMAND_SHUTDOWN})
+                except Exception:
+                    pass
 
-            process.join(timeout=1.0)
+                process.join(timeout=1.0)
 
-        if process.is_alive():
-            process.terminate()
-            process.join(timeout=1.0)
+            if process.is_alive():
+                process.terminate()
+                process.join(timeout=1.0)
 
         self._process = None
         self._command_queue = None
         self._event_queue = None
         self._prefetched_events.clear()
+
+        self._close_queue_handle(command_queue)
+        self._close_queue_handle(event_queue)
 
     def _restart_worker_locked(self) -> None:
         self._shutdown_worker_locked()
@@ -634,6 +720,7 @@ class PyRepl:
     async def execute(
         self,
         code: str,
+        timeout_seconds: Optional[float] = None,
         event_emitter: Optional[ToolEventEmitter] = None,
     ) -> Dict[str, Any]:
         """Execute Python snippets in a persistent REPL with streaming output.
@@ -642,14 +729,24 @@ class PyRepl:
         - Write executable snippets directly.
         - Do not wrap code with ``if __name__ == "__main__":``.
         - Variables persist across multiple ``execute_code`` calls.
+        - Runtime primitives are available via ``runtime.*``. Use
+          ``runtime.list_primitives()`` and
+          ``runtime.list_primitive_specs()`` to inspect callable contracts
+          (input/output types, parameter docs, and best practices).
+        - Self-reference primitives are grouped under
+          ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
         - ``input()`` is supported. In event mode, callers can reply via
           ``PyRepl.submit_input(request_id, value)``.
-        - ``reset_repl`` clears REPL variables only. Forgetting self-reference
-          memory must be done via memory methods (for example ``delete`` /
-          ``replace`` / ``clear`` on ``self_reference.memory["key"]``).
+        - ``reset_repl`` clears REPL variables only. Forgetting runtime-backed
+          memory must be done via self-reference history methods (for example
+          ``runtime.selfref.history.delete`` /
+          ``runtime.selfref.history.replace`` /
+          ``runtime.selfref.history.clear``).
 
         Args:
             code: Python code to execute.
+            timeout_seconds: Optional per-call active execution timeout in
+                seconds. If omitted, uses the REPL default timeout.
             event_emitter: Optional emitter for real-time stdout/stderr events.
 
         Returns:
@@ -659,7 +756,12 @@ class PyRepl:
 
         async with self._operation_lock:
             start_time = time.time()
-            timeout_seconds = self.execution_timeout_seconds
+            if timeout_seconds is None:
+                effective_timeout_seconds = self.execution_timeout_seconds
+            else:
+                effective_timeout_seconds = float(timeout_seconds)
+                if effective_timeout_seconds <= 0:
+                    raise ValueError("timeout_seconds must be greater than 0")
 
             stdout_parts: List[str] = []
             stderr_parts: List[str] = []
@@ -671,7 +773,7 @@ class PyRepl:
             pending_input_waiters = 0
 
             poll_interval_seconds = 0.05
-            execution_deadline = time.monotonic() + timeout_seconds
+            execution_deadline = time.monotonic() + effective_timeout_seconds
 
             timed_out = False
             interrupt_sent = False
@@ -810,7 +912,9 @@ class PyRepl:
                                 pending_input_waiters -= 1
                             pending_input_requests.pop(request_id, None)
                             self._pop_input_queue(request_id)
-                            execution_deadline = time.monotonic() + timeout_seconds
+                            execution_deadline = (
+                                time.monotonic() + effective_timeout_seconds
+                            )
                             continue
 
                         if event_type == EVENT_EXECUTE_RESULT:
@@ -895,7 +999,7 @@ class PyRepl:
             if timed_out:
                 timeout_message = (
                     "Execution timed out after "
-                    f"{self._format_timeout_seconds(timeout_seconds)} seconds"
+                    f"{self._format_timeout_seconds(effective_timeout_seconds)} seconds"
                 )
                 error_message = timeout_message
                 error_details = self._build_timeout_error_details(timeout_message)
@@ -926,7 +1030,7 @@ class PyRepl:
                     "execution_id": execution_id,
                     "code": code,
                     "result": result,
-                    "timeout_seconds": timeout_seconds,
+                    "timeout_seconds": effective_timeout_seconds,
                     "input_idle_timeout_seconds": self.input_idle_timeout_seconds,
                     "runtime_backends": self.list_runtime_backends(),
                 }

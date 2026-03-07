@@ -62,7 +62,7 @@ async def your_chat_function(
   - `False`: 返回 `(response, messages)` 元组（向后兼容模式）
   - `True`: 返回 `ReactOutput`（`ResponseYield` 或 `EventYield`）
   - 详细说明请参考 [事件流文档](event_stream.md)
-- **self_reference** (optional): Shared `SelfReference` object. When provided, `llm_chat` automatically appends a SelfReference Memory Contract to the end of the system prompt, guiding the agent to use controlled memory APIs.
+- **self_reference** (optional): Shared `SelfReference` object. When omitted, `llm_chat` can auto-detect a mounted `SelfReference` backend from `PyRepl` toolkit runtime backends. When runtime primitives are available, `llm_chat` appends deduplicated runtime-primitive guidance to the system prompt.
 - **self_reference_key** (optional): Memory key used for this chat function. Defaults to function name when omitted.
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
@@ -254,32 +254,33 @@ asyncio.run(demo())
 
 ## 高级特性
 
-### SelfReference + runtime memory contract
+### SelfReference + runtime primitives
 
-When `@llm_chat(...)` is provided with `self_reference`, the framework automatically appends a memory contract to the current system prompt (with deduplication to avoid repeated blocks).
+When runtime primitives are mounted (for example via `PyRepl`), the framework automatically appends a deduplicated runtime-primitive guidance block to the current system prompt.
 
-The contract is runtime guidance for each turn; durable system-prompt memory remains clean and can be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
+The guidance is rebuilt per turn and keeps durable system-prompt memory clean; durable prompt text can still be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
 
-The contract tells the agent:
+The guidance tells the agent:
 
-- which memory key to use for this chat function
-- how to persist durable preferences with system-prompt memory methods
-- which common memory operations are available (`append`, `update`, `delete`, `replace`, etc.)
+- how to discover mounted runtime capabilities (`runtime.list_primitives()` / `runtime.list_primitive_specs()`)
+- which primitive names are currently available with short descriptions
+- reset semantics (`reset_repl` clears REPL variables, not runtime backend state)
+- (when SelfReference memory is bound) the memory key scope for this chat function
 
 Example:
 
 ```python
-from SimpleLLMFunc import SelfReference, llm_chat
+from SimpleLLMFunc import llm_chat
 from SimpleLLMFunc.builtin import PyRepl
+from SimpleLLMFunc.builtin.primitive import SelfReference
 
 self_reference = SelfReference()
 repl = PyRepl()
-repl.install_primitive_pack("self_reference", backend=self_reference)
+repl.install_primitive_pack("selfref", backend=self_reference)
 
 @llm_chat(
     llm_interface=llm,
     toolkit=repl.toolset,
-    self_reference=self_reference,
     self_reference_key="agent_main",
 )
 async def agent(message: str, history=None):
@@ -289,33 +290,37 @@ async def agent(message: str, history=None):
 Inside `execute_code`, prefer runtime primitives for memory operations:
 
 ```python
-runtime.memory.append_system_prompt(
-    "agent_main",
+runtime.selfref.history.append_system_prompt(
     "User preference: answer in concise bullet points.",
 )
 ```
 
-Runtime memory primitive reference:
+Runtime self-reference primitive reference:
 
-- `runtime.memory.keys()`: list all bound memory keys.
-- `runtime.memory.count(key)`: return number of messages in `key`.
-- `runtime.memory.all(key)`: return deep-copied full message list.
-- `runtime.memory.get(key, index)`: read one message at index.
-- `runtime.memory.append(key, message)`: append one message.
-- `runtime.memory.insert(key, index, message)`: insert one message at index.
-- `runtime.memory.update(key, index, message)`: replace one message at index.
-- `runtime.memory.delete(key, index)`: delete one message at index.
-- `runtime.memory.replace(key, messages)`: replace entire history with validated messages.
-- `runtime.memory.clear(key)`: clear all messages.
-- `runtime.memory.get_system_prompt(key)`: read latest system prompt.
-- `runtime.memory.set_system_prompt(key, text)`: overwrite system prompt.
-- `runtime.memory.append_system_prompt(key, text)`: append text to existing system prompt memory.
+- `runtime.selfref.history.keys()`: list all bound memory keys.
+- `runtime.selfref.history.active_key()`: resolve active history key in current context.
+- `runtime.selfref.history.count(key=None)`: return number of messages in resolved key.
+- `runtime.selfref.history.all(key=None)`: return deep-copied full message list.
+- `runtime.selfref.history.get(index, key=None)`: read one message at index.
+- `runtime.selfref.history.append(message, key=None)`: append one message.
+- `runtime.selfref.history.insert(index, message, key=None)`: insert one message at index.
+- `runtime.selfref.history.update(index, message, key=None)`: replace one message at index.
+- `runtime.selfref.history.delete(index, key=None)`: delete one message at index.
+- `runtime.selfref.history.replace(messages, key=None)`: replace entire history with validated messages.
+- `runtime.selfref.history.clear(key=None)`: clear all messages.
+- `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
+- `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
+- `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
+- `runtime.selfref.fork.run(...)`: run one child self-fork and wait.
+- `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
+- `runtime.selfref.fork.wait(fork_id)`: wait one spawned fork.
+- `runtime.selfref.fork.wait_all([fork_id, ...])`: wait multiple forks.
 
 Forgetting memory:
 
 - Do not treat `reset_repl` as memory forgetting.
 - `reset_repl` only clears Python runtime variables.
-- Forget memory by deleting records through runtime memory primitives (`runtime.memory.delete`, `runtime.memory.replace`, `runtime.memory.clear`).
+- Forget memory by deleting records through selfref history primitives (`runtime.selfref.history.delete`, `runtime.selfref.history.replace`, `runtime.selfref.history.clear`).
 
 ### 返回模式
 

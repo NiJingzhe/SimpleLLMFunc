@@ -2,6 +2,8 @@
 
 本章节收集了 SimpleLLMFunc 框架的各种使用示例。这些示例展示了框架的核心功能和最佳实践。
 
+快速入口：可先查看 `examples/README.md`，其中包含按场景整理后的可运行命令（含无需 API Key 的本地示例）。
+
 > ⚠️ **重要提示**：本框架中的所有装饰器（`@llm_function`、`@llm_chat`、`@tool`）均要求被装饰的函数使用 `async def` 定义，并在调用时通过 `await`（或 `asyncio.run`）执行。
 
 ## 基础示例
@@ -132,8 +134,8 @@ Shows how to use runtime primitives without any LLM provider:
 
 - Explicitly wire `SelfReference` with `PyRepl` as memory backend
 - Register one custom runtime backend + primitive (`constants.get`) as extension example
-- Perform CRUD operations through `runtime.memory.*`
-- Persist durable preferences into system prompt via `runtime.memory.append_system_prompt(...)`
+- Perform CRUD operations through `runtime.selfref.history.*`
+- Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`
 
 Run:
 
@@ -141,38 +143,20 @@ Run:
 poetry run python examples/runtime_primitives_basic_example.py
 ```
 
-### Runtime memory + TUI Agent
+### Unified Runtime Selfref Agent (memory + fork)
 
-**File**: [examples/tui_runtime_memory_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_memory_example.py)
+**File**: [examples/tui_runtime_selfref_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_selfref_example.py)
 
-Shows full agent behavior when `@llm_chat` receives `self_reference` and REPL runtime primitives:
+Recommended single entry for runtime self-reference workflow:
 
-- `llm_chat` automatically appends the memory contract to system prompt
-- Agent mutates memory via `runtime.memory.*` inside `execute_code`
-- Per-turn memory edits are merged into `updated_history` / `ReactEndEvent.final_messages`
-
-Run:
-
-```bash
-poetry run python examples/tui_runtime_memory_example.py
-```
-
-### Adaptive Runtime-Fork Agent (subagent-like)
-
-**File**: [examples/tui_runtime_fork_subagent_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_fork_subagent_example.py)
-
-Shows a single-agent adaptive delegation pattern:
-
-- Agent decides whether to answer directly, plan, or fork.
-- Agent can call `execute_code` to run `runtime.fork.run(...)` for blocking delegation.
-- For concurrent delegation, agent can use `runtime.fork.spawn(...)`, `runtime.fork.wait(...)`, and `runtime.fork.wait_all(...)`.
-- Forked context inherits parent memory snapshot and handles delegated tasks.
-- Forked contexts can continue to fork deeper when decomposition is needed.
+- One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
+- `llm_chat` appends runtime primitive guidance automatically
+- Forked contexts inherit parent memory snapshot from the same selfref key
 
 Run:
 
 ```bash
-poetry run python examples/tui_runtime_fork_subagent_example.py
+poetry run python examples/tui_runtime_selfref_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控

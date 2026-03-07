@@ -20,7 +20,7 @@ class WorkerRuntimeNamespace:
     """Dynamic dotted primitive namespace.
 
     Example:
-        runtime.fork.spawn("task") -> primitive name ``fork.spawn``
+        runtime.selfref.fork.spawn("task") -> primitive name ``selfref.fork.spawn``
     """
 
     def __init__(self, transport: PrimitiveTransport, path: str):
@@ -71,6 +71,36 @@ class WorkerRuntimeProxy:
         if isinstance(result, list):
             return [str(item) for item in result]
         return []
+
+    def list_primitive_specs(self) -> list[dict[str, Any]]:
+        """List structured primitive specs from host registry."""
+
+        result = self.call("runtime.list_primitive_specs")
+        if not isinstance(result, list):
+            return []
+
+        specs: list[dict[str, Any]] = []
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+
+            name = item.get("name")
+            if not isinstance(name, str):
+                continue
+
+            normalized_item: dict[str, Any] = {"name": name}
+            for key, value in item.items():
+                if key == "name":
+                    continue
+                if isinstance(key, str):
+                    normalized_item[key] = value
+
+            if not isinstance(normalized_item.get("description"), str):
+                normalized_item["description"] = ""
+
+            specs.append(normalized_item)
+
+        return specs
 
     def list_backends(self) -> list[str]:
         """List registered runtime backend names."""

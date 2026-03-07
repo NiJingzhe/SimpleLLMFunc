@@ -7,6 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openai.types.chat import ChatCompletionChunk
+from openai.types.chat.chat_completion_chunk import (
+    Choice as ChunkChoice,
+    ChoiceDelta,
+    ChoiceDeltaToolCall,
+    ChoiceDeltaToolCallFunction,
+)
 from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.base.ReAct import execute_llm
@@ -184,6 +190,84 @@ class TestExecuteLLM:
             responses.append(response)
 
         assert len(responses) >= 1
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_streaming_emits_tool_argument_delta_event(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+    ) -> None:
+        """Streaming tool argument chunks should emit argument delta events."""
+
+        mock_get_context.return_value = "test_func"
+
+        def _chunk(arguments_delta: str, *, include_id: bool, include_name: bool):
+            tool_call = ChoiceDeltaToolCall(
+                index=0,
+                id="call_123" if include_id else None,
+                type="function" if include_id else None,
+                function=ChoiceDeltaToolCallFunction(
+                    name="execute_code" if include_name else None,
+                    arguments=arguments_delta,
+                ),
+            )
+            delta = ChoiceDelta(
+                content=None,
+                role="assistant",
+                tool_calls=[tool_call],
+            )
+            choice = ChunkChoice(delta=delta, finish_reason=None, index=0)
+            return ChatCompletionChunk(
+                id="chunk-id",
+                choices=[choice],
+                created=123,
+                model="test-model",
+                object="chat.completion.chunk",
+            )
+
+        async def stream_generator(**kwargs):
+            yield _chunk('{{"code":"print(', include_id=True, include_name=True)
+            yield _chunk('1)"}', include_id=False, include_name=False)
+
+        mock_llm_interface.chat_stream = stream_generator
+        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion)
+
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        tool_map = {"execute_code": AsyncMock(return_value="ok")}
+        tools = [{"type": "function", "function": {"name": "execute_code"}}]
+
+        delta_events = []
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=tools,
+            tool_map=tool_map,
+            max_tool_calls=1,
+            stream=True,
+            enable_event=True,
+        ):
+            if (
+                isinstance(output, EventYield)
+                and output.event.event_type == ReActEventType.TOOL_CALL_ARGUMENTS_DELTA
+            ):
+                delta_events.append(output.event)
+
+        assert delta_events
+        merged_delta = "".join(
+            event.argcontent_delta for event in delta_events if event.argname == "code"
+        )
+        assert merged_delta.endswith("print(1)")
+        assert all(event.tool_call_id == "call_123" for event in delta_events)
 
     @pytest.mark.asyncio
     @patch("SimpleLLMFunc.base.ReAct.langfuse_client")

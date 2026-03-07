@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List
 
 from SimpleLLMFunc.logger import push_error, push_warning
@@ -11,8 +12,162 @@ from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.type.message import ReasoningDetail
 from SimpleLLMFunc.type.tool_call import (
     AccumulatedToolCall,
+    ToolCallArguments,
     ToolCallFunctionInfo,
 )
+
+
+def _try_parse_tool_call_arguments(candidate: str) -> ToolCallArguments | None:
+    """Try parsing one candidate JSON string as tool-call arguments dict."""
+
+    try:
+        parsed = json.loads(candidate)
+    except Exception:
+        return None
+
+    if isinstance(parsed, dict):
+        return parsed
+
+    return None
+
+
+def _trim_trailing_char(value: str, char: str, count: int) -> str:
+    """Trim up to `count` trailing `char` from value."""
+
+    trimmed = value
+    while count > 0 and trimmed.endswith(char):
+        trimmed = trimmed[:-1]
+        count -= 1
+    return trimmed
+
+
+def _close_unfinished_json_payload(arguments_str: str) -> str:
+    """Close common unfinished JSON structures for streaming arguments."""
+
+    value = arguments_str.strip()
+    if not value:
+        return "{}"
+
+    in_string = False
+    escaped = False
+    brace_balance = 0
+    bracket_balance = 0
+
+    for char in value:
+        if in_string:
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == '"':
+                in_string = False
+            continue
+
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            brace_balance += 1
+        elif char == "}":
+            brace_balance -= 1
+        elif char == "[":
+            bracket_balance += 1
+        elif char == "]":
+            bracket_balance -= 1
+
+    candidate = value
+
+    if in_string:
+        candidate += '"'
+
+    if bracket_balance < 0:
+        candidate = _trim_trailing_char(candidate, "]", -bracket_balance)
+    if brace_balance < 0:
+        candidate = _trim_trailing_char(candidate, "}", -brace_balance)
+
+    if bracket_balance > 0:
+        candidate += "]" * bracket_balance
+    if brace_balance > 0:
+        candidate += "}" * brace_balance
+
+    return candidate
+
+
+def _build_argument_candidates(
+    arguments_str: str,
+    *,
+    allow_closure: bool,
+) -> List[str]:
+    """Build deterministic candidates for malformed tool-call arguments."""
+
+    value = arguments_str.strip()
+    if not value:
+        return ["{}"]
+
+    candidates: List[str] = []
+
+    def add(candidate: str) -> None:
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+
+    add(value)
+
+    if value.startswith("{{"):
+        add(value[1:])
+    if value.endswith("}}"):
+        add(value[:-1])
+    if value.startswith("{{") and value.endswith("}}"):
+        add(value[1:-1])
+
+    if allow_closure:
+        closed = _close_unfinished_json_payload(value)
+        add(closed)
+        if closed.startswith("{{"):
+            add(closed[1:])
+        if closed.endswith("}}"):
+            add(closed[:-1])
+        if closed.startswith("{{") and closed.endswith("}}"):
+            add(closed[1:-1])
+
+    return candidates
+
+
+def parse_tool_call_arguments(
+    arguments_str: str,
+    *,
+    allow_closure: bool = False,
+) -> ToolCallArguments | None:
+    """Parse tool-call arguments using deterministic repair candidates.
+
+    Args:
+        arguments_str: Raw JSON argument string from model output.
+        allow_closure: Whether to try auto-closing unfinished JSON payload.
+
+    Returns:
+        Parsed dict when successful, otherwise None.
+    """
+
+    for candidate in _build_argument_candidates(
+        arguments_str,
+        allow_closure=allow_closure,
+    ):
+        parsed = _try_parse_tool_call_arguments(candidate)
+        if parsed is not None:
+            return parsed
+
+    return None
+
+
+def repair_tool_call_arguments(arguments_str: str) -> str:
+    """Repair malformed tool-call arguments and return best JSON string."""
+
+    for candidate in _build_argument_candidates(arguments_str, allow_closure=True):
+        if _try_parse_tool_call_arguments(candidate) is not None:
+            return candidate
+
+    value = arguments_str.strip()
+    return value if value else "{}"
 
 
 def extract_tool_calls(response: Any) -> List[Dict[str, Any]]:
@@ -82,13 +237,16 @@ def accumulate_tool_calls_from_chunks(
         if call["id"] and call["function"]["name"]:
             if not call["type"]:
                 call["type"] = "function"
+            repaired_arguments = repair_tool_call_arguments(
+                call["function"]["arguments"]
+            )
             complete_tool_calls.append(
                 {
                     "id": call["id"],
                     "type": call["type"],
                     "function": {
                         "name": call["function"]["name"],
-                        "arguments": call["function"]["arguments"],
+                        "arguments": repaired_arguments,
                     },
                 }
             )
@@ -141,26 +299,26 @@ def extract_tool_calls_from_stream_response(chunk: Any) -> List[Dict[str, Any]]:
 
 def extract_reasoning_details(response: Any) -> List[ReasoningDetail]:
     """从非流式响应中提取 reasoning_details。
-    
+
     Args:
         response: LLM 响应对象
-        
+
     Returns:
         reasoning_details 列表
     """
     reasoning_details: List[ReasoningDetail] = []
-    
+
     try:
         if hasattr(response, "choices") and len(response.choices) > 0:
             message = response.choices[0].message
-            
+
             # 尝试从 message 中获取 reasoning_details
             reasoning_details_raw = None
             if hasattr(message, "reasoning_details"):
                 reasoning_details_raw = message.reasoning_details
             elif isinstance(message, dict) and "reasoning_details" in message:
                 reasoning_details_raw = message["reasoning_details"]
-            
+
             if reasoning_details_raw:
                 for detail in reasoning_details_raw:
                     # 处理 detail 可能是字典或对象的情况
@@ -178,45 +336,56 @@ def extract_reasoning_details(response: Any) -> List[ReasoningDetail]:
                         # detail 是对象，尝试获取属性
                         reasoning_details.append(
                             ReasoningDetail(
-                                id=getattr(detail, "id", "") if hasattr(detail, "id") else "",
-                                format=getattr(detail, "format", "") if hasattr(detail, "format") else "",
-                                index=getattr(detail, "index", 0) if hasattr(detail, "index") else 0,
-                                type=getattr(detail, "type", "reasoning.encrypted") if hasattr(detail, "type") else "reasoning.encrypted",
-                                data=getattr(detail, "data", "") if hasattr(detail, "data") else "",
+                                id=getattr(detail, "id", "")
+                                if hasattr(detail, "id")
+                                else "",
+                                format=getattr(detail, "format", "")
+                                if hasattr(detail, "format")
+                                else "",
+                                index=getattr(detail, "index", 0)
+                                if hasattr(detail, "index")
+                                else 0,
+                                type=getattr(detail, "type", "reasoning.encrypted")
+                                if hasattr(detail, "type")
+                                else "reasoning.encrypted",
+                                data=getattr(detail, "data", "")
+                                if hasattr(detail, "data")
+                                else "",
                             )
                         )
     except Exception as exc:
         push_error(f"提取 reasoning_details 时出错: {str(exc)}")
         import traceback
+
         push_error(f"详细错误: {traceback.format_exc()}")
-    
+
     return reasoning_details
 
 
 def extract_reasoning_details_from_stream(chunk: Any) -> List[ReasoningDetail]:
     """从流式响应 chunk 中提取 reasoning_details。
-    
+
     Args:
         chunk: 流式响应的一个 chunk
-        
+
     Returns:
         reasoning_details 列表
     """
     reasoning_details: List[ReasoningDetail] = []
-    
+
     try:
         if hasattr(chunk, "choices") and len(chunk.choices) > 0:
             choice = chunk.choices[0]
             if hasattr(choice, "delta") and choice.delta:
                 delta = choice.delta
-                
+
                 # 尝试从 delta 中获取 reasoning_details
                 reasoning_details_raw = None
                 if hasattr(delta, "reasoning_details"):
                     reasoning_details_raw = delta.reasoning_details
                 elif isinstance(delta, dict) and "reasoning_details" in delta:
                     reasoning_details_raw = delta["reasoning_details"]
-                
+
                 if reasoning_details_raw:
                     for detail in reasoning_details_raw:
                         # 处理 detail 可能是字典或对象的情况
@@ -234,17 +403,27 @@ def extract_reasoning_details_from_stream(chunk: Any) -> List[ReasoningDetail]:
                             # detail 是对象，尝试获取属性
                             reasoning_details.append(
                                 ReasoningDetail(
-                                    id=getattr(detail, "id", "") if hasattr(detail, "id") else "",
-                                    format=getattr(detail, "format", "") if hasattr(detail, "format") else "",
-                                    index=getattr(detail, "index", 0) if hasattr(detail, "index") else 0,
-                                    type=getattr(detail, "type", "reasoning.encrypted") if hasattr(detail, "type") else "reasoning.encrypted",
-                                    data=getattr(detail, "data", "") if hasattr(detail, "data") else "",
+                                    id=getattr(detail, "id", "")
+                                    if hasattr(detail, "id")
+                                    else "",
+                                    format=getattr(detail, "format", "")
+                                    if hasattr(detail, "format")
+                                    else "",
+                                    index=getattr(detail, "index", 0)
+                                    if hasattr(detail, "index")
+                                    else 0,
+                                    type=getattr(detail, "type", "reasoning.encrypted")
+                                    if hasattr(detail, "type")
+                                    else "reasoning.encrypted",
+                                    data=getattr(detail, "data", "")
+                                    if hasattr(detail, "data")
+                                    else "",
                                 )
                             )
     except Exception as exc:
         push_error(f"提取流式 reasoning_details 时出错: {str(exc)}")
         import traceback
-        push_error(f"详细错误: {traceback.format_exc()}")
-    
-    return reasoning_details
 
+        push_error(f"详细错误: {traceback.format_exc()}")
+
+    return reasoning_details

@@ -10,6 +10,7 @@ LLM calls with tool usage. It manages:
 """
 
 from __future__ import annotations
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import json
 import time
@@ -50,6 +51,7 @@ from SimpleLLMFunc.hooks.events import (
     LLMCallEndEvent,
     ToolCallsBatchStartEvent,
     ToolCallStartEvent,
+    ToolCallArgumentsDeltaEvent,
     ToolCallEndEvent,
     ToolCallErrorEvent,
     ToolCallsBatchEndEvent,
@@ -72,6 +74,7 @@ from SimpleLLMFunc.base.tool_call import (
     accumulate_tool_calls_from_chunks,
     extract_reasoning_details,
     extract_reasoning_details_from_stream,
+    parse_tool_call_arguments,
     extract_tool_calls,
     extract_tool_calls_from_stream_response,
     process_tool_calls,
@@ -110,6 +113,107 @@ def _usage_from_context_delta(
         completion_tokens=completion_tokens,
         total_tokens=prompt_tokens + completion_tokens,
     )
+
+
+@dataclass
+class _StreamingToolCallState:
+    """Streaming state per tool-call index while parsing argument deltas."""
+
+    tool_call_id: str = ""
+    tool_name: str = ""
+    arguments: str = ""
+    emitted_argument_values: Dict[str, str] = field(default_factory=dict)
+
+
+def _stringify_argument_value(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _collect_stream_argument_deltas(
+    state: _StreamingToolCallState,
+    parsed_arguments: ToolCallArguments,
+) -> List[Tuple[str, str]]:
+    """Compute per-argument text deltas from parsed arguments snapshot."""
+
+    deltas: List[Tuple[str, str]] = []
+
+    for argname, argvalue in parsed_arguments.items():
+        current_value = _stringify_argument_value(argvalue)
+        previous_value = state.emitted_argument_values.get(argname, "")
+
+        if current_value == previous_value:
+            continue
+
+        if previous_value and previous_value.startswith(current_value):
+            # Ignore temporary parser regression caused by partial payloads.
+            continue
+
+        if previous_value and current_value.startswith(previous_value):
+            delta = current_value[len(previous_value) :]
+        else:
+            delta = current_value
+
+        if delta:
+            deltas.append((argname, delta))
+
+        state.emitted_argument_values[argname] = current_value
+
+    return deltas
+
+
+def _collect_tool_argument_delta_payloads(
+    tool_call_chunks: List[Dict[str, Any]],
+    stream_states: Dict[int, _StreamingToolCallState],
+) -> List[Tuple[str, str, str, str]]:
+    """Collect (tool_name, tool_call_id, argname, arg_delta) payloads from chunks."""
+
+    payloads: List[Tuple[str, str, str, str]] = []
+
+    for chunk in tool_call_chunks:
+        index = chunk.get("index")
+        if index is None:
+            continue
+
+        state = stream_states.setdefault(index, _StreamingToolCallState())
+
+        chunk_id = chunk.get("id")
+        if isinstance(chunk_id, str) and chunk_id:
+            state.tool_call_id = chunk_id
+
+        function_chunk = chunk.get("function")
+        if isinstance(function_chunk, dict):
+            chunk_name = function_chunk.get("name")
+            if isinstance(chunk_name, str) and chunk_name:
+                state.tool_name = chunk_name
+
+            argument_delta = function_chunk.get("arguments")
+            if isinstance(argument_delta, str) and argument_delta:
+                state.arguments += argument_delta
+
+        if not state.arguments or not state.tool_call_id:
+            continue
+
+        parsed_arguments = parse_tool_call_arguments(
+            state.arguments,
+            allow_closure=True,
+        )
+        if parsed_arguments is None:
+            continue
+
+        deltas = _collect_stream_argument_deltas(state, parsed_arguments)
+        for argname, argcontent_delta in deltas:
+            payloads.append(
+                (
+                    state.tool_name,
+                    state.tool_call_id,
+                    argname,
+                    argcontent_delta,
+                )
+            )
+
+    return payloads
 
 
 async def _process_tool_calls_with_events_gen(
@@ -202,7 +306,13 @@ async def _process_tool_calls_with_events_gen(
         # 发射工具调用开始事件
         if enable_event:
             try:
-                arguments_start: ToolCallArguments = json.loads(arguments_str)
+                parsed_arguments_start = parse_tool_call_arguments(
+                    arguments_str,
+                    allow_closure=True,
+                )
+                arguments_start: ToolCallArguments = (
+                    parsed_arguments_start if parsed_arguments_start is not None else {}
+                )
                 tool_call_typed_start = dict_to_tool_call(tool_call)
                 await _publish_tool_event(
                     ToolCallStartEvent(
@@ -279,7 +389,13 @@ async def _process_tool_calls_with_events_gen(
         # 发射工具调用结束或错误事件
         if enable_event:
             try:
-                arguments_end: ToolCallArguments = json.loads(arguments_str)
+                parsed_arguments_end = parse_tool_call_arguments(
+                    arguments_str,
+                    allow_closure=True,
+                )
+                arguments_end: ToolCallArguments = (
+                    parsed_arguments_end if parsed_arguments_end is not None else {}
+                )
                 if tool_error:
                     await _publish_tool_event(
                         ToolCallErrorEvent(
@@ -526,8 +642,57 @@ async def execute_llm(
         agent_call_id=f"agent_{current_trace_id}",
     )
 
-    async def _emit_event(event: Any) -> EventYield:
-        return await event_bus.emit_and_get(cast(Any, event))
+    async def _emit_event(
+        event: Any,
+        *,
+        origin_overrides: Optional[Dict[str, Any]] = None,
+    ) -> EventYield:
+        return await event_bus.emit_and_get(
+            cast(Any, event),
+            origin_overrides=origin_overrides,
+        )
+
+    async def _emit_tool_argument_delta_events(
+        tool_call_chunks_batch: List[Dict[str, Any]],
+        stream_states: Dict[int, _StreamingToolCallState],
+        *,
+        current_iteration: int,
+    ) -> List[EventYield]:
+        if not enable_event:
+            return []
+
+        payloads = _collect_tool_argument_delta_payloads(
+            tool_call_chunks_batch,
+            stream_states,
+        )
+        emitted: List[EventYield] = []
+
+        for tool_name, tool_call_id, argname, argcontent_delta in payloads:
+            try:
+                origin_overrides: Dict[str, Any] = {"tool_call_id": tool_call_id}
+                if tool_name:
+                    origin_overrides["tool_name"] = tool_name
+
+                emitted.append(
+                    await _emit_event(
+                        ToolCallArgumentsDeltaEvent(
+                            event_type=ReActEventType.TOOL_CALL_ARGUMENTS_DELTA,
+                            timestamp=datetime.now(timezone.utc),
+                            trace_id=current_trace_id,
+                            func_name=func_name,
+                            iteration=current_iteration,
+                            tool_name=tool_name,
+                            tool_call_id=tool_call_id,
+                            argname=argname,
+                            argcontent_delta=argcontent_delta,
+                        ),
+                        origin_overrides=origin_overrides,
+                    )
+                )
+            except Exception:
+                continue
+
+        return emitted
 
     push_debug(
         f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
@@ -607,6 +772,7 @@ async def execute_llm(
         if stream:
             # Handle streaming response
             reasoning_details_list: List[Dict[str, Any]] = []
+            stream_tool_call_states: Dict[int, _StreamingToolCallState] = {}
             chunk_index = 0
             accumulated_content = ""
             async for chunk in llm_interface.chat_stream(
@@ -617,7 +783,8 @@ async def execute_llm(
                 chunk_content = extract_content_from_stream_response(chunk, func_name)
                 content += chunk_content
                 accumulated_content += chunk_content
-                tool_call_chunks.extend(extract_tool_calls_from_stream_response(chunk))
+                chunk_tool_call_chunks = extract_tool_calls_from_stream_response(chunk)
+                tool_call_chunks.extend(chunk_tool_call_chunks)
                 reasoning_details_list.extend(
                     extract_reasoning_details_from_stream(chunk)
                 )  # type: ignore
@@ -641,6 +808,15 @@ async def execute_llm(
                     except Exception:
                         pass
                     chunk_index += 1
+
+                if enable_event and chunk_tool_call_chunks:
+                    delta_events = await _emit_tool_argument_delta_events(
+                        chunk_tool_call_chunks,
+                        stream_tool_call_states,
+                        current_iteration=iteration,
+                    )
+                    for delta_event in delta_events:
+                        yield delta_event
 
                 # 发射响应
                 if enable_event:
@@ -923,6 +1099,7 @@ async def execute_llm(
                 content = ""
                 tool_call_chunks = []  # Reset for iteration
                 reasoning_details_list = []  # Reset for iteration
+                stream_tool_call_states = {}
                 chunk_index = 0
                 accumulated_content = ""
                 async for chunk in llm_interface.chat_stream(
@@ -935,9 +1112,10 @@ async def execute_llm(
                     )
                     content += chunk_content
                     accumulated_content += chunk_content
-                    tool_call_chunks.extend(
-                        extract_tool_calls_from_stream_response(chunk)
+                    chunk_tool_call_chunks = extract_tool_calls_from_stream_response(
+                        chunk
                     )
+                    tool_call_chunks.extend(chunk_tool_call_chunks)
                     reasoning_details_list.extend(
                         extract_reasoning_details_from_stream(chunk)  # type: ignore
                     )
@@ -961,6 +1139,15 @@ async def execute_llm(
                         except Exception:
                             pass
                         chunk_index += 1
+
+                    if enable_event and chunk_tool_call_chunks:
+                        delta_events = await _emit_tool_argument_delta_events(
+                            chunk_tool_call_chunks,
+                            stream_tool_call_states,
+                            current_iteration=iteration,
+                        )
+                        for delta_event in delta_events:
+                            yield delta_event
 
                     # 发射响应
                     if enable_event:

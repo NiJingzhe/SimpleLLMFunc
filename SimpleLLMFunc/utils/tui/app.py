@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Callable, Optional, Sequence
 
 from rich.markdown import Markdown
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import VerticalGroup, VerticalScroll
+from textual.containers import HorizontalScroll, VerticalGroup, VerticalScroll
 from textual.widgets import Input, Static
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
@@ -33,17 +33,29 @@ class _ModelWidgets:
 @dataclass
 class _ToolWidgets:
     root: VerticalGroup
+    model_call_id: str
+    tool_name: str
+    arguments_widget: Static
     status_widget: Static
     output_widget: Static
     result_widget: Static
     stats_widget: Static
+    arguments: dict[str, Any] = field(default_factory=dict)
     output: str = ""
+
+
+@dataclass
+class _AgentColumnWidgets:
+    root: VerticalScroll
+    header_widget: Static
+    message_list_widget: VerticalGroup
 
 
 class AgentTUIApp(App[None]):
     """Terminal chat UI for llm_chat event streams."""
 
     DEFAULT_INPUT_PLACEHOLDER = "Type a message and press Enter"
+    MAIN_AGENT_KEY = "main"
 
     CSS = """
     Screen {
@@ -83,6 +95,40 @@ class AgentTUIApp(App[None]):
     .model-bubble {
         border: round #5978a1;
         background: #151d2a;
+    }
+
+    .agent-board {
+        layout: horizontal;
+        width: 100%;
+        height: 1fr;
+        margin: 0 0 1 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+
+    .agent-column {
+        width: auto;
+        min-width: 33%;
+        height: 1fr;
+        margin: 0;
+        overflow-y: auto;
+    }
+
+    #agent-column-main {
+        margin: 0;
+    }
+
+    .agent-column-header {
+        margin: 0 0 1 0;
+        padding: 0 1;
+        border: round #3a4252;
+        background: #121722;
+        color: #a8b8d0;
+        text-style: bold;
+    }
+
+    .agent-column-messages {
+        height: auto;
     }
 
     .role {
@@ -150,7 +196,12 @@ class AgentTUIApp(App[None]):
 
         self._models: dict[str, _ModelWidgets] = {}
         self._tools: dict[str, _ToolWidgets] = {}
+        self._agent_board: Optional[HorizontalScroll] = None
+        self._agent_columns: dict[str, _AgentColumnWidgets] = {}
+        self._model_agent_key: dict[str, str] = {}
         self._scroll_after_refresh_pending = False
+        self._agent_scroll_pending: set[str] = set()
+        self._agent_layout_pending = False
 
     def compose(self) -> ComposeResult:
         yield VerticalScroll(id="chat-log")
@@ -179,6 +230,68 @@ class AgentTUIApp(App[None]):
             self._scroll_chat_log_to_end()
 
         self.call_after_refresh(_after_refresh_scroll)
+
+    def _scroll_agent_column_to_end(self, agent_key: str) -> None:
+        column = self._agent_columns.get(agent_key)
+        if column is None:
+            return
+        column.root.scroll_end(animate=False, force=True, immediate=True)
+
+    def _auto_scroll_agent_column(self, agent_key: str) -> None:
+        self._scroll_agent_column_to_end(agent_key)
+
+        if agent_key in self._agent_scroll_pending:
+            return
+
+        self._agent_scroll_pending.add(agent_key)
+
+        def _after_refresh_scroll() -> None:
+            self._agent_scroll_pending.discard(agent_key)
+            self._scroll_agent_column_to_end(agent_key)
+
+        self.call_after_refresh(_after_refresh_scroll)
+
+    def _auto_scroll_for_model(self, model_call_id: str) -> None:
+        agent_key = self._model_agent_key.get(
+            model_call_id,
+            self._resolve_agent_key(model_call_id),
+        )
+        self._auto_scroll_agent_column(agent_key)
+
+    def _auto_scroll_for_tool(self, tool_call_id: str) -> None:
+        tool = self._tools.get(tool_call_id)
+        if tool is None:
+            return
+        self._auto_scroll_for_model(tool.model_call_id)
+
+    def _schedule_agent_column_layout(self) -> None:
+        if self._agent_layout_pending:
+            return
+
+        self._agent_layout_pending = True
+
+        def _after_refresh_layout() -> None:
+            self._agent_layout_pending = False
+            self._reflow_agent_column_widths()
+
+        self.call_after_refresh(_after_refresh_layout)
+
+    def _reflow_agent_column_widths(self) -> None:
+        if not self._agent_columns:
+            return
+
+        column_count = len(self._agent_columns)
+
+        if column_count <= 1:
+            target_width = "100%"
+        elif column_count == 2:
+            target_width = "50%"
+        else:
+            target_width = "33%"
+
+        for column in self._agent_columns.values():
+            column.root.styles.min_width = "33%"
+            column.root.styles.width = target_width
 
     def _set_chat_placeholder(self) -> None:
         input_widget = self.query_one("#chat-input", Input)
@@ -293,16 +406,15 @@ class AgentTUIApp(App[None]):
             self._refresh_input_widget_state()
 
     async def _append_user_message(self, text: str) -> None:
-        chat_log = self.query_one("#chat-log", VerticalScroll)
         bubble = VerticalGroup(classes="bubble user-bubble")
         role = Static("User", classes="role")
         body = Static(classes="body")
         body.update(Markdown(text))
 
-        await chat_log.mount(bubble)
+        await self._mount_into_agent_column(self.MAIN_AGENT_KEY, bubble)
         await bubble.mount(role)
         await bubble.mount(body)
-        self._auto_scroll_chat_log()
+        self._auto_scroll_agent_column(self.MAIN_AGENT_KEY)
 
     async def _append_system_hint(self, text: str) -> None:
         chat_log = self.query_one("#chat-log", VerticalScroll)
@@ -310,13 +422,139 @@ class AgentTUIApp(App[None]):
         await chat_log.mount(hint)
         self._auto_scroll_chat_log()
 
+    def _is_fork_model_call_id(self, model_call_id: str) -> bool:
+        return model_call_id.startswith("fork::")
+
+    def _extract_fork_id(self, model_call_id: str) -> str:
+        if not self._is_fork_model_call_id(model_call_id):
+            return model_call_id
+        return model_call_id.split("::", 1)[1]
+
+    def _resolve_agent_key(self, model_call_id: str) -> str:
+        if self._is_fork_model_call_id(model_call_id):
+            return self._extract_fork_id(model_call_id)
+        return self.MAIN_AGENT_KEY
+
+    def _normalize_dom_id_suffix(self, value: str) -> str:
+        normalized_chars: list[str] = []
+        for char in value:
+            if char.isalnum() or char == "_":
+                normalized_chars.append(char)
+            else:
+                normalized_chars.append("_")
+
+        normalized = "".join(normalized_chars).strip("_")
+        if normalized:
+            return normalized
+        return "agent"
+
+    def _build_agent_column_dom_id(self, agent_key: str) -> str:
+        if agent_key == self.MAIN_AGENT_KEY:
+            return "agent-column-main"
+        return f"agent-column-fork_{self._normalize_dom_id_suffix(agent_key)}"
+
+    def _build_agent_column_label(self, agent_key: str) -> str:
+        if agent_key == self.MAIN_AGENT_KEY:
+            return "Main Agent"
+        return f"Fork {agent_key}"
+
+    async def _ensure_agent_board(self) -> HorizontalScroll:
+        if self._agent_board is not None:
+            return self._agent_board
+
+        chat_log = self.query_one("#chat-log", VerticalScroll)
+        board = HorizontalScroll(classes="agent-board", id="agent-board")
+        await chat_log.mount(board)
+        self._agent_board = board
+        self._schedule_agent_column_layout()
+        return board
+
+    async def _ensure_agent_column(self, agent_key: str) -> _AgentColumnWidgets:
+        existing = self._agent_columns.get(agent_key)
+        if existing is not None:
+            return existing
+
+        if (
+            agent_key != self.MAIN_AGENT_KEY
+            and self.MAIN_AGENT_KEY not in self._agent_columns
+        ):
+            await self._ensure_agent_column(self.MAIN_AGENT_KEY)
+
+        board = await self._ensure_agent_board()
+        column = VerticalScroll(
+            classes="agent-column",
+            id=self._build_agent_column_dom_id(agent_key),
+        )
+        header = Static(
+            self._build_agent_column_label(agent_key),
+            classes="agent-column-header",
+        )
+        message_list = VerticalGroup(classes="agent-column-messages")
+
+        await board.mount(column)
+        await column.mount(header)
+        await column.mount(message_list)
+
+        created = _AgentColumnWidgets(
+            root=column,
+            header_widget=header,
+            message_list_widget=message_list,
+        )
+        self._agent_columns[agent_key] = created
+        self._schedule_agent_column_layout()
+        return created
+
+    async def _mount_into_agent_column(
+        self, agent_key: str, widget: VerticalGroup
+    ) -> None:
+        column = await self._ensure_agent_column(agent_key)
+        await column.message_list_widget.mount(widget)
+
+    async def _teardown_agent_column(self, agent_key: str) -> None:
+        if agent_key == self.MAIN_AGENT_KEY:
+            return
+
+        self._agent_scroll_pending.discard(agent_key)
+
+        column = self._agent_columns.pop(agent_key, None)
+        if column is None:
+            return
+
+        removed_model_call_ids = [
+            model_call_id
+            for model_call_id, mapped_agent_key in self._model_agent_key.items()
+            if mapped_agent_key == agent_key
+        ]
+        for model_call_id in removed_model_call_ids:
+            self._model_agent_key.pop(model_call_id, None)
+            self._models.pop(model_call_id, None)
+
+        removed_tool_call_ids = [
+            tool_call_id
+            for tool_call_id, tool in self._tools.items()
+            if tool.model_call_id in removed_model_call_ids
+        ]
+        for tool_call_id in removed_tool_call_ids:
+            self._tools.pop(tool_call_id, None)
+            self._input_router.clear_tool_requests(tool_call_id)
+
+        await column.root.remove()
+        self._schedule_agent_column_layout()
+
+    async def _mount_model_root(
+        self,
+        model_call_id: str,
+        root: VerticalGroup,
+    ) -> None:
+        agent_key = self._resolve_agent_key(model_call_id)
+        self._model_agent_key[model_call_id] = agent_key
+        await self._mount_into_agent_column(agent_key, root)
+
     # ------------------------------------------------------------------
     # Adapter methods used by consume_react_stream
     # ------------------------------------------------------------------
 
     async def start_model_response(self, model_call_id: str) -> None:
-        chat_log = self.query_one("#chat-log", VerticalScroll)
-
         root = VerticalGroup(classes="bubble model-bubble")
         role = Static("Assistant", classes="role")
         reasoning_widget = Static("", classes="reasoning")
@@ -324,13 +562,12 @@ class AgentTUIApp(App[None]):
         tool_list_widget = VerticalGroup(classes="tool-list")
         stats_widget = Static("", classes="stats")
 
-        await chat_log.mount(root)
+        await self._mount_model_root(model_call_id, root)
         await root.mount(role)
         await root.mount(reasoning_widget)
         await root.mount(content_widget)
         await root.mount(tool_list_widget)
         await root.mount(stats_widget)
-        self._auto_scroll_chat_log()
 
         self._models[model_call_id] = _ModelWidgets(
             root=root,
@@ -339,6 +576,7 @@ class AgentTUIApp(App[None]):
             tool_list_widget=tool_list_widget,
             stats_widget=stats_widget,
         )
+        self._auto_scroll_for_model(model_call_id)
 
     async def append_model_content(
         self, model_call_id: str, content_delta: str
@@ -349,7 +587,7 @@ class AgentTUIApp(App[None]):
 
         model.content += content_delta
         model.content_widget.update(Markdown(model.content or " "))
-        self._auto_scroll_chat_log()
+        self._auto_scroll_for_model(model_call_id)
 
     async def append_model_reasoning(
         self,
@@ -362,14 +600,23 @@ class AgentTUIApp(App[None]):
 
         model.reasoning += reasoning_delta
         model.reasoning_widget.update(model.reasoning)
-        self._auto_scroll_chat_log()
+        self._auto_scroll_for_model(model_call_id)
 
     async def finish_model_response(self, model_call_id: str, stats_line: str) -> None:
         model = self._models.get(model_call_id)
         if model is None:
             return
+
         model.stats_widget.update(stats_line)
-        self._auto_scroll_chat_log()
+
+        if self._is_fork_model_call_id(model_call_id) and stats_line.startswith(
+            "fork |"
+        ):
+            agent_key = self._model_agent_key.get(model_call_id)
+            if agent_key is not None:
+                await self._teardown_agent_column(agent_key)
+
+        self._auto_scroll_for_model(model_call_id)
 
     async def start_tool_call(
         self,
@@ -378,6 +625,22 @@ class AgentTUIApp(App[None]):
         tool_name: str,
         arguments: dict[str, Any],
     ) -> None:
+        existing_tool = self._tools.get(tool_call_id)
+        if existing_tool is not None:
+            existing_tool.tool_name = tool_name
+            existing_tool.arguments = dict(arguments)
+            existing_tool.arguments_widget.update(
+                Markdown(
+                    format_tool_arguments_markdown(
+                        existing_tool.arguments,
+                        tool_name=tool_name,
+                    )
+                )
+            )
+            existing_tool.status_widget.update("running")
+            self._auto_scroll_for_tool(tool_call_id)
+            return
+
         model = self._models.get(model_call_id)
         if model is None:
             return
@@ -409,12 +672,40 @@ class AgentTUIApp(App[None]):
 
         self._tools[tool_call_id] = _ToolWidgets(
             root=root,
+            model_call_id=model_call_id,
+            tool_name=tool_name,
+            arguments_widget=args_widget,
             status_widget=status_widget,
             output_widget=output_widget,
             result_widget=result_widget,
             stats_widget=stats_widget,
+            arguments=dict(arguments),
         )
-        self._auto_scroll_chat_log()
+        self._auto_scroll_for_tool(tool_call_id)
+
+    async def append_tool_argument(
+        self,
+        tool_call_id: str,
+        argname: str,
+        argcontent_delta: str,
+    ) -> None:
+        tool = self._tools.get(tool_call_id)
+        if tool is None:
+            return
+
+        previous = tool.arguments.get(argname, "")
+        if not isinstance(previous, str):
+            previous = str(previous)
+        tool.arguments[argname] = previous + argcontent_delta
+        tool.arguments_widget.update(
+            Markdown(
+                format_tool_arguments_markdown(
+                    tool.arguments,
+                    tool_name=tool.tool_name,
+                )
+            )
+        )
+        self._auto_scroll_for_tool(tool_call_id)
 
     async def append_tool_output(self, tool_call_id: str, output_delta: str) -> None:
         tool = self._tools.get(tool_call_id)
@@ -424,7 +715,7 @@ class AgentTUIApp(App[None]):
         tool.output += output_delta
         if tool.output:
             tool.output_widget.update(Markdown(f"```text\n{tool.output}\n```"))
-            self._auto_scroll_chat_log()
+            self._auto_scroll_for_tool(tool_call_id)
 
     async def set_tool_status(self, tool_call_id: str, status: str) -> None:
         tool = self._tools.get(tool_call_id)
@@ -432,7 +723,7 @@ class AgentTUIApp(App[None]):
             return
 
         tool.status_widget.update(status)
-        self._auto_scroll_chat_log()
+        self._auto_scroll_for_tool(tool_call_id)
 
     async def request_tool_input(
         self,
@@ -465,7 +756,7 @@ class AgentTUIApp(App[None]):
         tool.status_widget.update("success" if success else "error")
         tool.result_widget.update(Markdown(result_markdown or ""))
         tool.stats_widget.update(stats_line)
-        self._auto_scroll_chat_log()
+        self._auto_scroll_for_tool(tool_call_id)
 
 
 __all__ = ["AgentTUIApp"]

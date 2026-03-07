@@ -448,3 +448,144 @@ class TestSelfReferenceInstanceProxy:
         assert forwarded_origin.fork_id == result["fork_id"]
         assert forwarded_origin.memory_key == result["memory_key"]
         assert forwarded_origin.fork_depth == result["depth"]
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_preserves_nested_fork_origin_metadata(self) -> None:
+        """Nested fork-origin events should keep their own fork scope metadata."""
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        nested_origin = EventOrigin(
+            session_id="trace-nested",
+            agent_call_id="agent-nested",
+            event_seq=1,
+            fork_id="fork_nested",
+            fork_depth=2,
+            source_memory_key="agent_main::fork::1",
+            memory_key="agent_main::fork::1::fork::2",
+            tool_name="execute_code",
+            tool_call_id="nested-tool-call",
+        )
+
+        async def fake_agent(message: str, history=None):
+            yield EventYield(
+                event=CustomEvent(
+                    event_type=ReActEventType.CUSTOM_EVENT,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id="trace-child",
+                    func_name="agent",
+                    iteration=1,
+                    event_name="nested_progress",
+                    data={"message": message},
+                ),
+                origin=nested_origin,
+            )
+            yield (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "child done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+        emitter = _CollectingEmitter()
+
+        result = await self_reference.instance.fork(
+            "task-a",
+            _event_emitter=emitter,
+        )
+
+        nested_progress_events = [
+            event_yield
+            for event_yield in emitter.react_events
+            if isinstance(event_yield.event, CustomEvent)
+            and event_yield.event.event_name == "nested_progress"
+        ]
+        assert len(nested_progress_events) == 1
+
+        forwarded_origin = nested_progress_events[0].origin
+        assert forwarded_origin.fork_id == nested_origin.fork_id
+        assert forwarded_origin.fork_depth == nested_origin.fork_depth
+        assert forwarded_origin.source_memory_key == nested_origin.source_memory_key
+        assert forwarded_origin.memory_key == nested_origin.memory_key
+        assert forwarded_origin.tool_call_id == nested_origin.tool_call_id
+        assert forwarded_origin.fork_id != result["fork_id"]
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_preserves_deep_nested_origin_through_multi_hops(
+        self,
+    ) -> None:
+        """Deep nested fork-origin events should survive multi-hop forwarding."""
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        target_depth = 5
+        emitter = _CollectingEmitter()
+
+        async def fake_agent(message: str, history=None):
+            current_depth = self_reference._get_active_fork_depth()
+            if current_depth < target_depth:
+                await self_reference.instance.fork(message, _event_emitter=emitter)
+                yield (
+                    f"pass-depth-{current_depth}",
+                    list(history or []),
+                )
+                return
+
+            active_fork_id = self_reference._get_active_fork_id()
+            active_memory_key = self_reference._get_active_memory_key() or ""
+            if "::fork::" in active_memory_key:
+                source_memory_key = active_memory_key.rsplit("::fork::", 1)[0]
+            else:
+                source_memory_key = "agent_main"
+
+            yield EventYield(
+                event=CustomEvent(
+                    event_type=ReActEventType.CUSTOM_EVENT,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id="trace-deep",
+                    func_name="agent",
+                    iteration=1,
+                    event_name="deep_progress",
+                    data={"depth": current_depth},
+                ),
+                origin=EventOrigin(
+                    session_id="trace-deep",
+                    agent_call_id="agent-deep",
+                    event_seq=1,
+                    fork_id=active_fork_id,
+                    fork_depth=current_depth,
+                    source_memory_key=source_memory_key,
+                    memory_key=active_memory_key,
+                ),
+            )
+            yield (
+                "leaf-done",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "leaf done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        top_level_result = await self_reference.instance.fork(
+            "descend",
+            _event_emitter=emitter,
+        )
+
+        deep_events = [
+            event_yield
+            for event_yield in emitter.react_events
+            if isinstance(event_yield.event, CustomEvent)
+            and event_yield.event.event_name == "deep_progress"
+        ]
+        assert len(deep_events) == 1
+
+        forwarded_origin = deep_events[0].origin
+        assert forwarded_origin.fork_depth == target_depth
+        assert forwarded_origin.fork_id is not None
+        assert forwarded_origin.fork_id != top_level_result["fork_id"]
+        assert isinstance(forwarded_origin.memory_key, str)
+        assert forwarded_origin.memory_key.startswith("agent_main::fork::")

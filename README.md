@@ -23,7 +23,7 @@
 
 ### Update Notes (0.6.0)
 
-🚀 **Major Release: PyRepl + Textual TUI + Durable Agent Memory** - `SimpleLLMFunc` now ships with a subprocess-based persistent `PyRepl`, an out-of-the-box Textual `@tui` integration for streaming `llm_chat`, and a durable `SelfReference` memory contract for stateful agent workflows.
+🚀 **Major Release: PyRepl + Textual TUI + Durable Agent Memory** - `SimpleLLMFunc` now ships with a subprocess-based persistent `PyRepl`, an out-of-the-box Textual `@tui` integration for streaming `llm_chat`, and runtime-primitive-guided durable `SelfReference` memory workflows for stateful agents.
 
 📝 **Also Included**: Custom tool event emission, improved tool input routing, expanded tests, and refreshed docs/examples. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for migration and details.
 
@@ -724,8 +724,7 @@ SimpleLLMFunc/
 │   ├── multi_modality_toolcall.py   # Multimodal examples
 │   ├── pyrepl_example.py            # Builtin PyRepl usage
 │   ├── runtime_primitives_basic_example.py # Local runtime memory primitives
-│   ├── tui_runtime_memory_example.py # TUI runtime memory demo
-│   ├── tui_runtime_fork_subagent_example.py # TUI runtime fork demo
+│   ├── tui_runtime_selfref_example.py # Unified TUI selfref demo (memory + fork)
 │   ├── custom_tool_event_example.py # Custom tool event examples
 │   ├── tui_chat_example.py          # Textual TUI example
 │   ├── provider.json          # Provider configuration examples

@@ -18,13 +18,19 @@ from typing import (
 
 from SimpleLLMFunc.logger import get_location, push_debug, push_warning
 from SimpleLLMFunc.tool import Tool
-from SimpleLLMFunc.type import ToolDefinitionList
+
+
+TOOL_PROMPT_BLOCK_START = "[Tool Best Practices]"
+TOOL_PROMPT_BLOCK_END = "[/Tool Best Practices]"
 
 
 def process_tools(
     toolkit: Optional[List[Union[Tool, Callable[..., Awaitable[Any]]]]] = None,
     func_name: str = "unknown_function",
-) -> Tuple[ToolDefinitionList, Dict[str, Callable[..., Awaitable[Any]]]]:
+) -> Tuple[
+    Optional[List[Dict[str, Any]]],
+    Dict[str, Callable[..., Awaitable[Any]]],
+]:
     """
     处理工具列表，返回 API 所需的工具参数和工具映射。
 
@@ -114,6 +120,184 @@ def process_tools(
     return tool_param_for_api, tool_map
 
 
+def collect_tool_prompt_specs(
+    toolkit: Optional[List[Union[Tool, Callable[..., Awaitable[Any]]]]] = None,
+) -> List[Dict[str, Any]]:
+    """Collect deduplicated ToolSpec metadata for system-prompt injection."""
+
+    if not toolkit:
+        return []
+
+    collected: Dict[str, Dict[str, Any]] = {}
+
+    for item in toolkit:
+        tool_obj: Optional[Tool] = None
+        if isinstance(item, Tool):
+            tool_obj = item
+        elif callable(item) and hasattr(item, "_tool"):
+            maybe_tool_obj = getattr(item, "_tool", None)
+            if isinstance(maybe_tool_obj, Tool):
+                tool_obj = maybe_tool_obj
+
+        if tool_obj is None:
+            continue
+
+        raw_spec = tool_obj.tool_spec
+        raw_name = raw_spec.get("name")
+        if not isinstance(raw_name, str):
+            continue
+
+        name = raw_name.strip()
+        if not name:
+            continue
+
+        raw_description = raw_spec.get("description")
+        description = (
+            raw_description.strip() if isinstance(raw_description, str) else ""
+        )
+
+        raw_best_practices = raw_spec.get("best_practices")
+        normalized_best_practices: List[str] = []
+        if isinstance(raw_best_practices, list):
+            for practice in raw_best_practices:
+                if not isinstance(practice, str):
+                    continue
+                text = practice.strip()
+                if text and text not in normalized_best_practices:
+                    normalized_best_practices.append(text)
+
+        existing = collected.get(name)
+        if existing is None:
+            collected[name] = {
+                "name": name,
+                "description": description,
+                "best_practices": normalized_best_practices,
+            }
+            continue
+
+        if not existing.get("description") and description:
+            existing["description"] = description
+
+        existing_best_practices = existing.get("best_practices")
+        if not isinstance(existing_best_practices, list):
+            existing_best_practices = []
+            existing["best_practices"] = existing_best_practices
+
+        for practice in normalized_best_practices:
+            if practice not in existing_best_practices:
+                existing_best_practices.append(practice)
+
+    return [collected[name] for name in sorted(collected.keys())]
+
+
+def build_tool_best_practices_prompt_block(
+    tool_specs: List[Dict[str, Any]],
+) -> Optional[str]:
+    """Render a stable ToolSpec guidance block for system prompt."""
+
+    if not tool_specs:
+        return None
+
+    lines: List[str] = [
+        TOOL_PROMPT_BLOCK_START,
+        "Follow each tool contract and prefer tool-specific best practices.",
+    ]
+
+    has_any_spec = False
+    for spec in tool_specs:
+        raw_name = spec.get("name")
+        if not isinstance(raw_name, str):
+            continue
+
+        name = raw_name.strip()
+        if not name:
+            continue
+
+        has_any_spec = True
+        raw_description = spec.get("description")
+        description = (
+            raw_description.strip() if isinstance(raw_description, str) else ""
+        )
+        if description:
+            lines.append(f"- {name}: {description}")
+        else:
+            lines.append(f"- {name}")
+
+        best_practices = spec.get("best_practices")
+        if isinstance(best_practices, list):
+            normalized_best_practices: List[str] = []
+            for practice in best_practices:
+                if not isinstance(practice, str):
+                    continue
+                text = practice.strip()
+                if text and text not in normalized_best_practices:
+                    normalized_best_practices.append(text)
+
+            for index, practice in enumerate(normalized_best_practices, start=1):
+                lines.append(f"  - best_practice_{index}: {practice}")
+
+    if not has_any_spec:
+        return None
+
+    lines.append(TOOL_PROMPT_BLOCK_END)
+    return "\n".join(lines)
+
+
+def remove_tool_best_practices_prompt_block(system_prompt: str) -> str:
+    """Remove previously injected ToolSpec guidance blocks."""
+
+    cleaned_prompt = system_prompt
+    while True:
+        start_index = cleaned_prompt.find(TOOL_PROMPT_BLOCK_START)
+        if start_index < 0:
+            break
+
+        end_index = cleaned_prompt.find(TOOL_PROMPT_BLOCK_END, start_index)
+        if end_index < 0:
+            cleaned_prompt = cleaned_prompt[:start_index]
+            break
+
+        cleaned_prompt = (
+            cleaned_prompt[:start_index]
+            + cleaned_prompt[end_index + len(TOOL_PROMPT_BLOCK_END) :]
+        )
+
+    return cleaned_prompt.strip()
+
+
+def append_tool_best_practices_prompt_to_messages(
+    messages: List[Any],
+    tool_specs: List[Dict[str, Any]],
+) -> None:
+    """Append one deduplicated ToolSpec guidance block into system prompt."""
+
+    prompt_block = build_tool_best_practices_prompt_block(tool_specs)
+    if not prompt_block:
+        return
+
+    for index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+
+        if message.get("role") != "system":
+            continue
+
+        content = message.get("content")
+        base_prompt = ""
+        if isinstance(content, str):
+            base_prompt = remove_tool_best_practices_prompt_block(content)
+
+        if base_prompt:
+            merged_prompt = f"{base_prompt}\n\n{prompt_block}"
+        else:
+            merged_prompt = prompt_block
+
+        messages[index] = {**message, "content": merged_prompt}
+        return
+
+    messages.insert(0, {"role": "system", "content": prompt_block})
+
+
 def _process_tool_object(
     tool: Tool,
     func_name: str,
@@ -166,9 +350,7 @@ def _process_decorated_function(
         )
 
     tool_obj = getattr(tool, "_tool", None)
-    assert isinstance(
-        tool_obj, Tool
-    ), "这一定是一个Tool对象，不会是None！是None我赤石"
+    assert isinstance(tool_obj, Tool), "这一定是一个Tool对象，不会是None！是None我赤石"
 
     # 添加 Tool 对象到列表（用于序列化）
     tool_objects.append(tool_obj)

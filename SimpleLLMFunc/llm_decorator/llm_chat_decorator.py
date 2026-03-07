@@ -27,8 +27,13 @@ from SimpleLLMFunc.llm_decorator.steps.chat import (
     process_chat_response_stream,
 )
 from SimpleLLMFunc.llm_decorator.steps.chat.message import HISTORY_PARAM_NAMES
+from SimpleLLMFunc.llm_decorator.utils import (
+    append_tool_best_practices_prompt_to_messages,
+    collect_tool_prompt_specs,
+    remove_tool_best_practices_prompt_block,
+)
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.self_reference import (
+from SimpleLLMFunc.builtin.self_reference import (
     SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
     SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
     SelfReference,
@@ -48,10 +53,13 @@ P = ParamSpec("P")
 
 # Constants
 DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
-_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
-_SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_START = "[Runtime Primitive Contract]"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END = "[/Runtime Primitive Contract]"
+_LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
+_LEGACY_SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 _AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
+_FORK_CLONED_PYREPL_ATTR = "__simplellmfunc_fork_cloned_pyrepl__"
 
 
 def _extract_raw_history_reference(arguments: dict[str, Any]) -> Optional[HistoryList]:
@@ -90,7 +98,7 @@ def _set_history_argument(
 
 def _clone_toolkit_for_fork(
     base_toolkit: Optional[ToolkitList],
-    self_reference: SelfReference,
+    self_reference_override: Optional[SelfReference],
 ) -> Optional[ToolkitList]:
     if base_toolkit is None:
         return None
@@ -110,6 +118,7 @@ def _clone_toolkit_for_fork(
                         execution_timeout_seconds=bound_instance.execution_timeout_seconds,
                         input_idle_timeout_seconds=bound_instance.input_idle_timeout_seconds,
                     )
+                    setattr(replacement_repl, _FORK_CLONED_PYREPL_ATTR, True)
 
                     runtime_backends = bound_instance.list_runtime_backends()
                     for backend_name in runtime_backends:
@@ -117,9 +126,14 @@ def _clone_toolkit_for_fork(
                         if backend_value is None:
                             continue
                         if isinstance(backend_value, SelfReference):
+                            replacement_self_reference = (
+                                self_reference_override
+                                if self_reference_override is not None
+                                else backend_value
+                            )
                             replacement_repl.install_primitive_pack(
-                                "self_reference",
-                                backend=self_reference,
+                                "selfref",
+                                backend=replacement_self_reference,
                                 backend_name=backend_name,
                                 replace=True,
                             )
@@ -142,6 +156,80 @@ def _clone_toolkit_for_fork(
         cloned_toolkit.append(item)
 
     return cloned_toolkit
+
+
+def _close_fork_cloned_pyrepls(toolkit: Optional[ToolkitList]) -> None:
+    if not toolkit:
+        return
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    closed_repl_ids: set[int] = set()
+
+    for item in toolkit:
+        if not isinstance(item, Tool):
+            continue
+
+        bound_instance = getattr(item.func, "__self__", None)
+        if not isinstance(bound_instance, PyRepl):
+            continue
+        if not bool(getattr(bound_instance, _FORK_CLONED_PYREPL_ATTR, False)):
+            continue
+
+        repl_id = id(bound_instance)
+        if repl_id in closed_repl_ids:
+            continue
+        closed_repl_ids.add(repl_id)
+
+        try:
+            bound_instance.close()
+        except Exception:
+            continue
+
+
+def _extract_self_reference_from_toolkit(
+    toolkit: Optional[ToolkitList],
+) -> Optional[SelfReference]:
+    if not toolkit:
+        return None
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    discovered: Dict[int, SelfReference] = {}
+
+    for item in toolkit:
+        if not isinstance(item, Tool):
+            continue
+
+        bound_instance = getattr(item.func, "__self__", None)
+        if not isinstance(bound_instance, PyRepl):
+            continue
+
+        default_backend = bound_instance.get_runtime_backend(
+            PyRepl.DEFAULT_SELF_REFERENCE_BACKEND_NAME
+        )
+        if isinstance(default_backend, SelfReference):
+            discovered[id(default_backend)] = default_backend
+            continue
+
+        for backend_name in bound_instance.list_runtime_backends():
+            backend_value = bound_instance.get_runtime_backend(backend_name)
+            if isinstance(backend_value, SelfReference):
+                discovered[id(backend_value)] = backend_value
+
+    if not discovered:
+        return None
+
+    return next(iter(discovered.values()))
+
+
+def _resolve_effective_self_reference(
+    explicit_self_reference: Optional[SelfReference],
+    toolkit: Optional[ToolkitList],
+) -> Optional[SelfReference]:
+    if explicit_self_reference is not None:
+        return explicit_self_reference
+    return _extract_self_reference_from_toolkit(toolkit)
 
 
 def _resolve_runtime_toolkit(
@@ -176,101 +264,269 @@ def _resolve_self_reference_key(
     return normalized
 
 
-def _build_self_reference_prompt_block(memory_key: str) -> str:
-    return "\n".join(
-        [
-            _SELF_REFERENCE_PROMPT_BLOCK_START,
-            "Self-reference memory is enabled for this agent.",
-            f'- Use runtime memory key: "{memory_key}"',
-            "- Runtime memory primitive purposes:",
-            f'  runtime.memory.count("{memory_key}"): number of stored messages.',
-            f'  runtime.memory.all("{memory_key}"): deep-copy snapshot of messages.',
-            f'  runtime.memory.get("{memory_key}", index): read one message by index.',
-            f'  runtime.memory.append("{memory_key}", message): append one message.',
-            (
-                f'  runtime.memory.insert("{memory_key}", index, message): insert one '
-                "message at index."
-            ),
-            (
-                f'  runtime.memory.update("{memory_key}", index, message): replace one '
-                "message at index."
-            ),
-            (
-                f'  runtime.memory.delete("{memory_key}", index): remove one message at '
-                "index."
-            ),
-            (
-                f'  runtime.memory.replace("{memory_key}", messages): replace entire '
-                "history with validated messages."
-            ),
-            f'  runtime.memory.clear("{memory_key}"): remove all messages for this key.',
-            (
-                f'  runtime.memory.get_system_prompt("{memory_key}"): read latest system '
-                "prompt text."
-            ),
-            (
-                f'  runtime.memory.set_system_prompt("{memory_key}", text): overwrite '
-                "system prompt text."
-            ),
-            (
-                f'  runtime.memory.append_system_prompt("{memory_key}", text): append '
-                "text to current system prompt with a newline."
-            ),
-            "- Runtime fork primitive purposes:",
-            "  runtime.fork.is_bound(): check if recursive fork is available.",
-            (
-                "  runtime.fork.run(message, "
-                f'source_memory_key="{memory_key}"): '
-                "fork this agent with inherited memory snapshot."
-            ),
-            (
-                "  runtime.fork.spawn(message, ...): spawn a child fork asynchronously "
-                "and return fork handle metadata."
-            ),
-            "  runtime.fork.wait(fork_id): wait for one spawned fork.",
-            "  runtime.fork.wait_all([fork_id, ...]): wait for multiple spawned forks.",
-            "- Forgetting memory:",
-            "  reset_repl only clears Python variables in REPL.",
-            "  It does NOT delete conversation memory in runtime backends.",
-            "  To forget memory, delete message records via memory methods:",
-            (
-                f'  runtime.memory.delete("{memory_key}", index), '
-                f'runtime.memory.replace("{memory_key}", messages), or '
-                f'runtime.memory.clear("{memory_key}").'
-            ),
-            "- Durable preference example:",
-            (f'  runtime.memory.append_system_prompt("{memory_key}", "...")'),
-            _SELF_REFERENCE_PROMPT_BLOCK_END,
-        ]
-    )
+def _collect_runtime_primitive_specs(
+    toolkit: Optional[ToolkitList],
+) -> List[Dict[str, Any]]:
+    if not toolkit:
+        return []
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    collected: Dict[str, Dict[str, Any]] = {}
+    visited_repl_ids: set[int] = set()
+
+    for item in toolkit:
+        if not isinstance(item, Tool):
+            continue
+
+        bound_instance = getattr(item.func, "__self__", None)
+        if not isinstance(bound_instance, PyRepl):
+            continue
+
+        repl_id = id(bound_instance)
+        if repl_id in visited_repl_ids:
+            continue
+        visited_repl_ids.add(repl_id)
+
+        try:
+            raw_specs = bound_instance.list_primitive_specs()
+        except Exception:
+            raw_specs = [
+                {"name": primitive_name, "description": ""}
+                for primitive_name in bound_instance.list_primitives()
+            ]
+
+        for raw_spec in raw_specs:
+            if not isinstance(raw_spec, dict):
+                continue
+
+            raw_name = raw_spec.get("name")
+            if not isinstance(raw_name, str):
+                continue
+
+            primitive_name = raw_name.strip()
+            if not primitive_name:
+                continue
+
+            normalized_spec: Dict[str, Any] = {"name": primitive_name}
+            for key, value in raw_spec.items():
+                if not isinstance(key, str) or key == "name":
+                    continue
+                normalized_spec[key] = value
+
+            raw_description = normalized_spec.get("description")
+            if isinstance(raw_description, str):
+                normalized_spec["description"] = raw_description.strip()
+            else:
+                normalized_spec["description"] = ""
+
+            existing = collected.get(primitive_name)
+            if existing is None:
+                collected[primitive_name] = normalized_spec
+                continue
+
+            if (
+                isinstance(existing.get("description"), str)
+                and not existing.get("description")
+                and normalized_spec.get("description")
+            ):
+                existing["description"] = normalized_spec.get("description")
+
+            for field in ("input_type", "output_type", "parameters"):
+                if field not in existing and field in normalized_spec:
+                    existing[field] = normalized_spec[field]
+
+            existing_best_practices = existing.get("best_practices")
+            if not isinstance(existing_best_practices, list):
+                existing_best_practices = []
+                existing["best_practices"] = existing_best_practices
+
+            new_best_practices = normalized_spec.get("best_practices")
+            if isinstance(new_best_practices, list):
+                for item in new_best_practices:
+                    if not isinstance(item, str):
+                        continue
+                    text = item.strip()
+                    if text and text not in existing_best_practices:
+                        existing_best_practices.append(text)
+
+    return [collected[primitive_name] for primitive_name in sorted(collected.keys())]
 
 
-def _remove_self_reference_prompt_block(system_prompt: str) -> str:
+def _format_runtime_primitive_display_name(primitive_name: str) -> str:
+    if primitive_name.startswith("runtime."):
+        return primitive_name
+    return f"runtime.{primitive_name}"
+
+
+def _extract_selfref_best_practices(
+    primitive_specs: List[Dict[str, Any]],
+) -> List[str]:
+    for spec in primitive_specs:
+        primitive_name = spec.get("name")
+        if not isinstance(primitive_name, str):
+            continue
+        if not primitive_name.strip().startswith("selfref."):
+            continue
+
+        raw_best_practices = spec.get("best_practices")
+        if not isinstance(raw_best_practices, list):
+            continue
+
+        normalized: List[str] = []
+        for item in raw_best_practices:
+            if not isinstance(item, str):
+                continue
+            text = item.strip()
+            if text and text not in normalized:
+                normalized.append(text)
+        if normalized:
+            return normalized
+
+    return []
+
+
+def _build_runtime_primitive_prompt_block(
+    primitive_specs: List[Dict[str, Any]],
+    memory_key: Optional[str],
+) -> str:
+    lines: List[str] = [
+        _RUNTIME_PRIMITIVE_PROMPT_BLOCK_START,
+        "Runtime primitives are mounted for execute_code calls.",
+        "- Capability discovery:",
+        "  runtime.list_primitives(): list mounted primitive names.",
+        (
+            "  runtime.list_primitive_specs(): list mounted primitive contracts "
+            "(input/output types, parameter docs, best practices)."
+        ),
+        "- Self-reference namespace:",
+        (
+            "  Prefer runtime.selfref.history.* for memory/history operations and "
+            "runtime.selfref.fork.* for self-fork operations."
+        ),
+        "- Mounted primitive summary:",
+    ]
+
+    has_history_primitives = False
+
+    for spec in primitive_specs:
+        primitive_name = spec.get("name")
+        if not isinstance(primitive_name, str):
+            continue
+
+        normalized_name = primitive_name.strip()
+        if not normalized_name:
+            continue
+
+        if normalized_name.startswith("selfref.history."):
+            has_history_primitives = True
+
+        display_name = _format_runtime_primitive_display_name(normalized_name)
+        description = spec.get("description")
+        if isinstance(description, str):
+            normalized_description = description.strip()
+        else:
+            normalized_description = ""
+
+        if normalized_description:
+            lines.append(f"  {display_name}: {normalized_description}")
+        else:
+            lines.append(f"  {display_name}")
+
+        input_type = spec.get("input_type")
+        if isinstance(input_type, str) and input_type.strip():
+            lines.append(f"    input: {input_type.strip()}")
+
+        output_type = spec.get("output_type")
+        if isinstance(output_type, str) and output_type.strip():
+            lines.append(f"    output: {output_type.strip()}")
+
+    selfref_best_practices = _extract_selfref_best_practices(primitive_specs)
+    if selfref_best_practices:
+        lines.append("- Self-reference best practices:")
+        for index, practice in enumerate(selfref_best_practices, start=1):
+            lines.append(f"  {index}. {practice}")
+
+    if memory_key is not None:
+        lines.append("- Active self-reference history scope:")
+        lines.append(
+            f'  Default history key is "{memory_key}" for runtime.selfref.history.* calls.'
+        )
+        lines.append(
+            "  You may still pass explicit key=... when cross-key access is required."
+        )
+
+    lines.append("- Reset behavior:")
+    lines.append("  reset_repl only clears Python variables in REPL.")
+    lines.append("  It does not clear runtime backend state.")
+
+    if memory_key is not None and has_history_primitives:
+        lines.append("- Forgetting memory:")
+        lines.append(
+            "  Forget memory via runtime.selfref.history.delete(...), "
+            "runtime.selfref.history.replace(...), or runtime.selfref.history.clear(...)."
+        )
+
+    lines.append(_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END)
+    return "\n".join(lines)
+
+
+def _remove_prompt_block(system_prompt: str, start_marker: str, end_marker: str) -> str:
     cleaned_prompt = system_prompt
 
     while True:
-        start_index = cleaned_prompt.find(_SELF_REFERENCE_PROMPT_BLOCK_START)
+        start_index = cleaned_prompt.find(start_marker)
         if start_index < 0:
             break
 
-        end_index = cleaned_prompt.find(_SELF_REFERENCE_PROMPT_BLOCK_END, start_index)
+        end_index = cleaned_prompt.find(end_marker, start_index)
         if end_index < 0:
             cleaned_prompt = cleaned_prompt[:start_index]
             break
 
         cleaned_prompt = (
-            cleaned_prompt[:start_index]
-            + cleaned_prompt[end_index + len(_SELF_REFERENCE_PROMPT_BLOCK_END) :]
+            cleaned_prompt[:start_index] + cleaned_prompt[end_index + len(end_marker) :]
+        )
+
+    return cleaned_prompt
+
+
+def _remove_runtime_primitive_prompt_block(system_prompt: str) -> str:
+    cleaned_prompt = system_prompt
+    for start_marker, end_marker in (
+        (
+            _RUNTIME_PRIMITIVE_PROMPT_BLOCK_START,
+            _RUNTIME_PRIMITIVE_PROMPT_BLOCK_END,
+        ),
+        (
+            _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START,
+            _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_END,
+        ),
+    ):
+        cleaned_prompt = _remove_prompt_block(
+            cleaned_prompt,
+            start_marker,
+            end_marker,
         )
 
     return cleaned_prompt.strip()
 
 
-def _append_self_reference_prompt_to_messages(
+def _remove_injected_prompt_blocks(system_prompt: str) -> str:
+    cleaned_prompt = _remove_runtime_primitive_prompt_block(system_prompt)
+    cleaned_prompt = remove_tool_best_practices_prompt_block(cleaned_prompt)
+    return cleaned_prompt.strip()
+
+
+def _append_runtime_primitive_prompt_to_messages(
     messages: MessageList,
-    memory_key: str,
+    primitive_specs: List[Dict[str, Any]],
+    memory_key: Optional[str],
 ) -> None:
-    prompt_block = _build_self_reference_prompt_block(memory_key)
+    if not primitive_specs:
+        return
+
+    prompt_block = _build_runtime_primitive_prompt_block(primitive_specs, memory_key)
 
     for index, message in enumerate(messages):
         if message.get("role") != "system":
@@ -279,7 +535,7 @@ def _append_self_reference_prompt_to_messages(
         content = message.get("content")
         base_prompt = ""
         if isinstance(content, str):
-            base_prompt = _remove_self_reference_prompt_block(content)
+            base_prompt = _remove_runtime_primitive_prompt_block(content)
 
         if base_prompt:
             merged_prompt = f"{base_prompt}\n\n{prompt_block}"
@@ -317,9 +573,9 @@ def _seed_self_reference_system_prompt_if_missing(
         return
 
     # Keep memory store focused on durable prompt content. If the system prompt
-    # already contains the auto-injected SelfReference contract block, store a
-    # cleaned version and let llm_chat append the contract again per turn.
-    cleaned_system_prompt = _remove_self_reference_prompt_block(system_prompt)
+    # already contains auto-injected runtime primitive guidance, store a cleaned
+    # version and let llm_chat append runtime guidance again per turn.
+    cleaned_system_prompt = _remove_injected_prompt_blocks(system_prompt)
     system_prompt_for_store = cleaned_system_prompt or system_prompt
 
     current_history = self_reference.snapshot_history(memory_key)
@@ -332,6 +588,23 @@ def _seed_self_reference_system_prompt_if_missing(
         messages=seeded_history,
         strict=False,
     )
+
+
+def _react_end_event_has_fork_origin(event: ReactEndEvent, origin: Any) -> bool:
+    origin_fork_id = getattr(origin, "fork_id", None)
+    if isinstance(origin_fork_id, str) and origin_fork_id:
+        return True
+
+    event_extra = getattr(event, "extra", None)
+    if not isinstance(event_extra, dict):
+        return False
+
+    raw_origin = event_extra.get("origin")
+    if not isinstance(raw_origin, dict):
+        return False
+
+    raw_fork_id = raw_origin.get("fork_id")
+    return isinstance(raw_fork_id, str) and bool(raw_fork_id)
 
 
 def llm_chat(
@@ -395,10 +668,12 @@ def llm_chat(
             - False: yields (response, messages) tuples (backward compatible)
             - True: yields ReactOutput (ResponseYield or EventYield)
         self_reference: Optional SelfReference shared object for agent self-referential
-            memory operations. When provided, llm_chat appends a
-            SelfReference memory contract block to the system prompt.
+            memory operations. When not provided, llm_chat will try to auto-detect
+            one from mounted PyRepl runtime backends in ``toolkit``.
+            When runtime primitives are mounted, llm_chat appends a deduplicated
+            runtime primitive guidance block to the system prompt.
         self_reference_key: Memory key used with self_reference for this decorator.
-            Defaults to function name when self_reference is provided.
+            Defaults to function name when self_reference is resolved.
         **llm_kwargs: Additional keyword arguments passed directly to the LLM interface
 
     Returns:
@@ -425,7 +700,7 @@ def llm_chat(
         func_name = func.__name__
 
         resolved_default_self_reference_key: Optional[str] = None
-        if self_reference is not None:
+        if self_reference is not None or self_reference_key is not None:
             resolved_default_self_reference_key = _resolve_self_reference_key(
                 self_reference_key,
                 func_name,
@@ -440,6 +715,10 @@ def llm_chat(
                 kwargs,
             )
             runtime_toolkit = _resolve_runtime_toolkit(toolkit, template_params)
+            effective_self_reference = _resolve_effective_self_reference(
+                self_reference,
+                runtime_toolkit,
+            )
 
             # 构建用户任务提示（用于事件）
             user_task_prompt = json.dumps(
@@ -449,9 +728,12 @@ def llm_chat(
             )
 
             toolkit_context_token = None
-            if self_reference is not None:
-                toolkit_context_token = self_reference._set_active_runtime_toolkit(
-                    runtime_toolkit
+            active_memory_key_token = None
+            if effective_self_reference is not None:
+                toolkit_context_token = (
+                    effective_self_reference._set_active_runtime_toolkit(
+                        runtime_toolkit
+                    )
                 )
 
             try:
@@ -476,7 +758,9 @@ def llm_chat(
                             "stream": stream,
                             "return_mode": return_mode,
                             "enable_event": enable_event,
-                            "self_reference_enabled": self_reference is not None,
+                            "self_reference_enabled": (
+                                effective_self_reference is not None
+                            ),
                             "self_reference_key": self_reference_key,
                         },
                     ) as chat_span:
@@ -488,7 +772,7 @@ def llm_chat(
                             resolved_self_reference_key: Optional[str] = None
                             baseline_history_count = 0
 
-                            if self_reference is not None:
+                            if effective_self_reference is not None:
                                 runtime_self_reference_key = self_reference_key
                                 if template_params is not None:
                                     override_key = template_params.get(
@@ -508,30 +792,43 @@ def llm_chat(
                                     )
                                 )
 
+                                effective_self_reference.bind_agent_instance(
+                                    wrapper,
+                                    default_memory_key=resolved_self_reference_key,
+                                )
+
                                 if raw_history_reference is not None:
-                                    self_reference.bind_history(
+                                    effective_self_reference.bind_history(
                                         resolved_self_reference_key,
                                         cast(
                                             List[Dict[str, Any]], raw_history_reference
                                         ),
                                     )
-                                elif not self_reference.has_history(
+                                elif not effective_self_reference.has_history(
                                     resolved_self_reference_key
                                 ):
-                                    self_reference.bind_history(
+                                    effective_self_reference.bind_history(
                                         resolved_self_reference_key,
                                         [],
                                     )
 
-                                history_snapshot = self_reference.snapshot_history(
-                                    resolved_self_reference_key
+                                history_snapshot = (
+                                    effective_self_reference.snapshot_history(
+                                        resolved_self_reference_key
+                                    )
                                 )
                                 _set_history_argument(
                                     function_signature.bound_args.arguments,
                                     history_snapshot,
                                 )
                                 baseline_history_count = (
-                                    self_reference.filtered_history_count(
+                                    effective_self_reference.filtered_history_count(
+                                        resolved_self_reference_key
+                                    )
+                                )
+
+                                active_memory_key_token = (
+                                    effective_self_reference._set_active_memory_key(
                                         resolved_self_reference_key
                                     )
                                 )
@@ -543,16 +840,29 @@ def llm_chat(
                                 exclude_params=HISTORY_PARAM_NAMES,
                             )
 
+                            tool_prompt_specs = collect_tool_prompt_specs(
+                                runtime_toolkit
+                            )
+                            append_tool_best_practices_prompt_to_messages(
+                                messages,
+                                tool_prompt_specs,
+                            )
+
+                            runtime_primitive_specs = _collect_runtime_primitive_specs(
+                                runtime_toolkit
+                            )
+                            _append_runtime_primitive_prompt_to_messages(
+                                messages,
+                                runtime_primitive_specs,
+                                resolved_self_reference_key,
+                            )
+
                             if (
-                                self_reference is not None
+                                effective_self_reference is not None
                                 and resolved_self_reference_key is not None
                             ):
-                                _append_self_reference_prompt_to_messages(
-                                    messages,
-                                    resolved_self_reference_key,
-                                )
                                 _seed_self_reference_system_prompt_if_missing(
-                                    self_reference,
+                                    effective_self_reference,
                                     resolved_self_reference_key,
                                     messages,
                                 )
@@ -582,12 +892,16 @@ def llm_chat(
                                 )
                                 async for output in typed_event_stream:
                                     if (
-                                        self_reference is not None
+                                        effective_self_reference is not None
                                         and resolved_self_reference_key is not None
                                         and is_event_yield(output)
                                         and isinstance(output.event, ReactEndEvent)
+                                        and not _react_end_event_has_fork_origin(
+                                            output.event,
+                                            output.origin,
+                                        )
                                     ):
-                                        merged_history = self_reference.merge_turn_history(
+                                        merged_history = effective_self_reference.merge_turn_history(
                                             key=resolved_self_reference_key,
                                             baseline_history_count=baseline_history_count,
                                             updated_history=cast(
@@ -621,10 +935,10 @@ def llm_chat(
                                 ):
                                     history_to_yield: MessageList = history
                                     if (
-                                        self_reference is not None
+                                        effective_self_reference is not None
                                         and resolved_self_reference_key is not None
                                     ):
-                                        merged_history = self_reference.merge_turn_history(
+                                        merged_history = effective_self_reference.merge_turn_history(
                                             key=resolved_self_reference_key,
                                             baseline_history_count=baseline_history_count,
                                             updated_history=cast(
@@ -641,11 +955,11 @@ def llm_chat(
                                     yield content, history_to_yield
 
                                 if (
-                                    self_reference is not None
+                                    effective_self_reference is not None
                                     and resolved_self_reference_key is not None
                                     and latest_merged_history is not None
                                 ):
-                                    self_reference.replace_history(
+                                    effective_self_reference.replace_history(
                                         key=resolved_self_reference_key,
                                         messages=cast(
                                             List[Dict[str, Any]],
@@ -672,8 +986,21 @@ def llm_chat(
                             )
                             raise
             finally:
-                if self_reference is not None and toolkit_context_token is not None:
-                    self_reference._reset_active_runtime_toolkit(toolkit_context_token)
+                _close_fork_cloned_pyrepls(runtime_toolkit)
+                if (
+                    effective_self_reference is not None
+                    and active_memory_key_token is not None
+                ):
+                    effective_self_reference._reset_active_memory_key(
+                        active_memory_key_token
+                    )
+                if (
+                    effective_self_reference is not None
+                    and toolkit_context_token is not None
+                ):
+                    effective_self_reference._reset_active_runtime_toolkit(
+                        toolkit_context_token
+                    )
 
         # Preserve original function metadata
         wrapper.__name__ = func.__name__
@@ -682,22 +1009,26 @@ def llm_chat(
         wrapper.__signature__ = signature_meta  # type: ignore
         setattr(wrapper, _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR, True)
 
+        def fork_toolkit_factory(parent_toolkit: Any) -> Optional[ToolkitList]:
+            candidate_toolkit: Optional[ToolkitList]
+            if isinstance(parent_toolkit, list):
+                candidate_toolkit = cast(Optional[ToolkitList], parent_toolkit)
+            else:
+                candidate_toolkit = toolkit
+
+            effective_for_fork = _resolve_effective_self_reference(
+                self_reference,
+                candidate_toolkit,
+            )
+
+            return _clone_toolkit_for_fork(
+                candidate_toolkit,
+                effective_for_fork,
+            )
+
+        setattr(wrapper, _AGENT_FORK_TOOLKIT_FACTORY_ATTR, fork_toolkit_factory)
+
         if self_reference is not None:
-            bound_self_reference = self_reference
-
-            def fork_toolkit_factory(parent_toolkit: Any) -> Optional[ToolkitList]:
-                candidate_toolkit: Optional[ToolkitList]
-                if isinstance(parent_toolkit, list):
-                    candidate_toolkit = cast(Optional[ToolkitList], parent_toolkit)
-                else:
-                    candidate_toolkit = toolkit
-
-                return _clone_toolkit_for_fork(
-                    candidate_toolkit,
-                    bound_self_reference,
-                )
-
-            setattr(wrapper, _AGENT_FORK_TOOLKIT_FACTORY_ATTR, fork_toolkit_factory)
             self_reference.bind_agent_instance(
                 wrapper,
                 default_memory_key=resolved_default_self_reference_key,
