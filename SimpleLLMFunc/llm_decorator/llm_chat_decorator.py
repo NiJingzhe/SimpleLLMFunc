@@ -1,5 +1,7 @@
+import contextvars
 import inspect
 import json
+import sys
 from functools import wraps
 from typing import (
     Any,
@@ -539,7 +541,12 @@ def llm_chat(
 
             toolkit_context_token = None
             active_memory_key_token = None
+            previous_runtime_toolkit: Any = None
+            previous_memory_key: Optional[str] = None
             if effective_self_reference is not None:
+                previous_runtime_toolkit = (
+                    effective_self_reference._get_active_runtime_toolkit()
+                )
                 toolkit_context_token = (
                     effective_self_reference._set_active_runtime_toolkit(
                         runtime_toolkit
@@ -554,7 +561,8 @@ def llm_chat(
                     arguments=function_signature.bound_args.arguments,
                 ):
                     # 创建 Langfuse parent span
-                    with langfuse_client.start_as_current_observation(
+                    span_context = contextvars.copy_context()
+                    span_cm = langfuse_client.start_as_current_observation(
                         as_type="span",
                         name=f"{function_signature.func_name}_chat_call",
                         input=function_signature.bound_args.arguments,
@@ -573,7 +581,9 @@ def llm_chat(
                             ),
                             "self_reference_key": self_reference_key,
                         },
-                    ) as chat_span:
+                    )
+                    chat_span = span_context.run(span_cm.__enter__)
+                    try:
                         try:
                             raw_history_reference = _extract_raw_history_reference(
                                 function_signature.bound_args.arguments
@@ -583,6 +593,9 @@ def llm_chat(
                             baseline_history_count = 0
 
                             if effective_self_reference is not None:
+                                previous_memory_key = (
+                                    effective_self_reference._get_active_memory_key()
+                                )
                                 runtime_self_reference_key = self_reference_key
                                 if template_params is not None:
                                     override_key = template_params.get(
@@ -790,22 +803,42 @@ def llm_chat(
                                 output={"error": str(exc)},
                             )
                             raise
+                    finally:
+                        exc_type, exc, tb = sys.exc_info()
+                        try:
+                            span_context.run(span_cm.__exit__, exc_type, exc, tb)
+                        except ValueError as exc_detach:
+                            if "different Context" not in str(exc_detach):
+                                raise
             finally:
                 _close_fork_cloned_pyrepls(runtime_toolkit)
                 if (
                     effective_self_reference is not None
                     and active_memory_key_token is not None
                 ):
-                    effective_self_reference._reset_active_memory_key(
-                        active_memory_key_token
-                    )
+                    try:
+                        effective_self_reference._reset_active_memory_key(
+                            active_memory_key_token
+                        )
+                    except ValueError:
+                        if previous_memory_key is None:
+                            effective_self_reference._active_memory_key_var.set(None)
+                        else:
+                            effective_self_reference._active_memory_key_var.set(
+                                previous_memory_key
+                            )
                 if (
                     effective_self_reference is not None
                     and toolkit_context_token is not None
                 ):
-                    effective_self_reference._reset_active_runtime_toolkit(
-                        toolkit_context_token
-                    )
+                    try:
+                        effective_self_reference._reset_active_runtime_toolkit(
+                            toolkit_context_token
+                        )
+                    except ValueError:
+                        effective_self_reference._active_runtime_toolkit_var.set(
+                            previous_runtime_toolkit
+                        )
 
         # Preserve original function metadata
         wrapper.__name__ = func.__name__

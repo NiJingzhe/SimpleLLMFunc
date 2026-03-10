@@ -12,7 +12,9 @@ LLM calls with tool usage. It manages:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import contextvars
 import json
+import sys
 import time
 
 from typing import (
@@ -760,7 +762,8 @@ async def execute_llm(
 
     llm_input_tokens_before, llm_output_tokens_before = _read_context_token_counters()
 
-    with langfuse_client.start_as_current_observation(
+    span_context = contextvars.copy_context()
+    span_cm = langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_initial_llm_call",
         input=current_messages,
@@ -768,7 +771,9 @@ async def execute_llm(
         model_parameters=model_parameters,
         metadata={"stream": stream, "tools_available": len(tools) if tools else 0},
         completion_start_time=datetime.now(timezone.utc),
-    ) as generation_span:
+    )
+    generation_span = span_context.run(span_cm.__enter__)
+    try:
         if stream:
             # Handle streaming response
             reasoning_details_list: List[Dict[str, Any]] = []
@@ -988,6 +993,13 @@ async def execute_llm(
             output={"content": content, "tool_calls": tool_calls},
             usage_details=usage_dict_with_tools,
         )
+    finally:
+        exc_type, exc, tb = sys.exc_info()
+        try:
+            span_context.run(span_cm.__exit__, exc_type, exc, tb)
+        except ValueError as exc_detach:
+            if "different Context" not in str(exc_detach):
+                raise
 
     # Phase 2: Tool calling loop
     push_debug(
@@ -1079,7 +1091,8 @@ async def execute_llm(
         ) = _read_context_token_counters()
 
         # 为迭代调用创建新的观测
-        with langfuse_client.start_as_current_observation(
+        iteration_span_context = contextvars.copy_context()
+        iteration_span_cm = langfuse_client.start_as_current_observation(
             as_type="generation",
             name=f"{func_name}_iteration_{call_count}_llm_call",
             input=current_messages,
@@ -1091,7 +1104,11 @@ async def execute_llm(
                 "tools_available": len(tools) if tools else 0,
             },
             completion_start_time=datetime.now(timezone.utc),
-        ) as iteration_generation_span:
+        )
+        iteration_generation_span = iteration_span_context.run(
+            iteration_span_cm.__enter__
+        )
+        try:
             last_response = None
 
             if stream:
@@ -1239,6 +1256,15 @@ async def execute_llm(
                 output={"content": content, "tool_calls": tool_calls},
                 usage_details=usage_dict_iteration,
             )
+        finally:
+            exc_type, exc, tb = sys.exc_info()
+            try:
+                iteration_span_context.run(
+                    iteration_span_cm.__exit__, exc_type, exc, tb
+                )
+            except ValueError as exc_detach:
+                if "different Context" not in str(exc_detach):
+                    raise
 
         # Append new assistant response to message history
         if content.strip() != "":
@@ -1410,7 +1436,8 @@ async def execute_llm(
     )
 
     # 为最终调用创建观测
-    with langfuse_client.start_as_current_observation(
+    final_span_context = contextvars.copy_context()
+    final_span_cm = langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_final_llm_call",
         input=current_messages,
@@ -1422,7 +1449,11 @@ async def execute_llm(
             "call_count": call_count,
         },
         completion_start_time=datetime.now(timezone.utc),
-    ) as final_generation_span:
+    )
+    final_generation_span = final_span_context.run(final_span_cm.__enter__)
+    final_response = None
+    final_content = ""
+    try:
         # 最终响应时不传递 tools，因为已经结束了
         llm_kwargs_final = llm_kwargs.copy()
         llm_kwargs_final.pop("tool_choice", None)
@@ -1474,6 +1505,13 @@ async def execute_llm(
             output={"content": final_content, "tool_calls": []},
             usage_details=usage_dict_final,
         )
+    finally:
+        exc_type, exc, tb = sys.exc_info()
+        try:
+            final_span_context.run(final_span_cm.__exit__, exc_type, exc, tb)
+        except ValueError as exc_detach:
+            if "different Context" not in str(exc_detach):
+                raise
 
         # 发射响应
         if enable_event:
