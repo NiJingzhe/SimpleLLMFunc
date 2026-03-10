@@ -70,3 +70,25 @@ class TestBuildAssistantToolMessage:
         assert result["tool_calls"] == tool_calls
         assert len(result["tool_calls"]) == 2
 
+    def test_build_drops_reasoning_details(self) -> None:
+        """Reasoning details should be consumed transiently, not persisted."""
+        tool_calls = [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {"name": "test_tool", "arguments": '{"arg": "value"}'},
+            }
+        ]
+
+        result = build_assistant_tool_message(
+            tool_calls,
+            reasoning_details=[
+                {
+                    "id": "r1",
+                    "type": "reasoning.text",
+                    "data": "transient",
+                }
+            ],
+        )
+
+        assert "reasoning_details" not in result

@@ -53,10 +53,12 @@ P = ParamSpec("P")
 
 # Constants
 DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
-_RUNTIME_PRIMITIVE_PROMPT_BLOCK_START = "[Runtime Primitive Contract]"
-_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END = "[/Runtime Primitive Contract]"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_START = "<runtime_primitive_contract>"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END = "</runtime_primitive_contract>"
 _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
 _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
+_MUST_PRINCIPLES_PROMPT_BLOCK_START = "<must_principles>"
+_MUST_PRINCIPLES_PROMPT_BLOCK_END = "</must_principles>"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 _AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
 _FORK_CLONED_PYREPL_ATTR = "__simplellmfunc_fork_cloned_pyrepl__"
@@ -264,213 +266,6 @@ def _resolve_self_reference_key(
     return normalized
 
 
-def _collect_runtime_primitive_specs(
-    toolkit: Optional[ToolkitList],
-) -> List[Dict[str, Any]]:
-    if not toolkit:
-        return []
-
-    from SimpleLLMFunc.builtin import PyRepl
-
-    collected: Dict[str, Dict[str, Any]] = {}
-    visited_repl_ids: set[int] = set()
-
-    for item in toolkit:
-        if not isinstance(item, Tool):
-            continue
-
-        bound_instance = getattr(item.func, "__self__", None)
-        if not isinstance(bound_instance, PyRepl):
-            continue
-
-        repl_id = id(bound_instance)
-        if repl_id in visited_repl_ids:
-            continue
-        visited_repl_ids.add(repl_id)
-
-        try:
-            raw_specs = bound_instance.list_primitive_specs()
-        except Exception:
-            raw_specs = [
-                {"name": primitive_name, "description": ""}
-                for primitive_name in bound_instance.list_primitives()
-            ]
-
-        for raw_spec in raw_specs:
-            if not isinstance(raw_spec, dict):
-                continue
-
-            raw_name = raw_spec.get("name")
-            if not isinstance(raw_name, str):
-                continue
-
-            primitive_name = raw_name.strip()
-            if not primitive_name:
-                continue
-
-            normalized_spec: Dict[str, Any] = {"name": primitive_name}
-            for key, value in raw_spec.items():
-                if not isinstance(key, str) or key == "name":
-                    continue
-                normalized_spec[key] = value
-
-            raw_description = normalized_spec.get("description")
-            if isinstance(raw_description, str):
-                normalized_spec["description"] = raw_description.strip()
-            else:
-                normalized_spec["description"] = ""
-
-            existing = collected.get(primitive_name)
-            if existing is None:
-                collected[primitive_name] = normalized_spec
-                continue
-
-            if (
-                isinstance(existing.get("description"), str)
-                and not existing.get("description")
-                and normalized_spec.get("description")
-            ):
-                existing["description"] = normalized_spec.get("description")
-
-            for field in ("input_type", "output_type", "parameters"):
-                if field not in existing and field in normalized_spec:
-                    existing[field] = normalized_spec[field]
-
-            existing_best_practices = existing.get("best_practices")
-            if not isinstance(existing_best_practices, list):
-                existing_best_practices = []
-                existing["best_practices"] = existing_best_practices
-
-            new_best_practices = normalized_spec.get("best_practices")
-            if isinstance(new_best_practices, list):
-                for item in new_best_practices:
-                    if not isinstance(item, str):
-                        continue
-                    text = item.strip()
-                    if text and text not in existing_best_practices:
-                        existing_best_practices.append(text)
-
-    return [collected[primitive_name] for primitive_name in sorted(collected.keys())]
-
-
-def _format_runtime_primitive_display_name(primitive_name: str) -> str:
-    if primitive_name.startswith("runtime."):
-        return primitive_name
-    return f"runtime.{primitive_name}"
-
-
-def _extract_selfref_best_practices(
-    primitive_specs: List[Dict[str, Any]],
-) -> List[str]:
-    for spec in primitive_specs:
-        primitive_name = spec.get("name")
-        if not isinstance(primitive_name, str):
-            continue
-        if not primitive_name.strip().startswith("selfref."):
-            continue
-
-        raw_best_practices = spec.get("best_practices")
-        if not isinstance(raw_best_practices, list):
-            continue
-
-        normalized: List[str] = []
-        for item in raw_best_practices:
-            if not isinstance(item, str):
-                continue
-            text = item.strip()
-            if text and text not in normalized:
-                normalized.append(text)
-        if normalized:
-            return normalized
-
-    return []
-
-
-def _build_runtime_primitive_prompt_block(
-    primitive_specs: List[Dict[str, Any]],
-    memory_key: Optional[str],
-) -> str:
-    lines: List[str] = [
-        _RUNTIME_PRIMITIVE_PROMPT_BLOCK_START,
-        "Runtime primitives are mounted for execute_code calls.",
-        "- Capability discovery:",
-        "  runtime.list_primitives(): list mounted primitive names.",
-        (
-            "  runtime.list_primitive_specs(): list mounted primitive contracts "
-            "(input/output types, parameter docs, best practices)."
-        ),
-        "- Self-reference namespace:",
-        (
-            "  Prefer runtime.selfref.history.* for memory/history operations and "
-            "runtime.selfref.fork.* for self-fork operations."
-        ),
-        "- Mounted primitive summary:",
-    ]
-
-    has_history_primitives = False
-
-    for spec in primitive_specs:
-        primitive_name = spec.get("name")
-        if not isinstance(primitive_name, str):
-            continue
-
-        normalized_name = primitive_name.strip()
-        if not normalized_name:
-            continue
-
-        if normalized_name.startswith("selfref.history."):
-            has_history_primitives = True
-
-        display_name = _format_runtime_primitive_display_name(normalized_name)
-        description = spec.get("description")
-        if isinstance(description, str):
-            normalized_description = description.strip()
-        else:
-            normalized_description = ""
-
-        if normalized_description:
-            lines.append(f"  {display_name}: {normalized_description}")
-        else:
-            lines.append(f"  {display_name}")
-
-        input_type = spec.get("input_type")
-        if isinstance(input_type, str) and input_type.strip():
-            lines.append(f"    input: {input_type.strip()}")
-
-        output_type = spec.get("output_type")
-        if isinstance(output_type, str) and output_type.strip():
-            lines.append(f"    output: {output_type.strip()}")
-
-    selfref_best_practices = _extract_selfref_best_practices(primitive_specs)
-    if selfref_best_practices:
-        lines.append("- Self-reference best practices:")
-        for index, practice in enumerate(selfref_best_practices, start=1):
-            lines.append(f"  {index}. {practice}")
-
-    if memory_key is not None:
-        lines.append("- Active self-reference history scope:")
-        lines.append(
-            f'  Default history key is "{memory_key}" for runtime.selfref.history.* calls.'
-        )
-        lines.append(
-            "  You may still pass explicit key=... when cross-key access is required."
-        )
-
-    lines.append("- Reset behavior:")
-    lines.append("  reset_repl only clears Python variables in REPL.")
-    lines.append("  It does not clear runtime backend state.")
-
-    if memory_key is not None and has_history_primitives:
-        lines.append("- Forgetting memory:")
-        lines.append(
-            "  Forget memory via runtime.selfref.history.delete(...), "
-            "runtime.selfref.history.replace(...), or runtime.selfref.history.clear(...)."
-        )
-
-    lines.append(_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END)
-    return "\n".join(lines)
-
-
 def _remove_prompt_block(system_prompt: str, start_marker: str, end_marker: str) -> str:
     cleaned_prompt = system_prompt
 
@@ -515,18 +310,32 @@ def _remove_runtime_primitive_prompt_block(system_prompt: str) -> str:
 def _remove_injected_prompt_blocks(system_prompt: str) -> str:
     cleaned_prompt = _remove_runtime_primitive_prompt_block(system_prompt)
     cleaned_prompt = remove_tool_best_practices_prompt_block(cleaned_prompt)
+    cleaned_prompt = _remove_must_principles_prompt_block(cleaned_prompt)
     return cleaned_prompt.strip()
 
 
-def _append_runtime_primitive_prompt_to_messages(
-    messages: MessageList,
-    primitive_specs: List[Dict[str, Any]],
-    memory_key: Optional[str],
-) -> None:
-    if not primitive_specs:
-        return
+def _build_must_principles_prompt_block() -> str:
+    lines = [
+        _MUST_PRINCIPLES_PROMPT_BLOCK_START,
+        "<rule>Never use chat-style XML text in assistant messages to invoke tools.</rule>",
+        "<rule>When tools are needed, invoke them only through native structured tool_calls / function-calling fields.</rule>",
+        "<rule>Do not fake tool invocations in assistant content via &lt;tool_call&gt;, XML, or JSON text.</rule>",
+        _MUST_PRINCIPLES_PROMPT_BLOCK_END,
+    ]
+    return "\n".join(lines)
 
-    prompt_block = _build_runtime_primitive_prompt_block(primitive_specs, memory_key)
+
+def _remove_must_principles_prompt_block(system_prompt: str) -> str:
+    cleaned_prompt = _remove_prompt_block(
+        system_prompt,
+        _MUST_PRINCIPLES_PROMPT_BLOCK_START,
+        _MUST_PRINCIPLES_PROMPT_BLOCK_END,
+    )
+    return cleaned_prompt.strip()
+
+
+def _append_must_principles_prompt_to_messages(messages: MessageList) -> None:
+    prompt_block = _build_must_principles_prompt_block()
 
     for index, message in enumerate(messages):
         if message.get("role") != "system":
@@ -535,7 +344,7 @@ def _append_runtime_primitive_prompt_to_messages(
         content = message.get("content")
         base_prompt = ""
         if isinstance(content, str):
-            base_prompt = _remove_runtime_primitive_prompt_block(content)
+            base_prompt = _remove_must_principles_prompt_block(content)
 
         if base_prompt:
             merged_prompt = f"{base_prompt}\n\n{prompt_block}"
@@ -573,8 +382,8 @@ def _seed_self_reference_system_prompt_if_missing(
         return
 
     # Keep memory store focused on durable prompt content. If the system prompt
-    # already contains auto-injected runtime primitive guidance, store a cleaned
-    # version and let llm_chat append runtime guidance again per turn.
+    # already contains auto-injected tool/runtime guidance blocks, store a
+    # cleaned version and let llm_chat inject guidance again per turn.
     cleaned_system_prompt = _remove_injected_prompt_blocks(system_prompt)
     system_prompt_for_store = cleaned_system_prompt or system_prompt
 
@@ -670,8 +479,9 @@ def llm_chat(
         self_reference: Optional SelfReference shared object for agent self-referential
             memory operations. When not provided, llm_chat will try to auto-detect
             one from mounted PyRepl runtime backends in ``toolkit``.
-            When runtime primitives are mounted, llm_chat appends a deduplicated
-            runtime primitive guidance block to the system prompt.
+            When runtime-enabled tools are mounted (for example PyRepl), llm_chat
+            injects deduplicated tool best-practice guidance at prompt head;
+            runtime primitive guidance is included in those tool-owned entries.
         self_reference_key: Memory key used with self_reference for this decorator.
             Defaults to function name when self_reference is resolved.
         **llm_kwargs: Additional keyword arguments passed directly to the LLM interface
@@ -841,21 +651,16 @@ def llm_chat(
                             )
 
                             tool_prompt_specs = collect_tool_prompt_specs(
-                                runtime_toolkit
+                                runtime_toolkit,
+                                context={
+                                    "self_reference_key": resolved_self_reference_key,
+                                },
                             )
                             append_tool_best_practices_prompt_to_messages(
                                 messages,
                                 tool_prompt_specs,
                             )
-
-                            runtime_primitive_specs = _collect_runtime_primitive_specs(
-                                runtime_toolkit
-                            )
-                            _append_runtime_primitive_prompt_to_messages(
-                                messages,
-                                runtime_primitive_specs,
-                                resolved_self_reference_key,
-                            )
+                            _append_must_principles_prompt_to_messages(messages)
 
                             if (
                                 effective_self_reference is not None

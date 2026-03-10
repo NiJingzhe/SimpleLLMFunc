@@ -597,8 +597,8 @@ async def test_consume_react_stream_stops_after_react_end_event() -> None:
 
 
 @pytest.mark.asyncio
-async def test_consume_react_stream_routes_fork_stream_to_peer_model_block() -> None:
-    """Fork stream events should render as separate peer model cards."""
+async def test_consume_react_stream_routes_fork_lifecycle_to_peer_model_block() -> None:
+    """Fork lifecycle events should render as separate peer model cards."""
     adapter = FakeAdapter()
     ts = datetime.now(timezone.utc)
     tool_call = ChatCompletionMessageToolCall(
@@ -644,7 +644,7 @@ async def test_consume_react_stream_routes_fork_stream_to_peer_model_block() -> 
                 trace_id="trace-1",
                 func_name="agent",
                 iteration=1,
-                event_name="selfref_fork_stream_open",
+                event_name="selfref_fork_start",
                 data={
                     "fork_id": "fork_1",
                     "depth": 1,
@@ -662,25 +662,7 @@ async def test_consume_react_stream_routes_fork_stream_to_peer_model_block() -> 
                 trace_id="trace-1",
                 func_name="agent",
                 iteration=1,
-                event_name="selfref_fork_stream_delta",
-                data={
-                    "fork_id": "fork_1",
-                    "depth": 1,
-                    "memory_key": "agent_main::fork::1",
-                    "text": "child says hi\n",
-                },
-                tool_name="execute_code",
-                tool_call_id="call-parent",
-            )
-        )
-        yield EventYield(
-            event=CustomEvent(
-                event_type=ReActEventType.CUSTOM_EVENT,
-                timestamp=ts,
-                trace_id="trace-1",
-                func_name="agent",
-                iteration=1,
-                event_name="selfref_fork_stream_close",
+                event_name="selfref_fork_end",
                 data={
                     "fork_id": "fork_1",
                     "depth": 1,
@@ -732,7 +714,7 @@ async def test_consume_react_stream_routes_fork_stream_to_peer_model_block() -> 
     await consume_react_stream(_stream(), adapter=adapter)
 
     assert "fork::fork_1" in adapter.model_start_order
-    assert adapter.model_content["fork::fork_1"] == "child says hi\n"
+    assert adapter.model_stats["fork::fork_1"] == "fork | completed"
     assert adapter.tool_output["call-parent"] == ""
     assert adapter.tool_results["call-parent"] == ""
 
@@ -1345,7 +1327,7 @@ async def test_consume_react_stream_ignores_fork_react_end_for_turn_completion()
                 trace_id="trace-main",
                 func_name="agent",
                 iteration=1,
-                event_name="selfref_fork_stream_close",
+                event_name="selfref_fork_end",
                 data={
                     "fork_id": "fork_1",
                     "depth": 1,

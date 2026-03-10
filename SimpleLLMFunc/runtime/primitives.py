@@ -10,6 +10,8 @@ from __future__ import annotations
 import inspect
 import re
 import threading
+import textwrap
+from xml.sax.saxutils import escape as _xml_escape
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, cast
 
@@ -42,6 +44,20 @@ def _normalize_text(value: Any) -> str:
     if not isinstance(value, str):
         return ""
     return value.strip()
+
+
+def _xml_escape_text(value: Any) -> str:
+    return _xml_escape(str(value))
+
+
+def _xml_escape_attribute(value: Any) -> str:
+    return _xml_escape(
+        str(value),
+        {
+            '"': "&quot;",
+            "'": "&apos;",
+        },
+    )
 
 
 def _annotation_to_text(annotation: Any) -> str:
@@ -97,6 +113,20 @@ class PrimitiveParameterSpec:
         if self.default is not None:
             payload["default"] = self.default
         return payload
+
+    def to_xml_element(self) -> str:
+        attributes = [
+            f'name="{_xml_escape_attribute(self.name)}"',
+            f'type="{_xml_escape_attribute(self.type)}"',
+            f'required="{str(bool(self.required)).lower()}"',
+            f'kind="{_xml_escape_attribute(self.kind)}"',
+        ]
+        if self.default is not None:
+            attributes.append(f'default="{_xml_escape_attribute(self.default)}"')
+
+        description_text = _xml_escape_text(self.description)
+        joined_attributes = " ".join(attributes)
+        return f"<parameter {joined_attributes}>{description_text}</parameter>"
 
 
 def _coerce_parameter_spec(raw: Any) -> Optional[PrimitiveParameterSpec]:
@@ -218,6 +248,145 @@ def _coerce_best_practices(
     return tuple(normalized)
 
 
+def _normalize_parameter_lookup_name(name: str) -> str:
+    return name.lstrip("*").strip()
+
+
+def _parse_primitive_docstring(docstring: Optional[str]) -> Dict[str, Any]:
+    text = textwrap.dedent(docstring or "").strip()
+    if not text:
+        return {}
+
+    recognized = {
+        "use": "description",
+        "input": "input_type",
+        "output": "output_type",
+        "parse": "output_parsing",
+        "parameters": "parameters",
+        "best practices": "best_practices",
+        "best_practices": "best_practices",
+    }
+    sections: Dict[str, List[str]] = {}
+    current_key: Optional[str] = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            if current_key is not None:
+                sections.setdefault(current_key, []).append("")
+            continue
+
+        matched_heading = False
+        for candidate, target_key in recognized.items():
+            prefix = f"{candidate}:"
+            if stripped.lower().startswith(prefix):
+                current_key = target_key
+                remainder = stripped[len(prefix) :].strip()
+                sections.setdefault(current_key, [])
+                if remainder:
+                    sections[current_key].append(remainder)
+                matched_heading = True
+                break
+        if matched_heading:
+            continue
+
+        if current_key is None:
+            current_key = "description"
+            sections.setdefault(current_key, [])
+        sections[current_key].append(stripped)
+
+    payload: Dict[str, Any] = {}
+    parameter_descriptions: Dict[str, str] = {}
+    best_practices: List[str] = []
+
+    for key, values in sections.items():
+        non_empty = [value.strip() for value in values if value.strip()]
+        if not non_empty:
+            continue
+
+        if key == "parameters":
+            for item in non_empty:
+                normalized = item
+                if normalized.startswith("-"):
+                    normalized = normalized[1:].strip()
+                name, sep, description = normalized.partition(":")
+                if not sep:
+                    continue
+                lookup_name = _normalize_parameter_lookup_name(name)
+                text_value = description.strip()
+                if lookup_name and text_value:
+                    parameter_descriptions[lookup_name] = text_value
+            continue
+
+        if key == "best_practices":
+            for item in non_empty:
+                normalized = item[1:].strip() if item.startswith("-") else item
+                if normalized and normalized not in best_practices:
+                    best_practices.append(normalized)
+            continue
+
+        payload[key] = " ".join(non_empty)
+
+    if parameter_descriptions:
+        payload["parameter_descriptions"] = parameter_descriptions
+    if best_practices:
+        payload["best_practices"] = tuple(best_practices)
+    return payload
+
+
+def primitive_spec(
+    *,
+    parameters: Optional[Sequence[Any]] = None,
+    best_practices: Optional[Sequence[Any]] = None,
+) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
+    """Attach primitive spec metadata parsed from the handler docstring."""
+
+    def decorator(handler: PrimitiveHandler) -> PrimitiveHandler:
+        metadata = _parse_primitive_docstring(getattr(handler, "__doc__", None))
+        if parameters is not None:
+            metadata["parameters"] = _coerce_parameter_specs(parameters)
+        if best_practices is not None:
+            metadata["best_practices"] = _coerce_best_practices(best_practices)
+        setattr(handler, "__simplellmfunc_primitive_spec__", metadata)
+        return handler
+
+    return decorator
+
+
+def _extract_handler_primitive_spec(handler: PrimitiveHandler) -> Dict[str, Any]:
+    raw = getattr(handler, "__simplellmfunc_primitive_spec__", None)
+    if isinstance(raw, dict):
+        return dict(raw)
+    return {}
+
+
+def _apply_parameter_descriptions(
+    parameters: Sequence[PrimitiveParameterSpec],
+    descriptions: Dict[str, str],
+) -> tuple[PrimitiveParameterSpec, ...]:
+    if not descriptions:
+        return tuple(parameters)
+
+    normalized: List[PrimitiveParameterSpec] = []
+    for parameter in parameters:
+        description = descriptions.get(_normalize_parameter_lookup_name(parameter.name))
+        if description:
+            normalized.append(
+                PrimitiveParameterSpec(
+                    name=parameter.name,
+                    type=parameter.type,
+                    required=parameter.required,
+                    description=description,
+                    kind=parameter.kind,
+                    default=parameter.default,
+                )
+            )
+            continue
+        normalized.append(parameter)
+    return tuple(normalized)
+
+
 @dataclass
 class PrimitiveCallContext:
     """Execution context passed to every primitive handler."""
@@ -253,6 +422,7 @@ class PrimitiveSpec:
     description: str = ""
     input_type: str = ""
     output_type: str = ""
+    output_parsing: str = ""
     parameters: tuple[PrimitiveParameterSpec, ...] = ()
     best_practices: tuple[str, ...] = ()
 
@@ -270,11 +440,44 @@ class PrimitiveSpec:
             "description": self.description,
             "input_type": resolved_input_type,
             "output_type": resolved_output_type,
+            "output_parsing": self.output_parsing,
             "parameters": [
                 parameter.to_public_dict() for parameter in resolved_parameters
             ],
             "best_practices": list(self.best_practices),
         }
+
+    def to_xml_element(self, *, root_tag: str = "primitive") -> str:
+        resolved_parameters = self.parameters or _infer_parameter_specs(self.handler)
+        resolved_input_type = self.input_type or (
+            "PrimitiveCallContext + declared parameters"
+            if resolved_parameters
+            else "PrimitiveCallContext only"
+        )
+        resolved_output_type = self.output_type or _infer_output_type(self.handler)
+
+        lines: List[str] = [
+            f"<{root_tag}>",
+            f"<name>{_xml_escape_text(self.name)}</name>",
+            f"<description>{_xml_escape_text(self.description)}</description>",
+            f"<input_type>{_xml_escape_text(resolved_input_type)}</input_type>",
+            f"<output_type>{_xml_escape_text(resolved_output_type)}</output_type>",
+            f"<output_parsing>{_xml_escape_text(self.output_parsing)}</output_parsing>",
+            "<parameters>",
+        ]
+
+        for parameter in resolved_parameters:
+            lines.append(parameter.to_xml_element())
+
+        lines.append("</parameters>")
+        lines.append("<best_practices>")
+        for index, practice in enumerate(self.best_practices, start=1):
+            lines.append(
+                f'<best_practice index="{index}">{_xml_escape_text(practice)}</best_practice>'
+            )
+        lines.append("</best_practices>")
+        lines.append(f"</{root_tag}>")
+        return "\n".join(lines)
 
 
 class PrimitiveRegistry:
@@ -315,14 +518,34 @@ class PrimitiveRegistry:
         if not callable(handler):
             raise ValueError("primitive handler must be callable")
 
+        handler_spec = _extract_handler_primitive_spec(handler)
+        parameter_specs = _coerce_parameter_specs(parameters)
+        if not parameter_specs:
+            doc_parameters = handler_spec.get("parameters")
+            if isinstance(doc_parameters, tuple):
+                parameter_specs = doc_parameters
+        if not parameter_specs:
+            parameter_specs = _infer_parameter_specs(handler)
+        parameter_specs = _apply_parameter_descriptions(
+            parameter_specs,
+            handler_spec.get("parameter_descriptions", {}),
+        )
+
         spec = PrimitiveSpec(
             name=normalized,
             handler=handler,
-            description=description.strip(),
-            input_type=input_type.strip(),
-            output_type=output_type.strip(),
-            parameters=_coerce_parameter_specs(parameters),
-            best_practices=_coerce_best_practices(best_practices),
+            description=description.strip()
+            or str(handler_spec.get("description", "")).strip(),
+            input_type=input_type.strip()
+            or str(handler_spec.get("input_type", "")).strip(),
+            output_type=output_type.strip()
+            or str(handler_spec.get("output_type", "")).strip(),
+            output_parsing=str(handler_spec.get("output_parsing", "")).strip(),
+            parameters=parameter_specs,
+            best_practices=(
+                _coerce_best_practices(best_practices)
+                or cast(tuple[str, ...], handler_spec.get("best_practices", ()))
+            ),
         )
 
         with self._lock:
@@ -342,24 +565,96 @@ class PrimitiveRegistry:
         with self._lock:
             return normalized in self._specs
 
-    def list_names(self) -> List[str]:
+    def list_names(self, *, prefix: Optional[str] = None) -> List[str]:
         with self._lock:
             names = list(self._specs.keys())
+
+        normalized_prefix: Optional[str] = None
+        if isinstance(prefix, str):
+            stripped_prefix = prefix.strip()
+            if stripped_prefix:
+                normalized_prefix = stripped_prefix
+
+        if normalized_prefix is not None:
+            names = [item for item in names if item.startswith(normalized_prefix)]
+
         names.sort()
         return names
 
-    def list_specs(self) -> List[PrimitiveSpec]:
-        """List registered primitive specs sorted by primitive name."""
+    def list_specs(
+        self,
+        *,
+        names: Optional[Sequence[str]] = None,
+        prefix: Optional[str] = None,
+    ) -> List[PrimitiveSpec]:
+        """List registered primitive specs with optional name/prefix filters."""
+
+        selected_names: Optional[set[str]] = None
+        if names is not None:
+            normalized_names: set[str] = set()
+            for item in names:
+                if not isinstance(item, str):
+                    continue
+                candidate = item.strip()
+                if not candidate:
+                    continue
+                normalized_names.add(_normalize_primitive_name(candidate))
+            selected_names = normalized_names
+
+        normalized_prefix: Optional[str] = None
+        if isinstance(prefix, str):
+            stripped_prefix = prefix.strip()
+            if stripped_prefix:
+                normalized_prefix = stripped_prefix
 
         with self._lock:
             specs = list(self._specs.values())
+
+        if selected_names is not None:
+            specs = [item for item in specs if item.name in selected_names]
+
+        if normalized_prefix is not None:
+            specs = [item for item in specs if item.name.startswith(normalized_prefix)]
+
         specs.sort(key=lambda item: item.name)
         return specs
 
-    def list_spec_payloads(self) -> List[Dict[str, Any]]:
-        """List structured primitive payloads sorted by primitive name."""
+    def list_spec_payloads(
+        self,
+        *,
+        names: Optional[Sequence[str]] = None,
+        prefix: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List structured primitive payloads with optional filters."""
 
-        return [spec.to_public_dict() for spec in self.list_specs()]
+        return [
+            spec.to_public_dict()
+            for spec in self.list_specs(names=names, prefix=prefix)
+        ]
+
+    def list_spec_xml(
+        self,
+        *,
+        names: Optional[Sequence[str]] = None,
+        prefix: Optional[str] = None,
+    ) -> str:
+        """List primitive specs as XML string payload."""
+
+        lines = ["<primitive_specs>"]
+        for spec in self.list_specs(names=names, prefix=prefix):
+            lines.append(spec.to_xml_element(root_tag="primitive"))
+        lines.append("</primitive_specs>")
+        return "\n".join(lines)
+
+    def get_spec_payload(self, name: str) -> Dict[str, Any]:
+        """Return one structured primitive payload by exact primitive name."""
+
+        return self._get_spec(name).to_public_dict()
+
+    def get_spec_xml(self, name: str) -> str:
+        """Return one primitive spec as XML string payload."""
+
+        return self._get_spec(name).to_xml_element(root_tag="primitive_spec")
 
     def _get_spec(self, name: str) -> PrimitiveSpec:
         normalized = _normalize_primitive_name(name)
@@ -427,6 +722,7 @@ class PrimitiveRegistry:
 __all__ = [
     "PrimitiveCallContext",
     "PrimitiveHandler",
+    "primitive_spec",
     "PrimitiveParameterSpec",
     "PrimitiveRegistry",
     "PrimitiveSpec",

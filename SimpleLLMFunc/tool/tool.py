@@ -58,10 +58,14 @@ class Tool(ABC):
         description: str,
         func: Optional[Callable[..., Awaitable[Any]]] = None,
         best_practices: Optional[Sequence[str]] = None,
+        prompt_injection_builder: Optional[
+            Callable[[Dict[str, Any]], Optional[str]]
+        ] = None,
     ):
         self.name = name
         self.description = description
         self.best_practices = self._normalize_best_practices(best_practices)
+        self._prompt_injection_builder = prompt_injection_builder
         if func is not None and not inspect.iscoroutinefunction(func):
             func_name = getattr(func, "__name__", repr(func))
             raise TypeError(
@@ -69,6 +73,24 @@ class Tool(ABC):
             )
         self.func = func
         self.parameters = self._extract_parameters() if func else []
+
+    def build_system_prompt_injection(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Return optional tool-owned system-prompt guidance text."""
+
+        builder = self._prompt_injection_builder
+        if builder is None:
+            return None
+
+        payload = context if isinstance(context, dict) else {}
+        rendered = builder(payload)
+        if not isinstance(rendered, str):
+            return None
+
+        normalized = rendered.strip()
+        return normalized or None
 
     @staticmethod
     def _normalize_best_practices(
@@ -367,6 +389,9 @@ def tool(
     name: str,
     description: str,
     best_practices: Optional[Sequence[str]] = None,
+    prompt_injection_builder: Optional[
+        Callable[[Dict[str, Any]], Optional[str]]
+    ] = None,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """
     工具装饰器，用于将函数转换为Tool对象。
@@ -407,6 +432,8 @@ def tool(
         description: 工具简短描述，更详细的内容可以在被装饰函数的docstring中给出
         best_practices: 可选最佳实践提示，会被 llm_chat / llm_function
             自动注入到 system prompt。
+        prompt_injection_builder: 可选注入器，接收上下文字典并返回
+            一段要拼接进 system prompt 的工具专属引导文本。
 
     Returns:
         装饰器函数，保持原函数功能的同时添加_tool属性
@@ -471,6 +498,7 @@ def tool(
             description=description,
             func=func,
             best_practices=best_practices,
+            prompt_injection_builder=prompt_injection_builder,
         )
 
         # 保留原始函数的功能，同时附加工具对象

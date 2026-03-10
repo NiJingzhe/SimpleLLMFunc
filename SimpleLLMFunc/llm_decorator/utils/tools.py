@@ -20,8 +20,14 @@ from SimpleLLMFunc.logger import get_location, push_debug, push_warning
 from SimpleLLMFunc.tool import Tool
 
 
-TOOL_PROMPT_BLOCK_START = "[Tool Best Practices]"
-TOOL_PROMPT_BLOCK_END = "[/Tool Best Practices]"
+TOOL_PROMPT_BLOCK_START = "<tool_best_practices>"
+TOOL_PROMPT_BLOCK_END = "</tool_best_practices>"
+
+
+def _normalize_prompt_text_for_dedupe(text: str) -> str:
+    collapsed = " ".join(text.replace("`", "").split())
+    normalized = collapsed.strip().lower()
+    return normalized.rstrip(".")
 
 
 def process_tools(
@@ -122,6 +128,8 @@ def process_tools(
 
 def collect_tool_prompt_specs(
     toolkit: Optional[List[Union[Tool, Callable[..., Awaitable[Any]]]]] = None,
+    *,
+    context: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Collect deduplicated ToolSpec metadata for system-prompt injection."""
 
@@ -166,12 +174,24 @@ def collect_tool_prompt_specs(
                 if text and text not in normalized_best_practices:
                     normalized_best_practices.append(text)
 
+        normalized_prompt_injections: List[str] = []
+        try:
+            prompt_injection = tool_obj.build_system_prompt_injection(context=context)
+        except Exception:
+            prompt_injection = None
+
+        if isinstance(prompt_injection, str):
+            normalized_injection = prompt_injection.strip()
+            if normalized_injection:
+                normalized_prompt_injections.append(normalized_injection)
+
         existing = collected.get(name)
         if existing is None:
             collected[name] = {
                 "name": name,
                 "description": description,
                 "best_practices": normalized_best_practices,
+                "prompt_injections": normalized_prompt_injections,
             }
             continue
 
@@ -187,6 +207,15 @@ def collect_tool_prompt_specs(
             if practice not in existing_best_practices:
                 existing_best_practices.append(practice)
 
+        existing_prompt_injections = existing.get("prompt_injections")
+        if not isinstance(existing_prompt_injections, list):
+            existing_prompt_injections = []
+            existing["prompt_injections"] = existing_prompt_injections
+
+        for injection in normalized_prompt_injections:
+            if injection not in existing_prompt_injections:
+                existing_prompt_injections.append(injection)
+
     return [collected[name] for name in sorted(collected.keys())]
 
 
@@ -200,7 +229,7 @@ def build_tool_best_practices_prompt_block(
 
     lines: List[str] = [
         TOOL_PROMPT_BLOCK_START,
-        "Follow each tool contract and prefer tool-specific best practices.",
+        "<instruction>Follow each tool contract and prefer tool-specific best practices.</instruction>",
     ]
 
     has_any_spec = False
@@ -214,27 +243,58 @@ def build_tool_best_practices_prompt_block(
             continue
 
         has_any_spec = True
+        lines.append(f'<tool name="{name}">')
         raw_description = spec.get("description")
         description = (
             raw_description.strip() if isinstance(raw_description, str) else ""
         )
         if description:
-            lines.append(f"- {name}: {description}")
-        else:
-            lines.append(f"- {name}")
+            lines.append(f"<use>{description}</use>")
+
+        normalized_description = _normalize_prompt_text_for_dedupe(description)
 
         best_practices = spec.get("best_practices")
         if isinstance(best_practices, list):
             normalized_best_practices: List[str] = []
+            seen_best_practices: set[str] = set()
             for practice in best_practices:
                 if not isinstance(practice, str):
                     continue
                 text = practice.strip()
-                if text and text not in normalized_best_practices:
-                    normalized_best_practices.append(text)
+                if not text:
+                    continue
+
+                normalized_text = _normalize_prompt_text_for_dedupe(text)
+                if not normalized_text or normalized_text in seen_best_practices:
+                    continue
+
+                if normalized_description and (
+                    normalized_text == normalized_description
+                    or normalized_text in normalized_description
+                ):
+                    continue
+
+                normalized_best_practices.append(text)
+                seen_best_practices.add(normalized_text)
 
             for index, practice in enumerate(normalized_best_practices, start=1):
-                lines.append(f"  - best_practice_{index}: {practice}")
+                lines.append(
+                    f'<best_practice index="{index}">{practice}</best_practice>'
+                )
+
+        prompt_injections = spec.get("prompt_injections")
+        if isinstance(prompt_injections, list):
+            normalized_prompt_injections: List[str] = []
+            for injection in prompt_injections:
+                if not isinstance(injection, str):
+                    continue
+                text = injection.strip()
+                if text and text not in normalized_prompt_injections:
+                    normalized_prompt_injections.append(text)
+
+            lines.extend(normalized_prompt_injections)
+
+        lines.append("</tool>")
 
     if not has_any_spec:
         return None
@@ -269,7 +329,7 @@ def append_tool_best_practices_prompt_to_messages(
     messages: List[Any],
     tool_specs: List[Dict[str, Any]],
 ) -> None:
-    """Append one deduplicated ToolSpec guidance block into system prompt."""
+    """Inject one deduplicated ToolSpec guidance block at prompt head."""
 
     prompt_block = build_tool_best_practices_prompt_block(tool_specs)
     if not prompt_block:
@@ -288,7 +348,7 @@ def append_tool_best_practices_prompt_to_messages(
             base_prompt = remove_tool_best_practices_prompt_block(content)
 
         if base_prompt:
-            merged_prompt = f"{base_prompt}\n\n{prompt_block}"
+            merged_prompt = f"{prompt_block}\n\n{base_prompt}"
         else:
             merged_prompt = prompt_block
 

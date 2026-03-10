@@ -236,6 +236,24 @@ async def test_fork_stream_adds_peer_column_and_unloads_on_finish() -> None:
 
 
 @pytest.mark.asyncio
+async def test_fork_error_column_stays_visible_for_inspection() -> None:
+    """Errored fork column should remain visible instead of unloading immediately."""
+    app = _make_app()
+
+    async with app.run_test() as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.start_model_response("fork::fork_1")
+        await app.append_model_reasoning("fork::fork_1", "TypeError: missing argument")
+        await app.finish_model_response("fork::fork_1", "fork | error")
+        await pilot.pause(0.05)
+
+        board = app.query_one("#agent-board")
+        columns = list(board.query(".agent-column"))
+        assert len(columns) == 2
+        app.query_one("#agent-column-fork_fork_1", VerticalScroll)
+
+
+@pytest.mark.asyncio
 async def test_agent_board_scrolls_horizontally_when_more_than_three_columns() -> None:
     """Agent board should enable horizontal scrolling when columns exceed width."""
     app = _make_app()
@@ -367,3 +385,84 @@ async def test_agent_columns_keep_independent_scroll_positions() -> None:
 
         assert main_column.scroll_y >= main_column.max_scroll_y - 0.5
         assert fork_column.scroll_y == 0
+
+
+@pytest.mark.asyncio
+async def test_copy_all_text_contains_user_model_and_tool_content() -> None:
+    """Copy-all action should include key rendered transcript sections."""
+    app = _make_app()
+    copied: list[str] = []
+
+    def _copy_to_clipboard(text: str) -> None:
+        copied.append(text)
+
+    app.copy_to_clipboard = _copy_to_clipboard  # type: ignore[method-assign]
+
+    async with app.run_test() as pilot:
+        await app._append_user_message("hello from user")
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "assistant says hi")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-1",
+            tool_name="execute_code",
+            arguments={"code": "print('ok')"},
+        )
+        await app.append_tool_output("call-1", "ok\n")
+        await app.finish_tool_call(
+            tool_call_id="call-1",
+            result_markdown="done",
+            stats_line="Tool | 0.01s | success",
+            success=True,
+        )
+        await app.finish_model_response("llm_call_1", "model | 0.02s")
+        await pilot.pause(0.05)
+
+        await app.action_copy_all_text()
+
+    assert copied
+    transcript = copied[-1]
+    assert "hello from user" in transcript
+    assert "assistant says hi" in transcript
+    assert "Tool: execute_code" in transcript
+    assert "ok" in transcript
+
+
+@pytest.mark.asyncio
+async def test_copy_command_routes_to_clipboard_action() -> None:
+    """/copy command should trigger copy-all without sending chat input."""
+    copy_mock = Mock()
+    app = _make_app()
+    app.copy_to_clipboard = copy_mock  # type: ignore[method-assign]
+
+    async with app.run_test() as pilot:
+        await app._append_user_message("copy me")
+        await pilot.click("#chat-input")
+        await pilot.press("/", "c", "o", "p", "y", "enter")
+        await pilot.pause(0.05)
+
+    copy_mock.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_virtualization_archives_old_blocks_but_copy_keeps_full_text() -> None:
+    """Old off-screen bubbles should archive while transcript copy remains complete."""
+    app = _make_app()
+    app._virtual_keep_live_blocks = 6
+    copied: list[str] = []
+    app.copy_to_clipboard = copied.append  # type: ignore[method-assign]
+
+    async with app.run_test(size=(100, 28)) as pilot:
+        for idx in range(18):
+            await app._append_user_message(f"msg-{idx}")
+        await pilot.pause(0.05)
+
+        assert app._archive_count > 0
+        assert len(list(app.query(".archived-block"))) > 0
+
+        await app.action_copy_all_text()
+
+    assert copied
+    transcript = copied[-1]
+    assert "msg-0" in transcript
+    assert "msg-17" in transcript

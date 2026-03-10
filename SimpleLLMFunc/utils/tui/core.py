@@ -121,11 +121,6 @@ class _ForkSessionState:
     tool_call_id_map: dict[str, str] = field(default_factory=dict)
 
 
-_FORK_STREAM_EVENT_NAMES = {
-    "selfref_fork_stream_open",
-    "selfref_fork_stream_delta",
-    "selfref_fork_stream_close",
-}
 _FORK_LIFECYCLE_EVENT_NAMES = {
     "selfref_fork_start",
     "selfref_fork_spawned",
@@ -363,71 +358,6 @@ async def _apply_custom_tool_event(
         await adapter.set_tool_status(tool_call_id, update.status)
 
 
-async def _handle_fork_stream_custom_event(
-    event: CustomEvent,
-    adapter: TUIStreamAdapter,
-    state: _StreamConsumeState,
-) -> bool:
-    if event.event_name not in _FORK_STREAM_EVENT_NAMES:
-        return False
-
-    if not isinstance(event.data, dict):
-        return True
-
-    fork_id_raw = event.data.get("fork_id")
-    if not isinstance(fork_id_raw, str) or not fork_id_raw:
-        return True
-
-    parent_fork_id = event.data.get("parent_fork_id")
-    if not isinstance(parent_fork_id, str):
-        parent_fork_id = None
-
-    depth = _parse_optional_int(event.data.get("depth"))
-    memory_key = event.data.get("memory_key")
-    if not isinstance(memory_key, str):
-        memory_key = ""
-
-    session = await _ensure_fork_session(
-        adapter=adapter,
-        state=state,
-        fork_id=fork_id_raw,
-        parent_fork_id=parent_fork_id,
-        depth=depth,
-        memory_key=memory_key,
-    )
-
-    if event.event_name == "selfref_fork_stream_open":
-        if not session.metadata_rendered:
-            parts: list[str] = []
-            if session.depth is not None:
-                parts.append(f"depth={session.depth}")
-            if session.memory_key:
-                parts.append(f"memory={session.memory_key}")
-            if session.parent_fork_id:
-                parts.append(f"parent={session.parent_fork_id}")
-            if parts:
-                await adapter.append_model_reasoning(
-                    session.model_call_id,
-                    " | ".join(parts),
-                )
-            session.metadata_rendered = True
-        return True
-
-    if event.event_name == "selfref_fork_stream_delta":
-        text = event.data.get("text")
-        if isinstance(text, str) and text:
-            await adapter.append_model_content(session.model_call_id, text)
-        return True
-
-    status = event.data.get("status")
-    if isinstance(status, str) and status:
-        stats_line = f"fork | {status}"
-    else:
-        stats_line = "fork | completed"
-    await adapter.finish_model_response(session.model_call_id, stats_line)
-    return True
-
-
 async def _handle_fork_lifecycle_custom_event(
     event: CustomEvent,
     adapter: TUIStreamAdapter,
@@ -532,8 +462,7 @@ async def _handle_origin_scoped_fork_event(
     custom_hooks: Sequence[ToolCustomEventHook],
 ) -> bool:
     if isinstance(event, CustomEvent) and (
-        event.event_name in _FORK_STREAM_EVENT_NAMES
-        or event.event_name in _FORK_LIFECYCLE_EVENT_NAMES
+        event.event_name in _FORK_LIFECYCLE_EVENT_NAMES
     ):
         return False
 
@@ -812,14 +741,6 @@ async def _handle_event(
         return
 
     if isinstance(event, CustomEvent):
-        handled_fork_stream = await _handle_fork_stream_custom_event(
-            event=event,
-            adapter=adapter,
-            state=state,
-        )
-        if handled_fork_stream:
-            return
-
         handled_fork_lifecycle = await _handle_fork_lifecycle_custom_event(
             event=event,
             adapter=adapter,

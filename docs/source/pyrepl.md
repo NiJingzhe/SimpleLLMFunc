@@ -73,7 +73,7 @@ async def chat2(message: str, history=None):
 
 > 说明：`execute_code` 默认有 600 秒活动执行超时保护。等待 `input()` 期间不会计入超时；每次 `input()` 成功回填后会重置超时计时。同时，单次 `input()` 默认 300 秒空闲超时。任一超时触发时 `success=False`，并在 `error`/`stderr` 中返回超时信息。你也可以在工具调用时传入 `timeout_seconds` 为该次执行单独设置超时。
 
-> Agent guidance in tool description (sent to model): write direct snippets instead of standalone scripts, **do not** add `if __name__ == "__main__":`, `input()` is supported, call `runtime.list_primitives()` / `runtime.list_primitive_specs()` to inspect mounted capabilities, and `reset_repl` does **not** delete attached memory state.
+> Agent guidance in tool description (sent to model): write direct snippets instead of standalone scripts, **do not** add `if __name__ == "__main__":`, `input()` is supported, call `runtime.list_primitives()` for discovery, then `runtime.get_primitive_spec(name)` (or `runtime.list_primitive_specs(names=[...])`) for targeted contracts, and `reset_repl` does **not** delete attached memory state.
 
 **参数：**
 
@@ -294,7 +294,8 @@ async def agent(message: str, history=None):
 - `register_primitive_pack_installer(pack_name, installer, replace=False)`
 - `install_primitive_pack(pack_name, **options)`
 - `list_runtime_backends()` and `list_primitives()`
-- `runtime.list_primitive_specs()` (inside REPL) for structured contract discovery: name, description, input/output, parameters, and best practices
+- `runtime.get_primitive_spec(name)` (inside REPL) for one exact contract
+- `runtime.list_primitive_specs(names=[...], prefix="...")` (inside REPL) for filtered contract discovery: name, description, input/output, parameters, and best practices
 
 ```python
 repl = PyRepl()
@@ -321,7 +322,7 @@ repl.register_primitive(
 await repl.execute('print(runtime.constants.get("project"))')
 ```
 
-When `@llm_chat(...)` runs with mounted runtime primitives, the framework automatically appends a deduplicated runtime-primitive guidance block to the current system prompt.
+When `@llm_chat(...)` runs with mounted runtime-enabled tools (for example `PyRepl`), the framework injects a deduplicated `Tool Best Practices` block at prompt head; runtime primitive guidance is included inside tool-owned best-practice entries.
 
 When a `SelfReference` backend is mounted in `PyRepl`, `llm_chat` can auto-resolve it from toolkit runtime backends (no mandatory `self_reference=` wiring), while still supporting explicit `self_reference=` when you want to pass one directly.
 
@@ -391,14 +392,17 @@ Runtime self-reference primitive reference:
 - `runtime.selfref.history.update(index, message, key=None)`: replace one message at index.
 - `runtime.selfref.history.delete(index, key=None)`: remove one message by index.
 - `runtime.selfref.history.replace(messages, key=None)`: replace full history with a validated list.
-- `runtime.selfref.history.clear(key=None)`: clear all messages.
+- `runtime.selfref.history.clear(key=None)`: clear non-system messages and keep current system prompt.
 - `runtime.selfref.history.get_system_prompt(key=None)`: read the latest system prompt text.
 - `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite current system prompt.
 - `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to system prompt.
-- `runtime.selfref.fork.run(...)`: run one child self-fork and wait for result.
+- `runtime.selfref.fork.run(..., include_history=False)`: run one child self-fork and wait for result.
 - `runtime.selfref.fork.spawn(...)`: spawn one child self-fork asynchronously.
-- `runtime.selfref.fork.wait(fork_id)`: wait for one spawned self-fork result.
-- `runtime.selfref.fork.wait_all([fork_id, ...])`: wait for multiple self-fork results.
+- `runtime.selfref.fork.wait(fork_id, include_history=False)`: wait for one spawned self-fork result.
+- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait for multiple self-fork results, returning `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+
+By default, fork results are compact and return metadata like `fork_id`, `memory_key`, `response`, `history_count`, and `history_included=False`.
+Set `include_history=True` only when you truly need full child message history.
 
 Fork planning checklist (same guidance returned by `runtime.selfref.guide()`):
 
@@ -406,13 +410,14 @@ Fork planning checklist (same guidance returned by `runtime.selfref.guide()`):
 2. 无依赖的任务尽量并行 `fork.spawn(...)`。
 3. fork 前先整理记忆：弱相关信息先总结或落盘。
 4. fork 提示词写清完成边界和验收标准，优先文件+回传消息交接。
-5. 每个里程碑后回收并整理记忆，再进入下一阶段。
+5. fork 结果默认是紧凑模式；需要子历史时再按需 `include_history=True`。
+6. 每个里程碑后回收并整理记忆，再进入下一阶段。
 
 Forgetting note:
 
 - Forgetting memory is **not** `reset_repl`.
 - `reset_repl` only clears Python variables in the REPL namespace.
-- Forget memory by deleting message records with `runtime.selfref.history.delete(...)`, `runtime.selfref.history.replace(...)`, or `runtime.selfref.history.clear(...)`.
+- Forget memory by deleting/replacing message records with `runtime.selfref.history.delete(...)` or `runtime.selfref.history.replace(...)`; `runtime.selfref.history.clear(...)` keeps only the current system prompt.
 
 All operations write into `SelfReference`'s internal store instead of exposing raw lists. Memory edits performed within a turn are merged into returned `updated_history` (and `ReactEndEvent.final_messages` in event mode) at turn end.
 

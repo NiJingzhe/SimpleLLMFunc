@@ -62,7 +62,7 @@ async def your_chat_function(
   - `False`: 返回 `(response, messages)` 元组（向后兼容模式）
   - `True`: 返回 `ReactOutput`（`ResponseYield` 或 `EventYield`）
   - 详细说明请参考 [事件流文档](event_stream.md)
-- **self_reference** (optional): Shared `SelfReference` object. When omitted, `llm_chat` can auto-detect a mounted `SelfReference` backend from `PyRepl` toolkit runtime backends. When runtime primitives are available, `llm_chat` appends deduplicated runtime-primitive guidance to the system prompt.
+- **self_reference** (optional): Shared `SelfReference` object. When omitted, `llm_chat` can auto-detect a mounted `SelfReference` backend from `PyRepl` toolkit runtime backends. Runtime primitive guidance is injected via tool-owned best-practice entries (for example `PyRepl.execute_code`) instead of a standalone runtime block.
 - **self_reference_key** (optional): Memory key used for this chat function. Defaults to function name when omitted.
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
@@ -256,14 +256,14 @@ asyncio.run(demo())
 
 ### SelfReference + runtime primitives
 
-When runtime primitives are mounted (for example via `PyRepl`), the framework automatically appends a deduplicated runtime-primitive guidance block to the current system prompt.
+When runtime-enabled tools are mounted (for example via `PyRepl`), the framework injects a deduplicated tool best-practices block at the system-prompt head. Runtime primitive guidance is included inside those tool-owned best-practice entries.
 
 The guidance is rebuilt per turn and keeps durable system-prompt memory clean; durable prompt text can still be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
 
 The guidance tells the agent:
 
-- how to discover mounted runtime capabilities (`runtime.list_primitives()` / `runtime.list_primitive_specs()`)
-- which primitive names are currently available with short descriptions
+- how to discover mounted runtime capabilities (`runtime.list_primitives()`)
+- how to inspect one exact contract (`runtime.get_primitive_spec(name)`) or a filtered subset (`runtime.list_primitive_specs(names=[...], prefix="...")`)
 - how to read selfref namespace guidance (`runtime.selfref.guide()`)
 - reset semantics (`reset_repl` clears REPL variables, not runtime backend state)
 - (when SelfReference memory is bound) the memory key scope for this chat function
@@ -308,14 +308,17 @@ Runtime self-reference primitive reference:
 - `runtime.selfref.history.update(index, message, key=None)`: replace one message at index.
 - `runtime.selfref.history.delete(index, key=None)`: delete one message at index.
 - `runtime.selfref.history.replace(messages, key=None)`: replace entire history with validated messages.
-- `runtime.selfref.history.clear(key=None)`: clear all messages.
+- `runtime.selfref.history.clear(key=None)`: clear non-system messages and keep current system prompt.
 - `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
 - `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
 - `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
-- `runtime.selfref.fork.run(...)`: run one child self-fork and wait.
+- `runtime.selfref.fork.run(..., include_history=False)`: run one child self-fork and wait.
 - `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
-- `runtime.selfref.fork.wait(fork_id)`: wait one spawned fork.
-- `runtime.selfref.fork.wait_all([fork_id, ...])`: wait multiple forks.
+- `runtime.selfref.fork.wait(fork_id, include_history=False)`: wait one spawned fork.
+- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait multiple forks and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+
+Fork results are compact by default (`history_included=False`, with `history_count` metadata) to avoid main-context pollution.
+Use `include_history=True` only when full child history is explicitly required.
 
 When `enable_event=True`, you can route main/fork events by origin metadata:
 
@@ -335,7 +338,7 @@ Forgetting memory:
 
 - Do not treat `reset_repl` as memory forgetting.
 - `reset_repl` only clears Python runtime variables.
-- Forget memory by deleting records through selfref history primitives (`runtime.selfref.history.delete`, `runtime.selfref.history.replace`, `runtime.selfref.history.clear`).
+- Forget memory by deleting/replacing records through selfref history primitives (`runtime.selfref.history.delete`, `runtime.selfref.history.replace`); `runtime.selfref.history.clear` keeps only the current system prompt.
 
 ### 返回模式
 

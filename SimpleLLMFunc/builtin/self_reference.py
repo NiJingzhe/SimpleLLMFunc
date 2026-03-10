@@ -14,6 +14,7 @@ import threading
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
+_TRANSIENT_MESSAGE_FIELDS = {"reasoning_details"}
 MemoryHistory = List[Dict[str, Any]]
 HISTORY_PARAM_NAMES = ("history", "chat_history")
 SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM = "__self_reference_key_override"
@@ -32,7 +33,13 @@ def _normalize_key(key: str) -> str:
 
 
 def _clone_messages(messages: MemoryHistory) -> MemoryHistory:
-    return copy.deepcopy(messages)
+    cloned: MemoryHistory = []
+    for message in messages:
+        sanitized = copy.deepcopy(message)
+        for field in _TRANSIENT_MESSAGE_FIELDS:
+            sanitized.pop(field, None)
+        cloned.append(sanitized)
+    return cloned
 
 
 def _is_valid_content_for_role(role: str, content: Any) -> bool:
@@ -199,6 +206,30 @@ def _extract_response_and_history_from_output(
     return output, None
 
 
+def _normalize_fork_ids(value: Optional[List[Any]]) -> Optional[List[str]]:
+    if value is None:
+        return None
+
+    if not isinstance(value, list):
+        raise ValueError("fork_ids must be a list of fork_id strings")
+
+    normalized: list[str] = []
+    for item in value:
+        if isinstance(item, str):
+            normalized.append(_normalize_key(item))
+            continue
+
+        if isinstance(item, dict):
+            fork_id = item.get("fork_id")
+            if isinstance(fork_id, str) and fork_id.strip():
+                normalized.append(_normalize_key(fork_id))
+                continue
+
+        raise ValueError("fork_ids must contain fork_id strings or dicts with fork_id")
+
+    return normalized
+
+
 def _extract_text_from_model_like_response(response: Any) -> str:
     if isinstance(response, str):
         return response
@@ -245,75 +276,6 @@ def _extract_event_and_origin_from_agent_output(output: Any) -> tuple[Any, Any]:
     return getattr(output, "event", None), getattr(output, "origin", None)
 
 
-async def _flush_fork_stream_buffer(
-    *,
-    event_emitter: Any,
-    fork_id: str,
-    parent_fork_id: Optional[str],
-    depth: int,
-    source_memory_key: str,
-    memory_key: str,
-    buffer: str,
-    force: bool,
-) -> str:
-    remaining = buffer
-    flush_threshold = 120
-
-    while True:
-        newline_index = remaining.find("\n")
-        if newline_index >= 0:
-            chunk = remaining[: newline_index + 1]
-            remaining = remaining[newline_index + 1 :]
-            await _emit_fork_custom_event(
-                event_emitter,
-                "selfref_fork_stream_delta",
-                {
-                    "fork_id": fork_id,
-                    "parent_fork_id": parent_fork_id,
-                    "depth": depth,
-                    "source_memory_key": source_memory_key,
-                    "memory_key": memory_key,
-                    "text": chunk,
-                },
-            )
-            continue
-
-        if force:
-            if remaining:
-                await _emit_fork_custom_event(
-                    event_emitter,
-                    "selfref_fork_stream_delta",
-                    {
-                        "fork_id": fork_id,
-                        "parent_fork_id": parent_fork_id,
-                        "depth": depth,
-                        "source_memory_key": source_memory_key,
-                        "memory_key": memory_key,
-                        "text": remaining,
-                    },
-                )
-            return ""
-
-        if len(remaining) >= flush_threshold:
-            chunk = remaining[:flush_threshold]
-            remaining = remaining[flush_threshold:]
-            await _emit_fork_custom_event(
-                event_emitter,
-                "selfref_fork_stream_delta",
-                {
-                    "fork_id": fork_id,
-                    "parent_fork_id": parent_fork_id,
-                    "depth": depth,
-                    "source_memory_key": source_memory_key,
-                    "memory_key": memory_key,
-                    "text": chunk,
-                },
-            )
-            continue
-
-        return remaining
-
-
 async def _consume_agent_call_output(
     call_output: Any,
     *,
@@ -331,7 +293,6 @@ async def _consume_agent_call_output(
     if hasattr(call_output, "__aiter__"):
         last_response: Any = None
         last_history: Optional[MemoryHistory] = None
-        stream_buffer = ""
         stream_forwarding_enabled = (
             fork_id is not None
             and depth is not None
@@ -355,36 +316,10 @@ async def _consume_agent_call_output(
                         forwarded_origin=forwarded_origin,
                     )
 
-                stream_text = _extract_stream_text_from_agent_output(output)
-                if stream_text:
-                    stream_buffer += stream_text
-                    stream_buffer = await _flush_fork_stream_buffer(
-                        event_emitter=event_emitter,
-                        fork_id=cast(str, fork_id),
-                        parent_fork_id=parent_fork_id,
-                        depth=cast(int, depth),
-                        source_memory_key=cast(str, source_memory_key),
-                        memory_key=cast(str, memory_key),
-                        buffer=stream_buffer,
-                        force=True,
-                    )
-
             response, history = _extract_response_and_history_from_output(output)
             last_response = response
             if history is not None:
                 last_history = history
-
-        if stream_forwarding_enabled and stream_buffer:
-            await _flush_fork_stream_buffer(
-                event_emitter=event_emitter,
-                fork_id=cast(str, fork_id),
-                parent_fork_id=parent_fork_id,
-                depth=cast(int, depth),
-                source_memory_key=cast(str, source_memory_key),
-                memory_key=cast(str, memory_key),
-                buffer=stream_buffer,
-                force=True,
-            )
 
         return last_response, last_history
 
@@ -452,6 +387,8 @@ def _build_fork_error_result(
         "error_message": str(error),
         "response": None,
         "history": [],
+        "history_count": 0,
+        "history_included": True,
     }
 
 
@@ -574,7 +511,11 @@ class SelfReferenceMemoryHandle:
         self._owner.replace_history(self._key, messages, strict=True)
 
     def clear(self) -> None:
-        self._owner.replace_history(self._key, [], strict=True)
+        system_prompt = self._owner.get_system_prompt(self._key)
+        replacement: List[Dict[str, Any]] = []
+        if system_prompt is not None:
+            replacement.append({"role": "system", "content": system_prompt})
+        self._owner.replace_history(self._key, replacement, strict=True)
 
     def get_system_prompt(self) -> Optional[str]:
         return self._owner.get_system_prompt(self._key)
@@ -626,6 +567,7 @@ class SelfReferenceInstanceHandle:
         source_memory_key: Optional[str] = None,
         fork_memory_key: Optional[str] = None,
         _event_emitter: Any = None,
+        include_history: bool = False,
         **agent_kwargs: Any,
     ) -> Dict[str, Any]:
         return await self._owner.fork_agent_instance(
@@ -633,6 +575,7 @@ class SelfReferenceInstanceHandle:
             source_memory_key=source_memory_key,
             fork_memory_key=fork_memory_key,
             _event_emitter=_event_emitter,
+            include_history=include_history,
             **agent_kwargs,
         )
 
@@ -652,14 +595,25 @@ class SelfReferenceInstanceHandle:
             **agent_kwargs,
         )
 
-    async def fork_wait(self, fork_id: str) -> Dict[str, Any]:
-        return await self._owner.wait_fork_result(fork_id)
+    async def fork_wait(
+        self,
+        fork_id: str,
+        include_history: bool = False,
+    ) -> Dict[str, Any]:
+        return await self._owner.wait_fork_result(
+            fork_id,
+            include_history=include_history,
+        )
 
     async def fork_wait_all(
         self,
         fork_ids: Optional[List[str]] = None,
+        include_history: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        return await self._owner.wait_all_fork_results(fork_ids)
+        return await self._owner.wait_all_fork_results(
+            fork_ids,
+            include_history=include_history,
+        )
 
 
 class SelfReference:
@@ -1021,12 +975,65 @@ class SelfReference:
             )
         return merged_template_params
 
+    def _history_length(self, key: str) -> int:
+        normalized_key = _normalize_key(key)
+        with self._lock:
+            if normalized_key not in self._history_store:
+                raise KeyError(f"Memory key '{normalized_key}' is not bound")
+            return len(self._history_store[normalized_key])
+
+    def _compact_fork_result_payload(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            compact_result = copy.deepcopy(result)
+        except Exception:
+            compact_result = dict(result)
+        compact_result.pop("history", None)
+
+        history_count = compact_result.get("history_count")
+        if not isinstance(history_count, int):
+            memory_key = compact_result.get("memory_key")
+            if isinstance(memory_key, str) and memory_key:
+                try:
+                    history_count = self._history_length(memory_key)
+                except Exception:
+                    history_count = 0
+            else:
+                history_count = 0
+            compact_result["history_count"] = history_count
+
+        compact_result["history_included"] = False
+        return compact_result
+
+    def _materialize_fork_result_payload(
+        self,
+        result: Dict[str, Any],
+        *,
+        include_history: bool,
+    ) -> Dict[str, Any]:
+        materialized = self._compact_fork_result_payload(result)
+        if not include_history:
+            return materialized
+
+        memory_key = materialized.get("memory_key")
+        history_snapshot: MemoryHistory = []
+        if isinstance(memory_key, str) and memory_key:
+            try:
+                history_snapshot = self.snapshot_history(memory_key)
+            except Exception:
+                history_snapshot = []
+
+        materialized["history"] = history_snapshot
+        materialized["history_count"] = len(history_snapshot)
+        materialized["history_included"] = True
+        return materialized
+
     async def fork_agent_instance(
         self,
         *agent_args: Any,
         source_memory_key: Optional[str] = None,
         fork_memory_key: Optional[str] = None,
         _event_emitter: Any = None,
+        include_history: bool = False,
         _fork_id: Optional[str] = None,
         _parent_fork_id: Optional[str] = None,
         _fork_depth: Optional[int] = None,
@@ -1061,19 +1068,6 @@ class SelfReference:
         await _emit_fork_custom_event(
             _event_emitter,
             "selfref_fork_start",
-            {
-                "fork_id": fork_id,
-                "parent_fork_id": parent_fork_id,
-                "depth": fork_depth,
-                "source_memory_key": source_key,
-                "memory_key": target_key,
-                "status": "running",
-            },
-        )
-
-        await _emit_fork_custom_event(
-            _event_emitter,
-            "selfref_fork_stream_open",
             {
                 "fork_id": fork_id,
                 "parent_fork_id": parent_fork_id,
@@ -1120,20 +1114,6 @@ class SelfReference:
         except Exception as exc:
             await _emit_fork_custom_event(
                 _event_emitter,
-                "selfref_fork_stream_close",
-                {
-                    "fork_id": fork_id,
-                    "parent_fork_id": parent_fork_id,
-                    "depth": fork_depth,
-                    "source_memory_key": source_key,
-                    "memory_key": target_key,
-                    "status": "error",
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
-                },
-            )
-            await _emit_fork_custom_event(
-                _event_emitter,
                 "selfref_fork_error",
                 {
                     "fork_id": fork_id,
@@ -1155,9 +1135,7 @@ class SelfReference:
         if final_history is not None:
             self.bind_history(target_key, final_history)
 
-        await _emit_fork_custom_event(
-            _event_emitter,
-            "selfref_fork_stream_close",
+        completed_result = self._materialize_fork_result_payload(
             {
                 "fork_id": fork_id,
                 "parent_fork_id": parent_fork_id,
@@ -1165,19 +1143,10 @@ class SelfReference:
                 "source_memory_key": source_key,
                 "memory_key": target_key,
                 "status": "completed",
+                "response": response,
             },
+            include_history=include_history,
         )
-
-        completed_result = {
-            "fork_id": fork_id,
-            "parent_fork_id": parent_fork_id,
-            "depth": fork_depth,
-            "source_memory_key": source_key,
-            "memory_key": target_key,
-            "status": "completed",
-            "response": response,
-            "history": self.snapshot_history(target_key),
-        }
 
         await _emit_fork_custom_event(
             _event_emitter,
@@ -1242,8 +1211,10 @@ class SelfReference:
                     error=exc,
                 )
 
+            compact_result = self._compact_fork_result_payload(done_result)
+
             with self._lock:
-                self._fork_results[fork_id] = done_result
+                self._fork_results[fork_id] = compact_result
                 self._fork_tasks.pop(fork_id, None)
 
         fork_task.add_done_callback(on_fork_task_done)
@@ -1274,7 +1245,11 @@ class SelfReference:
             "status": "running",
         }
 
-    async def wait_fork_result(self, fork_id: str) -> Dict[str, Any]:
+    async def wait_fork_result(
+        self,
+        fork_id: str,
+        include_history: bool = False,
+    ) -> Dict[str, Any]:
         normalized_fork_id = _normalize_key(fork_id)
 
         with self._lock:
@@ -1282,7 +1257,10 @@ class SelfReference:
             running_task = self._fork_tasks.get(normalized_fork_id)
 
         if completed_result is not None:
-            return copy.deepcopy(completed_result)
+            return self._materialize_fork_result_payload(
+                completed_result,
+                include_history=include_history,
+            )
 
         if running_task is None:
             raise KeyError(f"fork_id '{normalized_fork_id}' is not found")
@@ -1312,35 +1290,49 @@ class SelfReference:
                     "error_message": str(exc),
                     "response": None,
                     "history": [],
+                    "history_count": 0,
+                    "history_included": True,
                 }
             else:
-                result_after_wait = copy.deepcopy(direct_result)
+                result_after_wait = direct_result
+
+            compact_result = self._compact_fork_result_payload(result_after_wait)
 
             with self._lock:
-                self._fork_results[normalized_fork_id] = copy.deepcopy(
-                    result_after_wait
-                )
+                self._fork_results[normalized_fork_id] = compact_result
+
+            result_after_wait = compact_result
 
         if result_after_wait is None:
             raise KeyError(f"fork_id '{normalized_fork_id}' has no result")
 
-        return copy.deepcopy(result_after_wait)
+        return self._materialize_fork_result_payload(
+            result_after_wait,
+            include_history=include_history,
+        )
 
     async def wait_all_fork_results(
         self,
-        fork_ids: Optional[List[str]] = None,
+        fork_ids: Optional[List[Any]] = None,
+        include_history: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        if fork_ids is None:
+        """Wait for multiple fork results; accepts fork_id strings or fork-handle dicts."""
+        normalized_ids = _normalize_fork_ids(cast(Optional[List[Any]], fork_ids))
+
+        if normalized_ids is None:
             with self._lock:
                 target_ids = sorted(
                     set(self._fork_tasks.keys()) | set(self._fork_results.keys())
                 )
         else:
-            target_ids = [_normalize_key(item) for item in fork_ids]
+            target_ids = normalized_ids
 
         collected: Dict[str, Dict[str, Any]] = {}
         for target_id in target_ids:
-            collected[target_id] = await self.wait_fork_result(target_id)
+            collected[target_id] = await self.wait_fork_result(
+                target_id,
+                include_history=include_history,
+            )
 
         return collected
 
@@ -1357,6 +1349,7 @@ class SelfReference:
             messages = _clone_messages(self._history_store[normalized_key])
 
         mutator(messages)
+        messages = _clone_messages(messages)
         _validate_history_for_memory_methods(messages)
 
         with self._lock:

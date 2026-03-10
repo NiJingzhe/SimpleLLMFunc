@@ -7,7 +7,9 @@ from SimpleLLMFunc.type import ImgPath
 # 当前脚本文件所在的文件夹下的provider.json文件
 current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
-gpt_4o = OpenAICompatible.load_from_json_file(provider_json_path)["openrouter"]["google/gemini-3-flash-preview"]
+llm_model = OpenAICompatible.load_from_json_file(provider_json_path)["openrouter"][
+    "minimax/minimax-m2.5"
+]
 
 
 @tool(
@@ -21,7 +23,7 @@ async def get_image(image_path: str) -> tuple[str, ImgPath]:
         image_path: The path to the image file.
         detail: The detail level for the image retrieval.
             Can be 'low', 'high', or 'auto'.
-            
+
     Returns:
         ImgPath: An object representing the image file with its path and detail level.
     """
@@ -30,10 +32,10 @@ async def get_image(image_path: str) -> tuple[str, ImgPath]:
 
 
 @llm_function(  # type: ignore
-    llm_interface=gpt_4o,
+    llm_interface=llm_model,
     toolkit=[get_image],
     timeout=600,
-)  
+)
 async def analyze_image(
     focus: str,
     image_path: str,

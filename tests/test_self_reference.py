@@ -80,6 +80,23 @@ class TestSelfReferenceMemoryProxy:
         assert handle.get_system_prompt() == "Rule A\nRule B"
         assert handle.all()[0] == {"role": "system", "content": "Rule A\nRule B"}
 
+    def test_clear_preserves_system_prompt(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history(
+            "agent_main",
+            [
+                {"role": "system", "content": "Rule A"},
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"},
+            ],
+        )
+
+        handle = self_reference.memory["agent_main"]
+        handle.clear()
+
+        assert handle.count() == 1
+        assert handle.all() == [{"role": "system", "content": "Rule A"}]
+
     def test_replace_validates_tool_linkage(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [])
@@ -157,6 +174,36 @@ class TestSelfReferenceTurnMerge:
 
         assert merged[0] == {"role": "system", "content": "runtime system"}
 
+    def test_merge_turn_history_drops_reasoning_details(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        merged = self_reference.merge_turn_history(
+            key="agent_main",
+            baseline_history_count=1,
+            updated_history=[
+                {"role": "system", "content": "sys"},
+                {"role": "user", "content": "seed"},
+                {
+                    "role": "assistant",
+                    "content": "done",
+                    "reasoning_details": [
+                        {
+                            "id": "r1",
+                            "type": "reasoning.text",
+                            "data": "should not persist",
+                        }
+                    ],
+                },
+            ],
+            commit=True,
+        )
+
+        assert merged[-1] == {"role": "assistant", "content": "done"}
+        assert (
+            "reasoning_details" not in self_reference.snapshot_history("agent_main")[-1]
+        )
+
 
 class TestSelfReferenceInstanceProxy:
     """Validate self instance binding and fork behavior."""
@@ -196,6 +243,9 @@ class TestSelfReferenceInstanceProxy:
 
         assert fork_result["source_memory_key"] == "agent_main"
         assert fork_result["response"] == "forked:sub-task"
+        assert fork_result["history_included"] is False
+        assert "history" not in fork_result
+        assert fork_result["history_count"] == 2
         assert observed_calls[0]["history"] == [{"role": "user", "content": "seed"}]
 
         fork_memory_key = fork_result["memory_key"]
@@ -245,6 +295,8 @@ class TestSelfReferenceInstanceProxy:
 
         assert isinstance(child_fork, dict)
         assert child_fork["source_memory_key"] == parent_fork["memory_key"]
+        assert child_fork["history_included"] is False
+        assert "history" not in child_fork
         assert child_fork["memory_key"].startswith(
             f"{parent_fork['memory_key']}::fork::"
         )
@@ -278,10 +330,109 @@ class TestSelfReferenceInstanceProxy:
         assert completed["status"] == "completed"
         assert completed["response"] == "done:task-a"
         assert completed["memory_key"] == spawned["memory_key"]
+        assert completed["history_included"] is False
+        assert "history" not in completed
+        assert completed["history_count"] == 2
         assert self_reference.snapshot_history(completed["memory_key"])[-1] == {
             "role": "assistant",
             "content": "child:task-a",
         }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_include_history_can_be_enabled(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"child:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        completed = await self_reference.instance.fork(
+            "task-a",
+            include_history=True,
+        )
+
+        assert completed["status"] == "completed"
+        assert completed["history_included"] is True
+        assert isinstance(completed.get("history"), list)
+        assert completed["history_count"] == 2
+        assert completed["history"][-1] == {
+            "role": "assistant",
+            "content": "child:task-a",
+        }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_wait_can_hydrate_history_on_demand(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            await asyncio.sleep(0.01)
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"child:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        spawned = await self_reference.instance.fork_spawn("task-a")
+
+        compact = await self_reference.instance.fork_wait(spawned["fork_id"])
+        assert compact["history_included"] is False
+        assert "history" not in compact
+        assert compact["history_count"] == 2
+
+        hydrated = await self_reference.instance.fork_wait(
+            spawned["fork_id"],
+            include_history=True,
+        )
+        assert hydrated["history_included"] is True
+        assert isinstance(hydrated.get("history"), list)
+        assert hydrated["history_count"] == 2
+        assert hydrated["history"][-1] == {
+            "role": "assistant",
+            "content": "child:task-a",
+        }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_wait_all_can_hydrate_history_on_demand(self) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def fake_agent(message: str, history=None):
+            await asyncio.sleep(0.01)
+            return (
+                f"done:{message}",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": f"child:{message}"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        first = await self_reference.instance.fork_spawn("task-a")
+        second = await self_reference.instance.fork_spawn("task-b")
+        all_results = await self_reference.instance.fork_wait_all(
+            [first["fork_id"], second["fork_id"]],
+            include_history=True,
+        )
+
+        assert set(all_results.keys()) == {first["fork_id"], second["fork_id"]}
+        assert all(
+            result["history_included"] is True for result in all_results.values()
+        )
+        assert all(result["history_count"] == 2 for result in all_results.values())
 
     @pytest.mark.asyncio
     async def test_instance_fork_wait_all_collects_spawned_children(self) -> None:
@@ -310,7 +461,7 @@ class TestSelfReferenceInstanceProxy:
         assert all(result["status"] == "completed" for result in all_results.values())
 
     @pytest.mark.asyncio
-    async def test_instance_fork_emits_child_stream_events(self) -> None:
+    async def test_instance_fork_emits_lifecycle_events_only(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
@@ -340,25 +491,14 @@ class TestSelfReferenceInstanceProxy:
         )
 
         event_names = [name for name, _ in emitter.events]
-        assert "selfref_fork_stream_open" in event_names
-        assert "selfref_fork_stream_delta" in event_names
-        assert "selfref_fork_stream_close" in event_names
-
-        delta_texts = [
-            payload.get("text")
-            for name, payload in emitter.events
-            if name == "selfref_fork_stream_delta"
-        ]
-        assert delta_texts == ["alpha ", "beta\n", "done:task-a"]
-
-        for name, payload in emitter.events:
-            if not name.startswith("selfref_fork_stream"):
-                continue
-            assert payload.get("fork_id") == result["fork_id"]
-            assert payload.get("memory_key") == result["memory_key"]
+        assert "selfref_fork_start" in event_names
+        assert "selfref_fork_end" in event_names
+        assert "selfref_fork_stream_open" not in event_names
+        assert "selfref_fork_stream_delta" not in event_names
+        assert "selfref_fork_stream_close" not in event_names
 
     @pytest.mark.asyncio
-    async def test_instance_fork_stream_close_marks_error_when_child_fails(
+    async def test_instance_fork_emits_error_when_child_fails(
         self,
     ) -> None:
         self_reference = SelfReference()
@@ -379,21 +519,6 @@ class TestSelfReferenceInstanceProxy:
                 "task-a",
                 _event_emitter=emitter,
             )
-
-        delta_texts = [
-            payload.get("text")
-            for name, payload in emitter.events
-            if name == "selfref_fork_stream_delta"
-        ]
-        assert delta_texts == ["partial"]
-
-        close_events = [
-            payload
-            for name, payload in emitter.events
-            if name == "selfref_fork_stream_close"
-        ]
-        assert len(close_events) == 1
-        assert close_events[0].get("status") == "error"
 
         error_events = [
             payload for name, payload in emitter.events if name == "selfref_fork_error"

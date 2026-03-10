@@ -16,6 +16,12 @@ from SimpleLLMFunc.self_reference import SelfReference
 from SimpleLLMFunc.tool import Tool
 
 
+_MUST_PROMPT_BLOCK = "<must_principles>"
+_MUST_PROMPT_RULE = (
+    "Never use chat-style XML text in assistant messages to invoke tools"
+)
+
+
 class _DummyObservation:
     """Simple context manager used to stub Langfuse observations."""
 
@@ -113,10 +119,25 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
 
     assert repl.namespace.get("self_reference") is None
     assert captured_system_prompt is not None
-    assert "[Runtime Primitive Contract]" in captured_system_prompt
-    assert "[Tool Best Practices]" in captured_system_prompt
+    assert "[Runtime Primitive Contract]" not in captured_system_prompt
+    assert "<tool_best_practices>" in captured_system_prompt
     assert "execute_code" in captured_system_prompt
+    assert "<runtime_primitive_contract>" in captured_system_prompt
     assert "runtime.list_primitives()" in captured_system_prompt
+    assert "runtime.list_primitives(prefix='...')" in captured_system_prompt
+    assert "runtime.get_primitive_spec(name)" in captured_system_prompt
+    assert "runtime.list_primitive_specs(names=[...])" in captured_system_prompt
+    assert _MUST_PROMPT_BLOCK in captured_system_prompt
+    assert _MUST_PROMPT_RULE in captured_system_prompt
+    assert "永远不要" not in captured_system_prompt
+    assert "必须通过模型原生" not in captured_system_prompt
+    assert captured_system_prompt.index(
+        "<tool_best_practices>"
+    ) < captured_system_prompt.index("test agent")
+    assert captured_system_prompt.rfind(
+        _MUST_PROMPT_BLOCK
+    ) > captured_system_prompt.index("test agent")
+    assert "Mounted primitive summary:" not in captured_system_prompt
     assert "Use memory key" not in captured_system_prompt
 
 
@@ -189,11 +210,20 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     assert self_reference.get_agent_instance() is agent
     assert self_reference.list_history_keys() == ["agent"]
     assert captured_system_prompt is not None
-    assert "[Runtime Primitive Contract]" in captured_system_prompt
-    assert "Self-reference best practices:" in captured_system_prompt
-    assert "Each layer focuses on planning for its own scope" in captured_system_prompt
-    assert 'Default history key is "agent"' in captured_system_prompt
-    assert "runtime.selfref.history.count:" in captured_system_prompt
+    assert "[Runtime Primitive Contract]" not in captured_system_prompt
+    assert "<tool_best_practices>" in captured_system_prompt
+    assert "<runtime_primitive_contract>" in captured_system_prompt
+    assert "<progressive_disclosure>" in captured_system_prompt
+    assert "runtime.get_primitive_spec(name)" in captured_system_prompt
+    assert "do not dump full primitive spec lists" in captured_system_prompt
+    assert "<spec_rule>For each primitive" in captured_system_prompt
+    assert "<fork_result_safety>" in captured_system_prompt
+    assert "NEVER print raw fork result dicts" in captured_system_prompt
+    assert "Do not treat wait_all result as a list" in captured_system_prompt
+    assert _MUST_PROMPT_BLOCK in captured_system_prompt
+    assert _MUST_PROMPT_RULE in captured_system_prompt
+    assert "<active_selfref_key>agent</active_selfref_key>" in captured_system_prompt
+    assert "Mounted primitive summary:" not in captured_system_prompt
 
 
 @pytest.mark.asyncio
@@ -724,7 +754,10 @@ async def test_llm_chat_uses_function_name_as_default_self_reference_key() -> No
     assert self_reference.list_history_keys() == ["agent"]
     assert self_reference.snapshot_history("agent") == history
     assert captured_system_prompt is not None
-    assert captured_system_prompt == "test agent"
+    assert "test agent" in captured_system_prompt
+    assert _MUST_PROMPT_BLOCK in captured_system_prompt
+    assert _MUST_PROMPT_RULE in captured_system_prompt
+    assert captured_system_prompt.strip().endswith("</must_principles>")
     assert "[Runtime Primitive Contract]" not in captured_system_prompt
 
 
@@ -818,6 +851,8 @@ async def test_llm_chat_persists_runtime_system_prompt_across_turns() -> None:
     assert len(observed_system_prompts) == 2
     assert "docstring system" in observed_system_prompts[0]
     assert "runtime system" in observed_system_prompts[1]
+    assert _MUST_PROMPT_BLOCK in observed_system_prompts[0]
+    assert _MUST_PROMPT_BLOCK in observed_system_prompts[1]
     assert "[Runtime Primitive Contract]" not in observed_system_prompts[0]
     assert "[Runtime Primitive Contract]" not in observed_system_prompts[1]
     assert history[0] == {"role": "system", "content": "runtime system"}
@@ -914,6 +949,8 @@ async def test_append_system_prompt_persists_without_contract_pollution() -> Non
     assert call_count == 2
     assert len(observed_system_prompts) == 2
     assert "Preference A" in observed_system_prompts[1]
+    assert _MUST_PROMPT_BLOCK in observed_system_prompts[0]
+    assert _MUST_PROMPT_BLOCK in observed_system_prompts[1]
     assert "[Runtime Primitive Contract]" not in observed_system_prompts[1]
 
     persisted_system_prompt = self_reference.memory["agent_main"].get_system_prompt()
@@ -922,7 +959,7 @@ async def test_append_system_prompt_persists_without_contract_pollution() -> Non
 
 @pytest.mark.asyncio
 async def test_llm_chat_deduplicates_runtime_primitive_contract_prompt() -> None:
-    """Auto-added runtime contract should not duplicate across turns."""
+    """Runtime guidance should stay deduplicated in Tool Best Practices."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
     self_reference = SelfReference()
@@ -994,10 +1031,14 @@ async def test_llm_chat_deduplicates_runtime_primitive_contract_prompt() -> None
             pass
 
     assert len(observed_system_prompts) == 2
-    assert observed_system_prompts[0].count("[Runtime Primitive Contract]") == 1
-    assert observed_system_prompts[1].count("[Runtime Primitive Contract]") == 1
-    assert observed_system_prompts[0].count("[Tool Best Practices]") == 1
-    assert observed_system_prompts[1].count("[Tool Best Practices]") == 1
+    assert observed_system_prompts[0].count("[Runtime Primitive Contract]") == 0
+    assert observed_system_prompts[1].count("[Runtime Primitive Contract]") == 0
+    assert observed_system_prompts[0].count("<tool_best_practices>") == 1
+    assert observed_system_prompts[1].count("<tool_best_practices>") == 1
+    assert observed_system_prompts[0].count("<runtime_primitive_contract>") == 1
+    assert observed_system_prompts[1].count("<runtime_primitive_contract>") == 1
+    assert observed_system_prompts[0].count(_MUST_PROMPT_BLOCK) == 1
+    assert observed_system_prompts[1].count(_MUST_PROMPT_BLOCK) == 1
 
 
 @pytest.mark.asyncio
@@ -1073,3 +1114,4 @@ async def test_llm_chat_seeds_system_prompt_into_empty_self_reference_memory() -
     assert "docstring system" in seeded_system_prompt
     assert "[Runtime Primitive Contract]" not in seeded_system_prompt
     assert "[SelfReference Memory Contract]" not in seeded_system_prompt
+    assert _MUST_PROMPT_BLOCK not in seeded_system_prompt

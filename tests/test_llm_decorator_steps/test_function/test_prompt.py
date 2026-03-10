@@ -211,6 +211,6 @@ class TestBuildInitialPrompts:
 
         system_prompt = result[0]["content"]
         assert isinstance(system_prompt, str)
-        assert "[Tool Best Practices]" in system_prompt
+        assert "<tool_best_practices>" in system_prompt
         assert "search_docs" in system_prompt
         assert "Return concise evidence snippets." in system_prompt

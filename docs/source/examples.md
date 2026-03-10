@@ -154,7 +154,7 @@ poetry run python examples/runtime_primitives_basic_example.py
 Recommended single entry for runtime self-reference workflow:
 
 - One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
-- `llm_chat` appends runtime primitive guidance automatically
+- `llm_chat` injects runtime primitive guidance through `Tool Best Practices` (when `PyRepl` is mounted)
 - Forked contexts inherit parent memory snapshot from the same selfref key
 - Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
 

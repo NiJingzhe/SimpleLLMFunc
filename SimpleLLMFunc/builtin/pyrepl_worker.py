@@ -179,7 +179,7 @@ class _PyReplWorker:
 
     def _new_cell_filename(self) -> str:
         self._cell_counter += 1
-        return f"<pyrepl-cell-{self._cell_counter}>"
+        return f"pyrepl-cell-{self._cell_counter}"
 
     @staticmethod
     def _cache_source(filename: str, code: str) -> None:
@@ -251,9 +251,7 @@ class _PyReplWorker:
                     user_traceback += "\n"
                 user_traceback += exception_line
 
-        full_traceback = "".join(
-            traceback.format_exception(type(exc), exc, exc.__traceback__)
-        ).rstrip()
+        full_traceback = ""
 
         summary_lines = [f"{error_type}: {raw_message}"]
         if line_no is not None:

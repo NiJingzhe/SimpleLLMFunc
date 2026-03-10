@@ -23,7 +23,7 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["qwen/qwen3.5-397b-a17b"]
+    return models["openrouter"]["minimax/minimax-m2.5"]
 
 
 llm = load_llm()

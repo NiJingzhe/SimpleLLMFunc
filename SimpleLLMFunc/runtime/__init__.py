@@ -6,6 +6,7 @@ from .primitives import (
     PrimitiveParameterSpec,
     PrimitiveRegistry,
     PrimitiveSpec,
+    primitive_spec,
 )
 from .builtin_self_reference import register_self_reference_primitives
 
@@ -15,5 +16,6 @@ __all__ = [
     "PrimitiveParameterSpec",
     "PrimitiveRegistry",
     "PrimitiveSpec",
+    "primitive_spec",
     "register_self_reference_primitives",
 ]

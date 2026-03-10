@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, Union
 
 
 class PrimitiveTransport(Protocol):
@@ -64,18 +64,37 @@ class WorkerRuntimeProxy:
             kwargs=kwargs,
         )
 
-    def list_primitives(self) -> list[str]:
+    def list_primitives(self, prefix: Optional[str] = None) -> list[str]:
         """List primitive names from host registry."""
 
-        result = self.call("runtime.list_primitives")
+        call_kwargs: dict[str, Any] = {}
+        if prefix is not None:
+            call_kwargs["prefix"] = prefix
+
+        result = self.call("runtime.list_primitives", **call_kwargs)
         if isinstance(result, list):
             return [str(item) for item in result]
         return []
 
-    def list_primitive_specs(self) -> list[dict[str, Any]]:
-        """List structured primitive specs from host registry."""
+    def list_primitive_specs(
+        self,
+        names: Optional[list[str]] = None,
+        prefix: Optional[str] = None,
+        format: str = "xml",
+    ) -> Union[list[dict[str, Any]], str]:
+        """List primitive specs from host registry as dict payloads or XML."""
 
-        result = self.call("runtime.list_primitive_specs")
+        call_kwargs: dict[str, Any] = {}
+        if names is not None:
+            call_kwargs["names"] = names
+        if prefix is not None:
+            call_kwargs["prefix"] = prefix
+        if isinstance(format, str):
+            call_kwargs["format"] = format
+
+        result = self.call("runtime.list_primitive_specs", **call_kwargs)
+        if isinstance(result, str):
+            return result
         if not isinstance(result, list):
             return []
 
@@ -101,6 +120,40 @@ class WorkerRuntimeProxy:
             specs.append(normalized_item)
 
         return specs
+
+    def get_primitive_spec(
+        self,
+        name: str,
+        *,
+        format: str = "xml",
+    ) -> Union[dict[str, Any], str]:
+        """Get one primitive spec by exact primitive name as dict or XML."""
+
+        call_kwargs: dict[str, Any] = {}
+        if isinstance(format, str):
+            call_kwargs["format"] = format
+
+        result = self.call("runtime.get_primitive_spec", name, **call_kwargs)
+        if isinstance(result, str):
+            return result
+        if not isinstance(result, dict):
+            return {}
+
+        raw_name = result.get("name")
+        if not isinstance(raw_name, str):
+            return {}
+
+        normalized_item: dict[str, Any] = {"name": raw_name}
+        for key, value in result.items():
+            if key == "name":
+                continue
+            if isinstance(key, str):
+                normalized_item[key] = value
+
+        if not isinstance(normalized_item.get("description"), str):
+            normalized_item["description"] = ""
+
+        return normalized_item
 
     def list_backends(self) -> list[str]:
         """List registered runtime backend names."""

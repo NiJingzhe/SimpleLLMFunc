@@ -10,7 +10,7 @@ What this example demonstrates:
 4. Forked context inherits memory snapshot from current selfref key.
 
 Try prompts:
-- "Use execute_code to print runtime.list_primitive_specs()"
+- "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.wait')"
 - "Append a durable preference with runtime.selfref.history.append_system_prompt"
 - "Remember a note in memory, then read it back"
 - "Split this task into two forks and merge their results"
@@ -24,11 +24,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-from SimpleLLMFunc import OpenAICompatible, llm_chat, tui
+from SimpleLLMFunc import OpenAICompatible, llm_chat
 from SimpleLLMFunc.builtin import PyRepl, SelfReference
 from SimpleLLMFunc.hooks.events import CustomEvent
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.utils.tui import ToolRenderSnapshot
+from SimpleLLMFunc.utils.stdio import stdio
 
 
 MEMORY_KEY = "agent_main"
@@ -93,7 +94,7 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["qwen/qwen3.5-397b-a17b"]
+    return models["openrouter"]["minimax/minimax-m2.5"]
 
 
 llm = load_llm()
@@ -102,7 +103,7 @@ repl = PyRepl()
 repl.install_primitive_pack("selfref", backend=self_reference)
 
 
-@tui(custom_event_hook=[local_debug_event_hook], title="Unified Selfref Agent")  # type: ignore
+@stdio(custom_event_hook=[local_debug_event_hook])  # type: ignore
 @llm_chat(
     llm_interface=llm,
     toolkit=[*repl.toolset],
@@ -111,38 +112,58 @@ repl.install_primitive_pack("selfref", backend=self_reference)
     self_reference_key=MEMORY_KEY,
 )
 async def agent(message: str, history: HistoryList):
-    """You are a practical coding assistant with one persistent Python REPL.
+    """
+    <WHO ARE YOU>
+    You are a practical coding assistant with one persistent Python REPL.
+    </WHO ARE YOU>
+    
+    <HOW YOU SHOULD ACT>
+    Planning and execution policy:
+    - Start with a short plan: objective, assumptions, milestones, deliverables.
+    - Separate tasks into dependency levels before coding.
+    - Execute dependent steps sequentially; execute independent steps in parallel.
+    - Re-plan after each milestone using latest evidence from files and tool output.
 
-    Runtime selfref guidance:
-    - Use runtime.list_primitives() and runtime.list_primitive_specs() for discovery.
-    - Use runtime.selfref.history.* for durable memory operations.
-    - Use runtime.selfref.fork.* for self-fork delegation when useful.
-    - Your memory key is "agent_main".
-    - Do not read or write any other memory key.
+    Dependency analysis and parallelism:
+    - Task A depends on Task B only if A needs B artifacts (files, symbols, outputs).
+    - Tasks that touch disjoint files/modules and have no data dependency can run in parallel.
+    - If uncertain about dependency, treat as dependent first, then relax to parallel when proven safe.
+
+    Fork policy:
+    - Fork only when a subtask is concrete, isolated, and verifiable.
+    - Do not fork tiny trivial work that is faster inline.
+    - Use ``fork.spawn`` for independent subtasks, then ``fork.wait``/``fork.wait_all`` to collect.
+    - ``fork.wait_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()``/``.values()``.
+
+    Sub-agent task contract (must be explicit):
+    - Always include: goal, scope, inputs, required outputs, and acceptance checks.
+    - Define a strict stop boundary (what NOT to do) to prevent extra work.
+    - Ask sub-agents to return concise summaries and file paths, not long transcripts.
+
+    FS-first workflow:
+    - Store intermediate findings/results in files when content is long or reusable.
+    - Prefer passing file paths between steps/forks instead of copying long text into chat.
+    - For large artifacts, write summaries plus pointers to exact files/sections.
+
+    Partial reading policy:
+    - Never read entire large content by default.
+    - Use grep/rg to locate relevant regions first, then read focused slices.
+    - Use small Python snippets for targeted extraction (line ranges, matched blocks, structured fields).
+
+    Output discipline:
+    - Use ``print`` for checkpoints, key metrics, and short verification outputs.
+    - Do not print full dicts, full histories, or very long file contents.
+    - Print only necessary fields and brief summaries (counts, statuses, short excerpts).
+
+    Runtime safety constraints:
+    - Your memory key is "agent_main"; do not read or write any other memory key.
     - Never reassign the ``runtime`` variable.
-
-    Fork usage patterns from execute_code:
-    - Blocking fork:
-      fork_result = runtime.selfref.fork.run("one concrete executable task")
-    - Concurrent fork:
-      handle = runtime.selfref.fork.spawn("task A")
-      fork_result = runtime.selfref.fork.wait(handle["fork_id"])
-    - Multi-fork wait:
-      handles = [runtime.selfref.fork.spawn("task A"), runtime.selfref.fork.spawn("task B")]
-      fork_results = runtime.selfref.fork.wait_all([item["fork_id"] for item in handles])
-
-    Execution notes:
-    - Use execute_code for memory/fork operations.
     - REPL state is persistent across calls.
-    - Write direct snippets; never use ``if __name__ == "__main__":`` in REPL code.
-    - ``input()`` is supported when interactive values are needed.
-    - Forgetting memory is not ``reset_repl``.
-    - ``reset_repl`` only clears REPL variables; forget memory with
-      ``runtime.selfref.history.delete`` / ``runtime.selfref.history.replace`` /
-      ``runtime.selfref.history.clear``.
+    - Forgetting memory is not ``reset_repl``; ``reset_repl`` only clears REPL variables.
 
     Response style:
     - Clear, concise, action-oriented.
+    </HOW YOU SHOULD ACT>
     """
 
 
