@@ -8,7 +8,6 @@ SimpleLLMFunc 框架已集成 Langfuse 可观测性平台，支持对 LLM 生成
 - **工具调用观测**: 追踪工具调用的参数、执行结果和性能指标
 - **嵌套跨度支持**: 支持复杂的多层调用链追踪
 - **流式响应支持**: 兼容流式和非流式 LLM 响应
-- **优雅降级**: 在 Langfuse 不可用时自动禁用，不影响核心功能
 
 ## 安装和配置
 
@@ -35,13 +34,15 @@ pip install langfuse
 ```bash
 export LANGFUSE_PUBLIC_KEY="your_public_key"
 export LANGFUSE_SECRET_KEY="your_secret_key"
-export LANGFUSE_HOST="https://cloud.langfuse.com"  # 可选
-export LANGFUSE_ENABLED="True"  # 可选
+export LANGFUSE_BASE_URL="https://cloud.langfuse.com"  # 可选
+export LANGFUSE_ENABLED="True"  # 可选（当前实现不会自动禁用调用）
 ```
 
 ### 4. 初始化观测系统
 
 SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse：
+
+> 提示：当前实现不会根据 `LANGFUSE_ENABLED` 自动跳过观测调用；请确保 key 可用，或在应用层自行控制是否启用。
 
 ```python
 # 只需设置环境变量，框架会自动处理 Langfuse 连接
@@ -67,7 +68,7 @@ from SimpleLLMFunc.observability import langfuse_config, get_langfuse_client
 
 # 获取配置对象
 config = langfuse_config
-print(f"Langfuse 已启用: {config.enabled}")
+print(f"Langfuse 已启用: {config.LANGFUSE_ENABLED}")
 
 # 获取 Langfuse 客户端（用于高级场景）
 client = get_langfuse_client()
@@ -194,8 +195,8 @@ Function Call (Span)
 |--------|------|--------|------|
 | `LANGFUSE_PUBLIC_KEY` | Langfuse 公钥 | - | 是 |
 | `LANGFUSE_SECRET_KEY` | Langfuse 私钥 | - | 是 |
-| `LANGFUSE_HOST` | Langfuse 服务器地址 | `https://cloud.langfuse.com` | 否 |
-| `LANGFUSE_ENABLED` | 是否启用观测 | `true` | 否 |
+| `LANGFUSE_BASE_URL` | Langfuse 服务器地址 | `https://cloud.langfuse.com` | 否 |
+| `LANGFUSE_ENABLED` | 是否启用观测（当前实现不强制） | `true` | 否 |
 
 ### 高级配置
 
@@ -207,7 +208,7 @@ import os
 # 在导入 SimpleLLMFunc 之前设置环境变量
 os.environ["LANGFUSE_PUBLIC_KEY"] = "your_public_key"
 os.environ["LANGFUSE_SECRET_KEY"] = "your_secret_key"
-os.environ["LANGFUSE_HOST"] = "https://cloud.langfuse.com"
+os.environ["LANGFUSE_BASE_URL"] = "https://cloud.langfuse.com"
 os.environ["LANGFUSE_ENABLED"] = "true"
 
 # 然后导入并使用 SimpleLLMFunc
@@ -229,6 +230,8 @@ export LANGFUSE_ENABLED="true"
 export LANGFUSE_PUBLIC_KEY="prod_public_key"
 export LANGFUSE_SECRET_KEY="prod_secret_key"
 ```
+
+> 说明：当前版本不会自动读取 `LANGFUSE_ENABLED` 来跳过观测调用。如需按环境开关，请在应用层自行判断。
 
 ### 2. 错误处理
 
@@ -269,7 +272,7 @@ logging.getLogger("SimpleLLMFunc").setLevel(logging.INFO)
    ```
    - 检查网络连接
    - 验证 API 密钥是否正确
-   - 确认 LANGFUSE_HOST 设置正确
+   - 确认 LANGFUSE_BASE_URL 设置正确
 
 3. **数据未显示**
    - 检查 Langfuse 仪表板的项目设置

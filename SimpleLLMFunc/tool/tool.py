@@ -6,6 +6,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Sequence,
     Union,
     Callable,
     get_type_hints,
@@ -56,9 +57,15 @@ class Tool(ABC):
         name: str,
         description: str,
         func: Optional[Callable[..., Awaitable[Any]]] = None,
+        best_practices: Optional[Sequence[str]] = None,
+        prompt_injection_builder: Optional[
+            Callable[[Dict[str, Any]], Optional[str]]
+        ] = None,
     ):
         self.name = name
         self.description = description
+        self.best_practices = self._normalize_best_practices(best_practices)
+        self._prompt_injection_builder = prompt_injection_builder
         if func is not None and not inspect.iscoroutinefunction(func):
             func_name = getattr(func, "__name__", repr(func))
             raise TypeError(
@@ -66,6 +73,53 @@ class Tool(ABC):
             )
         self.func = func
         self.parameters = self._extract_parameters() if func else []
+
+    def build_system_prompt_injection(
+        self,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
+        """Return optional tool-owned system-prompt guidance text."""
+
+        builder = self._prompt_injection_builder
+        if builder is None:
+            return None
+
+        payload = context if isinstance(context, dict) else {}
+        rendered = builder(payload)
+        if not isinstance(rendered, str):
+            return None
+
+        normalized = rendered.strip()
+        return normalized or None
+
+    @staticmethod
+    def _normalize_best_practices(
+        best_practices: Optional[Sequence[str]],
+    ) -> List[str]:
+        if not best_practices:
+            return []
+
+        normalized: List[str] = []
+        seen: set[str] = set()
+        for item in best_practices:
+            if not isinstance(item, str):
+                continue
+            text = item.strip()
+            if not text or text in seen:
+                continue
+            normalized.append(text)
+            seen.add(text)
+        return normalized
+
+    @property
+    def tool_spec(self) -> Dict[str, Any]:
+        """Structured prompt metadata used by decorator-level injection."""
+
+        return {
+            "name": self.name,
+            "description": self.description,
+            "best_practices": list(self.best_practices),
+        }
 
     def _extract_parameters(self) -> List[Parameter]:
         """
@@ -295,7 +349,7 @@ class Tool(ABC):
 
     @staticmethod
     def serialize_tools(
-        tools: List[Tool | Callable[..., Awaitable[Any]]]
+        tools: List[Tool | Callable[..., Awaitable[Any]]],
     ) -> List[Dict[str, Any]]:
         """
         将多个工具序列化为OpenAI工具列表
@@ -332,7 +386,12 @@ T = TypeVar("T")
 
 
 def tool(
-    name: str, description: str
+    name: str,
+    description: str,
+    best_practices: Optional[Sequence[str]] = None,
+    prompt_injection_builder: Optional[
+        Callable[[Dict[str, Any]], Optional[str]]
+    ] = None,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """
     工具装饰器，用于将函数转换为Tool对象。
@@ -345,7 +404,7 @@ def tool(
 
     ## 一个工具函数支持的传入参数类型：
     - **基本类型**: str, int, float, bool
-    - **复合类型**: List[T], Dict[K, V]  
+    - **复合类型**: List[T], Dict[K, V]
     - **可选类型**: Optional[T], Union[T, None]
     - **Pydantic模型**: 继承自BaseModel的类，会自动解析为JSON Schema
     - **多模态类型**: ImgPath（本地图片）, ImgUrl（网络图片）, Text（文本）
@@ -353,7 +412,7 @@ def tool(
 
     ## 一个工具函数支持的返回值类型：
     - **基本类型**: str, int, float, bool, dict, list等可序列化类型
-    - **多模态返回**: 
+    - **多模态返回**:
       - ImgPath: 返回本地图片路径，用于生成图表、处理后的图片等
       - ImgUrl: 返回网络图片URL，用于搜索到的图片、在线资源等
       - Tuple[str, ImgPath]: 返回说明文本和图片的组合
@@ -371,6 +430,10 @@ def tool(
     Args:
         name: 工具名称，在LLM工具调用中使用
         description: 工具简短描述，更详细的内容可以在被装饰函数的docstring中给出
+        best_practices: 可选最佳实践提示，会被 llm_chat / llm_function
+            自动注入到 system prompt。
+        prompt_injection_builder: 可选注入器，接收上下文字典并返回
+            一段要拼接进 system prompt 的工具专属引导文本。
 
     Returns:
         装饰器函数，保持原函数功能的同时添加_tool属性
@@ -390,11 +453,11 @@ def tool(
     async def generate_map(location: Location, zoom: int = 10) -> ImgPath:
             '''
             根据位置信息生成地图图片
-            
+
             Args:
                 location: 位置坐标信息
                 zoom: 地图缩放级别，默认为10
-                
+
             Returns:
                 生成的地图图片路径
             '''
@@ -409,11 +472,11 @@ def tool(
         ) -> str:
             '''
             处理多个图片文件
-            
+
             Args:
                 local_images: 本地图片路径列表（LLM传递字符串数组，自动转换为ImgPath对象列表）
                 remote_images: 网络图片URL列表（LLM传递字符串数组，自动转换为ImgUrl对象列表）
-                
+
             Returns:
                 处理结果描述
             '''
@@ -428,11 +491,15 @@ def tool(
 
     def decorator(func: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
         if not inspect.iscoroutinefunction(func):
-            raise TypeError(
-                f"被 @tool 装饰的函数 '{func.__name__}' 必须是 async 函数"
-            )
+            raise TypeError(f"被 @tool 装饰的函数 '{func.__name__}' 必须是 async 函数")
         # 创建工具对象
-        tool_obj = Tool(name=name, description=description, func=func)
+        tool_obj = Tool(
+            name=name,
+            description=description,
+            func=func,
+            best_practices=best_practices,
+            prompt_injection_builder=prompt_injection_builder,
+        )
 
         # 保留原始函数的功能，同时附加工具对象
         setattr(func, "_tool", tool_obj)

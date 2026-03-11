@@ -6,7 +6,7 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 cd "${PROJECT_ROOT}"
 
-poetry run python examples/translate_docs_locale.py \
+poetry run python scripts/translate_docs_locale.py \
   --target-lang en \
   --source-lang zh_CN \
   --translate \

@@ -25,15 +25,46 @@ from SimpleLLMFunc.type.llm import LLMResponse, LLMStreamChunk
 # Tagged Union 类型定义
 # ============================================================================
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+
+
+@dataclass
+class EventOrigin:
+    """Normalized origin metadata for one emitted event."""
+
+    session_id: str
+    agent_call_id: str
+    event_seq: int
+    parent_agent_call_id: str | None = None
+    fork_id: str | None = None
+    fork_depth: int = 0
+    fork_seq: int | None = None
+    selfref_instance_id: str | None = None
+    source_memory_key: str | None = None
+    memory_key: str | None = None
+    tool_name: str | None = None
+    tool_call_id: str | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _default_origin() -> EventOrigin:
+    return EventOrigin(
+        session_id="legacy",
+        agent_call_id="legacy",
+        event_seq=0,
+        fork_depth=0,
+    )
 
 
 @dataclass
 class ResponseYield:
     """响应 yield - 保持现有 API
-    
+
     当 enable_event=True 时，响应通过此类型 yield 出来。
     """
+
     response: Union[LLMResponse, LLMStreamChunk, str]  # 根据 return_mode 决定
     messages: MessageList
     type: Literal["response"] = "response"  # 放在最后，因为有默认值
@@ -42,10 +73,12 @@ class ResponseYield:
 @dataclass
 class EventYield:
     """事件 yield - 新增功能
-    
+
     当 enable_event=True 时，事件通过此类型 yield 出来。
     """
+
     event: ReActEvent
+    origin: EventOrigin = field(default_factory=_default_origin)
     type: Literal["event"] = "event"  # 放在最后，因为有默认值
 
 
@@ -58,12 +91,13 @@ ReactOutput = Union[ResponseYield, EventYield]
 # 类型守卫函数
 # ============================================================================
 
+
 def is_response_yield(output: ReactOutput) -> TypeGuard[ResponseYield]:
     """类型守卫：判断是否为响应 yield
-    
+
     Args:
         output: ReactOutput 对象
-    
+
     Returns:
         如果是 ResponseYield，返回 True
     """
@@ -72,10 +106,10 @@ def is_response_yield(output: ReactOutput) -> TypeGuard[ResponseYield]:
 
 def is_event_yield(output: ReactOutput) -> TypeGuard[EventYield]:
     """类型守卫：判断是否为事件 yield
-    
+
     Args:
         output: ReactOutput 对象
-    
+
     Returns:
         如果是 EventYield，返回 True
     """
@@ -86,16 +120,17 @@ def is_event_yield(output: ReactOutput) -> TypeGuard[EventYield]:
 # 过滤器函数
 # ============================================================================
 
+
 async def responses_only(
     generator: AsyncGenerator[ReactOutput, None],
 ) -> AsyncGenerator[tuple[Any, MessageList], None]:
     """只保留响应，忽略事件
-    
+
     用于向后兼容：将 ReactOutput 转换为 (response, messages) 元组。
-    
+
     Args:
         generator: 产生 ReactOutput 的异步生成器
-    
+
     Yields:
         (response, messages) 元组，与现有 API 兼容
     """
@@ -108,10 +143,10 @@ async def events_only(
     generator: AsyncGenerator[ReactOutput, None],
 ) -> AsyncGenerator[ReActEvent, None]:
     """只保留事件，忽略响应
-    
+
     Args:
         generator: 产生 ReactOutput 的异步生成器
-    
+
     Yields:
         ReActEvent 对象
     """
@@ -125,11 +160,11 @@ async def filter_events(
     event_types: Set[ReActEventType],
 ) -> AsyncGenerator[ReActEvent, None]:
     """过滤特定类型的事件
-    
+
     Args:
         generator: 产生 ReactOutput 的异步生成器
         event_types: 要保留的事件类型集合
-    
+
     Yields:
         匹配的事件对象
     """
@@ -142,27 +177,31 @@ async def filter_events(
 # 装饰器函数
 # ============================================================================
 
+
 def with_event_observer(
     observer: Callable[[ReActEvent], Awaitable[None]],
 ):
     """装饰器：为 generator 添加事件观测器
-    
+
     使用示例：
         @with_event_observer(my_observer)
         @llm_chat(llm_interface=my_llm, enable_event=True)
         async def my_chat(message: str):
             pass
-    
+
     Args:
         observer: 异步事件处理函数
-    
+
     Returns:
         装饰器函数
     """
+
     def decorator(
-        generator_func: Callable[..., AsyncGenerator[ReactOutput, None]]
+        generator_func: Callable[..., AsyncGenerator[ReactOutput, None]],
     ) -> Callable[..., AsyncGenerator[ReactOutput, None]]:
-        async def wrapper(*args: Any, **kwargs: Any) -> AsyncGenerator[ReactOutput, None]:
+        async def wrapper(
+            *args: Any, **kwargs: Any
+        ) -> AsyncGenerator[ReactOutput, None]:
             async for output in generator_func(*args, **kwargs):
                 if is_event_yield(output):
                     try:
@@ -171,13 +210,16 @@ def with_event_observer(
                         # 事件处理失败不应影响主流程
                         pass
                 yield output
+
         return wrapper
+
     return decorator
 
 
 __all__ = [
     # Tagged Union 类型
     "ResponseYield",
+    "EventOrigin",
     "EventYield",
     "ReactOutput",
     # 类型守卫
@@ -190,4 +232,3 @@ __all__ = [
     # 装饰器
     "with_event_observer",
 ]
-

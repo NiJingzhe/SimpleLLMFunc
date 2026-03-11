@@ -14,13 +14,17 @@ from SimpleLLMFunc.base.tool_call.extraction import (
     accumulate_tool_calls_from_chunks,
     extract_tool_calls,
     extract_tool_calls_from_stream_response,
+    parse_tool_call_arguments,
+    repair_tool_call_arguments,
 )
 
 
 class TestExtractToolCalls:
     """Tests for extract_tool_calls function."""
 
-    def test_extract_single_tool_call(self, mock_chat_completion_with_tool_calls) -> None:
+    def test_extract_single_tool_call(
+        self, mock_chat_completion_with_tool_calls
+    ) -> None:
         """Test extracting single tool call."""
         result = extract_tool_calls(mock_chat_completion_with_tool_calls)
         assert len(result) == 1
@@ -84,8 +88,7 @@ class TestExtractToolCallsFromStreamResponse:
             id="call_123",
             type="function",
             function=ChoiceDeltaToolCallFunction(
-                name="test_tool",
-                arguments='{"arg": "value"}'
+                name="test_tool", arguments='{"arg": "value"}'
             ),
         )
         delta = ChoiceDelta(
@@ -205,3 +208,34 @@ class TestAccumulateToolCallsFromChunks:
         result = accumulate_tool_calls_from_chunks([])
         assert result == []
 
+    def test_accumulate_repairs_malformed_arguments(self) -> None:
+        """Test malformed arguments are repaired after accumulation."""
+        chunks = [
+            {
+                "index": 0,
+                "id": "call_123",
+                "type": "function",
+                "function": {
+                    "name": "execute_code",
+                    "arguments": '{{"code":"print(1)"}',
+                },
+            }
+        ]
+
+        result = accumulate_tool_calls_from_chunks(chunks)
+        assert len(result) == 1
+        assert result[0]["function"]["arguments"] == '{"code":"print(1)"}'
+
+
+class TestToolCallArgumentParsing:
+    """Tests for argument parsing and repair helpers."""
+
+    def test_repair_tool_call_arguments_double_opening_brace(self) -> None:
+        """Repair helper should fix duplicated leading brace."""
+        repaired = repair_tool_call_arguments('{{"code":"print(1)"}')
+        assert repaired == '{"code":"print(1)"}'
+
+    def test_parse_tool_call_arguments_with_closure(self) -> None:
+        """Closure parser should parse incomplete streaming argument payloads."""
+        parsed = parse_tool_call_arguments('{{"code":"print(', allow_closure=True)
+        assert parsed == {"code": "print("}

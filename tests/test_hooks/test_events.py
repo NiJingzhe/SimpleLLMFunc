@@ -29,6 +29,7 @@ from SimpleLLMFunc.hooks.events import (
     ToolCallEndEvent,
     ToolCallErrorEvent,
     ToolCallResult,
+    ToolCallArgumentsDeltaEvent,
     ToolCallStartEvent,
     ToolCallsBatchEndEvent,
     ToolCallsBatchStartEvent,
@@ -50,6 +51,7 @@ class TestReActEventType:
         assert ReActEventType.LLM_CALL_ERROR == "llm_call_error"
         assert ReActEventType.TOOL_CALLS_BATCH_START == "tool_calls_batch_start"
         assert ReActEventType.TOOL_CALL_START == "tool_call_start"
+        assert ReActEventType.TOOL_CALL_ARGUMENTS_DELTA == "tool_call_arguments_delta"
         assert ReActEventType.TOOL_CALL_END == "tool_call_end"
         assert ReActEventType.TOOL_CALL_ERROR == "tool_call_error"
         assert ReActEventType.TOOL_CALLS_BATCH_END == "tool_calls_batch_end"
@@ -99,9 +101,7 @@ class TestReactStartEvent:
 
     def test_react_start_event_creation(self):
         """Test creating a ReactStartEvent."""
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
         event = ReactStartEvent(
             event_type=ReActEventType.REACT_START,
             timestamp=datetime.now(timezone.utc),
@@ -122,9 +122,7 @@ class TestLLMCallStartEvent:
 
     def test_llm_call_start_event_creation(self):
         """Test creating a LLMCallStartEvent."""
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
         event = LLMCallStartEvent(
             event_type=ReActEventType.LLM_CALL_START,
             timestamp=datetime.now(timezone.utc),
@@ -179,9 +177,7 @@ class TestLLMCallEndEvent:
                 Choice(
                     finish_reason="stop",
                     index=0,
-                    message=ChatCompletionMessage(
-                        role="assistant", content="Hello"
-                    ),
+                    message=ChatCompletionMessage(role="assistant", content="Hello"),
                 )
             ],
             created=1234567890,
@@ -196,9 +192,7 @@ class TestLLMCallEndEvent:
             type="function",
             function=OpenAIFunction(name="test_tool", arguments='{"key": "value"}'),
         )
-        usage = CompletionUsage(
-            prompt_tokens=10, completion_tokens=20, total_tokens=30
-        )
+        usage = CompletionUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
 
         event = LLMCallEndEvent(
             event_type=ReActEventType.LLM_CALL_END,
@@ -227,9 +221,7 @@ class TestLLMCallErrorEvent:
     def test_llm_call_error_event_creation(self):
         """Test creating a LLMCallErrorEvent."""
         error = ValueError("Test error")
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
         event = LLMCallErrorEvent(
             event_type=ReActEventType.LLM_CALL_ERROR,
             timestamp=datetime.now(timezone.utc),
@@ -324,6 +316,29 @@ class TestToolCallEndEvent:
         assert event.success is True
 
 
+class TestToolCallArgumentsDeltaEvent:
+    """Test ToolCallArgumentsDeltaEvent."""
+
+    def test_tool_call_arguments_delta_event_creation(self):
+        """Test creating a ToolCallArgumentsDeltaEvent."""
+        event = ToolCallArgumentsDeltaEvent(
+            event_type=ReActEventType.TOOL_CALL_ARGUMENTS_DELTA,
+            timestamp=datetime.now(timezone.utc),
+            trace_id="test-trace-123",
+            func_name="test_func",
+            iteration=0,
+            tool_name="execute_code",
+            tool_call_id="call_123",
+            argname="code",
+            argcontent_delta="print(1)",
+        )
+
+        assert event.tool_name == "execute_code"
+        assert event.tool_call_id == "call_123"
+        assert event.argname == "code"
+        assert event.argcontent_delta == "print(1)"
+
+
 class TestToolCallErrorEvent:
     """Test ToolCallErrorEvent."""
 
@@ -388,9 +403,7 @@ class TestReactIterationStartEvent:
 
     def test_react_iteration_start_event_creation(self):
         """Test creating a ReactIterationStartEvent."""
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
         event = ReactIterationStartEvent(
             event_type=ReActEventType.REACT_ITERATION_START,
             timestamp=datetime.now(timezone.utc),
@@ -408,9 +421,7 @@ class TestReactIterationEndEvent:
 
     def test_react_iteration_end_event_creation(self):
         """Test creating a ReactIterationEndEvent."""
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
         event = ReactIterationEndEvent(
             event_type=ReActEventType.REACT_ITERATION_END,
             timestamp=datetime.now(timezone.utc),
@@ -435,9 +446,7 @@ class TestReactEndEvent:
         messages: MessageList = [
             ChatCompletionMessage(role="assistant", content="Hello")
         ]
-        usage = CompletionUsage(
-            prompt_tokens=10, completion_tokens=20, total_tokens=30
-        )
+        usage = CompletionUsage(prompt_tokens=10, completion_tokens=20, total_tokens=30)
         event = ReactEndEvent(
             event_type=ReActEventType.REACT_END,
             timestamp=datetime.now(timezone.utc),
@@ -506,5 +515,3 @@ class TestEventInheritance:
             assert hasattr(event, "func_name")
             assert hasattr(event, "iteration")
             assert hasattr(event, "extra")
-
-

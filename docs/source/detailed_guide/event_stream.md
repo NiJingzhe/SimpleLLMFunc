@@ -2,6 +2,8 @@
 
 事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。通过启用事件流，你可以监控 LLM 调用、工具调用、流式响应等所有关键环节，实现更精细的控制和更好的用户体验。
 
+在当前版本中，事件流还提供了统一来源元数据（`EventYield.origin`），用于稳定识别主会话与 fork 子会话。
+
 **适用范围**：事件流系统同时支持 `@llm_chat` 和 `@llm_function` 装饰器，提供统一的事件观测体验。
 
 ## 概述
@@ -173,10 +175,15 @@ from SimpleLLMFunc.hooks import ReactOutput, ResponseYield, EventYield
 ```python
 @dataclass
 class ResponseYield:
-    response: Union[LLMResponse, LLMStreamChunk, str]  # 响应内容
-    messages: MessageList  # 消息历史
+    response: Union[LLMResponse, LLMStreamChunk, str]
+    messages: MessageList
     type: Literal["response"] = "response"
 ```
+
+说明：
+
+- `llm_chat` 事件流模式中，`response` 为原始响应对象或流式 chunk
+- `llm_function` 事件流模式中，`response` 为**解析后的最终结果**（如 `str` / Pydantic 对象）
 
 ### EventYield
 
@@ -186,7 +193,41 @@ class ResponseYield:
 @dataclass
 class EventYield:
     event: ReActEvent  # 事件对象
+    origin: EventOrigin  # 事件来源（会话/分叉/工具关联元数据）
     type: Literal["event"] = "event"
+```
+
+### EventOrigin（来源元数据）
+
+`EventOrigin` 用于描述事件在调用树中的来源。常用字段如下：
+
+- `session_id`: 当前会话 ID（同一会话内稳定）
+- `agent_call_id`: 当前 agent 调用 ID
+- `parent_agent_call_id`: 父 agent 调用 ID（如果存在）
+- `event_seq`: 会话内递增事件序号
+- `fork_id`: fork 场景下的分叉 ID（主会话通常为 `None`）
+- `fork_depth`: 分叉深度（主会话通常为 `0`）
+- `fork_seq`: fork 内事件序号（若存在）
+- `selfref_instance_id`: SelfReference 实例标识（若存在）
+- `memory_key` / `source_memory_key`: selfref 记忆键上下文
+- `tool_name` / `tool_call_id`: 工具事件关联信息
+
+快速示例：
+
+```python
+from SimpleLLMFunc.hooks import is_event_yield
+
+async for output in chat("请并行处理多个子任务"):
+    if not is_event_yield(output):
+        continue
+
+    if output.origin.fork_id:
+        print(
+            f"[fork:{output.origin.fork_id} depth={output.origin.fork_depth}] "
+            f"{output.event.event_type}"
+        )
+    else:
+        print(f"[main] {output.event.event_type}")
 ```
 
 ## 事件类型
@@ -292,7 +333,22 @@ class ToolCallStartEvent(ReActEvent):
 
 **使用场景**：显示工具调用信息、记录调用参数
 
-### 8. ToolCallEndEvent
+### 8. ToolCallArgumentsDeltaEvent
+
+工具调用参数增量事件（仅流式模式）。
+
+```python
+@dataclass
+class ToolCallArgumentsDeltaEvent(ReActEvent):
+    tool_name: str
+    tool_call_id: str
+    argname: str
+    argcontent_delta: str
+```
+
+**使用场景**：在工具调用尚未开始前，增量渲染参数拼装过程（适合 TUI 实时面板）。
+
+### 9. ToolCallEndEvent
 
 单个工具调用结束事件（**关键**：立即获取结果）。
 
@@ -309,7 +365,7 @@ class ToolCallEndEvent(ReActEvent):
 
 **使用场景**：显示工具执行结果、更新 UI、记录执行时间
 
-### 9. CustomEvent
+### 10. CustomEvent
 
 工具内部主动发射的自定义事件，用于进度、日志、阶段状态等实时反馈。
 
@@ -324,7 +380,7 @@ class CustomEvent(ReActEvent):
 
 **使用场景**：在 TUI 或自定义 UI 中增量渲染工具执行过程（例如 PyRepl stdout/stderr、批处理进度）。
 
-### 10. ToolCallsBatchEndEvent
+### 11. ToolCallsBatchEndEvent
 
 工具调用批次结束事件，批次全部完成后触发。
 
@@ -340,7 +396,7 @@ class ToolCallsBatchEndEvent(ReActEvent):
 
 **使用场景**：显示批次统计、性能分析
 
-### 11. ReactIterationEndEvent
+### 12. ReactIterationEndEvent
 
 ReAct 迭代结束事件，每次迭代完成时触发。
 
@@ -354,7 +410,7 @@ class ReactIterationEndEvent(ReActEvent):
 
 **使用场景**：显示迭代统计、更新进度
 
-### 12. ReactEndEvent
+### 13. ReactEndEvent
 
 ReAct 循环结束事件，循环结束时触发。
 
@@ -371,6 +427,21 @@ class ReactEndEvent(ReActEvent):
 ```
 
 **使用场景**：显示完整统计、性能分析、保存执行记录
+
+## Fork 场景事件路由
+
+在 fork agent 场景中，事件大致分为两类：
+
+1. **标准 ReAct 事件**（如 `LLMCallStartEvent`、`ToolCallStartEvent`）
+   - 通过 `EventYield.origin.fork_id` / `fork_depth` 标识归属 fork。
+   - 适合在 UI 层按 fork 维度拆分消息流与工具卡片。
+
+2. **selfref 生命周期与流式自定义事件**（`CustomEvent`）
+   - 生命周期：`selfref_fork_start` / `selfref_fork_spawned` / `selfref_fork_end` / `selfref_fork_error`
+   - 流式文本：`selfref_fork_stream_open` / `selfref_fork_stream_delta` / `selfref_fork_stream_close`
+   - 适合展示 fork 启停状态与子任务增量输出。
+
+如果你的处理链只保留了 `ReActEvent` 对象，也可从 `event.extra["origin"]` 读取同源元数据。
 
 ## 使用示例
 
@@ -452,10 +523,10 @@ from SimpleLLMFunc.hooks import is_response_yield, is_event_yield
 
 async for output in chat("Hello"):
     if is_response_yield(output):
-        # TypeScript 会知道 output 是 ResponseYield
+        # 类型检查器会知道 output 是 ResponseYield
         print(output.response)
     elif is_event_yield(output):
-        # TypeScript 会知道 output 是 EventYield
+        # 类型检查器会知道 output 是 EventYield
         print(output.event.event_type)
 ```
 

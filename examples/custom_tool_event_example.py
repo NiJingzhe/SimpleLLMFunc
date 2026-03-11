@@ -22,7 +22,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
 
 llm = OpenAICompatible.load_from_json_file(provider_json_path)["openrouter"][
-    "qwen/qwen3.5-397b-a17b"
+    "minimax/minimax-m2.5"
 ]
 
 

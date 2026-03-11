@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from SimpleLLMFunc.utils.tui.formatters import format_tool_arguments_markdown
+from SimpleLLMFunc.utils.tui.formatters import (
+    format_custom_event_fallback,
+    format_tool_arguments_markdown,
+    format_tool_result_markdown,
+)
 
 
 def test_execute_code_arguments_render_as_python_block() -> None:
@@ -38,3 +42,28 @@ def test_execute_code_arguments_with_backticks_use_safe_fence() -> None:
 
     assert "````python" in markdown
     assert markdown.strip().endswith("````")
+
+
+def test_custom_event_fallback_handles_non_serializable_payload() -> None:
+    """Fallback rendering should not crash on non-JSON-serializable values."""
+
+    class _Opaque:
+        pass
+
+    payload = {"event": _Opaque()}
+    rendered = format_custom_event_fallback("child_progress", payload)
+
+    assert rendered.startswith("[child_progress] ")
+    assert "event" in rendered
+
+
+def test_tool_result_markdown_handles_non_serializable_values() -> None:
+    """Tool result formatter should degrade gracefully for opaque objects."""
+
+    class _Opaque:
+        pass
+
+    rendered = format_tool_result_markdown({"result": _Opaque()})
+
+    assert rendered.startswith("```json\n")
+    assert '"result"' in rendered

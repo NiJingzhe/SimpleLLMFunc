@@ -21,11 +21,13 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.6.0)
+### 更新说明 (0.7.0)
 
-🚀 **重大版本发布：PyRepl + Textual TUI + 持久化 Agent 记忆** - `SimpleLLMFunc` 现已提供基于子进程的持久化 `PyRepl`、开箱即用的 Textual `@tui`（支持 `llm_chat` 流式显示），以及面向有状态 Agent 的 `SelfReference` 持久记忆契约。
+🧠 **Runtime 原语 + SelfRef 分叉**：新增 `runtime.*` 原语发现、自引用 history/fork 原语与 `run`/`spawn`/`wait` 分叉流程。
 
-📝 **同时包含**：自定义工具事件发射、工具输入路由优化、更完整的测试覆盖，以及文档与示例的全面更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+🧭 **事件 Origin 路由**：统一事件来源元数据，并在 Textual TUI 中加入 fork 路由与可视化。
+
+📘 **文档与多语言同步**：更新文档并重新生成 EN/zh 翻译。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -288,6 +290,8 @@ SimpleLLMFunc 提供了基于 Textual + Event Stream 的终端 TUI：
 - 工具调用参数/结果面板
 - 模型与工具统计（耗时、Token）
 - 支持 `custom_event_hook` 实时更新工具输出
+- 支持基于 `origin` 的主链路/分叉链路事件路由
+- 内置 selfref fork 生命周期与流式输出可视化
 - 内置退出方式：`/exit`、`/quit`、`/q`、`Ctrl+Q`、`Ctrl+C`
 
 ```python
@@ -305,6 +309,24 @@ if __name__ == "__main__":
 ```
 
 完整示例见：`examples/tui_chat_example.py`
+
+当 `enable_event=True` 时，每个 `EventYield` 都会携带 `origin` 元数据，这在 fork 场景下尤其有用：
+
+```python
+from SimpleLLMFunc.hooks import is_event_yield
+
+async for output in agent("把任务拆成并行子任务"):
+    if not is_event_yield(output):
+        continue
+
+    if output.origin.fork_id:
+        print(
+            f"[fork:{output.origin.fork_id} depth={output.origin.fork_depth}] "
+            f"{output.event.event_type}"
+        )
+    else:
+        print(f"[main] {output.event.event_type}")
+```
 
 #### 异步原生设计
 
@@ -692,11 +714,13 @@ SimpleLLMFunc/
 │   ├── tool/                  # 工具系统
 │   │   └── tool.py            # @tool 装饰器和 Tool 基类
 │   ├── builtin/               # 内置工具
-│   │   └── pyrepl.py          # Python REPL 工具集
+│   │   ├── pyrepl.py          # Python REPL 工具集
+│   │   └── self_reference.py  # SelfReference 记忆/分叉后端
 │   ├── hooks/                 # 事件流系统
 │   │   ├── events.py          # ReAct 事件定义
 │   │   ├── stream.py          # 事件/响应流封装
-│   │   └── event_emitter.py   # 工具自定义事件发射器
+│   │   ├── event_emitter.py   # 工具自定义事件发射器
+│   │   └── event_bus.py       # 统一事件入口与 origin 元数据
 │   ├── interface/             # LLM 接口层
 │   │   ├── llm_interface.py   # 抽象基类
 │   │   ├── openai_compatible.py    # OpenAI 兼容实现
@@ -727,8 +751,8 @@ SimpleLLMFunc/
 │   ├── parallel_toolcall_example.py # 并发示例
 │   ├── multi_modality_toolcall.py   # 多模态示例
 │   ├── pyrepl_example.py            # 内置 PyRepl 示例
-│   ├── self_reference_basic_example.py # 本地 SelfReference 示例
-│   ├── tui_self_reference_example.py # TUI SelfReference 示例
+│   ├── runtime_primitives_basic_example.py # 本地 runtime memory primitive 示例
+│   ├── tui_runtime_selfref_example.py # 统一 TUI selfref 示例（memory + fork）
 │   ├── custom_tool_event_example.py # 自定义工具事件示例
 │   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例
@@ -846,6 +870,8 @@ cp env_template .env
 python examples/llm_function_pydantic_example.py
 python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
+python examples/runtime_primitives_basic_example.py
+python examples/tui_runtime_selfref_example.py
 ```
 
 ## 🤝 贡献指南
@@ -885,7 +911,7 @@ python examples/parallel_toolcall_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.6.0},
+  version = {0.7.0},
   year = {2026}
 }
 ```
