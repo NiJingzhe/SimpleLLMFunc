@@ -64,12 +64,19 @@ class WorkerRuntimeProxy:
             kwargs=kwargs,
         )
 
-    def list_primitives(self, prefix: Optional[str] = None) -> list[str]:
+    def list_primitives(
+        self,
+        prefix: Optional[str] = None,
+        *,
+        contains: Optional[str] = None,
+    ) -> list[str]:
         """List primitive names from host registry."""
 
         call_kwargs: dict[str, Any] = {}
         if prefix is not None:
             call_kwargs["prefix"] = prefix
+        if contains is not None:
+            call_kwargs["contains"] = contains
 
         result = self.call("runtime.list_primitives", **call_kwargs)
         if isinstance(result, list):
@@ -80,6 +87,7 @@ class WorkerRuntimeProxy:
         self,
         names: Optional[list[str]] = None,
         prefix: Optional[str] = None,
+        contains: Optional[str] = None,
         format: str = "xml",
     ) -> Union[list[dict[str, Any]], str]:
         """List primitive specs from host registry as dict payloads or XML."""
@@ -89,6 +97,8 @@ class WorkerRuntimeProxy:
             call_kwargs["names"] = names
         if prefix is not None:
             call_kwargs["prefix"] = prefix
+        if contains is not None:
+            call_kwargs["contains"] = contains
         if isinstance(format, str):
             call_kwargs["format"] = format
 

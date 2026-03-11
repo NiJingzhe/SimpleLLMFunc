@@ -880,11 +880,13 @@ class TestPyReplRuntimePrimitives:
         result = await repl.execute(
             "names = runtime.list_primitives()\n"
             "filtered = runtime.list_primitives(prefix='runtime.list_')\n"
+            "fork_contains = runtime.list_primitives(contains='selfref.fork.')\n"
             "print('runtime.list_primitives' in names)\n"
             "print('runtime.list_backends' in names)\n"
             "print('selfref.history.keys' in names)\n"
             "print(all(item.startswith('runtime.list_') for item in filtered))\n"
             "print('runtime.list_primitives' in filtered)\n"
+            "print(all('selfref.fork.' in item for item in fork_contains))\n"
         )
 
         assert result["success"] is True
@@ -892,6 +894,7 @@ class TestPyReplRuntimePrimitives:
             "True",
             "True",
             "False",
+            "True",
             "True",
             "True",
         ]
