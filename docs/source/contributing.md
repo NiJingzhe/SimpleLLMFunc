@@ -33,7 +33,7 @@
 
 ### 依赖项
 
-- Python 3.10 或更高版本
+- Python 3.12 或更高版本
 - Poetry (推荐的依赖管理工具)
 
 ### 安装开发依赖
@@ -56,15 +56,11 @@ TODO
 
 ### 代码风格
 
-我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python 代码风格指南，使用 [Black](https://github.com/psf/black) 格式化器自动化格式化过程：
-
-```bash
-black SimpleLLMFunc tests
-```
+我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python 代码风格指南，并遵循仓库现有格式。
 
 ### 类型注解
 
-我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 Pylint 检查类型。
+我们鼓励使用类型注解以提高代码可读性和安全性。
 
 ### 文档
 

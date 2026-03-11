@@ -15,6 +15,8 @@ SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 AP
 ### 支持的数据类型（参数类型）
 - **基本类型**: `str`, `int`, `float`, `bool`
 - **容器类型**: `List[T]`, `Dict[K, V]`
+- **多模态类型**: `Text`, `ImgPath`, `ImgUrl`
+- **多模态列表**: `List[Text]`, `List[ImgPath]`, `List[ImgUrl]`（由字符串列表自动转换）
 - **Pydantic 模型**: 自动解析模型字段和验证规则
 - **可选参数**: 支持带默认值的可选参数
 - **复杂嵌套**: 支持嵌套的容器类型和复杂对象
@@ -38,7 +40,7 @@ SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 AP
 
 ```python
 from SimpleLLMFunc import tool
-from SimpleLLMFunc.llm_decorator import ImgUrl, ImgPath
+from SimpleLLMFunc.type import ImgUrl, ImgPath
 from typing import Dict, List, Tuple, Any
 
 # 1. 基本类型返回
@@ -102,6 +104,12 @@ async def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 3. **组合类型**: 将文本和图片组合成多模态消息，LLM 可以同时看到文本说明和图片内容
 4. **错误处理**: 不支持的返回类型会自动转换为字符串格式
 
+**多模态返回的特殊处理**：
+
+- 当工具返回图片或文本+图片组合时，框架会用 **assistant + user** 的多模态消息对替代标准 `tool` 消息
+- 这是因为 OpenAI tool_call 消息无法直接携带多模态内容
+- 因此在事件流与历史中，工具调用会被折叠为一条说明性 assistant 消息与一条包含多模态内容的 user 消息
+
 **⚠️ 返回类型注意事项**:
 - 确保本地图片文件路径存在且可读
 - 网络图片 URL 应该是公开可访问的
@@ -147,7 +155,7 @@ class YourTool(Tool):
             description="工具描述"
         )
     
-    def run(self, *args, **kwargs):
+    async def run(self, *args, **kwargs):
         # 工具执行逻辑
         pass
 ```
@@ -157,6 +165,8 @@ class YourTool(Tool):
 #### @tool 装饰器参数
 - **name** (必需): 工具名称，应该简洁明了，符合函数命名规范
 - **description** (必需): 工具的简短描述，说明工具的主要功能
+- **best_practices** (可选): 工具最佳实践提示，`llm_chat` / `llm_function` 会自动注入 system prompt
+- **prompt_injection_builder** (可选): 动态注入器，接收上下文并返回一段工具专属的 system prompt 引导
 
 #### 函数要求
 - **类型标注**: 建议为所有参数添加类型标注，以便自动生成准确的 JSON Schema
@@ -356,7 +366,7 @@ async def analyze_data(
     return result
 
 # 示例5：多模态返回类型
-from SimpleLLMFunc import ImgUrl, ImgPath
+from SimpleLLMFunc.type import ImgUrl, ImgPath
 from typing import Tuple
 
 @tool(name="generate_chart", description="生成数据图表")
@@ -469,7 +479,7 @@ class WebSearchTool(Tool):
             description="在网络上搜索信息并返回相关结果"
         )
     
-    def run(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    async def run(self, query: str, max_results: int = 5) -> List[Dict[str, str]]:
         """
         执行网络搜索
         
@@ -500,7 +510,7 @@ class APICallTool(Tool):
         )
         self.api_base_url = api_base_url
     
-    def run(self, endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def run(self, endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         调用 API 端点
         
@@ -556,7 +566,7 @@ async def chat_with_tools(message: str, history: List[Dict[str, str]] | None = N
     支持工具调用的聊天助手。
     可以执行计算、搜索网络、查询天气和分析数据。
     """
-    yield "", history or []
+    pass
 
 # 使用示例
 async def main():
@@ -732,7 +742,7 @@ async def robust_image_tool(image_path: str) -> Tuple[str, ImgPath]:
 #### 多模态类型详细说明
 
 ```python
-from SimpleLLMFunc import ImgUrl, ImgPath
+from SimpleLLMFunc.type import ImgUrl, ImgPath
 
 # ImgPath 使用示例
 img_local = ImgPath(

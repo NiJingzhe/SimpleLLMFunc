@@ -12,7 +12,7 @@ SimpleLLMFunc 是一个轻量级、可配置的 LLM 应用开发框架。
     终端TUI<tui.md>
     示例代码<examples.md>
     Langfuse集成<langfuse_integration.md>
-    iPython内核<pyrepl.md>
+    PyRepl运行时<pyrepl.md>
     贡献指南<contributing.md>
 ```
 

@@ -73,7 +73,7 @@ async def chat2(message: str, history=None):
 
 > 说明：`execute_code` 默认有 600 秒活动执行超时保护。等待 `input()` 期间不会计入超时；每次 `input()` 成功回填后会重置超时计时。同时，单次 `input()` 默认 300 秒空闲超时。任一超时触发时 `success=False`，并在 `error`/`stderr` 中返回超时信息。你也可以在工具调用时传入 `timeout_seconds` 为该次执行单独设置超时。
 
-> Agent guidance in tool description (sent to model): write direct snippets instead of standalone scripts, **do not** add `if __name__ == "__main__":`, `input()` is supported, call `runtime.list_primitives()` for discovery, then `runtime.get_primitive_spec(name)` (or `runtime.list_primitive_specs(names=[...])`) for targeted contracts, and `reset_repl` does **not** delete attached memory state.
+> Agent guidance in tool description (sent to model): write direct snippets instead of standalone scripts, **do not** add `if __name__ == "__main__":`, `input()` is supported, use `runtime.list_primitives(contains="selfref.")` for discovery, then `runtime.get_primitive_spec(name)` or `runtime.list_primitive_specs(names=[...], contains="selfref.")` for targeted contracts (XML by default; use `format="dict"` only when code needs field access), and `reset_repl` does **not** delete attached memory state.
 
 **参数：**
 
@@ -114,7 +114,8 @@ async def chat2(message: str, history=None):
 示例：
 
 ```python
-result = await execute(code="for i in range(2)\n    print(i)")
+repl = PyRepl()
+result = await repl.execute(code="for i in range(2)\n    print(i)")
 if not result["success"]:
     print(result["error"])
     print(result["error_details"])
@@ -221,11 +222,9 @@ async for output in data_helper(
 
 ```python
 repl = PyRepl()
-tools = repl.toolset
-execute = next(t for t in tools if t.name == "execute_code")
 
 # 第一次调用：定义数据
-result1 = await execute(code="""
+result1 = await repl.execute(code="""
 import random
 data = [random.randint(1, 100) for _ in range(10)]
 print(f"创建了 {len(data)} 个随机数")
@@ -233,7 +232,7 @@ print(f"数据: {data}")
 """)
 
 # 第二次调用：使用之前的数据
-result2 = await execute(code="""
+result2 = await repl.execute(code="""
 mean = sum(data) / len(data)
 print(f"均值: {mean}")
 """)
@@ -295,7 +294,7 @@ async def agent(message: str, history=None):
 - `install_primitive_pack(pack_name, **options)`
 - `list_runtime_backends()` and `list_primitives()`
 - `runtime.get_primitive_spec(name)` (inside REPL) for one exact contract
-- `runtime.list_primitive_specs(names=[...], prefix="...")` (inside REPL) for filtered contract discovery: name, description, input/output, parameters, and best practices
+- `runtime.list_primitive_specs(names=[...], contains="selfref.")` (inside REPL) for filtered contract discovery: name, description, input/output, parameters, and best practices
 
 ```python
 repl = PyRepl()
@@ -460,7 +459,8 @@ async def experiment(message: str, history=None):
 ### 2. 错误处理
 
 ```python
-result = await execute(code="可能出错的代码")
+repl = PyRepl()
+result = await repl.execute(code="可能出错的代码")
 
 if not result['success']:
     print(f"执行错误: {result['error']}")
@@ -496,7 +496,8 @@ from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
 
 emitter = ToolEventEmitter()
 
-result = await execute(
+repl = PyRepl()
+result = await repl.execute(
     code="for i in range(10): print(i); import time; time.sleep(0.5)",
     event_emitter=emitter
 )

@@ -40,6 +40,8 @@ async def your_function(param1: Type1, param2: Type2) -> ReturnType:
     pass
 ```
 
+> 提示：函数体不会被执行，DocString 才是 Prompt；建议直接使用 `pass`。
+
 ### 参数说明
 
 - **llm_interface** (必需): LLM 接口实例，用于与大语言模型通信
@@ -51,7 +53,7 @@ async def your_function(param1: Type1, param2: Type2) -> ReturnType:
   - `False`: 正常执行，直接返回解析后的结果（向后兼容模式）
   - `True`: 返回一个异步生成器，yield `ReactOutput`（`ResponseYield` 或 `EventYield`）
   - 详细说明请参考 [事件流系统文档](event_stream.md)
-- ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
+- ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）；可传入 `retry_times` 控制空响应重试次数（默认 2）
 
 ### 自定义提示模板
 
@@ -135,9 +137,14 @@ result1, result2 = asyncio.run(main())
 
 #### 类型转换支持
 - 基本类型：`str`, `int`, `float`, `bool`
-- 容器类型：`List`, `Dict`, `Tuple`
+- 容器类型：`List`, `Dict`
 - Pydantic 模型
-- 自定义类型（通过 JSON 序列化）
+- 其他类型：按文本结果回退
+
+#### 输出格式约束
+
+- 简单返回类型使用纯文本约束，不要求 XML/JSON 包装
+- 复杂返回类型（Pydantic/List/Dict/Union）使用 XML Schema + 示例，模型需输出合法 XML
 
 #### 错误处理机制
 - **空响应重试**: 当 LLM 返回空内容时自动重试
@@ -553,6 +560,8 @@ asyncio.run(process_multiple_urls())
 ## 事件流使用
 
 `llm_function` 支持事件流，允许你实时观察函数执行过程中的 LLM 调用、Token 用量等信息。这对于性能监控、成本追踪和调试非常有用。
+
+> 注意：`llm_function` 本身不提供流式文本输出。即使启用事件流，`ResponseYield` 也只会在最终解析完成后返回一次结果。
 
 ### 基本用法
 

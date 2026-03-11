@@ -21,13 +21,13 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.6.0)
+### 更新说明 (0.7.0)
 
-🚀 **重大版本发布：PyRepl + Textual TUI + 持久化 Agent 记忆** - `SimpleLLMFunc` 现已提供基于子进程的持久化 `PyRepl`、开箱即用的 Textual `@tui`（支持 `llm_chat` 流式显示），以及面向有状态 Agent 的 `SelfReference` 持久记忆契约。
+🧠 **Runtime 原语 + SelfRef 分叉**：新增 `runtime.*` 原语发现、自引用 history/fork 原语与 `run`/`spawn`/`wait` 分叉流程。
 
-🧭 **事件流重构**：事件输出现在带有统一来源元数据（`EventYield.origin`），包含 `session_id`、`agent_call_id`、`fork_id`、`fork_depth`、tool 关联信息，可在自定义 UI 中稳定区分主链路与 fork 链路。
+🧭 **事件 Origin 路由**：统一事件来源元数据，并在 Textual TUI 中加入 fork 路由与可视化。
 
-📝 **同时包含**：自定义工具事件发射、工具输入路由优化、self-fork 生命周期流式事件（`selfref_fork_*`）、更完整的测试覆盖，以及文档与示例的全面更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **文档与多语言同步**：更新文档并重新生成 EN/zh 翻译。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -911,7 +911,7 @@ python examples/tui_runtime_selfref_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.6.0},
+  version = {0.7.0},
   year = {2026}
 }
 ```

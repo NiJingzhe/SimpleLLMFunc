@@ -175,10 +175,15 @@ from SimpleLLMFunc.hooks import ReactOutput, ResponseYield, EventYield
 ```python
 @dataclass
 class ResponseYield:
-    response: Union[LLMResponse, LLMStreamChunk, str]  # 响应内容
-    messages: MessageList  # 消息历史
+    response: Union[LLMResponse, LLMStreamChunk, str]
+    messages: MessageList
     type: Literal["response"] = "response"
 ```
+
+说明：
+
+- `llm_chat` 事件流模式中，`response` 为原始响应对象或流式 chunk
+- `llm_function` 事件流模式中，`response` 为**解析后的最终结果**（如 `str` / Pydantic 对象）
 
 ### EventYield
 
@@ -202,6 +207,8 @@ class EventYield:
 - `event_seq`: 会话内递增事件序号
 - `fork_id`: fork 场景下的分叉 ID（主会话通常为 `None`）
 - `fork_depth`: 分叉深度（主会话通常为 `0`）
+- `fork_seq`: fork 内事件序号（若存在）
+- `selfref_instance_id`: SelfReference 实例标识（若存在）
 - `memory_key` / `source_memory_key`: selfref 记忆键上下文
 - `tool_name` / `tool_call_id`: 工具事件关联信息
 

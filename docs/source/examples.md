@@ -83,8 +83,9 @@ async for output in chat(user_message="帮我计算 25 * 4 + 18"):
             print(f"参数: {event.arguments}")
     
     elif isinstance(output, ResponseYield):
-        # 处理响应数据
-        print(output.response, end="")
+        # 原始响应对象（流式时为 chunk）。
+        # 文本渲染建议使用 LLMChunkArriveEvent 的 accumulated_content。
+        messages = output.messages
 ```
 
 **依赖安装**：
@@ -254,19 +255,19 @@ poetry run python examples/llm_function_token_usage.py
 
 **文件**: [examples/provider.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider.json)
 
-示范 provider.json 的完整配置结构：
-- OpenAI 模型配置
-- 其他供应商的配置方式
-- API 密钥和速率限制设置
+示范 provider.json 的完整配置结构（提供商 -> 模型配置列表）：
+- `model_name` 作为索引键
+- API 密钥、重试与限流参数
+- 适配任意 OpenAI 兼容服务
 
 ### Provider 模板
 
 **文件**: [examples/provider_template.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider_template.json)
 
-提供了一个可复用的配置模板：
-- 预配置的常见 LLM 供应商
-- 最佳实践的参数设置
-- 多个 API 密钥的配置方式
+提供可复用的配置模板：
+- 多供应商示例与参数说明
+- 多密钥负载均衡
+- 限流与重试最佳实践
 
 ## 按功能分类的示例
 
