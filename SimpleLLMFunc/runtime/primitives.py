@@ -335,12 +335,15 @@ def _parse_primitive_docstring(docstring: Optional[str]) -> Dict[str, Any]:
     return payload
 
 
-def primitive_spec(
+def primitive(
     *,
     parameters: Optional[Sequence[Any]] = None,
     best_practices: Optional[Sequence[Any]] = None,
 ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
-    """Attach primitive spec metadata parsed from the handler docstring."""
+    """Attach primitive spec metadata parsed from the handler docstring.
+
+    This decorator is the canonical way to declare runtime primitive contracts.
+    """
 
     def decorator(handler: PrimitiveHandler) -> PrimitiveHandler:
         metadata = _parse_primitive_docstring(getattr(handler, "__doc__", None))
@@ -352,6 +355,16 @@ def primitive_spec(
         return handler
 
     return decorator
+
+
+def primitive_spec(
+    *,
+    parameters: Optional[Sequence[Any]] = None,
+    best_practices: Optional[Sequence[Any]] = None,
+) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
+    """Backward-compatible alias for :func:`primitive`."""
+
+    return primitive(parameters=parameters, best_practices=best_practices)
 
 
 def _extract_handler_primitive_spec(handler: PrimitiveHandler) -> Dict[str, Any]:
@@ -722,6 +735,7 @@ class PrimitiveRegistry:
 __all__ = [
     "PrimitiveCallContext",
     "PrimitiveHandler",
+    "primitive",
     "primitive_spec",
     "PrimitiveParameterSpec",
     "PrimitiveRegistry",

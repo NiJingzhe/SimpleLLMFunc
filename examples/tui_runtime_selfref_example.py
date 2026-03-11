@@ -110,6 +110,7 @@ repl.install_primitive_pack("selfref", backend=self_reference)
     stream=True,
     enable_event=True,
     self_reference_key=MEMORY_KEY,
+    temperature=1.0
 )
 async def agent(message: str, history: HistoryList):
     """

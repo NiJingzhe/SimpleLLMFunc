@@ -425,6 +425,7 @@ def llm_chat(
     stream: bool = False,
     return_mode: Literal["text", "raw"] = "text",
     enable_event: bool = False,
+    strict_signature: bool = False,
     self_reference: Optional[SelfReference] = None,
     self_reference_key: Optional[str] = None,
     **llm_kwargs: Any,
@@ -450,6 +451,16 @@ def llm_chat(
     - Decorator passes function parameters as `param_name: param_value` format to the LLM as user messages
     - `history`/`chat_history` parameters are treated specially and excluded from user messages
     - Function docstring is passed to the LLM as system prompt
+
+    ## Compatibility option: strict signature
+    This decorator historically accepts arbitrary function signatures and will serialize non-history
+    parameters into user messages. To reduce agent/tooling ambiguity and enable a stable self-fork
+    call contract, you may enable `strict_signature=True` to enforce a canonical signature:
+
+    - `async def agent(history, message: str, ...)`
+    - The first positional parameter must be one of `history` / `chat_history` (see `HISTORY_PARAM_NAMES`).
+    - The second positional parameter must be annotated as `str` (the user message).
+    - Only an optional `_template_params` keyword parameter is allowed in addition to the above.
 
     ## Conversation History Format
     ```python
@@ -478,6 +489,8 @@ def llm_chat(
         enable_event: Whether to enable event stream (default: False)
             - False: yields (response, messages) tuples (backward compatible)
             - True: yields ReactOutput (ResponseYield or EventYield)
+        strict_signature: Compatibility option (default: False). When True, enforce
+            canonical agent signature `agent(history, message: str, ...)` (see docstring).
         self_reference: Optional SelfReference shared object for agent self-referential
             memory operations. When not provided, llm_chat will try to auto-detect
             one from mounted PyRepl runtime backends in ``toolkit``.
@@ -507,6 +520,70 @@ def llm_chat(
     def decorator(
         func: Union[Callable[P, Any], Callable[P, Awaitable[Any]]],
     ) -> Callable[P, AsyncGenerator[Union[Tuple[Any, HistoryList], ReactOutput], None]]:
+        if strict_signature:
+            signature = inspect.signature(func)
+            parameters = list(signature.parameters.values())
+
+            allowed_extra_param_names = {"_template_params"}
+
+            if len(parameters) < 2:
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires function signature "
+                    "`agent(history, message: str, ...)` with at least two parameters."
+                )
+
+            if any(
+                param.kind
+                in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                )
+                for param in parameters
+            ):
+                raise TypeError(
+                    "llm_chat(strict_signature=True) does not allow *args/**kwargs. "
+                    "Use `agent(history, message: str, _template_params=None)`."
+                )
+
+            history_param = parameters[0]
+            message_param = parameters[1]
+
+            if history_param.name not in HISTORY_PARAM_NAMES:
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the first parameter to be "
+                    "`history` or `chat_history` (see HISTORY_PARAM_NAMES)."
+                )
+
+            message_annotation = message_param.annotation
+            if (
+                message_annotation is inspect.Signature.empty
+                or message_annotation is None
+                or (
+                    message_annotation is not str
+                    and not (isinstance(message_annotation, str) and message_annotation == "str")
+                )
+            ):
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the second parameter to be "
+                    "annotated as `str` for the user message, e.g. "
+                    "`async def agent(history, message: str, ...)`."
+                )
+
+            if message_param.name != "message":
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the second parameter name to be "
+                    "`message` so fork delegation can pass it by keyword."
+                )
+
+            for extra_param in parameters[2:]:
+                if extra_param.name in allowed_extra_param_names:
+                    continue
+                raise TypeError(
+                    "llm_chat(strict_signature=True) only allows an optional `_template_params` "
+                    "parameter in addition to `(history, message: str)`. "
+                    f"Unexpected parameter: {extra_param.name!r}."
+                )
+
         signature_meta = inspect.signature(func)
         docstring = func.__doc__ or ""
         func_name = func.__name__

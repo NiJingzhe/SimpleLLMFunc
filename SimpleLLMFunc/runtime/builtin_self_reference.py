@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional
 
 from SimpleLLMFunc.builtin.self_reference import SelfReference
 
-from .primitives import PrimitiveCallContext, PrimitiveRegistry, primitive_spec
+from .primitives import PrimitiveCallContext, PrimitiveRegistry, primitive
 
 
 def register_self_reference_primitives(
@@ -40,7 +40,7 @@ def register_self_reference_primitives(
         resolved_key = self_reference.resolve_history_key(key)
         return self_reference.memory[resolved_key]
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_keys(_ctx: PrimitiveCallContext) -> list[str]:
         """
         Use: List all bound self-reference history keys.
@@ -50,7 +50,7 @@ def register_self_reference_primitives(
         """
         return require_self_reference().memory.keys()
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_active_key(_ctx: PrimitiveCallContext) -> str:
         """
         Use: Resolve the active history key for the current self-reference context.
@@ -60,7 +60,7 @@ def register_self_reference_primitives(
         """
         return resolve_history_key(None)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_count(
         _ctx: PrimitiveCallContext,
         *,
@@ -76,7 +76,7 @@ def register_self_reference_primitives(
         """
         return get_history_handle(key).count()
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_all(
         _ctx: PrimitiveCallContext,
         *,
@@ -92,7 +92,7 @@ def register_self_reference_primitives(
         """
         return get_history_handle(key).all()
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_get(
         _ctx: PrimitiveCallContext,
         index: int,
@@ -110,7 +110,7 @@ def register_self_reference_primitives(
         """
         return get_history_handle(key).get(index)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_append(
         _ctx: PrimitiveCallContext,
         message: dict[str, Any],
@@ -128,7 +128,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).append(message)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_insert(
         _ctx: PrimitiveCallContext,
         index: int,
@@ -148,7 +148,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).insert(index, message)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_update(
         _ctx: PrimitiveCallContext,
         index: int,
@@ -168,7 +168,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).update(index, message)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_delete(
         _ctx: PrimitiveCallContext,
         index: int,
@@ -186,7 +186,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).delete(index)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_replace(
         _ctx: PrimitiveCallContext,
         messages: list[dict[str, Any]],
@@ -204,7 +204,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).replace(messages)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_clear(
         _ctx: PrimitiveCallContext,
         *,
@@ -220,7 +220,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).clear()
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_get_system_prompt(
         _ctx: PrimitiveCallContext,
         *,
@@ -236,7 +236,7 @@ def register_self_reference_primitives(
         """
         return get_history_handle(key).get_system_prompt()
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_set_system_prompt(
         _ctx: PrimitiveCallContext,
         text: str,
@@ -254,7 +254,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).set_system_prompt(text)
 
-    @primitive_spec()
+    @primitive()
     def selfref_history_append_system_prompt(
         _ctx: PrimitiveCallContext,
         text: str,
@@ -272,7 +272,7 @@ def register_self_reference_primitives(
         """
         get_history_handle(key).append_system_prompt(text)
 
-    @primitive_spec()
+    @primitive()
     def fork_is_bound(_ctx: PrimitiveCallContext) -> bool:
         """
         Use: Diagnostic helper for checking whether a self-reference agent callable is available for fork delegation.
@@ -315,6 +315,40 @@ def register_self_reference_primitives(
             **call_kwargs,
         )
 
+    async def fork_run_chat(
+        ctx: PrimitiveCallContext,
+        message: str,
+        *,
+        include_history: bool = False,
+        **agent_kwargs: Any,
+    ) -> dict[str, Any]:
+        call_kwargs = dict(agent_kwargs)
+        call_kwargs.pop("_event_emitter", None)
+        return await require_self_reference().instance.fork(
+            message=message,
+            _event_emitter=ctx.event_emitter,
+            include_history=include_history,
+            **call_kwargs,
+        )
+
+    async def fork_spawn_chat(
+        ctx: PrimitiveCallContext,
+        message: str,
+        **agent_kwargs: Any,
+    ) -> dict[str, Any]:
+        if "include_history" in agent_kwargs:
+            raise TypeError(
+                "selfref.fork.spawn_chat does not accept include_history; "
+                "call selfref.fork.wait(..., include_history=True) instead"
+            )
+        call_kwargs = dict(agent_kwargs)
+        call_kwargs.pop("_event_emitter", None)
+        return await require_self_reference().instance.fork_spawn(
+            message=message,
+            _event_emitter=ctx.event_emitter,
+            **call_kwargs,
+        )
+
     async def fork_wait(
         _ctx: PrimitiveCallContext,
         fork_id: str,
@@ -337,7 +371,7 @@ def register_self_reference_primitives(
             include_history=include_history,
         )
 
-    @primitive_spec()
+    @primitive()
     def selfref_fork_is_bound(_ctx: PrimitiveCallContext) -> bool:
         """
         Use: Diagnostic helper for checking whether recursive self-reference fork delegation is available.
@@ -347,7 +381,7 @@ def register_self_reference_primitives(
         """
         return fork_is_bound(_ctx)
 
-    @primitive_spec()
+    @primitive()
     async def selfref_fork_run(
         ctx: PrimitiveCallContext,
         *agent_args: Any,
@@ -371,7 +405,7 @@ def register_self_reference_primitives(
             **agent_kwargs,
         )
 
-    @primitive_spec()
+    @primitive()
     async def selfref_fork_spawn(
         ctx: PrimitiveCallContext,
         *agent_args: Any,
@@ -388,7 +422,49 @@ def register_self_reference_primitives(
         """
         return await fork_spawn(ctx, *agent_args, **agent_kwargs)
 
-    @primitive_spec()
+    @primitive()
+    async def selfref_fork_run_chat(
+        ctx: PrimitiveCallContext,
+        message: str,
+        *,
+        include_history: bool = False,
+        **agent_kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Use: Run one child chat-style self-reference agent with canonical signature and wait for its result.
+        Input: `message: str` plus keyword-only `include_history: bool = False` and `**agent_kwargs: primitive`.
+        Output: Same result shape as `selfref.fork.run`.
+        Parse: Check `status` first; then read `response` and `memory_key`. Fetch full history only when needed.
+        Parameters:
+        - message: User message string passed to the child agent as keyword argument `message=...`.
+        - include_history: When `True`, include full child history in the returned dict.
+        - **agent_kwargs: Optional fork control kwargs such as `source_memory_key` / `fork_memory_key`.
+        """
+        return await fork_run_chat(
+            ctx,
+            message,
+            include_history=include_history,
+            **agent_kwargs,
+        )
+
+    @primitive()
+    async def selfref_fork_spawn_chat(
+        ctx: PrimitiveCallContext,
+        message: str,
+        **agent_kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Use: Spawn one child chat-style self-reference agent with canonical signature asynchronously and return a handle.
+        Input: `message: str` plus `**agent_kwargs: primitive`.
+        Output: Same handle shape as `selfref.fork.spawn` (`status:'running'` with `fork_id` and `memory_key`).
+        Parse: Save `fork_id`, then call `selfref.fork.wait` / `selfref.fork.wait_all`.
+        Parameters:
+        - message: User message string passed to the child agent as keyword argument `message=...`.
+        - **agent_kwargs: Optional fork control kwargs such as `source_memory_key` / `fork_memory_key`.
+        """
+        return await fork_spawn_chat(ctx, message, **agent_kwargs)
+
+    @primitive()
     async def selfref_fork_wait(
         _ctx: PrimitiveCallContext,
         fork_id: str,
@@ -406,7 +482,7 @@ def register_self_reference_primitives(
         """
         return await fork_wait(_ctx, fork_id, include_history=include_history)
 
-    @primitive_spec()
+    @primitive()
     async def selfref_fork_wait_all(
         _ctx: PrimitiveCallContext,
         fork_ids: Optional[list[Any]] = None,
@@ -429,45 +505,36 @@ def register_self_reference_primitives(
         )
 
     selfref_best_practices = [
+        "Mental model: selfref operates on *your agent runtime state* (message memory + forked child contexts). It is not philosophical self-reference, not Python `self`, and not 'rewrite your previous answer'.",
+        "Use selfref.history.* to read/write your conversation memory (messages). Prefer appending durable preferences into the system prompt via selfref.history.append_system_prompt(...).",
+        "When `key` is omitted, selfref resolves an active memory key for the current execution context. Use selfref.history.active_key() to see which key is currently in scope.",
+        "Safety: do not assume internal data structures; only interact via runtime primitives (runtime.selfref.history.* and runtime.selfref.fork.*). Do not invent fields in message dicts.",
         "Each layer focuses on planning for its own scope; delegate concrete execution to child forks.",
-        "When tasks are independent (no content dependency), spawn forks in parallel.",
+        "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then join results (selfref.fork.wait_all).",
         "Before forking, review and trim memory; summarize irrelevant context or dump it to files.",
-        "runtime.selfref.history.clear clears non-system history only; current system prompt is preserved.",
+        "runtime.selfref.history.clear clears non-system history only; the current system prompt is preserved.",
         "Call selfref.fork.run/spawn directly; do not use selfref.fork.is_bound as routine preflight. If fork status is error, read error_type/error_message and fix call arguments.",
-        "Child args/kwargs must satisfy the current agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...), and do not invent unsupported kwargs such as goal=/scope= unless the agent actually accepts them.",
+        "Child args/kwargs must satisfy the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Do not invent unsupported kwargs such as goal=/scope= unless the agent actually accepts them.",
         "In fork prompts, define completion boundaries and require explicit acceptance criteria; prefer file-based handoff plus parent-agent messaging over dumping everything in chat.",
-        "Fork results are compact by default; use memory_key + runtime.selfref.history.* to fetch child history only when needed.",
-        "Fork result contract reminder: consume only required keys (fork_id/status/response/history_count); full child history is omitted unless include_history=True.",
+        "Fork results are compact by default (history omitted). Use include_history=True only when full child history is explicitly required; otherwise use memory_key + selfref.history.* to fetch details on demand.",
+        "Fork result contract reminder: consume only required keys (fork_id/status/response/history_count/memory_key). Full child history is omitted unless include_history=True.",
         "If a fork result status is error, inspect error_type/error_message immediately; do not assume response/history_count explain the failure.",
-        "NEVER print raw fork result dict (forbidden: print(result)); example: result = runtime.selfref.fork.wait(fid) -> read result['status'] / result['response'], and fetch full history only via runtime.selfref.fork.wait(fid, include_history=True) when truly needed.",
+        "NEVER print raw fork result dict (forbidden: print(result)). Read only the fields you need (status/response/memory_key) and fetch history explicitly when needed.",
         "After each milestone, review and reorganize memory before moving forward.",
     ]
-
-    def _optional_history_key_param() -> dict[str, Any]:
-        return {
-            "name": "key",
-            "type": "str | None",
-            "required": False,
-            "description": "Optional history key. When omitted, resolves from active selfref context.",
-            "kind": "keyword_only",
-            "default": "None",
-        }
 
     def _register_selfref_primitive(
         name: str,
         handler: Any,
-        *,
-        parameters: Optional[list[dict[str, Any]]] = None,
     ) -> None:
         registry.register(
             name,
             handler,
-            parameters=parameters or [],
             best_practices=selfref_best_practices,
             replace=replace,
         )
 
-    @primitive_spec()
+    @primitive()
     def selfref_guide(_ctx: PrimitiveCallContext) -> dict[str, Any]:
         """
         Use: Read the overview of the self-reference namespace.
@@ -478,8 +545,10 @@ def register_self_reference_primitives(
         return {
             "namespace": "selfref",
             "overview": (
-                "Self-reference primitives provide memory/history management and "
-                "recursive fork delegation for agent workflows."
+                "Selfref primitives operate on your agent runtime state: "
+                "(1) message memory/history (keyed), and "
+                "(2) recursive fork delegation to spawn/run child agent contexts. "
+                "This is not philosophical self-reference and not Python `self`."
             ),
             "best_practices": list(selfref_best_practices),
         }
@@ -488,259 +557,90 @@ def register_self_reference_primitives(
     _register_selfref_primitive(
         "selfref.guide",
         selfref_guide,
-        parameters=[],
     )
     _register_selfref_primitive(
         "selfref.history.keys",
         selfref_history_keys,
-        parameters=[],
     )
     _register_selfref_primitive(
         "selfref.history.active_key",
         selfref_history_active_key,
-        parameters=[],
     )
     _register_selfref_primitive(
         "selfref.history.count",
         selfref_history_count,
-        parameters=[_optional_history_key_param()],
     )
     _register_selfref_primitive(
         "selfref.history.all",
         selfref_history_all,
-        parameters=[_optional_history_key_param()],
     )
     _register_selfref_primitive(
         "selfref.history.get",
         selfref_history_get,
-        parameters=[
-            {
-                "name": "index",
-                "type": "int",
-                "required": True,
-                "description": "Zero-based message index.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.append",
         selfref_history_append,
-        parameters=[
-            {
-                "name": "message",
-                "type": "dict[str, Any]",
-                "required": True,
-                "description": "Message object with role/content fields.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.insert",
         selfref_history_insert,
-        parameters=[
-            {
-                "name": "index",
-                "type": "int",
-                "required": True,
-                "description": "Insert position for the new message.",
-                "kind": "positional_or_keyword",
-            },
-            {
-                "name": "message",
-                "type": "dict[str, Any]",
-                "required": True,
-                "description": "Message object with role/content fields.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.update",
         selfref_history_update,
-        parameters=[
-            {
-                "name": "index",
-                "type": "int",
-                "required": True,
-                "description": "Target message index to overwrite.",
-                "kind": "positional_or_keyword",
-            },
-            {
-                "name": "message",
-                "type": "dict[str, Any]",
-                "required": True,
-                "description": "Replacement message object.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.delete",
         selfref_history_delete,
-        parameters=[
-            {
-                "name": "index",
-                "type": "int",
-                "required": True,
-                "description": "Zero-based message index to delete.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.replace",
         selfref_history_replace,
-        parameters=[
-            {
-                "name": "messages",
-                "type": "list[dict[str, Any]]",
-                "required": True,
-                "description": "Complete replacement history message list.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.clear",
         selfref_history_clear,
-        parameters=[_optional_history_key_param()],
     )
     _register_selfref_primitive(
         "selfref.history.get_system_prompt",
         selfref_history_get_system_prompt,
-        parameters=[_optional_history_key_param()],
     )
     _register_selfref_primitive(
         "selfref.history.set_system_prompt",
         selfref_history_set_system_prompt,
-        parameters=[
-            {
-                "name": "text",
-                "type": "str",
-                "required": True,
-                "description": "New system prompt content.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.history.append_system_prompt",
         selfref_history_append_system_prompt,
-        parameters=[
-            {
-                "name": "text",
-                "type": "str",
-                "required": True,
-                "description": "Prompt suffix to append.",
-                "kind": "positional_or_keyword",
-            },
-            _optional_history_key_param(),
-        ],
     )
     _register_selfref_primitive(
         "selfref.fork.is_bound",
         selfref_fork_is_bound,
-        parameters=[],
     )
     _register_selfref_primitive(
         "selfref.fork.run",
         selfref_fork_run,
-        parameters=[
-            {
-                "name": "*agent_args",
-                "type": "Any",
-                "required": False,
-                "description": "Positional arguments forwarded to the child agent.",
-                "kind": "var_positional",
-            },
-            {
-                "name": "include_history",
-                "type": "bool",
-                "required": False,
-                "description": "When True, include full child history in result. Default False returns compact metadata.",
-                "kind": "keyword_only",
-                "default": "False",
-            },
-            {
-                "name": "**agent_kwargs",
-                "type": "Any",
-                "required": False,
-                "description": "Keyword arguments accepted by the selfref fork wrapper and/or forwarded to the child agent. Supports source_memory_key/fork_memory_key; remaining kwargs pass through to the child agent.",
-                "kind": "var_keyword",
-            },
-        ],
     )
     _register_selfref_primitive(
         "selfref.fork.spawn",
         selfref_fork_spawn,
-        parameters=[
-            {
-                "name": "*agent_args",
-                "type": "Any",
-                "required": False,
-                "description": "Positional arguments forwarded to the child agent.",
-                "kind": "var_positional",
-            },
-            {
-                "name": "**agent_kwargs",
-                "type": "Any",
-                "required": False,
-                "description": "Keyword arguments accepted by the selfref fork wrapper and/or forwarded to the child agent. Supports source_memory_key/fork_memory_key; remaining kwargs pass through to the child agent.",
-                "kind": "var_keyword",
-            },
-        ],
+    )
+    _register_selfref_primitive(
+        "selfref.fork.run_chat",
+        selfref_fork_run_chat,
+    )
+    _register_selfref_primitive(
+        "selfref.fork.spawn_chat",
+        selfref_fork_spawn_chat,
     )
     _register_selfref_primitive(
         "selfref.fork.wait",
         selfref_fork_wait,
-        parameters=[
-            {
-                "name": "fork_id",
-                "type": "str",
-                "required": True,
-                "description": "Target fork identifier returned by spawn/run.",
-                "kind": "positional_or_keyword",
-            },
-            {
-                "name": "include_history",
-                "type": "bool",
-                "required": False,
-                "description": "When True, include full child history in result. Default False returns compact metadata.",
-                "kind": "keyword_only",
-                "default": "False",
-            },
-        ],
     )
     _register_selfref_primitive(
         "selfref.fork.wait_all",
         selfref_fork_wait_all,
-        parameters=[
-            {
-                "name": "fork_ids",
-                "type": "list[str] | None",
-                "required": False,
-                "description": "Specific fork IDs to wait for. Omit to wait all pending forks.",
-                "kind": "positional_or_keyword",
-                "default": "None",
-            },
-            {
-                "name": "include_history",
-                "type": "bool",
-                "required": False,
-                "description": "When True, include full child history in each result. Default False returns compact metadata.",
-                "kind": "keyword_only",
-                "default": "False",
-            },
-        ],
     )
 
 

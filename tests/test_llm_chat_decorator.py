@@ -53,6 +53,46 @@ def test_llm_chat_binds_wrapped_agent_instance_to_self_reference() -> None:
     assert self_reference.get_agent_instance() is agent
 
 
+def test_llm_chat_strict_signature_enforces_history_message_shape() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+
+    @llm_chat(llm_interface=mock_llm, strict_signature=True)
+    async def agent(history, message: str, _template_params=None):
+        """test agent"""
+
+    assert callable(agent)
+
+
+def test_llm_chat_strict_signature_rejects_non_canonical_shapes() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+
+    with pytest.raises(TypeError, match="first parameter"):
+
+        @llm_chat(llm_interface=mock_llm, strict_signature=True)
+        async def bad_agent(message: str, history=None):
+            """bad agent"""
+
+    with pytest.raises(TypeError, match="second parameter"):
+
+        @llm_chat(llm_interface=mock_llm, strict_signature=True)
+        async def bad_agent2(history, message):
+            """bad agent"""
+
+    with pytest.raises(TypeError, match="second parameter name"):
+
+        @llm_chat(llm_interface=mock_llm, strict_signature=True)
+        async def bad_agent3(history, user_message: str):
+            """bad agent"""
+
+    with pytest.raises(TypeError, match="only allows"):
+
+        @llm_chat(llm_interface=mock_llm, strict_signature=True)
+        async def bad_agent4(history, message: str, extra: int):
+            """bad agent"""
+
+
 @pytest.mark.asyncio
 async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     """Decorator stays decoupled and does not inject self_reference by itself."""

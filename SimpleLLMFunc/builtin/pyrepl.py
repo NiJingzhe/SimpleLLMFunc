@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Union
 from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
 from SimpleLLMFunc.logger.logger_config import logger_config
 from SimpleLLMFunc.runtime import PrimitiveCallContext, PrimitiveRegistry
-from SimpleLLMFunc.runtime.primitives import primitive_spec
+from SimpleLLMFunc.runtime.primitives import primitive
 from SimpleLLMFunc.runtime.builtin_self_reference import (
     register_self_reference_primitives,
 )
@@ -293,7 +293,7 @@ class PyRepl:
             replace=True,
         )
 
-        @primitive_spec()
+        @primitive()
         def runtime_list_primitive_specs(
             _ctx: Any,
             *,
@@ -313,7 +313,7 @@ class PyRepl:
             """
             return self.list_primitive_specs(names=names, prefix=prefix, format=format)
 
-        @primitive_spec()
+        @primitive()
         def runtime_list_primitives(
             _ctx: Any,
             *,
@@ -329,7 +329,7 @@ class PyRepl:
             """
             return self._primitive_registry.list_names(prefix=prefix)
 
-        @primitive_spec()
+        @primitive()
         def runtime_get_primitive_spec(
             _ctx: Any,
             name: str,
@@ -347,7 +347,7 @@ class PyRepl:
             """
             return self.get_primitive_spec(name, format=format)
 
-        @primitive_spec()
+        @primitive()
         def runtime_list_backends(_ctx: Any) -> List[str]:
             """
             Use: List installed runtime backend packs.

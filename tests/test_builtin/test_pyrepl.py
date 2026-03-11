@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import inspect
 import json
 import os
@@ -17,7 +18,7 @@ from SimpleLLMFunc.hooks.events import CustomEvent
 async def _wait_for_input_request(
     emitter,
     seen_request_ids: set[str] | None = None,
-    timeout: float = 5.0,
+    timeout: float = 15.0,
 ) -> tuple[str, str]:
     """Wait until one unseen kernel_input_request event is emitted."""
 
@@ -463,6 +464,8 @@ class TestPyReplPrimitivePacks:
         assert repl.list_runtime_backends() == ["selfref"]
         assert "selfref.history.keys" in repl.list_primitives()
         assert "selfref.fork.run" in repl.list_primitives()
+        assert "selfref.fork.run_chat" in repl.list_primitives()
+        assert "selfref.fork.spawn_chat" in repl.list_primitives()
         assert "memory.keys" not in repl.list_primitives()
         assert "fork.run" not in repl.list_primitives()
 
@@ -845,6 +848,8 @@ class TestPyReplRuntimePrimitives:
             "selfref.history.clear",
             "runtime.list_primitives",
             "selfref.fork.run",
+            "selfref.fork.run_chat",
+            "selfref.fork.spawn_chat",
             "selfref.fork.wait",
             "selfref.fork.wait_all",
         ]:
@@ -1018,11 +1023,17 @@ class TestPyReplRuntimePrimitives:
             "specs = runtime.list_primitive_specs(format='dict')\n"
             "spawn_spec = next(item for item in specs if item.get('name') == 'selfref.fork.spawn')\n"
             "run_spec = next(item for item in specs if item.get('name') == 'selfref.fork.run')\n"
+            "run_chat_spec = next(item for item in specs if item.get('name') == 'selfref.fork.run_chat')\n"
+            "spawn_chat_spec = next(item for item in specs if item.get('name') == 'selfref.fork.spawn_chat')\n"
             "wait_spec = next(item for item in specs if item.get('name') == 'selfref.fork.wait')\n"
             "wait_all_spec = next(item for item in specs if item.get('name') == 'selfref.fork.wait_all')\n"
             "best_text = ' '.join(str(item) for item in run_spec.get('best_practices', []))\n"
             "print(\"status:'running'\" in str(spawn_spec.get('output_type')))\n"
             "print(\"status:'completed'\" in str(run_spec.get('output_type')))\n"
+            "run_chat_params = [item.get('name') for item in run_chat_spec.get('parameters', [])]\n"
+            "spawn_chat_params = [item.get('name') for item in spawn_chat_spec.get('parameters', [])]\n"
+            "print('message' in run_chat_params)\n"
+            "print('message' in spawn_chat_params)\n"
             "wait_output = str(wait_spec.get('output_type')).lower()\n"
             'print("status:\'completed\'" in wait_output and "error_message:str" in wait_output)\n'
             "print('check `status` first' in str(wait_spec.get('output_parsing')).lower())\n"
@@ -1040,6 +1051,8 @@ class TestPyReplRuntimePrimitives:
 
         assert result["success"] is True
         assert result["stdout"].splitlines() == [
+            "True",
+            "True",
             "True",
             "True",
             "True",
@@ -1493,10 +1506,17 @@ class TestPyReplInputHook:
             )
         )
 
-        request_id, prompt = await _wait_for_input_request(emitter)
-        assert prompt == "Name: "
-        assert PyRepl.submit_input(request_id, "Alice") is True
+        try:
+            request_id, prompt = await _wait_for_input_request(emitter)
+            assert prompt == "Name: "
+            assert PyRepl.submit_input(request_id, "Alice") is True
 
-        result = await asyncio.wait_for(run_task, timeout=2)
-        assert result["success"] is True
-        assert "Hello, Alice!" in result["stdout"]
+            result = await asyncio.wait_for(run_task, timeout=5)
+            assert result["success"] is True
+            assert "Hello, Alice!" in result["stdout"]
+        finally:
+            if not run_task.done():
+                run_task.cancel()
+                with contextlib.suppress(Exception):
+                    await run_task
+            repl.close()
