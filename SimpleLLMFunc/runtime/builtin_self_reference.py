@@ -505,7 +505,7 @@ def register_self_reference_primitives(
         )
 
     selfref_best_practices = [
-        "Mental model: selfref operates on *your agent runtime state* (message memory + forked child contexts). It is not philosophical self-reference, not Python `self`, and not 'rewrite your previous answer'.",
+        "Mental model: selfref = your agent state. (1) Your memory: message history via selfref.history.*. (2) Your clones: forked child agents via selfref.fork.*. Not philosophical self-reference, not Python self.",
         "Use selfref.history.* to read/write your conversation memory (messages). Prefer appending durable preferences into the system prompt via selfref.history.append_system_prompt(...).",
         "When `key` is omitted, selfref resolves an active memory key for the current execution context. Use selfref.history.active_key() to see which key is currently in scope.",
         "Safety: do not assume internal data structures; only interact via runtime primitives (runtime.selfref.history.* and runtime.selfref.fork.*). Do not invent fields in message dicts.",
@@ -545,10 +545,10 @@ def register_self_reference_primitives(
         return {
             "namespace": "selfref",
             "overview": (
-                "Selfref primitives operate on your agent runtime state: "
-                "(1) message memory/history (keyed), and "
-                "(2) recursive fork delegation to spawn/run child agent contexts. "
-                "This is not philosophical self-reference and not Python `self`."
+                "selfref = your agent state. (1) Your memory: message history via selfref.history.*. "
+                "(2) Your clones: child agents via selfref.fork.run/spawn/wait. "
+                "You operate on your own memory and create your own clones. "
+                "Not philosophical self-reference, not Python self."
             ),
             "best_practices": list(selfref_best_practices),
         }

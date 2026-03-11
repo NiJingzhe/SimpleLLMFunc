@@ -1,8 +1,7 @@
 """Primitive registry and runtime call context.
 
-This module defines a small runtime primitive system used by ``PyRepl``.
-Primitives are host-registered callables that can be invoked from the worker
-process through a structured RPC bridge.
+Primitive = host-registered callable, callable in REPL without import as
+runtime.namespace.name(...). Used by PyRepl; invoked from worker via RPC.
 """
 
 from __future__ import annotations
@@ -578,7 +577,12 @@ class PrimitiveRegistry:
         with self._lock:
             return normalized in self._specs
 
-    def list_names(self, *, prefix: Optional[str] = None) -> List[str]:
+    def list_names(
+        self,
+        *,
+        prefix: Optional[str] = None,
+        contains: Optional[str] = None,
+    ) -> List[str]:
         with self._lock:
             names = list(self._specs.keys())
 
@@ -588,8 +592,17 @@ class PrimitiveRegistry:
             if stripped_prefix:
                 normalized_prefix = stripped_prefix
 
+        normalized_contains: Optional[str] = None
+        if isinstance(contains, str):
+            stripped_contains = contains.strip()
+            if stripped_contains:
+                normalized_contains = stripped_contains
+
         if normalized_prefix is not None:
             names = [item for item in names if item.startswith(normalized_prefix)]
+
+        if normalized_contains is not None:
+            names = [item for item in names if normalized_contains in item]
 
         names.sort()
         return names
@@ -599,8 +612,9 @@ class PrimitiveRegistry:
         *,
         names: Optional[Sequence[str]] = None,
         prefix: Optional[str] = None,
+        contains: Optional[str] = None,
     ) -> List[PrimitiveSpec]:
-        """List registered primitive specs with optional name/prefix filters."""
+        """List registered primitive specs with optional name/prefix/contains filters."""
 
         selected_names: Optional[set[str]] = None
         if names is not None:
@@ -620,6 +634,12 @@ class PrimitiveRegistry:
             if stripped_prefix:
                 normalized_prefix = stripped_prefix
 
+        normalized_contains: Optional[str] = None
+        if isinstance(contains, str):
+            stripped_contains = contains.strip()
+            if stripped_contains:
+                normalized_contains = stripped_contains
+
         with self._lock:
             specs = list(self._specs.values())
 
@@ -629,6 +649,9 @@ class PrimitiveRegistry:
         if normalized_prefix is not None:
             specs = [item for item in specs if item.name.startswith(normalized_prefix)]
 
+        if normalized_contains is not None:
+            specs = [item for item in specs if normalized_contains in item.name]
+
         specs.sort(key=lambda item: item.name)
         return specs
 
@@ -637,12 +660,13 @@ class PrimitiveRegistry:
         *,
         names: Optional[Sequence[str]] = None,
         prefix: Optional[str] = None,
+        contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """List structured primitive payloads with optional filters."""
 
         return [
             spec.to_public_dict()
-            for spec in self.list_specs(names=names, prefix=prefix)
+            for spec in self.list_specs(names=names, prefix=prefix, contains=contains)
         ]
 
     def list_spec_xml(
@@ -650,11 +674,12 @@ class PrimitiveRegistry:
         *,
         names: Optional[Sequence[str]] = None,
         prefix: Optional[str] = None,
+        contains: Optional[str] = None,
     ) -> str:
         """List primitive specs as XML string payload."""
 
         lines = ["<primitive_specs>"]
-        for spec in self.list_specs(names=names, prefix=prefix):
+        for spec in self.list_specs(names=names, prefix=prefix, contains=contains):
             lines.append(spec.to_xml_element(root_tag="primitive"))
         lines.append("</primitive_specs>")
         return "\n".join(lines)

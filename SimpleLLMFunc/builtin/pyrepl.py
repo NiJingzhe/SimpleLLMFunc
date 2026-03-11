@@ -80,20 +80,18 @@ class PyRepl:
         "Run Python code in a persistent REPL session (state persists across "
         "calls). Write direct executable snippets, not standalone scripts. "
         'Do not include `if __name__ == "__main__":` blocks. Interactive '
-        "`input()` is supported. Runtime primitives are available via "
-        "`runtime.*`; call `runtime.list_primitives()` for discovery (or "
-        "`runtime.list_primitives(prefix='...')` for name filtering), then "
-        "use `runtime.get_primitive_spec(name)` (preferred) or "
-        "`runtime.list_primitive_specs(names=[...])` for selected contracts "
-        "(input/output types, parameter docs, best practices). "
-        "Spec lookups return XML by default; use `format='dict'` only when "
-        "direct field access is needed in code. "
-        "You may set per-call active timeout via "
-        "`timeout_seconds` (defaults to 600 seconds). "
-        "Self-reference operations are grouped under "
-        "`runtime.selfref.*` (`runtime.selfref.history.*` and "
-        "`runtime.selfref.fork.*`). `reset_repl` only clears REPL variables "
-        "and does not delete runtime memory managed by registered primitives."
+        "`input()` is supported. "
+        "Runtime primitives = host-registered callables usable without import; "
+        "call as `runtime.namespace.name(...)` (e.g. runtime.selfref.history.keys()). "
+        "Discover names via `runtime.list_primitives()` or "
+        "`runtime.list_primitives(contains='selfref.fork.')` for namespace filtering; "
+        "avoid `prefix='fork'` (ambiguous). "
+        "Fetch contracts via `runtime.get_primitive_spec(name)` or "
+        "`runtime.list_primitive_specs(contains='...')`. Specs return XML by default. "
+        "Per-call timeout: `timeout_seconds` (default 600). "
+        "selfref = your agent state: (1) your memory via runtime.selfref.history.*, "
+        "(2) your clones via runtime.selfref.fork.*. "
+        "`reset_repl` clears REPL variables only; runtime memory is unchanged."
     )
     RESET_TOOL_DESCRIPTION = (
         "Reset REPL runtime variables in the current session. This clears "
@@ -104,9 +102,10 @@ class PyRepl:
         "(excluding private names and runtime)."
     )
     EXECUTE_TOOL_BEST_PRACTICES = [
-        "Spec lookups return XML by default; switch to format='dict' only when code needs direct field access.",
+        "Primitive = callable without import; use runtime.namespace.name(...). Filter discovery with contains='selfref.fork.' not prefix='fork'.",
+        "Spec lookups return XML by default; use format='dict' only when code needs direct field access.",
         "Inspect only required contracts; do not dump full primitive spec lists into chat/system prompt.",
-        "For fork results, read required keys first (status/response/memory_key/history_count); if status is error, inspect error_type/error_message before retrying.",
+        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying.",
     ]
     RESET_TOOL_BEST_PRACTICES = [
         "Use reset_repl only for variable cleanup; runtime backend state remains unchanged.",
@@ -299,35 +298,44 @@ class PyRepl:
             *,
             names: Optional[List[str]] = None,
             prefix: Optional[str] = None,
+            contains: Optional[str] = None,
             format: str = "xml",
         ) -> Union[List[Dict[str, Any]], str]:
             """
-            Use: Read structured specs for a small exact set of runtime primitives or one namespace prefix.
-            Input: Keyword-only filters. `names` is `list[str] | None` for exact primitive names. `prefix` is `str | None` for names starting with that prefix. Optional `format` is `'xml' | 'dict'` and defaults to `'xml'`.
-            Output: XML `str` when `format='xml'` (default), or `list[dict[str, primitive]]` when `format='dict'`.
-            Parse: For default XML output, parse `<primitive_specs>` and `<primitive>` nodes. For dict output, iterate the list.
+            Use: Read structured specs for runtime primitives (host-registered callables, no import needed).
+            Input: Keyword-only filters. `names` exact names. `contains` substring filter (prefer contains='selfref.fork.' over prefix='fork'). `format` defaults to `xml`.
+            Output: XML when format='xml', or list[dict] when format='dict'.
+            Parse: XML: parse <primitive_specs>/<primitive>. Dict: iterate list.
             Parameters:
-            - names: Exact primitive names to fetch.
-            - prefix: Optional prefix such as `selfref.fork.`.
-            - format: Output format. Default is `xml`; use `dict` for programmatic field access.
+            - names: Exact primitive names.
+            - prefix: Names starting with prefix.
+            - contains: Names containing substring (preferred for namespace: contains='selfref.fork.').
+            - format: xml (default) or dict.
             """
-            return self.list_primitive_specs(names=names, prefix=prefix, format=format)
+            return self.list_primitive_specs(
+                names=names,
+                prefix=prefix,
+                contains=contains,
+                format=format,
+            )
 
         @primitive()
         def runtime_list_primitives(
             _ctx: Any,
             *,
             prefix: Optional[str] = None,
+            contains: Optional[str] = None,
         ) -> List[str]:
             """
-            Use: Discover available runtime primitive names before fetching one exact spec.
-            Input: Keyword-only `prefix: str | None`. When provided, only names starting with that prefix are returned.
-            Output: `list[str]`. Each item is one primitive name.
-            Parse: Iterate the list directly. Call `runtime.get_primitive_spec(name)` for any candidate you want to inspect.
+            Use: Discover runtime primitive names (callables usable without import). Filter by namespace with contains='selfref.fork.'.
+            Input: Keyword-only. `contains` substring filter (preferred). `prefix` names starting with.
+            Output: list[str] of primitive names.
+            Parse: Iterate list; call runtime.get_primitive_spec(name) for contracts.
             Parameters:
-            - prefix: Optional name prefix such as `runtime.list_` or `selfref.fork.`.
+            - prefix: Names starting with prefix.
+            - contains: Names containing substring (prefer contains='selfref.fork.' over prefix='fork').
             """
-            return self._primitive_registry.list_names(prefix=prefix)
+            return self._primitive_registry.list_names(prefix=prefix, contains=contains)
 
         @primitive()
         def runtime_get_primitive_spec(
@@ -337,13 +345,13 @@ class PyRepl:
             format: str = "xml",
         ) -> Union[Dict[str, Any], str]:
             """
-            Use: Read one exact runtime primitive spec.
-            Input: `name: str` plus optional keyword-only `format: 'xml' | 'dict'` (default `xml`). Pass one full primitive name such as `selfref.fork.wait`.
-            Output: XML `str` when `format='xml'` (default), or `dict[str, primitive]` when `format='dict'`.
-            Parse: For default XML output, parse `<primitive_spec>` fields. For dict output, read `description`, `parameters`, `output_type`, and `output_parsing`.
+            Use: Read one runtime primitive contract (input/output shape, parameters). Primitive = callable without import.
+            Input: name (full name e.g. selfref.fork.wait), format (xml default, dict for field access).
+            Output: XML or dict with description, parameters, output_type, output_parsing.
+            Parse: XML parse <primitive_spec>. Dict read description, parameters, output_type, output_parsing.
             Parameters:
             - name: Full primitive name.
-            - format: Output format. Default is `xml`; use `dict` for programmatic field access.
+            - format: xml (default) or dict.
             """
             return self.get_primitive_spec(name, format=format)
 
@@ -361,8 +369,8 @@ class PyRepl:
             "runtime.list_primitives",
             runtime_list_primitives,
             best_practices=[
-                "Use prefix=... for cheap name-only discovery before fetching contracts.",
-                "After discovery, call runtime.get_primitive_spec(name) for one exact contract or runtime.list_primitive_specs(names=[...]) for targeted contract details.",
+                "Filter by namespace with contains='selfref.fork.'; avoid prefix='fork' (ambiguous).",
+                "After discovery, call runtime.get_primitive_spec(name) or runtime.list_primitive_specs(contains='...').",
             ],
         )
 
@@ -370,8 +378,8 @@ class PyRepl:
             "runtime.list_primitive_specs",
             runtime_list_primitive_specs,
             best_practices=[
-                "Use names=[...] or prefix=... to retrieve only the primitive contracts you need.",
-                "runtime list/get spec calls return XML by default; pass format='dict' only when code needs direct field access.",
+                "Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.",
+                "Specs return XML by default; format='dict' only when code needs direct field access.",
             ],
         )
 
@@ -379,8 +387,8 @@ class PyRepl:
             "runtime.get_primitive_spec",
             runtime_get_primitive_spec,
             best_practices=[
-                "Use this as the default contract lookup for one target primitive (XML by default). Use format='dict' only when code needs direct field access.",
-                "Resolve available names first via runtime.list_primitives() or runtime.list_primitives(prefix='...') when uncertain.",
+                "Default contract lookup for one primitive. Resolve names first via runtime.list_primitives(contains='...').",
+                "Spec returns XML by default; format='dict' only for direct field access.",
             ],
         )
 
@@ -431,6 +439,7 @@ class PyRepl:
         self,
         names: Optional[List[str]] = None,
         prefix: Optional[str] = None,
+        contains: Optional[str] = None,
         format: str = "xml",
     ) -> Union[List[Dict[str, Any]], str]:
         """List primitive contracts as dict payloads or XML string."""
@@ -440,11 +449,13 @@ class PyRepl:
             return self._primitive_registry.list_spec_xml(
                 names=names,
                 prefix=prefix,
+                contains=contains,
             )
 
         return self._primitive_registry.list_spec_payloads(
             names=names,
             prefix=prefix,
+            contains=contains,
         )
 
     def get_primitive_spec(
@@ -489,13 +500,16 @@ class PyRepl:
         lines: List[str] = [
             "<runtime_primitive_contract>",
             "<title>Tool-provided runtime guidance</title>",
+            "<definition>",
+            "<primitive>Runtime primitive = host-registered callable; callable in REPL without import as runtime.namespace.name(...). No import needed.</primitive>",
+            "</definition>",
             "<progressive_disclosure>",
-            "<step index=\"1\">call runtime.list_primitives() to discover available names, or runtime.list_primitives(prefix='...') for cheap name-only filtering.</step>",
-            '<step index="2">for one primitive, call runtime.get_primitive_spec(name) (XML by default).</step>',
-            "<step index=\"3\">for small batches, call runtime.list_primitive_specs(names=[...]) or runtime.list_primitive_specs(prefix='...') (XML by default).</step>",
-            '<step index="4">inspect only required contracts; do not dump full primitive spec lists into chat/system prompt.</step>',
+            "<step index=\"1\">Discover names: runtime.list_primitives() or runtime.list_primitives(contains='selfref.fork.') for namespace filtering. Avoid prefix='fork' (ambiguous).</step>",
+            '<step index="2">One primitive: runtime.get_primitive_spec(name). XML by default.</step>',
+            "<step index=\"3\">Batches: runtime.list_primitive_specs(names=[...]) or runtime.list_primitive_specs(contains='...').</step>",
+            '<step index="4">Inspect only required contracts; do not dump full spec lists into chat/system prompt.</step>',
             "</progressive_disclosure>",
-            "<spec_rule>For each primitive, capture purpose, exact input shape, exact output shape, output parsing rule, and only the key parameters you need.</spec_rule>",
+            "<spec_rule>For each primitive: purpose, input shape, output shape, parsing rule, key parameters only.</spec_rule>",
             "<spec_return_format>",
             "<rule>Spec lookups return XML by default.</rule>",
             "<rule>Use format='dict' only when code needs direct field access.</rule>",
@@ -506,8 +520,9 @@ class PyRepl:
             lines.extend(
                 [
                     "<self_reference_namespace>",
-                    "<history>Use runtime.selfref.history.* for memory/history operations.</history>",
-                    "<fork>Use runtime.selfref.fork.* for self-fork delegation.</fork>",
+                    "<definition>selfref = your agent state: (1) your memory (message history), (2) your clones (forked child agents).</definition>",
+                    "<history>runtime.selfref.history.* operates on your memory.</history>",
+                    "<fork>runtime.selfref.fork.* creates and waits for your clones.</fork>",
                     "</self_reference_namespace>",
                 ]
             )
