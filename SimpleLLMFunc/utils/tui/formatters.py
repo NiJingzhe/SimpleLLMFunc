@@ -116,7 +116,7 @@ def _format_primitive(value: Any) -> str:
         return value
     if isinstance(value, (int, float, bool)) or value is None:
         return str(value)
-    return json.dumps(value, ensure_ascii=False)
+    return json.dumps(value, ensure_ascii=False, default=str)
 
 
 def _render_fenced_code_block(code: str, language: str = "") -> list[str]:
@@ -146,7 +146,7 @@ def format_tool_arguments_markdown(
             continue
 
         if isinstance(value, (dict, list)):
-            pretty = json.dumps(value, ensure_ascii=False, indent=2)
+            pretty = json.dumps(value, ensure_ascii=False, indent=2, default=str)
             lines.append(f"- `{key}`:")
             lines.append("```json")
             lines.append(pretty)
@@ -160,7 +160,7 @@ def format_tool_result_markdown(result: Any) -> str:
     """Format tool result to markdown-friendly text."""
 
     if isinstance(result, (dict, list)):
-        pretty = json.dumps(result, ensure_ascii=False, indent=2)
+        pretty = json.dumps(result, ensure_ascii=False, indent=2, default=str)
         return f"```json\n{pretty}\n```"
 
     if isinstance(result, str):
@@ -173,7 +173,7 @@ def format_custom_event_fallback(event_name: str, data: Any) -> str:
     """Fallback rendering when no event hook handles the custom event."""
 
     if isinstance(data, dict):
-        payload = json.dumps(data, ensure_ascii=False)
+        payload = json.dumps(data, ensure_ascii=False, default=str)
     else:
         payload = str(data)
     return f"[{event_name}] {payload}\n"

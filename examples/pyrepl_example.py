@@ -38,7 +38,7 @@ def load_llm():
 
     try:
         return OpenAICompatible.load_from_json_file(provider_json_path)["openrouter"][
-            "qwen/qwen3.5-397b-a17b"
+            "minimax/minimax-m2.5"
         ]
     except Exception:
         return None

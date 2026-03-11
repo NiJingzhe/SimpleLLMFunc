@@ -17,5 +17,5 @@ from SimpleLLMFunc.logger import *
 from SimpleLLMFunc.tool import *
 from SimpleLLMFunc.interface import *
 from SimpleLLMFunc.observability import *
-from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.builtin.self_reference import SelfReference
 from SimpleLLMFunc.utils.tui import tui

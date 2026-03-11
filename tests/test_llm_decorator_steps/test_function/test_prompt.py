@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -12,6 +13,7 @@ from SimpleLLMFunc.llm_decorator.steps.function.prompt import (
     build_return_type_description,
     build_text_messages,
 )
+from SimpleLLMFunc.tool import tool
 
 
 class TestBuildParameterTypeDescriptions:
@@ -54,6 +56,7 @@ class TestBuildReturnTypeDescription:
     def test_build_list_type(self) -> None:
         """Test building description for List type."""
         from typing import List
+
         result = build_return_type_description(List[str])
         assert "XML Schema" in result or "xml" in result.lower()
         assert "Example XML" in result or "example" in result.lower()
@@ -61,6 +64,7 @@ class TestBuildReturnTypeDescription:
     def test_build_dict_type(self) -> None:
         """Test building description for Dict type."""
         from typing import Dict
+
         result = build_return_type_description(Dict[str, int])
         assert "XML Schema" in result or "xml" in result.lower()
         assert "Example XML" in result or "example" in result.lower()
@@ -99,9 +103,7 @@ class TestBuildInitialPrompts:
     """Tests for build_initial_prompts function."""
 
     @patch("SimpleLLMFunc.llm_decorator.steps.function.prompt.has_multimodal_content")
-    def test_build_text_prompts(
-        self, mock_has_multimodal: Any
-    ) -> None:
+    def test_build_text_prompts(self, mock_has_multimodal: Any) -> None:
         """Test building text prompts."""
         mock_has_multimodal.return_value = False
         from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
@@ -114,7 +116,7 @@ class TestBuildInitialPrompts:
         sig = inspect.signature(test_func)
         bound = sig.bind("test")
         bound.apply_defaults()
-        
+
         signature = FunctionSignature(
             func_name="test_func",
             trace_id="trace_123",
@@ -137,10 +139,8 @@ class TestBuildInitialPrompts:
     ) -> None:
         """Test building multimodal prompts."""
         mock_has_multimodal.return_value = True
-        mock_build_multimodal.return_value = [
-            {"type": "text", "text": "test"}
-        ]
-        
+        mock_build_multimodal.return_value = [{"type": "text", "text": "test"}]
+
         from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
         import inspect
 
@@ -151,7 +151,7 @@ class TestBuildInitialPrompts:
         sig = inspect.signature(test_func)
         bound = sig.bind("test")
         bound.apply_defaults()
-        
+
         signature = FunctionSignature(
             func_name="test_func",
             trace_id="trace_123",
@@ -166,3 +166,51 @@ class TestBuildInitialPrompts:
         assert len(result) >= 2
         mock_build_multimodal.assert_called()
 
+    @patch("SimpleLLMFunc.llm_decorator.steps.function.prompt.has_multimodal_content")
+    def test_build_prompts_injects_tool_best_practices(
+        self, mock_has_multimodal: Any
+    ) -> None:
+        """Tool best practices should be injected into llm_function system prompt."""
+        mock_has_multimodal.return_value = False
+
+        from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+        import inspect
+
+        @tool(
+            name="search_docs",
+            description="Search internal documents.",
+            best_practices=[
+                "Return concise evidence snippets.",
+                "Report acceptance criteria.",
+            ],
+        )
+        async def search_docs(query: str) -> str:
+            """Search docs for relevant evidence."""
+            return query
+
+        def test_func(param1: str) -> str:
+            """Test function."""
+            return "result"
+
+        sig = inspect.signature(test_func)
+        bound = sig.bind("test")
+        bound.apply_defaults()
+
+        signature = FunctionSignature(
+            func_name="test_func",
+            trace_id="trace_123",
+            bound_args=bound,
+            signature=sig,
+            type_hints={"param1": str, "return": str},
+            return_type=str,
+            docstring="Test function.",
+        )
+
+        result = build_initial_prompts(signature, toolkit=[search_docs])
+        assert len(result) >= 2
+
+        system_prompt = result[0]["content"]
+        assert isinstance(system_prompt, str)
+        assert "<tool_best_practices>" in system_prompt
+        assert "search_docs" in system_prompt
+        assert "Return concise evidence snippets." in system_prompt

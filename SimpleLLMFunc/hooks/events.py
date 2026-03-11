@@ -41,6 +41,7 @@ class ReActEventType(str, Enum):
     LLM_CALL_ERROR = "llm_call_error"
     TOOL_CALLS_BATCH_START = "tool_calls_batch_start"
     TOOL_CALL_START = "tool_call_start"
+    TOOL_CALL_ARGUMENTS_DELTA = "tool_call_arguments_delta"
     TOOL_CALL_END = "tool_call_end"
     TOOL_CALL_ERROR = "tool_call_error"
     TOOL_CALLS_BATCH_END = "tool_calls_batch_end"
@@ -216,6 +217,19 @@ class ToolCallStartEvent(ReActEvent):
 
 
 @dataclass
+class ToolCallArgumentsDeltaEvent(ReActEvent):
+    """工具调用参数增量事件（仅 streaming）
+
+    触发时机：流式响应接收 tool_call 参数片段时，实时解析并输出单参数增量。
+    """
+
+    tool_name: str  # 工具名称
+    tool_call_id: str  # 工具调用 ID
+    argname: str  # 参数名
+    argcontent_delta: str  # 参数内容增量
+
+
+@dataclass
 class ToolCallEndEvent(ReActEvent):
     """工具调用结束事件
 
@@ -333,6 +347,7 @@ __all__ = [
     "LLMCallErrorEvent",
     "ToolCallsBatchStartEvent",
     "ToolCallStartEvent",
+    "ToolCallArgumentsDeltaEvent",
     "ToolCallEndEvent",
     "ToolCallErrorEvent",
     "ToolCallsBatchEndEvent",

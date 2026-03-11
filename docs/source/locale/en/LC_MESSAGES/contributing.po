@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-10-27 17:51+0800\n"
+"POT-Creation-Date: 2026-03-11 21:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -126,8 +126,8 @@ msgid "依赖项"
 msgstr "Dependency"
 
 #: ../../source/contributing.md:36
-msgid "Python 3.10 或更高版本"
-msgstr "Python 3.10 or later versions"
+msgid "Python 3.12 或更高版本"
+msgstr "Python 3.12 or higher"
 
 #: ../../source/contributing.md:37
 msgid "Poetry (推荐的依赖管理工具)"
@@ -147,32 +147,31 @@ msgstr "Code Style"
 
 #: ../../source/contributing.md:59
 msgid ""
-"我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python 代码风格指南，使用 "
-"[Black](https://github.com/psf/black) 格式化器自动化格式化过程："
+"我们使用 [PEP 8](https://www.python.org/dev/peps/pep-0008/) 作为 Python "
+"代码风格指南，并遵循仓库现有格式。"
 msgstr ""
 "We use [PEP 8](https://www.python.org/dev/peps/pep-0008/) as the Python code"
-" style guide and [Black](https://github.com/psf/black) formatter to automate"
-" the formatting process:"
+" style guide, and follow the repository's existing format."
 
-#: ../../source/contributing.md:65
+#: ../../source/contributing.md:61
 msgid "类型注解"
 msgstr "Type annotation"
 
-#: ../../source/contributing.md:67
-msgid "我们鼓励使用类型注解以提高代码可读性和安全性。可以使用 Pylint 检查类型。"
+#: ../../source/contributing.md:63
+msgid "我们鼓励使用类型注解以提高代码可读性和安全性。"
 msgstr ""
 "We encourage the use of type annotations to improve code readability and "
-"safety. Pylint can be used to check types."
+"safety."
 
-#: ../../source/contributing.md:69
+#: ../../source/contributing.md:65
 msgid "文档"
 msgstr "Documentation"
 
-#: ../../source/contributing.md:71
+#: ../../source/contributing.md:67
 msgid "所有公共 API 都应该有清晰的文档字符串"
 msgstr "All public APIs should have clear docstrings"
 
-#: ../../source/contributing.md:72
+#: ../../source/contributing.md:68
 msgid ""
 "文档注释应遵循 [Google Python 文档风格](https://github.com/google/styleguide/blob/gh-"
 "pages/pyguide.md#38-comments-and-docstrings)"
@@ -181,37 +180,37 @@ msgstr ""
 "Guide](https://github.com/google/styleguide/blob/gh-"
 "pages/pyguide.md#38-comments-and-docstrings)"
 
-#: ../../source/contributing.md:73
+#: ../../source/contributing.md:69
 msgid "更新功能时，请同时更新相关文档"
 msgstr "When updating features, please also update the related documentation"
 
-#: ../../source/contributing.md:87
+#: ../../source/contributing.md:83
 msgid "行为准则"
 msgstr "Code of Conduct"
 
-#: ../../source/contributing.md:89
+#: ../../source/contributing.md:85
 msgid "请尊重所有项目参与者，保持友好的交流环境。任何形式的骚扰或冒犯行为都是不可接受的。"
 msgstr ""
 "Please respect all project participants and maintain a friendly "
 "communication environment. Any form of harassment or offensive behavior is "
 "unacceptable."
 
-#: ../../source/contributing.md:91
+#: ../../source/contributing.md:87
 msgid "获取帮助"
 msgstr "get help"
 
-#: ../../source/contributing.md:93
+#: ../../source/contributing.md:89
 msgid "如果你在贡献过程中需要帮助，可以："
 msgstr "If you need help during your contribution, you can:"
 
-#: ../../source/contributing.md:95
+#: ../../source/contributing.md:91
 msgid "在 GitHub Issues 中提问"
 msgstr "Ask a question on GitHub Issues"
 
-#: ../../source/contributing.md:96
+#: ../../source/contributing.md:92
 msgid "联系项目维护者"
 msgstr "Contact project maintainer"
 
-#: ../../source/contributing.md:98
+#: ../../source/contributing.md:94
 msgid "再次感谢你对 SimpleLLMFunc 的贡献！"
 msgstr "Thank you again for your contribution to SimpleLLMFunc!"

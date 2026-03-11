@@ -17,9 +17,10 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, List, Optional, TYPE_CHECKING
+from typing import Any, List, Optional, TYPE_CHECKING
 
 from SimpleLLMFunc.hooks.events import (
+    ReActEvent,
     ReActEventType,
     CustomEvent,
 )
@@ -27,7 +28,8 @@ from SimpleLLMFunc.logger.context_manager import get_current_trace_id
 from SimpleLLMFunc.logger.logger import get_current_context_attribute
 
 if TYPE_CHECKING:
-    from SimpleLLMFunc.hooks.stream import EventYield
+    from SimpleLLMFunc.hooks.event_bus import EventBus
+    from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield
 
 
 @dataclass
@@ -49,6 +51,7 @@ class ToolEventEmitter:
     _iteration: int = 0
     _tool_name: str = ""
     _tool_call_id: str = ""
+    _event_bus: Optional[EventBus] = field(default=None, repr=False)
 
     def __post_init__(self):
         """初始化后处理"""
@@ -82,9 +85,38 @@ class ToolEventEmitter:
             tool_call_id=self._tool_call_id or None,
         )
 
+        await self.emit_event(event)
+
+    async def emit_event(
+        self,
+        event: ReActEvent,
+        *,
+        origin: Optional[EventOrigin] = None,
+        origin_overrides: Optional[dict[str, Any]] = None,
+    ) -> None:
+        """Emit one fully-typed ReAct event."""
+        merged_origin_overrides: dict[str, Any] = {}
+        if origin_overrides:
+            merged_origin_overrides.update(origin_overrides)
+        if self._tool_name and "tool_name" not in merged_origin_overrides:
+            merged_origin_overrides["tool_name"] = self._tool_name
+        if self._tool_call_id and "tool_call_id" not in merged_origin_overrides:
+            merged_origin_overrides["tool_call_id"] = self._tool_call_id
+
+        if self._event_bus is not None:
+            await self._event_bus.emit_event(
+                event,
+                origin=origin,
+                origin_overrides=merged_origin_overrides if origin is None else None,
+            )
+            return
+
         from SimpleLLMFunc.hooks.stream import EventYield
 
-        event_yield = EventYield(event=event)
+        if origin is not None:
+            event_yield = EventYield(event=event, origin=origin)
+        else:
+            event_yield = EventYield(event=event)
         await self._queue.put(event_yield)
 
     async def emit_batch(
@@ -138,6 +170,10 @@ class NoOpEventEmitter:
         pass
 
     async def emit_batch(self, events: List[tuple[str, Any]]) -> None:
+        """空操作，不发射任何事件"""
+        pass
+
+    async def emit_event(self, event: ReActEvent, **_: Any) -> None:
         """空操作，不发射任何事件"""
         pass
 

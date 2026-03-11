@@ -35,29 +35,29 @@ async def my_task(text: str) -> str:
 
 ```json
 {
-  "openai": {
-    "gpt-3.5-turbo": {
+  "openai": [
+    {
+      "model_name": "gpt-3.5-turbo",
       "api_keys": ["sk-key1", "sk-key2"],
       "base_url": "https://api.openai.com/v1",
-      "model": "gpt-3.5-turbo",
       "max_retries": 5,
       "retry_delay": 1.0,
       "rate_limit_capacity": 20,
       "rate_limit_refill_rate": 3.0
     },
-    "gpt-4": {
+    {
+      "model_name": "gpt-4",
       "api_keys": ["sk-key3"],
-      "base_url": "https://api.openai.com/v1",
-      "model": "gpt-4"
+      "base_url": "https://api.openai.com/v1"
     }
-  },
-  "deepseek": {
-    "v3-turbo": {
+  ],
+  "deepseek": [
+    {
+      "model_name": "deepseek-chat",
       "api_keys": ["your-deepseek-key"],
-      "base_url": "https://api.deepseek.com/v1",
-      "model": "deepseek-chat"
+      "base_url": "https://api.deepseek.com/v1"
     }
-  }
+  ]
 }
 ```
 
@@ -78,7 +78,9 @@ async def my_task(text: str) -> str:
 
 ```python
 from abc import ABC, abstractmethod
-from typing import Dict, Any, AsyncGenerator, List
+from typing import Iterable, Dict, Optional, Literal, AsyncGenerator
+from openai.types.chat.chat_completion import ChatCompletion
+from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 
 class LLM_Interface(ABC):
     """LLM 接口抽象基类"""
@@ -86,47 +88,29 @@ class LLM_Interface(ABC):
     @abstractmethod
     async def chat(
         self,
-        messages: List[Dict[str, str]],
-        stream: bool = False,
-        timeout: int | None = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        执行非流式对话请求
-
-        Args:
-            messages: 消息列表，每条消息为 {"role": "user"|"assistant"|"system", "content": "..."}
-            stream: 流式标志（False 表示非流式）
-            timeout: 请求超时时间（秒）
-            **kwargs: 其他 LLM 参数（temperature、top_p 等）
-
-        Returns:
-            LLM 响应数据
-        """
+        trace_id: str = get_current_trace_id(),
+        stream: Literal[False] = False,
+        messages: Iterable[Dict[str, str]] = [{"role": "user", "content": ""}],
+        timeout: Optional[int] = None,
+        *args,
+        **kwargs,
+    ) -> ChatCompletion:
+        """执行非流式对话请求"""
         pass
 
     @abstractmethod
     async def chat_stream(
         self,
-        messages: List[Dict[str, str]],
-        stream: bool = True,
-        timeout: int | None = None,
-        **kwargs
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        执行流式对话请求
-
-        Args:
-            messages: 消息列表
-            stream: 流式标志（True 表示流式）
-            timeout: 请求超时时间（秒）
-            **kwargs: 其他 LLM 参数
-
-        Yields:
-            LLM 响应数据块
-        """
+        trace_id: str = get_current_trace_id(),
+        stream: Literal[True] = True,
+        messages: Iterable[Dict[str, str]] = [{"role": "user", "content": ""}],
+        timeout: Optional[int] = None,
+        *args,
+        **kwargs,
+    ) -> AsyncGenerator[ChatCompletionChunk, None]:
+        """执行流式对话请求"""
         if False:
-            yield {}
+            yield ChatCompletionChunk(id="", created=0, model="", object="", choices=[])
 ```
 
 ## OpenAICompatible 实现
@@ -156,7 +140,7 @@ all_models = OpenAICompatible.load_from_json_file("provider.json")
 # 访问具体的模型
 gpt35 = all_models["openai"]["gpt-3.5-turbo"]
 gpt4 = all_models["openai"]["gpt-4"]
-deepseek = all_models["deepseek"]["v3-turbo"]
+deepseek = all_models["deepseek"]["deepseek-chat"]
 ```
 
 #### 方式 2: 直接创建
@@ -173,8 +157,8 @@ key_pool = APIKeyPool(
 # 创建 LLM 接口
 llm = OpenAICompatible(
     api_key_pool=key_pool,
+    model_name="gpt-3.5-turbo",
     base_url="https://api.openai.com/v1",
-    model="gpt-3.5-turbo",
     max_retries=5,
     retry_delay=1.0,
     rate_limit_capacity=20,
@@ -299,7 +283,7 @@ models = OpenAICompatible.load_from_json_file("provider.json")
 # 定义不同的任务用不同的模型
 fast_llm = models["openai"]["gpt-3.5-turbo"]  # 快速、便宜
 powerful_llm = models["openai"]["gpt-4"]      # 强大、昂贵
-deepseek_llm = models["deepseek"]["v3-turbo"] # 国内服务
+deepseek_llm = models["deepseek"]["deepseek-chat"] # 国内服务
 
 @llm_function(llm_interface=fast_llm)
 async def simple_task(text: str) -> str:
@@ -337,16 +321,20 @@ async def call_with_fallback():
 ### 3. 监控和调试
 
 ```python
-# 检查 token 使用量
-print(f"输入 tokens: {llm.input_token_count}")
-print(f"输出 tokens: {llm.output_token_count}")
+# 使用事件流获取 token 用量（推荐）
+from SimpleLLMFunc.hooks.events import LLMCallEndEvent
+from SimpleLLMFunc.hooks.stream import is_event_yield
+
+async for output in summarize_text("..."):
+    if is_event_yield(output) and isinstance(output.event, LLMCallEndEvent):
+        print(output.event.usage)
 
 # 检查密钥池状态
 least_loaded = llm.key_pool.get_least_loaded_key()
 print(f"最低负载密钥: {least_loaded}")
 
 # 检查令牌桶状态
-print(f"可用令牌: {llm.token_bucket.tokens}")
+print(llm.get_rate_limit_status())
 ```
 
 ## 最佳实践

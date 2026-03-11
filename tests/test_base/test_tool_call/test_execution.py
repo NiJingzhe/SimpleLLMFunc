@@ -25,9 +25,7 @@ class TestExecuteSingleToolCall:
             "type": "function",
             "function": {"name": "test_tool", "arguments": '{"arg": "value"}'},
         }
-        tool_map = {
-            "test_tool": AsyncMock(return_value="result")
-        }
+        tool_map = {"test_tool": AsyncMock(return_value="result")}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -46,9 +44,7 @@ class TestExecuteSingleToolCall:
             "type": "function",
             "function": {"name": "test_tool", "arguments": '{"arg": "value"}'},
         }
-        tool_map = {
-            "test_tool": AsyncMock(return_value={"key": "value"})
-        }
+        tool_map = {"test_tool": AsyncMock(return_value={"key": "value"})}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -64,11 +60,9 @@ class TestExecuteSingleToolCall:
         tool_call = {
             "id": "call_123",
             "type": "function",
-            "function": {"name": "test_tool", "arguments": '{}'},
+            "function": {"name": "test_tool", "arguments": "{}"},
         }
-        tool_map = {
-            "test_tool": AsyncMock(return_value=img_url)
-        }
+        tool_map = {"test_tool": AsyncMock(return_value=img_url)}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -84,11 +78,9 @@ class TestExecuteSingleToolCall:
         tool_call = {
             "id": "call_123",
             "type": "function",
-            "function": {"name": "test_tool", "arguments": '{}'},
+            "function": {"name": "test_tool", "arguments": "{}"},
         }
-        tool_map = {
-            "test_tool": AsyncMock(return_value=img_path)
-        }
+        tool_map = {"test_tool": AsyncMock(return_value=img_path)}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -104,11 +96,9 @@ class TestExecuteSingleToolCall:
         tool_call = {
             "id": "call_123",
             "type": "function",
-            "function": {"name": "test_tool", "arguments": '{}'},
+            "function": {"name": "test_tool", "arguments": "{}"},
         }
-        tool_map = {
-            "test_tool": AsyncMock(return_value=("text", img_url))
-        }
+        tool_map = {"test_tool": AsyncMock(return_value=("text", img_url))}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -124,7 +114,7 @@ class TestExecuteSingleToolCall:
         tool_call = {
             "id": "call_123",
             "type": "function",
-            "function": {"name": "unknown_tool", "arguments": '{}'},
+            "function": {"name": "unknown_tool", "arguments": "{}"},
         }
         tool_map = {}
 
@@ -143,11 +133,9 @@ class TestExecuteSingleToolCall:
         tool_call = {
             "id": "call_123",
             "type": "function",
-            "function": {"name": "test_tool", "arguments": '{}'},
+            "function": {"name": "test_tool", "arguments": "{}"},
         }
-        tool_map = {
-            "test_tool": AsyncMock(side_effect=ValueError("Tool error"))
-        }
+        tool_map = {"test_tool": AsyncMock(side_effect=ValueError("Tool error"))}
 
         tool_call_dict, messages, is_multimodal = await _execute_single_tool_call(
             tool_call, tool_map
@@ -156,6 +144,26 @@ class TestExecuteSingleToolCall:
         assert len(messages) == 1
         assert messages[0]["role"] == "tool"
         assert "error" in json.loads(messages[0]["content"])
+        assert is_multimodal is False
+
+    @pytest.mark.asyncio
+    async def test_execute_repair_malformed_arguments(self) -> None:
+        """Test executing tool call with repairable malformed arguments."""
+        tool_call = {
+            "id": "call_123",
+            "type": "function",
+            "function": {"name": "test_tool", "arguments": '{{"arg": "value"}'},
+        }
+        tool_func = AsyncMock(return_value="result")
+        tool_map = {"test_tool": tool_func}
+
+        _, messages, is_multimodal = await _execute_single_tool_call(
+            tool_call, tool_map
+        )
+
+        tool_func.assert_awaited_once_with(arg="value")
+        assert len(messages) == 1
+        assert messages[0]["role"] == "tool"
         assert is_multimodal is False
 
 
@@ -173,9 +181,7 @@ class TestProcessToolCalls:
             }
         ]
         messages = [{"role": "user", "content": "test"}]
-        tool_map = {
-            "test_tool": AsyncMock(return_value="result")
-        }
+        tool_map = {"test_tool": AsyncMock(return_value="result")}
 
         result = await process_tool_calls(tool_calls, messages, tool_map)
 
@@ -189,12 +195,12 @@ class TestProcessToolCalls:
             {
                 "id": "call_1",
                 "type": "function",
-                "function": {"name": "tool1", "arguments": '{}'},
+                "function": {"name": "tool1", "arguments": "{}"},
             },
             {
                 "id": "call_2",
                 "type": "function",
-                "function": {"name": "tool2", "arguments": '{}'},
+                "function": {"name": "tool2", "arguments": "{}"},
             },
         ]
         messages = [{"role": "user", "content": "test"}]
@@ -224,7 +230,7 @@ class TestProcessToolCalls:
             {
                 "id": "call_123",
                 "type": "function",
-                "function": {"name": "test_tool", "arguments": '{}'},
+                "function": {"name": "test_tool", "arguments": "{}"},
             }
         ]
         messages = [
@@ -234,9 +240,7 @@ class TestProcessToolCalls:
                 "tool_calls": tool_calls,
             }
         ]
-        tool_map = {
-            "test_tool": AsyncMock(return_value=img_url)
-        }
+        tool_map = {"test_tool": AsyncMock(return_value=img_url)}
 
         result = await process_tool_calls(tool_calls, messages, tool_map)
 
@@ -244,4 +248,3 @@ class TestProcessToolCalls:
         assert len(result) > len(messages)
         user_messages = [msg for msg in result if msg["role"] == "user"]
         assert len(user_messages) >= 1
-

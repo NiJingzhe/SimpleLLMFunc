@@ -1,5 +1,7 @@
+import contextvars
 import inspect
 import json
+import sys
 from functools import wraps
 from typing import (
     Any,
@@ -27,8 +29,17 @@ from SimpleLLMFunc.llm_decorator.steps.chat import (
     process_chat_response_stream,
 )
 from SimpleLLMFunc.llm_decorator.steps.chat.message import HISTORY_PARAM_NAMES
+from SimpleLLMFunc.llm_decorator.utils import (
+    append_tool_best_practices_prompt_to_messages,
+    collect_tool_prompt_specs,
+    remove_tool_best_practices_prompt_block,
+)
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.builtin.self_reference import (
+    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
+    SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
+    SelfReference,
+)
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
 from SimpleLLMFunc.hooks.events import ReactEndEvent
@@ -44,8 +55,15 @@ P = ParamSpec("P")
 
 # Constants
 DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
-_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
-_SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_START = "<runtime_primitive_contract>"
+_RUNTIME_PRIMITIVE_PROMPT_BLOCK_END = "</runtime_primitive_contract>"
+_LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
+_LEGACY_SELF_REFERENCE_PROMPT_BLOCK_END = "[/SelfReference Memory Contract]"
+_MUST_PRINCIPLES_PROMPT_BLOCK_START = "<must_principles>"
+_MUST_PRINCIPLES_PROMPT_BLOCK_END = "</must_principles>"
+_AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
+_AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
+_FORK_CLONED_PYREPL_ATTR = "__simplellmfunc_fork_cloned_pyrepl__"
 
 
 def _extract_raw_history_reference(arguments: dict[str, Any]) -> Optional[HistoryList]:
@@ -82,6 +100,161 @@ def _set_history_argument(
     return False
 
 
+def _clone_toolkit_for_fork(
+    base_toolkit: Optional[ToolkitList],
+    self_reference_override: Optional[SelfReference],
+) -> Optional[ToolkitList]:
+    if base_toolkit is None:
+        return None
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    cloned_toolkit: ToolkitList = []
+    repl_clones: Dict[int, PyRepl] = {}
+
+    for item in base_toolkit:
+        if isinstance(item, Tool):
+            bound_instance = getattr(item.func, "__self__", None)
+            if isinstance(bound_instance, PyRepl):
+                original_repl_id = id(bound_instance)
+                if original_repl_id not in repl_clones:
+                    replacement_repl = PyRepl(
+                        execution_timeout_seconds=bound_instance.execution_timeout_seconds,
+                        input_idle_timeout_seconds=bound_instance.input_idle_timeout_seconds,
+                    )
+                    setattr(replacement_repl, _FORK_CLONED_PYREPL_ATTR, True)
+
+                    runtime_backends = bound_instance.list_runtime_backends()
+                    for backend_name in runtime_backends:
+                        backend_value = bound_instance.get_runtime_backend(backend_name)
+                        if backend_value is None:
+                            continue
+                        if isinstance(backend_value, SelfReference):
+                            replacement_self_reference = (
+                                self_reference_override
+                                if self_reference_override is not None
+                                else backend_value
+                            )
+                            replacement_repl.install_primitive_pack(
+                                "selfref",
+                                backend=replacement_self_reference,
+                                backend_name=backend_name,
+                                replace=True,
+                            )
+                            continue
+                        replacement_repl.register_runtime_backend(
+                            backend_name,
+                            backend_value,
+                            replace=True,
+                        )
+
+                    repl_clones[original_repl_id] = replacement_repl
+
+                replacement_repl = repl_clones[original_repl_id]
+                replacement_tool = next(
+                    tool for tool in replacement_repl.toolset if tool.name == item.name
+                )
+                cloned_toolkit.append(replacement_tool)
+                continue
+
+        cloned_toolkit.append(item)
+
+    return cloned_toolkit
+
+
+def _close_fork_cloned_pyrepls(toolkit: Optional[ToolkitList]) -> None:
+    if not toolkit:
+        return
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    closed_repl_ids: set[int] = set()
+
+    for item in toolkit:
+        if not isinstance(item, Tool):
+            continue
+
+        bound_instance = getattr(item.func, "__self__", None)
+        if not isinstance(bound_instance, PyRepl):
+            continue
+        if not bool(getattr(bound_instance, _FORK_CLONED_PYREPL_ATTR, False)):
+            continue
+
+        repl_id = id(bound_instance)
+        if repl_id in closed_repl_ids:
+            continue
+        closed_repl_ids.add(repl_id)
+
+        try:
+            bound_instance.close()
+        except Exception:
+            continue
+
+
+def _extract_self_reference_from_toolkit(
+    toolkit: Optional[ToolkitList],
+) -> Optional[SelfReference]:
+    if not toolkit:
+        return None
+
+    from SimpleLLMFunc.builtin import PyRepl
+
+    discovered: Dict[int, SelfReference] = {}
+
+    for item in toolkit:
+        if not isinstance(item, Tool):
+            continue
+
+        bound_instance = getattr(item.func, "__self__", None)
+        if not isinstance(bound_instance, PyRepl):
+            continue
+
+        default_backend = bound_instance.get_runtime_backend(
+            PyRepl.DEFAULT_SELF_REFERENCE_BACKEND_NAME
+        )
+        if isinstance(default_backend, SelfReference):
+            discovered[id(default_backend)] = default_backend
+            continue
+
+        for backend_name in bound_instance.list_runtime_backends():
+            backend_value = bound_instance.get_runtime_backend(backend_name)
+            if isinstance(backend_value, SelfReference):
+                discovered[id(backend_value)] = backend_value
+
+    if not discovered:
+        return None
+
+    return next(iter(discovered.values()))
+
+
+def _resolve_effective_self_reference(
+    explicit_self_reference: Optional[SelfReference],
+    toolkit: Optional[ToolkitList],
+) -> Optional[SelfReference]:
+    if explicit_self_reference is not None:
+        return explicit_self_reference
+    return _extract_self_reference_from_toolkit(toolkit)
+
+
+def _resolve_runtime_toolkit(
+    default_toolkit: Optional[ToolkitList],
+    template_params: Optional[Dict[str, Any]],
+) -> Optional[ToolkitList]:
+    if template_params is None:
+        return default_toolkit
+
+    override_toolkit = template_params.get(
+        SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM
+    )
+    if override_toolkit is None:
+        return default_toolkit
+
+    if not isinstance(override_toolkit, list):
+        raise ValueError("self_reference toolkit override must be a list")
+
+    return cast(Optional[ToolkitList], override_toolkit)
+
+
 def _resolve_self_reference_key(
     explicit_key: Optional[str],
     func_name: str,
@@ -95,66 +268,76 @@ def _resolve_self_reference_key(
     return normalized
 
 
-def _build_self_reference_prompt_block(memory_key: str) -> str:
-    return "\n".join(
-        [
-            _SELF_REFERENCE_PROMPT_BLOCK_START,
-            "Self-reference memory is enabled for this agent.",
-            f'- Use memory handle: self_reference.memory["{memory_key}"]',
-            "- Method purposes:",
-            "  count(): number of messages currently stored.",
-            "  all(): deep-copy snapshot of all messages.",
-            "  get(index): read one message by index.",
-            "  append(message): add one message at the end.",
-            "  insert(index, message): insert one message at index.",
-            "  update(index, message): replace one message at index.",
-            "  delete(index): remove one message at index.",
-            "  replace(messages): replace entire history with validated messages.",
-            "  clear(): remove all messages for this key.",
-            "  get_system_prompt(): read latest system prompt text.",
-            "  set_system_prompt(text): overwrite system prompt text.",
-            (
-                "  append_system_prompt(text): append text to current system "
-                "prompt with a newline."
-            ),
-            "- Forgetting memory:",
-            "  reset_repl only clears Python variables in REPL.",
-            "  It does NOT delete conversation memory in self_reference.",
-            "  To forget memory, delete message records via memory methods:",
-            "  delete(index), replace(messages), or clear().",
-            "- Durable preference example:",
-            (f'  self_reference.memory["{memory_key}"].append_system_prompt("...")'),
-            _SELF_REFERENCE_PROMPT_BLOCK_END,
-        ]
-    )
-
-
-def _remove_self_reference_prompt_block(system_prompt: str) -> str:
+def _remove_prompt_block(system_prompt: str, start_marker: str, end_marker: str) -> str:
     cleaned_prompt = system_prompt
 
     while True:
-        start_index = cleaned_prompt.find(_SELF_REFERENCE_PROMPT_BLOCK_START)
+        start_index = cleaned_prompt.find(start_marker)
         if start_index < 0:
             break
 
-        end_index = cleaned_prompt.find(_SELF_REFERENCE_PROMPT_BLOCK_END, start_index)
+        end_index = cleaned_prompt.find(end_marker, start_index)
         if end_index < 0:
             cleaned_prompt = cleaned_prompt[:start_index]
             break
 
         cleaned_prompt = (
-            cleaned_prompt[:start_index]
-            + cleaned_prompt[end_index + len(_SELF_REFERENCE_PROMPT_BLOCK_END) :]
+            cleaned_prompt[:start_index] + cleaned_prompt[end_index + len(end_marker) :]
+        )
+
+    return cleaned_prompt
+
+
+def _remove_runtime_primitive_prompt_block(system_prompt: str) -> str:
+    cleaned_prompt = system_prompt
+    for start_marker, end_marker in (
+        (
+            _RUNTIME_PRIMITIVE_PROMPT_BLOCK_START,
+            _RUNTIME_PRIMITIVE_PROMPT_BLOCK_END,
+        ),
+        (
+            _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START,
+            _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_END,
+        ),
+    ):
+        cleaned_prompt = _remove_prompt_block(
+            cleaned_prompt,
+            start_marker,
+            end_marker,
         )
 
     return cleaned_prompt.strip()
 
 
-def _append_self_reference_prompt_to_messages(
-    messages: MessageList,
-    memory_key: str,
-) -> None:
-    prompt_block = _build_self_reference_prompt_block(memory_key)
+def _remove_injected_prompt_blocks(system_prompt: str) -> str:
+    cleaned_prompt = _remove_runtime_primitive_prompt_block(system_prompt)
+    cleaned_prompt = remove_tool_best_practices_prompt_block(cleaned_prompt)
+    cleaned_prompt = _remove_must_principles_prompt_block(cleaned_prompt)
+    return cleaned_prompt.strip()
+
+
+def _build_must_principles_prompt_block() -> str:
+    lines = [
+        _MUST_PRINCIPLES_PROMPT_BLOCK_START,
+        "<rule>Never use chat-style XML text in assistant messages to invoke tools.</rule>",
+        "<rule>When tools are needed, invoke them only through native structured tool_calls / function-calling fields.</rule>",
+        "<rule>Do not fake tool invocations in assistant content via &lt;tool_call&gt;, XML, or JSON text.</rule>",
+        _MUST_PRINCIPLES_PROMPT_BLOCK_END,
+    ]
+    return "\n".join(lines)
+
+
+def _remove_must_principles_prompt_block(system_prompt: str) -> str:
+    cleaned_prompt = _remove_prompt_block(
+        system_prompt,
+        _MUST_PRINCIPLES_PROMPT_BLOCK_START,
+        _MUST_PRINCIPLES_PROMPT_BLOCK_END,
+    )
+    return cleaned_prompt.strip()
+
+
+def _append_must_principles_prompt_to_messages(messages: MessageList) -> None:
+    prompt_block = _build_must_principles_prompt_block()
 
     for index, message in enumerate(messages):
         if message.get("role") != "system":
@@ -163,7 +346,7 @@ def _append_self_reference_prompt_to_messages(
         content = message.get("content")
         base_prompt = ""
         if isinstance(content, str):
-            base_prompt = _remove_self_reference_prompt_block(content)
+            base_prompt = _remove_must_principles_prompt_block(content)
 
         if base_prompt:
             merged_prompt = f"{base_prompt}\n\n{prompt_block}"
@@ -201,9 +384,9 @@ def _seed_self_reference_system_prompt_if_missing(
         return
 
     # Keep memory store focused on durable prompt content. If the system prompt
-    # already contains the auto-injected SelfReference contract block, store a
-    # cleaned version and let llm_chat append the contract again per turn.
-    cleaned_system_prompt = _remove_self_reference_prompt_block(system_prompt)
+    # already contains auto-injected tool/runtime guidance blocks, store a
+    # cleaned version and let llm_chat inject guidance again per turn.
+    cleaned_system_prompt = _remove_injected_prompt_blocks(system_prompt)
     system_prompt_for_store = cleaned_system_prompt or system_prompt
 
     current_history = self_reference.snapshot_history(memory_key)
@@ -218,6 +401,23 @@ def _seed_self_reference_system_prompt_if_missing(
     )
 
 
+def _react_end_event_has_fork_origin(event: ReactEndEvent, origin: Any) -> bool:
+    origin_fork_id = getattr(origin, "fork_id", None)
+    if isinstance(origin_fork_id, str) and origin_fork_id:
+        return True
+
+    event_extra = getattr(event, "extra", None)
+    if not isinstance(event_extra, dict):
+        return False
+
+    raw_origin = event_extra.get("origin")
+    if not isinstance(raw_origin, dict):
+        return False
+
+    raw_fork_id = raw_origin.get("fork_id")
+    return isinstance(raw_fork_id, str) and bool(raw_fork_id)
+
+
 def llm_chat(
     llm_interface: LLM_Interface,
     toolkit: Optional[ToolkitList] = None,
@@ -225,6 +425,7 @@ def llm_chat(
     stream: bool = False,
     return_mode: Literal["text", "raw"] = "text",
     enable_event: bool = False,
+    strict_signature: bool = False,
     self_reference: Optional[SelfReference] = None,
     self_reference_key: Optional[str] = None,
     **llm_kwargs: Any,
@@ -250,6 +451,16 @@ def llm_chat(
     - Decorator passes function parameters as `param_name: param_value` format to the LLM as user messages
     - `history`/`chat_history` parameters are treated specially and excluded from user messages
     - Function docstring is passed to the LLM as system prompt
+
+    ## Compatibility option: strict signature
+    This decorator historically accepts arbitrary function signatures and will serialize non-history
+    parameters into user messages. To reduce agent/tooling ambiguity and enable a stable self-fork
+    call contract, you may enable `strict_signature=True` to enforce a canonical signature:
+
+    - `async def agent(history, message: str, ...)`
+    - The first positional parameter must be one of `history` / `chat_history` (see `HISTORY_PARAM_NAMES`).
+    - The second positional parameter must be annotated as `str` (the user message).
+    - Only an optional `_template_params` keyword parameter is allowed in addition to the above.
 
     ## Conversation History Format
     ```python
@@ -278,11 +489,16 @@ def llm_chat(
         enable_event: Whether to enable event stream (default: False)
             - False: yields (response, messages) tuples (backward compatible)
             - True: yields ReactOutput (ResponseYield or EventYield)
+        strict_signature: Compatibility option (default: False). When True, enforce
+            canonical agent signature `agent(history, message: str, ...)` (see docstring).
         self_reference: Optional SelfReference shared object for agent self-referential
-            memory operations. When provided, llm_chat appends a
-            SelfReference memory contract block to the system prompt.
+            memory operations. When not provided, llm_chat will try to auto-detect
+            one from mounted PyRepl runtime backends in ``toolkit``.
+            When runtime-enabled tools are mounted (for example PyRepl), llm_chat
+            injects deduplicated tool best-practice guidance at prompt head;
+            runtime primitive guidance is included in those tool-owned entries.
         self_reference_key: Memory key used with self_reference for this decorator.
-            Defaults to function name when self_reference is provided.
+            Defaults to function name when self_reference is resolved.
         **llm_kwargs: Additional keyword arguments passed directly to the LLM interface
 
     Returns:
@@ -304,17 +520,94 @@ def llm_chat(
     def decorator(
         func: Union[Callable[P, Any], Callable[P, Awaitable[Any]]],
     ) -> Callable[P, AsyncGenerator[Union[Tuple[Any, HistoryList], ReactOutput], None]]:
+        if strict_signature:
+            signature = inspect.signature(func)
+            parameters = list(signature.parameters.values())
+
+            allowed_extra_param_names = {"_template_params"}
+
+            if len(parameters) < 2:
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires function signature "
+                    "`agent(history, message: str, ...)` with at least two parameters."
+                )
+
+            if any(
+                param.kind
+                in (
+                    inspect.Parameter.VAR_POSITIONAL,
+                    inspect.Parameter.VAR_KEYWORD,
+                )
+                for param in parameters
+            ):
+                raise TypeError(
+                    "llm_chat(strict_signature=True) does not allow *args/**kwargs. "
+                    "Use `agent(history, message: str, _template_params=None)`."
+                )
+
+            history_param = parameters[0]
+            message_param = parameters[1]
+
+            if history_param.name not in HISTORY_PARAM_NAMES:
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the first parameter to be "
+                    "`history` or `chat_history` (see HISTORY_PARAM_NAMES)."
+                )
+
+            message_annotation = message_param.annotation
+            if (
+                message_annotation is inspect.Signature.empty
+                or message_annotation is None
+                or (
+                    message_annotation is not str
+                    and not (isinstance(message_annotation, str) and message_annotation == "str")
+                )
+            ):
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the second parameter to be "
+                    "annotated as `str` for the user message, e.g. "
+                    "`async def agent(history, message: str, ...)`."
+                )
+
+            if message_param.name != "message":
+                raise TypeError(
+                    "llm_chat(strict_signature=True) requires the second parameter name to be "
+                    "`message` so fork delegation can pass it by keyword."
+                )
+
+            for extra_param in parameters[2:]:
+                if extra_param.name in allowed_extra_param_names:
+                    continue
+                raise TypeError(
+                    "llm_chat(strict_signature=True) only allows an optional `_template_params` "
+                    "parameter in addition to `(history, message: str)`. "
+                    f"Unexpected parameter: {extra_param.name!r}."
+                )
+
         signature_meta = inspect.signature(func)
         docstring = func.__doc__ or ""
         func_name = func.__name__
 
-        if self_reference is not None:
-            self_reference.bind_agent_instance(func)
+        resolved_default_self_reference_key: Optional[str] = None
+        if self_reference is not None or self_reference_key is not None:
+            resolved_default_self_reference_key = _resolve_self_reference_key(
+                self_reference_key,
+                func_name,
+            )
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Step 1: 解析函数签名
-            function_signature, _ = parse_function_signature(func, args, kwargs)
+            function_signature, template_params = parse_function_signature(
+                func,
+                args,
+                kwargs,
+            )
+            runtime_toolkit = _resolve_runtime_toolkit(toolkit, template_params)
+            effective_self_reference = _resolve_effective_self_reference(
+                self_reference,
+                runtime_toolkit,
+            )
 
             # 构建用户任务提示（用于事件）
             user_task_prompt = json.dumps(
@@ -323,207 +616,338 @@ def llm_chat(
                 ensure_ascii=False,
             )
 
-            # Step 2: 设置日志上下文
-            async with setup_log_context(
-                func_name=function_signature.func_name,
-                trace_id=function_signature.trace_id,
-                arguments=function_signature.bound_args.arguments,
-            ):
-                # 创建 Langfuse parent span
-                with langfuse_client.start_as_current_observation(
-                    as_type="span",
-                    name=f"{function_signature.func_name}_chat_call",
-                    input=function_signature.bound_args.arguments,
-                    metadata={
-                        "function_name": function_signature.func_name,
-                        "trace_id": function_signature.trace_id,
-                        "tools_available": len(toolkit) if toolkit else 0,
-                        "max_tool_calls": max_tool_calls,
-                        "stream": stream,
-                        "return_mode": return_mode,
-                        "enable_event": enable_event,
-                        "self_reference_enabled": self_reference is not None,
-                        "self_reference_key": self_reference_key,
-                    },
-                ) as chat_span:
+            toolkit_context_token = None
+            active_memory_key_token = None
+            previous_runtime_toolkit: Any = None
+            previous_memory_key: Optional[str] = None
+            if effective_self_reference is not None:
+                previous_runtime_toolkit = (
+                    effective_self_reference._get_active_runtime_toolkit()
+                )
+                toolkit_context_token = (
+                    effective_self_reference._set_active_runtime_toolkit(
+                        runtime_toolkit
+                    )
+                )
+
+            try:
+                # Step 2: 设置日志上下文
+                async with setup_log_context(
+                    func_name=function_signature.func_name,
+                    trace_id=function_signature.trace_id,
+                    arguments=function_signature.bound_args.arguments,
+                ):
+                    # 创建 Langfuse parent span
+                    span_context = contextvars.copy_context()
+                    span_cm = langfuse_client.start_as_current_observation(
+                        as_type="span",
+                        name=f"{function_signature.func_name}_chat_call",
+                        input=function_signature.bound_args.arguments,
+                        metadata={
+                            "function_name": function_signature.func_name,
+                            "trace_id": function_signature.trace_id,
+                            "tools_available": len(runtime_toolkit)
+                            if runtime_toolkit
+                            else 0,
+                            "max_tool_calls": max_tool_calls,
+                            "stream": stream,
+                            "return_mode": return_mode,
+                            "enable_event": enable_event,
+                            "self_reference_enabled": (
+                                effective_self_reference is not None
+                            ),
+                            "self_reference_key": self_reference_key,
+                        },
+                    )
+                    chat_span = span_context.run(span_cm.__enter__)
                     try:
-                        raw_history_reference = _extract_raw_history_reference(
-                            function_signature.bound_args.arguments
-                        )
-
-                        resolved_self_reference_key: Optional[str] = None
-                        baseline_history_count = 0
-
-                        if self_reference is not None:
-                            resolved_self_reference_key = _resolve_self_reference_key(
-                                self_reference_key,
-                                function_signature.func_name,
+                        try:
+                            raw_history_reference = _extract_raw_history_reference(
+                                function_signature.bound_args.arguments
                             )
 
-                            if raw_history_reference is not None:
-                                self_reference.bind_history(
-                                    resolved_self_reference_key,
-                                    cast(List[Dict[str, Any]], raw_history_reference),
+                            resolved_self_reference_key: Optional[str] = None
+                            baseline_history_count = 0
+
+                            if effective_self_reference is not None:
+                                previous_memory_key = (
+                                    effective_self_reference._get_active_memory_key()
                                 )
-                            elif not self_reference.has_history(
-                                resolved_self_reference_key
-                            ):
-                                self_reference.bind_history(
-                                    resolved_self_reference_key,
-                                    [],
-                                )
-
-                            history_snapshot = self_reference.snapshot_history(
-                                resolved_self_reference_key
-                            )
-                            _set_history_argument(
-                                function_signature.bound_args.arguments,
-                                history_snapshot,
-                            )
-                            baseline_history_count = (
-                                self_reference.filtered_history_count(
-                                    resolved_self_reference_key
-                                )
-                            )
-
-                        # Step 3: 构建聊天消息
-                        messages = build_chat_messages(
-                            signature=function_signature,
-                            toolkit=toolkit,
-                            exclude_params=HISTORY_PARAM_NAMES,
-                        )
-
-                        if (
-                            self_reference is not None
-                            and resolved_self_reference_key is not None
-                        ):
-                            _append_self_reference_prompt_to_messages(
-                                messages,
-                                resolved_self_reference_key,
-                            )
-                            _seed_self_reference_system_prompt_if_missing(
-                                self_reference,
-                                resolved_self_reference_key,
-                                messages,
-                            )
-
-                        # Step 4: 执行 ReAct 循环（流式）
-                        response_stream = execute_react_loop_streaming(
-                            llm_interface=llm_interface,
-                            messages=messages,
-                            toolkit=toolkit,
-                            max_tool_calls=max_tool_calls,
-                            stream=stream,
-                            llm_kwargs=llm_kwargs,
-                            func_name=function_signature.func_name,
-                            enable_event=enable_event,
-                            trace_id=function_signature.trace_id,
-                            user_task_prompt=user_task_prompt,
-                        )
-
-                        collected_responses = []
-                        final_history = None
-
-                        if enable_event:
-                            # 事件模式：直接 yield ReactOutput
-                            typed_event_stream = cast(
-                                AsyncGenerator[ReactOutput, None],
-                                response_stream,
-                            )
-                            async for output in typed_event_stream:
-                                if (
-                                    self_reference is not None
-                                    and resolved_self_reference_key is not None
-                                    and is_event_yield(output)
-                                    and isinstance(output.event, ReactEndEvent)
-                                ):
-                                    merged_history = self_reference.merge_turn_history(
-                                        key=resolved_self_reference_key,
-                                        baseline_history_count=baseline_history_count,
-                                        updated_history=cast(
-                                            List[Dict[str, Any]],
-                                            output.event.final_messages,
-                                        ),
-                                        commit=True,
+                                runtime_self_reference_key = self_reference_key
+                                if template_params is not None:
+                                    override_key = template_params.get(
+                                        SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM
                                     )
-                                    output.event.final_messages = merged_history
-                                    if raw_history_reference is not None:
-                                        raw_history_reference[:] = merged_history
+                                    if override_key is not None:
+                                        if not isinstance(override_key, str):
+                                            raise ValueError(
+                                                "self_reference key override must be a non-empty string"
+                                            )
+                                        runtime_self_reference_key = override_key
 
-                                yield output
-                        else:
-                            # 向后兼容模式：处理响应流
-                            # 类型断言：当 enable_event=False 时，response_stream 只包含 Tuple[Any, MessageList]
-                            typed_response_stream = cast(
-                                AsyncGenerator[Tuple[Any, MessageList], None],
-                                response_stream,
-                            )
-                            latest_merged_history: Optional[HistoryList] = None
-                            async for content, history in process_chat_response_stream(
-                                response_stream=typed_response_stream,
-                                return_mode=return_mode,
-                                messages=messages,
-                                func_name=function_signature.func_name,
-                                stream=stream,
-                            ):
-                                history_to_yield: MessageList = history
-                                if (
-                                    self_reference is not None
-                                    and resolved_self_reference_key is not None
-                                ):
-                                    merged_history = self_reference.merge_turn_history(
-                                        key=resolved_self_reference_key,
-                                        baseline_history_count=baseline_history_count,
-                                        updated_history=cast(
-                                            List[Dict[str, Any]],
-                                            history,
-                                        ),
-                                        commit=False,
+                                resolved_self_reference_key = (
+                                    _resolve_self_reference_key(
+                                        runtime_self_reference_key,
+                                        function_signature.func_name,
                                     )
-                                    history_to_yield = merged_history
-                                    latest_merged_history = merged_history
-
-                                collected_responses.append(content)
-                                final_history = history_to_yield
-                                yield content, history_to_yield
-
-                            if (
-                                self_reference is not None
-                                and resolved_self_reference_key is not None
-                                and latest_merged_history is not None
-                            ):
-                                self_reference.replace_history(
-                                    key=resolved_self_reference_key,
-                                    messages=cast(
-                                        List[Dict[str, Any]],
-                                        latest_merged_history,
-                                    ),
-                                    strict=False,
                                 )
+
+                                effective_self_reference.bind_agent_instance(
+                                    wrapper,
+                                    default_memory_key=resolved_self_reference_key,
+                                )
+
                                 if raw_history_reference is not None:
-                                    raw_history_reference[:] = latest_merged_history
+                                    effective_self_reference.bind_history(
+                                        resolved_self_reference_key,
+                                        cast(
+                                            List[Dict[str, Any]], raw_history_reference
+                                        ),
+                                    )
+                                elif not effective_self_reference.has_history(
+                                    resolved_self_reference_key
+                                ):
+                                    effective_self_reference.bind_history(
+                                        resolved_self_reference_key,
+                                        [],
+                                    )
 
-                        # 更新 Langfuse span（仅在非事件模式或收集到响应时）
-                        if not enable_event or collected_responses:
-                            chat_span.update(
-                                output={
-                                    "responses": collected_responses,
-                                    "final_history": final_history,
-                                    "total_responses": len(collected_responses),
+                                history_snapshot = (
+                                    effective_self_reference.snapshot_history(
+                                        resolved_self_reference_key
+                                    )
+                                )
+                                _set_history_argument(
+                                    function_signature.bound_args.arguments,
+                                    history_snapshot,
+                                )
+                                baseline_history_count = (
+                                    effective_self_reference.filtered_history_count(
+                                        resolved_self_reference_key
+                                    )
+                                )
+
+                                active_memory_key_token = (
+                                    effective_self_reference._set_active_memory_key(
+                                        resolved_self_reference_key
+                                    )
+                                )
+
+                            # Step 3: 构建聊天消息
+                            messages = build_chat_messages(
+                                signature=function_signature,
+                                toolkit=runtime_toolkit,
+                                exclude_params=HISTORY_PARAM_NAMES,
+                            )
+
+                            tool_prompt_specs = collect_tool_prompt_specs(
+                                runtime_toolkit,
+                                context={
+                                    "self_reference_key": resolved_self_reference_key,
                                 },
                             )
-                    except Exception as exc:
-                        # 更新 span 错误信息
-                        chat_span.update(
-                            output={"error": str(exc)},
+                            append_tool_best_practices_prompt_to_messages(
+                                messages,
+                                tool_prompt_specs,
+                            )
+                            _append_must_principles_prompt_to_messages(messages)
+
+                            if (
+                                effective_self_reference is not None
+                                and resolved_self_reference_key is not None
+                            ):
+                                _seed_self_reference_system_prompt_if_missing(
+                                    effective_self_reference,
+                                    resolved_self_reference_key,
+                                    messages,
+                                )
+
+                            # Step 4: 执行 ReAct 循环（流式）
+                            response_stream = execute_react_loop_streaming(
+                                llm_interface=llm_interface,
+                                messages=messages,
+                                toolkit=runtime_toolkit,
+                                max_tool_calls=max_tool_calls,
+                                stream=stream,
+                                llm_kwargs=llm_kwargs,
+                                func_name=function_signature.func_name,
+                                enable_event=enable_event,
+                                trace_id=function_signature.trace_id,
+                                user_task_prompt=user_task_prompt,
+                            )
+
+                            collected_responses = []
+                            final_history = None
+
+                            if enable_event:
+                                # 事件模式：直接 yield ReactOutput
+                                typed_event_stream = cast(
+                                    AsyncGenerator[ReactOutput, None],
+                                    response_stream,
+                                )
+                                async for output in typed_event_stream:
+                                    if (
+                                        effective_self_reference is not None
+                                        and resolved_self_reference_key is not None
+                                        and is_event_yield(output)
+                                        and isinstance(output.event, ReactEndEvent)
+                                        and not _react_end_event_has_fork_origin(
+                                            output.event,
+                                            output.origin,
+                                        )
+                                    ):
+                                        merged_history = effective_self_reference.merge_turn_history(
+                                            key=resolved_self_reference_key,
+                                            baseline_history_count=baseline_history_count,
+                                            updated_history=cast(
+                                                List[Dict[str, Any]],
+                                                output.event.final_messages,
+                                            ),
+                                            commit=True,
+                                        )
+                                        output.event.final_messages = merged_history
+                                        if raw_history_reference is not None:
+                                            raw_history_reference[:] = merged_history
+
+                                    yield output
+                            else:
+                                # 向后兼容模式：处理响应流
+                                # 类型断言：当 enable_event=False 时，response_stream 只包含 Tuple[Any, MessageList]
+                                typed_response_stream = cast(
+                                    AsyncGenerator[Tuple[Any, MessageList], None],
+                                    response_stream,
+                                )
+                                latest_merged_history: Optional[HistoryList] = None
+                                async for (
+                                    content,
+                                    history,
+                                ) in process_chat_response_stream(
+                                    response_stream=typed_response_stream,
+                                    return_mode=return_mode,
+                                    messages=messages,
+                                    func_name=function_signature.func_name,
+                                    stream=stream,
+                                ):
+                                    history_to_yield: MessageList = history
+                                    if (
+                                        effective_self_reference is not None
+                                        and resolved_self_reference_key is not None
+                                    ):
+                                        merged_history = effective_self_reference.merge_turn_history(
+                                            key=resolved_self_reference_key,
+                                            baseline_history_count=baseline_history_count,
+                                            updated_history=cast(
+                                                List[Dict[str, Any]],
+                                                history,
+                                            ),
+                                            commit=False,
+                                        )
+                                        history_to_yield = merged_history
+                                        latest_merged_history = merged_history
+
+                                    collected_responses.append(content)
+                                    final_history = history_to_yield
+                                    yield content, history_to_yield
+
+                                if (
+                                    effective_self_reference is not None
+                                    and resolved_self_reference_key is not None
+                                    and latest_merged_history is not None
+                                ):
+                                    effective_self_reference.replace_history(
+                                        key=resolved_self_reference_key,
+                                        messages=cast(
+                                            List[Dict[str, Any]],
+                                            latest_merged_history,
+                                        ),
+                                        strict=False,
+                                    )
+                                    if raw_history_reference is not None:
+                                        raw_history_reference[:] = latest_merged_history
+
+                            # 更新 Langfuse span（仅在非事件模式或收集到响应时）
+                            if not enable_event or collected_responses:
+                                chat_span.update(
+                                    output={
+                                        "responses": collected_responses,
+                                        "final_history": final_history,
+                                        "total_responses": len(collected_responses),
+                                    },
+                                )
+                        except Exception as exc:
+                            # 更新 span 错误信息
+                            chat_span.update(
+                                output={"error": str(exc)},
+                            )
+                            raise
+                    finally:
+                        exc_type, exc, tb = sys.exc_info()
+                        try:
+                            span_context.run(span_cm.__exit__, exc_type, exc, tb)
+                        except ValueError as exc_detach:
+                            if "different Context" not in str(exc_detach):
+                                raise
+            finally:
+                _close_fork_cloned_pyrepls(runtime_toolkit)
+                if (
+                    effective_self_reference is not None
+                    and active_memory_key_token is not None
+                ):
+                    try:
+                        effective_self_reference._reset_active_memory_key(
+                            active_memory_key_token
                         )
-                        raise
+                    except ValueError:
+                        if previous_memory_key is None:
+                            effective_self_reference._active_memory_key_var.set(None)
+                        else:
+                            effective_self_reference._active_memory_key_var.set(
+                                previous_memory_key
+                            )
+                if (
+                    effective_self_reference is not None
+                    and toolkit_context_token is not None
+                ):
+                    try:
+                        effective_self_reference._reset_active_runtime_toolkit(
+                            toolkit_context_token
+                        )
+                    except ValueError:
+                        effective_self_reference._active_runtime_toolkit_var.set(
+                            previous_runtime_toolkit
+                        )
 
         # Preserve original function metadata
         wrapper.__name__ = func.__name__
         wrapper.__doc__ = func.__doc__
         wrapper.__annotations__ = func.__annotations__
         wrapper.__signature__ = signature_meta  # type: ignore
+        setattr(wrapper, _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR, True)
+
+        def fork_toolkit_factory(parent_toolkit: Any) -> Optional[ToolkitList]:
+            candidate_toolkit: Optional[ToolkitList]
+            if isinstance(parent_toolkit, list):
+                candidate_toolkit = cast(Optional[ToolkitList], parent_toolkit)
+            else:
+                candidate_toolkit = toolkit
+
+            effective_for_fork = _resolve_effective_self_reference(
+                self_reference,
+                candidate_toolkit,
+            )
+
+            return _clone_toolkit_for_fork(
+                candidate_toolkit,
+                effective_for_fork,
+            )
+
+        setattr(wrapper, _AGENT_FORK_TOOLKIT_FACTORY_ATTR, fork_toolkit_factory)
+
+        if self_reference is not None:
+            self_reference.bind_agent_instance(
+                wrapper,
+                default_memory_key=resolved_default_self_reference_key,
+            )
 
         return cast(
             Callable[

@@ -62,7 +62,8 @@ class ProductAnalysis(BaseModel):
     rating: int = Field(..., description="评分（1-5分）")
 
 # 配置 LLM 接口
-llm_interface = OpenAICompatible.load_from_json_file("provider.json")["provider"]["model"]
+models = OpenAICompatible.load_from_json_file("provider.json")
+llm_interface = models["openai"]["gpt-3.5-turbo"]
 
 # 创建 LLM 函数
 @llm_function(llm_interface=llm_interface)
@@ -230,15 +231,17 @@ asyncio.run(main())
 - **动态模板参数**: 支持通过 `_template_params` 在函数调用时动态设置 DocString 模板参数，让一个函数适应多种场景。
 - **类型安全**: 支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
 - **异步支持**: `@llm_function` 与 `@llm_chat` 原生支持异步调用，无需额外别名。
-- **多模态支持**: 支持文本、图片URL和本地图片路径的多模态输入处理，同时创新性支持工具的多模态返回。
-- **步骤化装饰器流水线**：`llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct 和响应解析拆分为可组合的步骤，便于调试与扩展。
-- **基础引擎模块化**：`base/messages`、`base/tool_call`、`base/type_resolve` 独立演进，类型解析和多模态处理更稳健。
-- **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，并且定义了 LLM Interface 抽象类，便于扩展。
+- **多模态支持**: 支持文本、图片 URL、本地图片路径的多模态输入，同时支持工具多模态返回。
+- **事件流与可观测性**: 通过 `enable_event=True` 获取完整 ReAct 事件流与 `origin` 元数据，便于 UI 路由与性能统计。
+- **SelfReference + PyRepl 运行时**: 提供内置 PyRepl 与 selfref primitives，支持持久记忆、fork/spawn/wait 等自分叉能力。
+- **步骤化装饰器流水线**: `llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct 和响应解析拆分为可组合步骤。
+- **基础引擎模块化**: `base/messages`、`base/tool_call`、`base/type_resolve` 独立演进，类型解析与多模态处理更稳健。
+- **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，便于扩展。
 - **API 密钥管理**: 智能负载均衡多个 API 密钥。
 - **流量控制**: 集成令牌桶算法，实现智能流量平滑。
-- **工具系统**: 支持 LLM tool use，具有简单易用的工具定义和调用机制，支持多模态工具返回。
-- **开箱即用终端 TUI**: 提供 `@tui` 装饰器，可直接将 `@llm_chat` Agent 包装为 Textual 终端聊天界面。
-- **日志完备**: 支持 `trace_id` 跟踪和搜索，方便调试和监控。
+- **工具系统**: 支持工具调用、参数校验、最佳实践注入与多模态返回。
+- **开箱即用终端 TUI**: 提供 `@tui` 装饰器，可将 `@llm_chat` Agent 包装为 Textual 终端聊天界面。
+- **日志可追踪**: 支持 `trace_id` 关联日志，便于调试与排障。
 
 ## 项目架构
 
@@ -255,11 +258,14 @@ SimpleLLMFunc/
 │   ├── post_process.py          # 响应解析与类型转换
 │   └── ReAct.py                 # ReAct 协调器
 ├── builtin/                     # 内置工具
-│   └── pyrepl.py                # Python REPL 工具集
+│   ├── pyrepl.py                # Python REPL 工具集
+│   └── self_reference.py        # SelfReference 内存实现
 ├── hooks/                       # 事件流系统
 │   ├── events.py                # 事件类型定义
 │   ├── stream.py                # 事件/响应流封装
-│   └── event_emitter.py         # 工具自定义事件发射器
+│   ├── event_emitter.py         # 工具自定义事件发射器
+│   ├── event_bus.py             # 事件总线
+│   └── input_stream.py          # 交互式输入路由
 ├── interface/                   # LLM 接口层
 │   ├── llm_interface.py         # 抽象基类
 │   ├── openai_compatible.py     # OpenAI 兼容实现
@@ -268,23 +274,28 @@ SimpleLLMFunc/
 ├── llm_decorator/               # 装饰器与步骤化流水线
 │   ├── llm_function_decorator.py
 │   ├── llm_chat_decorator.py
-│   ├── multimodal_types.py
 │   ├── steps/                   # Prompt/签名/执行/响应拆分
 │   │   ├── common/
 │   │   ├── function/
 │   │   └── chat/
 │   └── utils/
 │       └── tools.py
+├── runtime/                     # 运行时原语与 worker 代理
+│   ├── primitives.py
+│   ├── builtin_self_reference.py
+│   └── worker_proxy.py
+├── self_reference.py            # SelfReference 对外接口
 ├── utils/                       # 通用工具与 TUI 组件
-│   ├── __init__.py
 │   └── tui/
 ├── tool/                        # 工具定义与序列化
 │   └── tool.py
 ├── type/                        # 类型与多模态辅助
-│   ├── decorator.py             # 装饰器相关的类型定义
-│   ├── message.py               # 消息片段类型
-│   └── multimodal.py            # Text / ImgUrl / ImgPath 等
-├── logger/                      # 日志与可观测性
+│   ├── hooks.py
+│   ├── llm.py
+│   ├── message.py
+│   ├── multimodal.py            # Text / ImgUrl / ImgPath 等
+│   └── tool_call.py
+├── logger/                      # 日志系统
 ├── observability/               # Langfuse 等集成
 └── py.typed
 ```
@@ -293,27 +304,27 @@ SimpleLLMFunc/
 
 #### LLM 接口模块
 
-`interface` 模块提供了与各种 LLM 服务通信的标准接口，支持任何符合 OpenAI API 格式的服务，包括 OpenAI/Deepseek/Claude 及自建兼容 API。`token_bucket.py` 负责流量控制，`key_pool.py` 负责密钥负载均衡。
+`interface` 模块提供与 LLM 服务通信的标准接口，支持任何兼容 OpenAI API 的服务。`OpenAICompatible` 可通过 `provider.json`（提供商 -> 模型配置列表）加载多个模型实例；`token_bucket.py` 负责流量控制，`key_pool.py` 负责密钥负载均衡。
 
 #### LLM 装饰器模块
 
-`llm_decorator` 模块是框架的核心，提供 `@llm_function` 与 `@llm_chat`，并在 `steps/` 中将 Prompt 构建、签名解析、ReAct 执行、响应解析等环节拆分为可组合步骤。`multimodal_types.py` 定义了 `Text`、`ImgUrl`、`ImgPath` 等多模态类型，支持处理文本和图片混合输入。
+`llm_decorator` 模块是框架的核心，提供 `@llm_function` 与 `@llm_chat`，并在 `steps/` 中将 Prompt 构建、签名解析、ReAct 执行、响应解析等环节拆分为可组合步骤。多模态类型定义位于 `type/multimodal.py`（`Text`、`ImgUrl`、`ImgPath`）。
 
 #### 类型定义模块
 
-`type` 模块专门用于导出多模态类型定义，使开发者可以方便地使用类型标注来创建支持多模态输入的 LLM 函数。
+`type` 模块导出消息、工具调用、多模态与事件流相关的类型定义，方便在签名与工具中直接使用 `Text`/`ImgUrl`/`ImgPath` 等类型。
 
 #### 日志系统
 
-`logger` 模块提供了全面的日志记录功能，包括 trace_id 跟踪、token 使用统计、系统和用户提示的记录等。特别地，日志系统会自动记录所有 LLM 的输入输出对话，生成结构化的 trace 索引文件以按照函数调用归类日志，开发者可以直接从这些日志中快速整理出高质量的对话语料，用于后续的模型微调和优化。
+`logger` 模块提供结构化日志记录与 `trace_id` 关联，默认输出控制台日志并在 `LOG_DIR/application.log` 中记录 JSON 日志，便于排障和观测。
 
 #### 工具系统
 
-`tool` 模块允许 LLM 访问外部工具和服务，工具通过 `@tool` 装饰器标记，并支持多模态返回（文本、图片或组合）。
+`tool` 模块允许 LLM 调用外部工具和服务。工具通过 `@tool` 装饰器标记（仅支持 `async def`），并支持多模态返回（文本、图片或组合），同时可注入工具最佳实践提示。
 
 #### 事件系统与终端 TUI
 
-`hooks` 模块提供统一事件流（LLM 调用、工具调用、自定义事件），`utils/tui` 在此基础上实现 `@tui` 装饰器，可直接把 `@llm_chat` Agent 包装为可交互终端界面；`builtin/pyrepl.py` 提供默认可用的代码执行工具集。
+`hooks` 模块提供统一事件流（LLM 调用、工具调用、自定义事件）与 `origin` 元数据，用于稳定路由主会话与 fork 子会话。`utils/tui` 基于事件流实现 `@tui` 装饰器，可直接把 `@llm_chat` Agent 包装为可交互终端界面；`builtin/pyrepl.py` 提供默认可用的代码执行工具集。
 
 ## 适用人群
 

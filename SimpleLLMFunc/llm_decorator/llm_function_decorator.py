@@ -70,7 +70,7 @@ def llm_function(
 ) -> Any:  # type: ignore
     """
     Async LLM function decorator that delegates function execution to a large language model.
-    
+
     When enable_event=True, the decorated function returns an AsyncGenerator[ReactOutput, None]
     that yields events and responses. When enable_event=False (default), it returns a single value.
     """
@@ -137,7 +137,9 @@ def llm_function(
 
     def decorator(
         func: Union[Callable[..., T], Callable[..., Awaitable[T]]],
-    ) -> Union[Callable[..., Awaitable[T]], Callable[..., AsyncGenerator[ReactOutput, None]]]:
+    ) -> Union[
+        Callable[..., Awaitable[T]], Callable[..., AsyncGenerator[ReactOutput, None]]
+    ]:
         signature = inspect.signature(func)
         docstring = func.__doc__ or ""
         func_name = func.__name__
@@ -145,12 +147,12 @@ def llm_function(
         # 统一的内部执行逻辑
         # 使用闭包变量来传递解析后的结果（避免重复解析）
         parsed_result: List[Optional[T]] = [None]  # 使用列表以便在闭包中修改
-        
+
         async def _execute_function_with_events(
             *args: Any, **kwargs: Any
         ) -> AsyncGenerator[ReactOutput, None]:
             """统一的执行逻辑，总是返回事件流
-            
+
             解析后的结果会存储在外层的 parsed_result 变量中
             """
             # Step 1: 解析函数签名
@@ -182,6 +184,7 @@ def llm_function(
                             system_prompt_template=system_prompt_template,
                             user_prompt_template=user_prompt_template,
                             template_params=template_params,
+                            toolkit=toolkit,
                         )
 
                         # Step 4: 执行 ReAct 循环（返回事件流）
@@ -190,7 +193,7 @@ def llm_function(
                             default=str,
                             ensure_ascii=False,
                         )
-                        
+
                         event_stream = await execute_react_loop(
                             llm_interface=llm_interface,
                             messages=messages,
@@ -229,17 +232,18 @@ def llm_function(
 
                             # Yield 解析后的响应（而不是原始的 LLM 响应）
                             from SimpleLLMFunc.hooks.stream import ResponseYield
+
                             yield ResponseYield(
                                 type="response",
                                 response=result,  # 解析后的结果（str, Pydantic 对象等）
                                 messages=last_messages if last_messages else [],
-                        )
+                            )
 
                         # 更新 Langfuse span
                         function_span.update(
                             output={
                                 "result": result,
-                                    "return_type": str(sig.return_type),
+                                "return_type": str(sig.return_type),
                             },
                         )
                     except Exception as exc:
@@ -256,7 +260,9 @@ def llm_function(
         if enable_event:
             # 事件模式：直接返回生成器
             @wraps(func)
-            async def async_wrapper_event(*args: Any, **kwargs: Any) -> AsyncGenerator[ReactOutput, None]:
+            async def async_wrapper_event(
+                *args: Any, **kwargs: Any
+            ) -> AsyncGenerator[ReactOutput, None]:
                 async for output in _execute_function_with_events(*args, **kwargs):
                     yield output
 
@@ -266,7 +272,9 @@ def llm_function(
             async_wrapper_event.__annotations__ = func.__annotations__
             setattr(async_wrapper_event, "__signature__", signature)
 
-            return cast(Callable[..., AsyncGenerator[ReactOutput, None]], async_wrapper_event)
+            return cast(
+                Callable[..., AsyncGenerator[ReactOutput, None]], async_wrapper_event
+            )
         else:
             # 非事件模式：消费生成器并返回最终结果
             @wraps(func)
@@ -274,7 +282,7 @@ def llm_function(
                 # 消费事件流（内部会自动解析并存储结果到 parsed_result）
                 async for output in _execute_function_with_events(*args, **kwargs):
                     pass  # 在非事件模式下，我们不关心事件，只要最终结果
-                
+
                 # 返回内部已经解析好的结果（避免重复解析）
                 if parsed_result[0] is not None:
                     return parsed_result[0]

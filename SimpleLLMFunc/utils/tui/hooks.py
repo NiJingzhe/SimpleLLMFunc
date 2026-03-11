@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Sequence, TypeAlias
 
 from SimpleLLMFunc.hooks.events import CustomEvent
@@ -17,6 +17,7 @@ class ToolRenderSnapshot:
     arguments: dict[str, Any]
     output: str = ""
     status: str = "running"
+    state: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -78,6 +79,52 @@ def pyrepl_tool_event_hook(
             return ToolEventRenderUpdate(append_output=prompt, status="waiting-input")
 
         return ToolEventRenderUpdate(status="waiting-input")
+
+    if event.event_name in {
+        "selfref_fork_start",
+        "selfref_fork_spawned",
+        "selfref_fork_end",
+        "selfref_fork_error",
+    }:
+        if not isinstance(event.data, dict):
+            return None
+
+        fork_id = str(event.data.get("fork_id", ""))
+        depth = event.data.get("depth", "")
+        memory_key = str(event.data.get("memory_key", ""))
+
+        if event.event_name == "selfref_fork_start":
+            return ToolEventRenderUpdate(
+                append_output=(
+                    f"[fork start] id={fork_id} depth={depth} memory={memory_key}\n"
+                ),
+                status="running",
+            )
+
+        if event.event_name == "selfref_fork_spawned":
+            return ToolEventRenderUpdate(
+                append_output=(
+                    f"[fork spawned] id={fork_id} depth={depth} memory={memory_key}\n"
+                ),
+                status="running",
+            )
+
+        if event.event_name == "selfref_fork_end":
+            return ToolEventRenderUpdate(
+                append_output=(
+                    f"[fork done] id={fork_id} depth={depth} memory={memory_key}\n"
+                ),
+                status="success",
+            )
+
+        error_type = str(event.data.get("error_type", "RuntimeError"))
+        error_message = str(event.data.get("error_message", ""))
+        return ToolEventRenderUpdate(
+            append_output=(
+                f"[fork error] id={fork_id} depth={depth} {error_type}: {error_message}\n"
+            ),
+            status="error",
+        )
 
     return None
 

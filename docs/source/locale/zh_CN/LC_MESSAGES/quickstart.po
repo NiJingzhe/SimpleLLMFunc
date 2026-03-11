@@ -7,17 +7,17 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: SimpleLLMFunc\n"
+"Project-Id-Version:  SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-12-08 01:12+0800\n"
+"POT-Creation-Date: 2026-03-11 21:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: zh_CN <LL@li.org>\n"
 "Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=1; plural=0;\n"
 "Generated-By: Babel 2.17.0\n"
 
 #: ../../source/quickstart.md:1
@@ -33,7 +33,8 @@ msgid "环境要求"
 msgstr "环境要求"
 
 #: ../../source/quickstart.md:7
-msgid "Python 3.11 或更高版本"
+#, fuzzy
+msgid "Python 3.12 或更高版本"
 msgstr "Python 3.11 或更高版本"
 
 #: ../../source/quickstart.md:8
@@ -81,174 +82,173 @@ msgid "在项目根目录创建 `.env` 文件："
 msgstr "在项目根目录创建 `.env` 文件："
 
 #: ../../source/quickstart.md:62
-msgid "编辑 `.env` 文件，配置日志设置："
+#, fuzzy
+msgid "编辑 `.env` 文件，配置日志设置（可选）："
 msgstr "编辑 `.env` 文件，配置日志设置："
 
-#: ../../source/quickstart.md:68
+#: ../../source/quickstart.md:72
 msgid "2.2 创建模型配置文件"
 msgstr "2.2 创建模型配置文件"
 
-#: ../../source/quickstart.md:70
+#: ../../source/quickstart.md:74
 msgid "创建 `provider.json` 文件来配置您的 LLM 模型："
 msgstr "创建 `provider.json` 文件来配置您的 LLM 模型："
 
-#: ../../source/quickstart.md:119
+#: ../../source/quickstart.md:112
 msgid "**重要提示：**"
 msgstr "**重要提示：**"
 
-#: ../../source/quickstart.md:121
-msgid "请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥"
-msgstr "请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥"
+#: ../../source/quickstart.md:114
+msgid "`provider.json` 采用 **提供商 -> 模型配置列表** 的结构"
+msgstr ""
 
-#: ../../source/quickstart.md:122
-msgid "请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥"
-msgstr "请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥"
+#: ../../source/quickstart.md:115
+msgid "`model_name` 会作为 `models[provider][model_name]` 的索引键"
+msgstr ""
 
-#: ../../source/quickstart.md:123
+#: ../../source/quickstart.md:116
 msgid "支持多个 API 密钥，系统会自动进行负载均衡"
 msgstr "支持多个 API 密钥，系统会自动进行负载均衡"
 
-#: ../../source/quickstart.md:124
+#: ../../source/quickstart.md:117
 msgid "可以配置多个不同的模型提供商"
 msgstr "可以配置多个不同的模型提供商"
 
-#: ../../source/quickstart.md:125
-msgid "配置文件使用嵌套结构：`provider -> model_name -> 配置参数`"
-msgstr "配置文件使用嵌套结构：`provider -> model_name -> 配置参数`"
-
-#: ../../source/quickstart.md:127
+#: ../../source/quickstart.md:119
 msgid "第三步：创建第一个 Demo"
 msgstr "第三步：创建第一个 Demo"
 
-#: ../../source/quickstart.md:129
+#: ../../source/quickstart.md:121
 msgid "3.1 基础文本分析示例"
 msgstr "3.1 基础文本分析示例"
 
-#: ../../source/quickstart.md:131
+#: ../../source/quickstart.md:123
 msgid "创建一个名为 `first_demo.py` 的文件："
 msgstr "创建一个名为 `first_demo.py` 的文件："
 
-#: ../../source/quickstart.md:133
+#: ../../source/quickstart.md:125
 msgid ""
-"⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 `async "
-"def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。"
+"⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 "
+"`async def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。"
 msgstr ""
-"⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 `async "
-"def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。"
+"⚠️ SimpleLLMFunc 中的所有装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）都要求装饰 "
+"`async def` 定义的函数；使用时请在异步上下文中通过 `await` 调用，或使用 `asyncio.run` 启动顶层任务。"
 
-#: ../../source/quickstart.md:188
+#: ../../source/quickstart.md:180
 msgid "3.2 运行 Demo"
 msgstr "3.2 运行 Demo"
 
-#: ../../source/quickstart.md:194
+#: ../../source/quickstart.md:186
 msgid "您应该看到类似以下的输出："
 msgstr "您应该看到类似以下的输出："
 
-#: ../../source/quickstart.md:206
+#: ../../source/quickstart.md:198
 msgid "第四步：进阶示例"
 msgstr "第四步：进阶示例"
 
-#: ../../source/quickstart.md:208
+#: ../../source/quickstart.md:200
 msgid "4.1 动态模板参数示例"
 msgstr "4.1 动态模板参数示例"
 
-#: ../../source/quickstart.md:210
+#: ../../source/quickstart.md:202
 msgid "这个示例展示了如何使用 `_template_params` 让同一个函数适应不同的使用场景："
 msgstr "这个示例展示了如何使用 `_template_params` 让同一个函数适应不同的使用场景："
 
-#: ../../source/quickstart.md:307
+#: ../../source/quickstart.md:299
 msgid "这个示例展示了动态模板参数的核心优势："
 msgstr "这个示例展示了动态模板参数的核心优势："
 
-#: ../../source/quickstart.md:309
+#: ../../source/quickstart.md:301
 msgid "**一个函数定义，多种使用场景**"
 msgstr "**一个函数定义，多种使用场景**"
 
-#: ../../source/quickstart.md:310
+#: ../../source/quickstart.md:302
 msgid "**调用时动态指定角色和任务**"
 msgstr "**调用时动态指定角色和任务**"
 
-#: ../../source/quickstart.md:311
+#: ../../source/quickstart.md:303
 msgid "**代码复用性大大提高**"
 msgstr "**代码复用性大大提高**"
 
-#: ../../source/quickstart.md:313
+#: ../../source/quickstart.md:305
 msgid "4.2 带工具调用的示例"
 msgstr "4.2 带工具调用的示例"
 
-#: ../../source/quickstart.md:315
+#: ../../source/quickstart.md:307
 msgid "创建一个更复杂的示例，展示工具调用功能："
 msgstr "创建一个更复杂的示例，展示工具调用功能："
 
-#: ../../source/quickstart.md:386
+#: ../../source/quickstart.md:378
 msgid "第五步：查看日志"
 msgstr "第五步：查看日志"
 
-#: ../../source/quickstart.md:388
-msgid "SimpleLLMFunc 提供了强大的日志系统。运行 Demo 后，您可以："
+#: ../../source/quickstart.md:380
+#, fuzzy
+msgid "SimpleLLMFunc 提供了内建日志系统。运行 Demo 后，您可以："
 msgstr "SimpleLLMFunc 提供了强大的日志系统。运行 Demo 后，您可以："
 
-#: ../../source/quickstart.md:390
-msgid "查看控制台输出的彩色日志"
-msgstr "查看控制台输出的彩色日志"
+#: ../../source/quickstart.md:382
+msgid "查看控制台输出日志（含 trace_id）"
+msgstr ""
 
-#: ../../source/quickstart.md:391
-msgid "检查 `./agent.log` 文件中的详细日志"
-msgstr "检查 `./agent.log` 文件中的详细日志"
+#: ../../source/quickstart.md:383
+msgid "检查 `LOG_DIR/application.log` 的结构化日志（默认 `logs/application.log`）"
+msgstr ""
 
-#: ../../source/quickstart.md:392
-msgid "查看 `log_indices/trace_index.json` 中的结构化日志索引"
-msgstr "查看 `log_indices/trace_index.json` 中的结构化日志索引"
+#: ../../source/quickstart.md:384
+msgid "若启用 PyRepl，查看 `LOG_DIR/pyrepl/<instance_id>/executions.jsonl` 的执行审计"
+msgstr ""
 
-#: ../../source/quickstart.md:394
-msgid "每个函数调用都会生成唯一的 `trace_id`，方便追踪和调试。"
+#: ../../source/quickstart.md:386
+#, fuzzy
+msgid "每个函数调用都会生成唯一的 `trace_id`，便于追踪和调试。"
 msgstr "每个函数调用都会生成唯一的 `trace_id`，方便追踪和调试。"
 
-#: ../../source/quickstart.md:396
+#: ../../source/quickstart.md:388
 msgid "常见问题"
 msgstr "常见问题"
 
-#: ../../source/quickstart.md:398
+#: ../../source/quickstart.md:390
 msgid "Q: API 密钥配置错误怎么办？"
 msgstr "Q: API 密钥配置错误怎么办？"
 
-#: ../../source/quickstart.md:400
+#: ../../source/quickstart.md:392
 msgid "A: 请检查 `provider.json` 文件中的 API 密钥是否正确，确保密钥有效且有足够的配额。"
 msgstr "A: 请检查 `provider.json` 文件中的 API 密钥是否正确，确保密钥有效且有足够的配额。"
 
-#: ../../source/quickstart.md:402
+#: ../../source/quickstart.md:394
 msgid "Q: 模型返回格式不正确怎么办？"
 msgstr "Q: 模型返回格式不正确怎么办？"
 
-#: ../../source/quickstart.md:404
-msgid "A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。"
-msgstr "A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。"
+#: ../../source/quickstart.md:396
+msgid "A: 对于复杂返回类型，框架会要求模型输出 XML 结构。若模型经常输出不合规 XML，建议切换更强模型或在 DocString 中强化格式约束。"
+msgstr ""
 
-#: ../../source/quickstart.md:406
+#: ../../source/quickstart.md:398
 msgid "Q: 如何添加更多工具？"
 msgstr "Q: 如何添加更多工具？"
 
-#: ../../source/quickstart.md:408
+#: ../../source/quickstart.md:400
 msgid "A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `toolkit` 参数中传入工具列表。"
 msgstr "A: 使用 `@tool` 装饰器定义工具函数，然后在 `@llm_function` 的 `toolkit` 参数中传入工具列表。"
 
-#: ../../source/quickstart.md:410
+#: ../../source/quickstart.md:402
 msgid "Q: 如何实现异步调用？"
 msgstr "Q: 如何实现异步调用？"
 
-#: ../../source/quickstart.md:412
+#: ../../source/quickstart.md:404
 msgid ""
-"A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async def`"
-" 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。"
+"A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async "
+"def` 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。"
 msgstr ""
-"A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async def`"
-" 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。"
+"A: SimpleLLMFunc 中的装饰器（如 `@llm_function`、`@llm_chat`、`@tool`）只支持 `async "
+"def` 定义的函数，因此需要在异步上下文中通过 `await` 调用，或在脚本入口使用 `asyncio.run`。"
 
-#: ../../source/quickstart.md:414
+#: ../../source/quickstart.md:406
 msgid "Q: 什么是动态模板参数？"
 msgstr "Q: 什么是动态模板参数？"
 
-#: ../../source/quickstart.md:416
+#: ../../source/quickstart.md:408
 msgid ""
 "A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString "
 "中的占位符，让同一个函数适应不同的使用场景。"
@@ -256,39 +256,61 @@ msgstr ""
 "A: 动态模板参数允许您在函数调用时通过 `_template_params` 参数动态设置 DocString "
 "中的占位符，让同一个函数适应不同的使用场景。"
 
-#: ../../source/quickstart.md:418
+#: ../../source/quickstart.md:410
 msgid "Q: 如何使用动态模板参数？"
 msgstr "Q: 如何使用动态模板参数？"
 
-#: ../../source/quickstart.md:420
+#: ../../source/quickstart.md:412
 #, python-brace-format
 msgid "A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如："
 msgstr "A: 在 DocString 中使用 `{变量名}` 占位符，调用时通过 `_template_params` 传入变量值。例如："
 
-#: ../../source/quickstart.md:441
+#: ../../source/quickstart.md:433
 msgid "下一步"
 msgstr "下一步"
 
-#: ../../source/quickstart.md:443
+#: ../../source/quickstart.md:435
 msgid "恭喜！您已经成功运行了第一个 SimpleLLMFunc 应用。接下来您可以："
 msgstr "恭喜！您已经成功运行了第一个 SimpleLLMFunc 应用。接下来您可以："
 
-#: ../../source/quickstart.md:445
+#: ../../source/quickstart.md:437
 msgid "探索更多示例代码（在 `examples/` 目录中）"
 msgstr "探索更多示例代码（在 `examples/` 目录中）"
 
-#: ../../source/quickstart.md:446
+#: ../../source/quickstart.md:438
 msgid "阅读详细文档了解高级功能"
 msgstr "阅读详细文档了解高级功能"
 
-#: ../../source/quickstart.md:447
+#: ../../source/quickstart.md:439
 msgid "尝试创建自己的 LLM 应用"
 msgstr "尝试创建自己的 LLM 应用"
 
-#: ../../source/quickstart.md:448
+#: ../../source/quickstart.md:440
 msgid "参与社区讨论和贡献"
 msgstr "参与社区讨论和贡献"
 
-#: ../../source/quickstart.md:450
+#: ../../source/quickstart.md:442
 msgid "祝您使用愉快！"
 msgstr "祝您使用愉快！"
+
+#~ msgid "请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥"
+#~ msgstr "请将 `your-openai-api-key` 替换为您的实际 OpenAI API 密钥"
+
+#~ msgid "请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥"
+#~ msgstr "请将 `your-deepseek-api-key` 替换为您的实际 Deepseek API 密钥"
+
+#~ msgid "配置文件使用嵌套结构：`provider -> model_name -> 配置参数`"
+#~ msgstr "配置文件使用嵌套结构：`provider -> model_name -> 配置参数`"
+
+#~ msgid "查看控制台输出的彩色日志"
+#~ msgstr "查看控制台输出的彩色日志"
+
+#~ msgid "检查 `./agent.log` 文件中的详细日志"
+#~ msgstr "检查 `./agent.log` 文件中的详细日志"
+
+#~ msgid "查看 `log_indices/trace_index.json` 中的结构化日志索引"
+#~ msgstr "查看 `log_indices/trace_index.json` 中的结构化日志索引"
+
+#~ msgid "A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。"
+#~ msgstr "A: SimpleLLMFunc 会自动重试，但如果小模型无法输出正确的 JSON 格式，建议使用更强大的模型如 GPT-4。"
+

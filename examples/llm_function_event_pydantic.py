@@ -16,7 +16,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 provider_json_path = os.path.join(current_dir, "provider.json")
 
 llm = OpenAICompatible.load_from_json_file(provider_json_path)["openrouter"][
-    "google/gemini-3-flash-preview"
+    "minimax/minimax-m2.5"
 ]
 
 
@@ -45,9 +45,7 @@ async def analyze_movie_review(review_text: str) -> MovieReview:
     Returns:
         MovieReview: 结构化的评论分析结果
     """
-    return MovieReview(
-        title="", rating=0, sentiment="", summary="", tags=[]
-    )  # 占位符
+    return MovieReview(title="", rating=0, sentiment="", summary="", tags=[])  # 占位符
 
 
 async def main():
@@ -68,7 +66,7 @@ async def main():
     async for output in analyze_movie_review(review_text=review):
         if is_response_yield(output):
             # output.response 现在是解析后的 Pydantic 对象
-            result: MovieReview = output.response   # type: ignore
+            result: MovieReview = output.response  # type: ignore
             print(f"\n分析结果（Pydantic 对象）：")
             print(f"  电影标题: {result.title}")
             print(f"  评分: {result.rating}")
@@ -91,4 +89,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

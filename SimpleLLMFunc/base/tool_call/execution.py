@@ -21,6 +21,10 @@ from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+from SimpleLLMFunc.base.tool_call.extraction import (
+    parse_tool_call_arguments,
+    repair_tool_call_arguments,
+)
 
 
 def _convert_tool_arguments(
@@ -231,7 +235,17 @@ async def _execute_single_tool_call(
         metadata={"tool_call_id": tool_call_id},
     ) as tool_span:
         try:
-            arguments = json.loads(arguments_str)
+            repaired_arguments_str = repair_tool_call_arguments(arguments_str)
+            if repaired_arguments_str != arguments_str:
+                push_warning(
+                    f"工具 '{tool_name}' 参数 JSON 已自动修复",
+                    location=get_location(),
+                )
+                arguments_str = repaired_arguments_str
+
+            arguments = parse_tool_call_arguments(arguments_str)
+            if arguments is None:
+                raise ValueError("工具参数不是合法的 JSON 对象")
 
             # 更新为解析后的参数
             tool_span.update(input=arguments)

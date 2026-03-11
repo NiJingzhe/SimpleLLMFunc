@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-02-22 18:55+0800\n"
+"POT-Creation-Date: 2026-03-11 21:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -45,8 +45,8 @@ msgid "    Langfuse集成"
 msgstr "Langfuse Integration"
 
 #: ../../source/index.md:5
-msgid "    iPython内核"
-msgstr "    iPython Kernel"
+msgid "    PyRepl运行时"
+msgstr "PyRepl runtime"
 
 #: ../../source/index.md:5
 msgid "    贡献指南"
@@ -68,3 +68,6 @@ msgstr ""
 
 #~ msgid "    Langfuse Intergation"
 #~ msgstr ""
+
+#~ msgid "    iPython内核"
+#~ msgstr "    iPython Kernel"

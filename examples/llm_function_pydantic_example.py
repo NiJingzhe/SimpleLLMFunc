@@ -18,7 +18,7 @@ provider_json_path = os.path.join(current_dir, "provider.json")
 try:
     llm_interface = OpenAICompatible.load_from_json_file(provider_json_path)[
         "openrouter"
-    ]["qwen/qwen3.5-397b-a17b"]
+    ]["minimax/minimax-m2.5"]
 except Exception:
     llm_interface = None  # type: ignore
 

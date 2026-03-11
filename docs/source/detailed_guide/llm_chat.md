@@ -23,7 +23,7 @@
 
 ## 装饰器用法
 
-> ⚠️ **重要说明**：`llm_chat` 只能装饰 `async def` 定义的异步函数，返回的也是可 `await` 的协程；请在异步上下文中调用，或在脚本入口使用 `asyncio.run()`。
+> ⚠️ **重要说明**：`llm_chat` 只能装饰 `async def` 定义的异步函数，调用后返回 **异步生成器**；请使用 `async for` 消费输出。
 
 ### 基本语法
 
@@ -48,22 +48,27 @@ async def your_chat_function(
     Describe assistant role and behavior here.
     This docstring is used as the system prompt.
     """
-    yield "", history or []
+    pass
 ```
+
+> 提示：函数体不会被执行，DocString 才是 Prompt；建议直接使用 `pass`。
 
 ### 参数说明
 
 - **llm_interface** (必需): LLM 接口实例，用于与大语言模型通信
 - **toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
 - **max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5
-- **stream** (可选): 是否启用流式模式，默认为 True
-- **return_mode** (可选): 返回模式，可选值为 "text"（默认）或 "raw"
+- **stream** (可选): 是否启用流式模式，默认为 False
+- **return_mode** (可选): 返回模式，可选值为 "text"（默认）或 "raw"。
+  - 仅在 `enable_event=False` 时生效
+  - 当 `enable_event=True` 时，`ResponseYield.response` 始终为原始响应对象或流式 chunk
 - **enable_event** (可选): 是否启用事件流，默认为 False
   - `False`: 返回 `(response, messages)` 元组（向后兼容模式）
   - `True`: 返回 `ReactOutput`（`ResponseYield` 或 `EventYield`）
   - 详细说明请参考 [事件流文档](event_stream.md)
-- **self_reference** (optional): Shared `SelfReference` object. When provided, `llm_chat` automatically appends a SelfReference Memory Contract to the end of the system prompt, guiding the agent to use controlled memory APIs.
-- **self_reference_key** (optional): Memory key used for this chat function. Defaults to function name when omitted.
+- **strict_signature** (可选): 当为 True 时强制 `agent(history, message: str, _template_params=None)` 规范签名
+- **self_reference** (可选): 共享的 `SelfReference` 实例；若未显式传入，`llm_chat` 会从 `PyRepl` runtime backend 中自动探测
+- **self_reference_key** (可选): 本聊天函数的记忆键，默认为函数名
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
 ### 返回值
@@ -73,9 +78,13 @@ async def your_chat_function(
 - `chunk` (str): 响应内容的一部分（流式模式）或完整响应（非流式）
 - `updated_history` (List[Dict[str, str]]): 更新后的对话历史
 
+> 提示：当 `stream=True` 且 `return_mode="text"` 时，流结束会额外 yield 一个空字符串作为结束标记。
+
 当 `enable_event=True` 时，返回 `ReactOutput`，可以是：
 - `ResponseYield`: 包含响应和消息列表
 - `EventYield`: 包含 ReAct 循环中的事件（如工具调用开始/结束、LLM 调用等）
+
+> 注意：历史参数名应为 `history` 或 `chat_history`。若未提供符合格式的历史，框架会忽略历史并发出警告。若历史中包含 `system` 消息，最新的 `system` 会覆盖 DocString 作为系统提示，其余 `system` 会被过滤。
 
 ## 使用示例
 
@@ -98,7 +107,7 @@ async def simple_chat(
     history: List[Dict[str, str]] | None = None,
 ) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
     """你是一个友好的聊天助手，善于回答各种问题。"""
-    yield "", history or []
+    pass
 
 # 使用示例
 async def main():
@@ -161,7 +170,7 @@ async def weather_chat(
     你是一个天气助手，可以查询城市天气信息。
     当用户询问天气时，使用 get_weather 工具来获取实时信息。
     """
-    yield "", history or []
+    pass
 
 # 使用示例
 async def main():
@@ -198,7 +207,7 @@ async def multi_turn_chat(
     history: List[Dict[str, str]] | None = None,
 ) -> AsyncGenerator[Tuple[str, List[Dict[str, str]]], None]:
     """你是一个专业的编程助手，精通 Python 和 JavaScript。"""
-    yield "", history or []
+    pass
 
 async def interactive_chat_session():
     """运行交互式聊天会话"""
@@ -254,79 +263,122 @@ asyncio.run(demo())
 
 ## 高级特性
 
-### SelfReference auto system-prompt contract
+### SelfReference + runtime primitives
 
-When `@llm_chat(...)` is provided with `self_reference`, the framework automatically appends a SelfReference Memory Contract to the current system prompt (with deduplication to avoid repeated blocks).
+When runtime-enabled tools are mounted (for example via `PyRepl`), the framework injects a deduplicated tool best-practices block at the system-prompt head. Runtime primitive guidance is included inside those tool-owned best-practice entries.
 
-The contract is runtime guidance for each turn; durable system-prompt memory remains clean and can be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
+The guidance is rebuilt per turn and keeps durable system-prompt memory clean; durable prompt text can still be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
 
-The contract tells the agent:
+The guidance tells the agent:
 
-- which `self_reference.memory["<key>"]` handle to use
-- how to persist durable preferences with `append_system_prompt(...)`
-- which common memory methods are available (`append`, `update`, `delete`, `replace`, etc.)
+- how to discover mounted runtime capabilities (`runtime.list_primitives()`)
+- how to inspect one exact contract (`runtime.get_primitive_spec(name)`) or a filtered subset (`runtime.list_primitive_specs(names=[...], contains="selfref.fork.")`)
+- how to read selfref namespace guidance (`runtime.selfref.guide()`)
+- reset semantics (`reset_repl` clears REPL variables, not runtime backend state)
+- (when SelfReference memory is bound) the memory key scope for this chat function
 
 Example:
 
 ```python
-from SimpleLLMFunc import SelfReference, llm_chat
+from SimpleLLMFunc import llm_chat
+from SimpleLLMFunc.builtin import PyRepl, SelfReference
 
 self_reference = SelfReference()
+repl = PyRepl()
+repl.install_primitive_pack("selfref", backend=self_reference)
 
 @llm_chat(
     llm_interface=llm,
     toolkit=repl.toolset,
-    self_reference=self_reference,
     self_reference_key="agent_main",
 )
 async def agent(message: str, history=None):
     """You are a practical coding assistant."""
 ```
 
-Write durable memory into system prompt from tools (for example in `execute_code`):
+单次调用的高级覆盖（可选）：
 
 ```python
-mem = self_reference.memory["agent_main"]
-mem.append_system_prompt("User preference: answer in concise bullet points.")
+await agent(
+    "task",
+    _template_params={
+        "__self_reference_key_override": "agent_alt",
+        "__self_reference_toolkit_override": repl.toolset,
+    },
+)
 ```
 
-Method reference (purpose of each memory method):
+Inside `execute_code`, prefer runtime primitives for memory operations:
 
-- `count()`: return number of messages in this memory key.
-- `all()`: return deep-copied full message list.
-- `get(index)`: read one message at index.
-- `append(message)`: append one message.
-- `insert(index, message)`: insert one message at index.
-- `update(index, message)`: replace one message at index.
-- `delete(index)`: delete one message at index.
-- `replace(messages)`: replace entire history with validated messages.
-- `clear()`: clear all messages.
-- `get_system_prompt()`: read latest system prompt.
-- `set_system_prompt(text)`: overwrite system prompt.
-- `append_system_prompt(text)`: append text to existing system prompt memory.
+```python
+runtime.selfref.history.append_system_prompt(
+    "User preference: answer in concise bullet points.",
+)
+```
+
+Runtime self-reference primitive reference:
+
+- `runtime.selfref.guide()`: return namespace overview and fork/memory best-practice checklist.
+- `runtime.selfref.history.keys()`: list all bound memory keys.
+- `runtime.selfref.history.active_key()`: resolve active history key in current context.
+- `runtime.selfref.history.count(key=None)`: return number of messages in resolved key.
+- `runtime.selfref.history.all(key=None)`: return deep-copied full message list.
+- `runtime.selfref.history.get(index, key=None)`: read one message at index.
+- `runtime.selfref.history.append(message, key=None)`: append one message.
+- `runtime.selfref.history.insert(index, message, key=None)`: insert one message at index.
+- `runtime.selfref.history.update(index, message, key=None)`: replace one message at index.
+- `runtime.selfref.history.delete(index, key=None)`: delete one message at index.
+- `runtime.selfref.history.replace(messages, key=None)`: replace entire history with validated messages.
+- `runtime.selfref.history.clear(key=None)`: clear non-system messages and keep current system prompt.
+- `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
+- `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
+- `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
+- `runtime.selfref.fork.run(..., include_history=False)`: run one child self-fork and wait.
+- `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
+- `runtime.selfref.fork.wait(fork_id, include_history=False)`: wait one spawned fork.
+- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait multiple forks and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+
+Fork results are compact by default (`history_included=False`, with `history_count` metadata) to avoid main-context pollution.
+Use `include_history=True` only when full child history is explicitly required.
+
+When `enable_event=True`, you can route main/fork events by origin metadata:
+
+```python
+from SimpleLLMFunc.hooks import is_event_yield
+
+async for output in agent("analyze and split"):
+    if not is_event_yield(output):
+        continue
+    if output.origin.fork_id:
+        print(f"fork={output.origin.fork_id} type={output.event.event_type}")
+    else:
+        print(f"main type={output.event.event_type}")
+```
 
 Forgetting memory:
 
 - Do not treat `reset_repl` as memory forgetting.
 - `reset_repl` only clears Python runtime variables.
-- Forget memory by deleting records through memory methods (`delete`, `replace`, `clear`).
+- Forget memory by deleting/replacing records through selfref history primitives (`runtime.selfref.history.delete`, `runtime.selfref.history.replace`); `runtime.selfref.history.clear` keeps only the current system prompt.
 
 ### 返回模式
 
 `return_mode` 参数控制返回的数据类型：
+
+> 提示：`return_mode` 仅在 `enable_event=False` 时生效；事件流模式始终返回原始响应对象或流式 chunk。
 
 ```python
 # 返回文本（默认）
 @llm_chat(llm_interface=llm, stream=True, return_mode="text")
 async def text_mode_chat(message: str, history=None):
     """聊天函数"""
-    yield "", history or []
+    pass
 
 # 返回原始响应对象（用于获取 token 使用量等详细信息）
 @llm_chat(llm_interface=llm, stream=True, return_mode="raw")
 async def raw_mode_chat(message: str, history=None):
     """聊天函数"""
-    yield "", history or []
+    pass
 ```
 
 ### 并发聊天会话
@@ -340,7 +392,7 @@ async def concurrent_chats():
     @llm_chat(llm_interface=llm, stream=True)
     async def chat(message: str, history=None):
         """通用聊天函数"""
-        yield "", history or []
+        pass
 
     # 定义多个会话
     sessions = [
@@ -471,7 +523,9 @@ from SimpleLLMFunc.hooks import ResponseYield, EventYield
 
 async for output in chat("查询天气"):
     if isinstance(output, ResponseYield):
-        print(output.response)
+        # 原始响应对象（流式时为 chunk）。
+        # 文本渲染建议使用 LLMChunkArriveEvent 的 accumulated_content。
+        pass
     elif isinstance(output, EventYield):
         print(f"事件: {output.event.event_type}")
 ```

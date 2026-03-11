@@ -11,6 +11,7 @@ from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from SimpleLLMFunc.type.message import MessageParam
 
 from SimpleLLMFunc.hooks.stream import (
+    EventOrigin,
     EventYield,
     ReactOutput,
     ResponseYield,
@@ -42,15 +43,13 @@ class TestResponseYield:
             model="test-model",
             object="chat.completion",
         )
-        messages: MessageList = [
-            {"role": "user", "content": "Hello"}
-        ]
-        
+        messages: MessageList = [{"role": "user", "content": "Hello"}]
+
         yield_obj = ResponseYield(
             response=response,
             messages=messages,
         )
-        
+
         assert yield_obj.type == "response"
         assert yield_obj.response == response
         assert yield_obj.messages == messages
@@ -63,7 +62,7 @@ class TestResponseYield:
             response="Hello",
             messages=messages,
         )
-        
+
         assert yield_obj.type == "response"
         assert yield_obj.response == "Hello"
         assert isinstance(yield_obj.response, str)
@@ -75,7 +74,7 @@ class TestEventYield:
     def test_event_yield_creation(self):
         """Test creating an EventYield."""
         from datetime import datetime, timezone
-        
+
         event = ReactStartEvent(
             event_type=ReActEventType.REACT_START,
             timestamp=datetime.now(timezone.utc),
@@ -86,15 +85,40 @@ class TestEventYield:
             initial_messages=[],
             available_tools=None,
         )
-        
+
         yield_obj = EventYield(
             type="event",
             event=event,
         )
-        
+
         assert yield_obj.type == "event"
         assert yield_obj.event == event
         assert isinstance(yield_obj.event, ReactStartEvent)
+
+    def test_event_yield_accepts_origin(self):
+        """EventYield should keep explicit origin metadata."""
+        event = ReactStartEvent(
+            event_type=ReActEventType.REACT_START,
+            timestamp=datetime.now(timezone.utc),
+            trace_id="test-trace",
+            func_name="test_func",
+            iteration=0,
+            user_task_prompt="test",
+            initial_messages=[],
+            available_tools=None,
+        )
+        origin = EventOrigin(
+            session_id="session-1",
+            agent_call_id="agent-root",
+            event_seq=1,
+            fork_depth=0,
+        )
+
+        yield_obj = EventYield(event=event, origin=origin)
+
+        assert yield_obj.origin.session_id == "session-1"
+        assert yield_obj.origin.agent_call_id == "agent-root"
+        assert yield_obj.origin.event_seq == 1
 
 
 class TestTypeGuards:
@@ -110,13 +134,13 @@ class TestTypeGuards:
             object="chat.completion",
         )
         messages: MessageList = []
-        
+
         response_yield = ResponseYield(
             type="response",
             response=response,
             messages=messages,
         )
-        
+
         event = ReactStartEvent(
             event_type=ReActEventType.REACT_START,
             timestamp=datetime.now(timezone.utc),
@@ -128,13 +152,13 @@ class TestTypeGuards:
             available_tools=None,
         )
         event_yield = EventYield(type="event", event=event)
-        
+
         assert is_response_yield(response_yield) is True
         assert is_response_yield(event_yield) is False
 
     def test_is_event_yield(self):
         """Test is_event_yield type guard."""
-        
+
         response = ChatCompletion(
             id="test-id",
             choices=[],
@@ -143,13 +167,13 @@ class TestTypeGuards:
             object="chat.completion",
         )
         messages: MessageList = []
-        
+
         response_yield = ResponseYield(
             type="response",
             response=response,
             messages=messages,
         )
-        
+
         event = ReactStartEvent(
             event_type=ReActEventType.REACT_START,
             timestamp=datetime.now(timezone.utc),
@@ -161,7 +185,7 @@ class TestTypeGuards:
             available_tools=None,
         )
         event_yield = EventYield(type="event", event=event)
-        
+
         assert is_event_yield(event_yield) is True
         assert is_event_yield(response_yield) is False
 
@@ -172,7 +196,7 @@ class TestReactOutput:
     def test_react_output_union(self):
         """Test that ReactOutput can be either ResponseYield or EventYield."""
         from datetime import datetime, timezone
-        
+
         # ResponseYield
         response = ChatCompletion(
             id="test-id",
@@ -188,7 +212,7 @@ class TestReactOutput:
             messages=messages,
         )
         assert isinstance(response_output, ResponseYield)
-        
+
         # EventYield
         event = ReactStartEvent(
             event_type=ReActEventType.REACT_START,
@@ -202,4 +226,3 @@ class TestReactOutput:
         )
         event_output: ReactOutput = EventYield(type="event", event=event)
         assert isinstance(event_output, EventYield)
-

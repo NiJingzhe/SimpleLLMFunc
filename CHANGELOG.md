@@ -1,5 +1,28 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.0 (2026-03-11) - Runtime Primitives, Forking, and Docs Refresh
+
+### 🎉 Major Features
+
+1. **Runtime Primitive Registry**:
+   - Added host-side primitive registry with `runtime.list_primitives`, `runtime.get_primitive_spec`, and `runtime.list_primitive_specs` for in-REPL discovery.
+   - Added worker proxy plumbing so primitives are callable in PyRepl without imports.
+   - Bundled SelfReference primitive pack under `runtime.selfref.history.*` and `runtime.selfref.fork.*` namespaces.
+
+2. **SelfReference Forking**:
+   - Added fork lifecycle primitives: `run`, `spawn`, `wait`, `wait_all` (plus chat variants) for parallel agent work.
+   - Fork results expose status, response, memory key, history count, and structured error details.
+
+3. **Event Origin Metadata & TUI Routing**:
+   - Normalized event origin metadata (session/fork context + tool linkage) for deterministic routing.
+   - Added fork-aware routing and visualization in the Textual TUI.
+
+### 🔧 Improvements
+
+1. **Tool Prompt Injection**:
+   - Added best-practice prompts and tool-specific prompt injection hooks for safer tool usage.
+
+
 ## 0.6.0 (2026-02-24) - PyRepl, Textual TUI, and Durable Agent Memory
 
 ### 🎉 Major Features

@@ -2,6 +2,8 @@
 
 本章节收集了 SimpleLLMFunc 框架的各种使用示例。这些示例展示了框架的核心功能和最佳实践。
 
+快速入口：可先查看 `examples/README.md`，其中包含按场景整理后的可运行命令（含无需 API Key 的本地示例）。
+
 > ⚠️ **重要提示**：本框架中的所有装饰器（`@llm_function`、`@llm_chat`、`@tool`）均要求被装饰的函数使用 `async def` 定义，并在调用时通过 `await`（或 `asyncio.run`）执行。
 
 ## 基础示例
@@ -46,6 +48,7 @@
 - 🔧 **工具调用可视化**：实时显示工具调用的参数、执行过程和结果
 - 📊 **完整执行统计**：Token 使用量、执行耗时、调用次数等详细信息
 - 🎯 **事件驱动架构**：在外部函数中处理事件，实现自定义 UI 和逻辑
+- 🧭 **Origin 元数据路由**：通过 `output.origin` 区分主链路与 fork 子链路
 
 **关键代码片段**：
 
@@ -72,13 +75,17 @@ async for output in chat(user_message="帮我计算 25 * 4 + 18"):
     if isinstance(output, EventYield):
         # 处理事件：LLM 调用、工具调用等
         event = output.event
+        origin = output.origin
+        if origin.fork_id:
+            print(f"fork={origin.fork_id} depth={origin.fork_depth}")
         if isinstance(event, ToolCallStartEvent):
             print(f"工具调用: {event.tool_name}")
             print(f"参数: {event.arguments}")
     
     elif isinstance(output, ResponseYield):
-        # 处理响应数据
-        print(output.response, end="")
+        # 原始响应对象（流式时为 chunk）。
+        # 文本渲染建议使用 LLMChunkArriveEvent 的 accumulated_content。
+        messages = output.messages
 ```
 
 **依赖安装**：
@@ -124,36 +131,38 @@ Run:
 poetry run python examples/tui_chat_example.py
 ```
 
-### SelfReference memory operations (local, no model)
+### Runtime memory primitives (local, no model)
 
-**File**: [examples/self_reference_basic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/self_reference_basic_example.py)
+**File**: [examples/runtime_primitives_basic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/runtime_primitives_basic_example.py)
 
-Shows how to use `SelfReference` without any LLM provider:
+Shows how to use runtime primitives without any LLM provider:
 
-- Explicitly wire `SelfReference` with `PyRepl`
-- Perform CRUD operations through `self_reference.memory["agent_main"]`
-- Persist durable preferences into system prompt via `append_system_prompt(...)`
+- Explicitly wire `SelfReference` with `PyRepl` as memory backend
+- Register one custom runtime backend + primitive (`constants.get`) as extension example
+- Perform CRUD operations through `runtime.selfref.history.*`
+- Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`
 
 Run:
 
 ```bash
-poetry run python examples/self_reference_basic_example.py
+poetry run python examples/runtime_primitives_basic_example.py
 ```
 
-### SelfReference + TUI Agent
+### Unified Runtime Selfref Agent (memory + fork)
 
-**File**: [examples/tui_self_reference_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_self_reference_example.py)
+**File**: [examples/tui_runtime_selfref_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_selfref_example.py)
 
-Shows full agent behavior when `@llm_chat` receives `self_reference`:
+Recommended single entry for runtime self-reference workflow:
 
-- `llm_chat` automatically appends the SelfReference Memory Contract to system prompt
-- Agent mutates memory via memory handles inside `execute_code`
-- Per-turn memory edits are merged into `updated_history` / `ReactEndEvent.final_messages`
+- One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
+- `llm_chat` injects runtime primitive guidance through `Tool Best Practices` (when `PyRepl` is mounted)
+- Forked contexts inherit parent memory snapshot from the same selfref key
+- Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
 
 Run:
 
 ```bash
-poetry run python examples/tui_self_reference_example.py
+poetry run python examples/tui_runtime_selfref_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控
@@ -246,19 +255,19 @@ poetry run python examples/llm_function_token_usage.py
 
 **文件**: [examples/provider.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider.json)
 
-示范 provider.json 的完整配置结构：
-- OpenAI 模型配置
-- 其他供应商的配置方式
-- API 密钥和速率限制设置
+示范 provider.json 的完整配置结构（提供商 -> 模型配置列表）：
+- `model_name` 作为索引键
+- API 密钥、重试与限流参数
+- 适配任意 OpenAI 兼容服务
 
 ### Provider 模板
 
 **文件**: [examples/provider_template.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider_template.json)
 
-提供了一个可复用的配置模板：
-- 预配置的常见 LLM 供应商
-- 最佳实践的参数设置
-- 多个 API 密钥的配置方式
+提供可复用的配置模板：
+- 多供应商示例与参数说明
+- 多密钥负载均衡
+- 限流与重试最佳实践
 
 ## 按功能分类的示例
 
