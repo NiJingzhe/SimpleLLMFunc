@@ -29,7 +29,7 @@ from SimpleLLMFunc.builtin import PyRepl, SelfReference
 from SimpleLLMFunc.hooks.events import CustomEvent
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.utils.tui import ToolRenderSnapshot
-from SimpleLLMFunc.utils.stdio import stdio
+from SimpleLLMFunc.utils.tui import tui
 
 
 MEMORY_KEY = "agent_main"
@@ -103,7 +103,7 @@ repl = PyRepl()
 repl.install_primitive_pack("selfref", backend=self_reference)
 
 
-@stdio(custom_event_hook=[local_debug_event_hook])  # type: ignore
+@tui(custom_event_hook=[local_debug_event_hook])  # type: ignore
 @llm_chat(
     llm_interface=llm,
     toolkit=[*repl.toolset],
