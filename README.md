@@ -400,17 +400,23 @@ asyncio.run(main())
 @llm_function(
     llm_interface=llm_interface,          # LLM interface instance
     toolkit=[tool1, tool2],                # Tool list
-    _template_params={                     # Dynamic Prompt template parameters
-        "language": "English",
-        "style": "Professional"
-    },
     retry_on_exception=True,               # Auto retry on exception
     timeout=60                              # Timeout setting
 )
 async def my_function(param: str) -> str:
     """Supports {language} {style} analysis"""
     pass
+
+result = await my_function(
+    "some input",
+    _template_params={
+        "language": "English",
+        "style": "Professional",
+    },
+)
 ```
+
+`_template_params` is passed **at call time** and only used to format the function DocString via `str.format`. It is removed before signature binding and is not part of the LLM input. If a placeholder is missing, the original DocString is used (with a warning).
 
 ### 2. LLM Provider Interface
 

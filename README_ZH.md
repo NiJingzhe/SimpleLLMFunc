@@ -404,17 +404,23 @@ asyncio.run(main())
 @llm_function(
     llm_interface=llm_interface,          # LLM 接口实例
     toolkit=[tool1, tool2],                # 工具列表
-    _template_params={                     # 动态 Prompt 模板参数
-        "language": "中文",
-        "style": "专业"
-    },
     retry_on_exception=True,               # 异常时自动重试
     timeout=60                              # 超时设置
 )
 async def my_function(param: str) -> str:
     """支持 {language} 的 {style} 分析"""
     pass
+
+result = await my_function(
+    "输入内容",
+    _template_params={
+        "language": "中文",
+        "style": "专业",
+    },
+)
 ```
+
+`_template_params` 需要在**调用时**传入，仅用于对 DocString 执行 `str.format` 替换。该参数会在函数签名绑定前被移除，不属于 LLM 输入。若占位符缺失，会记录 warning 并回退使用原始 DocString。
 
 ### 2. LLM 供应商接口
 
