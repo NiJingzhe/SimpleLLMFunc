@@ -20,7 +20,10 @@ from typing import (
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
-from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+from SimpleLLMFunc.observability.langfuse_client import (
+    coerce_langfuse_metadata,
+    langfuse_client,
+)
 from SimpleLLMFunc.base.tool_call.extraction import (
     parse_tool_call_arguments,
     repair_tool_call_arguments,
@@ -232,7 +235,7 @@ async def _execute_single_tool_call(
         as_type="tool",
         name=tool_name,
         input={"raw_arguments": arguments_str},
-        metadata={"tool_call_id": tool_call_id},
+        metadata=coerce_langfuse_metadata({"tool_call_id": tool_call_id}),
     ) as tool_span:
         try:
             repaired_arguments_str = repair_tool_call_arguments(arguments_str)

@@ -801,8 +801,10 @@ SimpleLLMFunc 支持灵活的配置：
 # .env 文件示例
 LOG_DIR=./logs                          # 日志目录（可选）
 LOG_LEVEL=INFO                          # 日志级别, 只控制控制台日志的输出，不会影响文件日志的输出
+LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse 服务器地址（可选）
 LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse 公钥（可选）
 LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse 密钥（可选）
+LANGFUSE_EXPORT_ALL_SPANS=true         # 导出所有 OpenTelemetry spans（可选）
 ```
 
 ## 🎯 常见使用场景

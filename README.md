@@ -797,8 +797,10 @@ SimpleLLMFunc supports flexible configuration:
 # .env file example
 LOG_DIR=./logs                          # Log directory (optional)
 LOG_LEVEL=INFO                          # Log level, only controls console log output, doesn't affect file log output
+LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse base URL (optional)
 LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse public key (optional)
 LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse secret key (optional)
+LANGFUSE_EXPORT_ALL_SPANS=true         # Export all OpenTelemetry spans (optional)
 ```
 
 ## 🎯 Common Use Cases

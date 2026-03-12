@@ -583,30 +583,26 @@ files = [
 
 [[package]]
 name = "langfuse"
-version = "3.6.1"
+version = "4.0.0"
 description = "A client library for accessing langfuse"
 optional = false
-python-versions = "<4.0,>=3.9"
+python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "langfuse-3.6.1-py3-none-any.whl", hash = "sha256:134e0007fcfdd9fb70b491c882bb431c8095b3f5cc5e865756f46a2abd3675a2"},
-    {file = "langfuse-3.6.1.tar.gz", hash = "sha256:eac27ee5bbd8d05e7d665e822e0efb36766b20fe281930ff040f47eb22cc1b69"},
+    {file = "langfuse-4.0.0-py3-none-any.whl", hash = "sha256:4afe6a114937fa544e7f5f86c34533c711f0f12ebf77480239b626da28bbae68"},
+    {file = "langfuse-4.0.0.tar.gz", hash = "sha256:10df126c8d68e5746ff39a0a5100233f9f29446626c478e7770b1c775e4c4e17"},
 ]
 
 [package.dependencies]
 backoff = ">=1.10.0"
 httpx = ">=0.15.4,<1.0"
+openai = ">=0.27.8"
 opentelemetry-api = ">=1.33.1,<2.0.0"
 opentelemetry-exporter-otlp-proto-http = ">=1.33.1,<2.0.0"
 opentelemetry-sdk = ">=1.33.1,<2.0.0"
 packaging = ">=23.2,<26.0"
-pydantic = ">=1.10.7,<3.0"
-requests = ">=2,<3"
+pydantic = ">=2,<3"
 wrapt = ">=1.14,<2.0"
-
-[package.extras]
-langchain = ["langchain (>=0.0.309)"]
-openai = ["openai (>=0.27.8)"]
 
 [[package]]
 name = "linkify-it-py"
@@ -1978,4 +1974,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "69ec8f03983663845df6c51c9e27b45726f7f49d26f5a3fca0c44538dbac623d"
+content-hash = "a7909ed1fdc5538c43547389d8e5fe7ac8fb0e1925f5856ac013dec419f2ed2c"

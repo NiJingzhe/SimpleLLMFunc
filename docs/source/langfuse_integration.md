@@ -35,6 +35,7 @@ pip install langfuse
 export LANGFUSE_PUBLIC_KEY="your_public_key"
 export LANGFUSE_SECRET_KEY="your_secret_key"
 export LANGFUSE_BASE_URL="https://cloud.langfuse.com"  # 可选
+export LANGFUSE_EXPORT_ALL_SPANS="true"  # 可选（默认保持 v3 的 export-all 行为）
 export LANGFUSE_ENABLED="True"  # 可选（当前实现不会自动禁用调用）
 ```
 
@@ -196,7 +197,13 @@ Function Call (Span)
 | `LANGFUSE_PUBLIC_KEY` | Langfuse 公钥 | - | 是 |
 | `LANGFUSE_SECRET_KEY` | Langfuse 私钥 | - | 是 |
 | `LANGFUSE_BASE_URL` | Langfuse 服务器地址 | `https://cloud.langfuse.com` | 否 |
+| `LANGFUSE_EXPORT_ALL_SPANS` | 导出所有 OpenTelemetry spans（保持 v3 行为） | `true` | 否 |
 | `LANGFUSE_ENABLED` | 是否启用观测（当前实现不强制） | `true` | 否 |
+
+### Langfuse v4 注意事项
+
+- v4 默认会过滤非 LLM 的 OpenTelemetry spans；框架默认保持 v3 的“导出全部 spans”行为，若希望使用 v4 的智能过滤，请设置 `LANGFUSE_EXPORT_ALL_SPANS=false`。
+- v4 会将 `metadata` 值规范化为字符串并限制长度，框架侧已自动做字符串化处理。
 
 ### 高级配置
 

@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
+
 class LangfuseConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -8,10 +9,11 @@ class LangfuseConfig(BaseSettings):
         extra="ignore",
     )
 
-    LANGFUSE_PUBLIC_KEY: str = ""  
+    LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
     LANGFUSE_ENABLED: bool = True
+    LANGFUSE_EXPORT_ALL_SPANS: bool = True
 
 
 @lru_cache

@@ -53,7 +53,10 @@ from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import push_error
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
-from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+from SimpleLLMFunc.observability.langfuse_client import (
+    coerce_langfuse_metadata,
+    langfuse_client,
+)
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
 
 T = TypeVar("T")
@@ -169,13 +172,15 @@ def llm_function(
                     as_type="span",
                     name=f"{sig.func_name}_function_call",
                     input=sig.bound_args.arguments,
-                    metadata={
-                        "function_name": sig.func_name,
-                        "trace_id": sig.trace_id,
-                        "tools_available": len(toolkit) if toolkit else 0,
-                        "max_tool_calls": max_tool_calls,
-                        "enable_event": enable_event,
-                    },
+                    metadata=coerce_langfuse_metadata(
+                        {
+                            "function_name": sig.func_name,
+                            "trace_id": sig.trace_id,
+                            "tools_available": len(toolkit) if toolkit else 0,
+                            "max_tool_calls": max_tool_calls,
+                            "enable_event": enable_event,
+                        }
+                    ),
                 ) as function_span:
                     try:
                         # Step 3: 构建初始提示
@@ -219,6 +224,8 @@ def llm_function(
                                 # EventYield 直接透传
                                 yield output
 
+                        result: Optional[T] = None
+
                         # 解析和验证最终响应
                         if last_response:
                             result = parse_and_validate_response(
@@ -240,12 +247,11 @@ def llm_function(
                             )
 
                         # 更新 Langfuse span
-                        function_span.update(
-                            output={
-                                "result": result,
-                                "return_type": str(sig.return_type),
-                            },
-                        )
+                        output_payload: Dict[str, Any] = {
+                            "return_type": str(sig.return_type),
+                            "result": result,
+                        }
+                        function_span.update(output=output_payload)
                     except Exception as exc:
                         # 更新 span 错误信息
                         function_span.update(
