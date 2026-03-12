@@ -94,7 +94,7 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["minimax/minimax-m2.5"]
+    return models["openrouter"]["z-ai/glm-4.7"]
 
 
 llm = load_llm()
@@ -110,14 +110,14 @@ repl.install_primitive_pack("selfref", backend=self_reference)
     stream=True,
     enable_event=True,
     self_reference_key=MEMORY_KEY,
-    temperature=1.0
+    temperature=1.0,
 )
 async def agent(message: str, history: HistoryList):
     """
     <WHO ARE YOU>
     You are a practical coding assistant with one persistent Python REPL.
     </WHO ARE YOU>
-    
+
     <HOW YOU SHOULD ACT>
     Planning and execution policy:
     - Start with a short plan: objective, assumptions, milestones, deliverables.

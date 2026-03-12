@@ -317,6 +317,19 @@ class TestPyReplExecute:
         assert details["pointer"] == " " * 17 + "^"
 
     @pytest.mark.asyncio
+    async def test_execute_import_runtime_includes_hint(self):
+        """Importing runtime should return a guidance hint."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("import runtime")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "runtime" in result["error"]
+        assert "cannot be imported" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_execute_handles_stderr_with_invalid_fileno(self, monkeypatch):
         """Worker startup should survive environments where stderr has fileno=-1."""
         from SimpleLLMFunc.builtin import PyRepl
@@ -890,7 +903,12 @@ class TestPyReplRuntimePrimitives:
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == [
+        stdout_lines = [
+            line
+            for line in result["stdout"].splitlines()
+            if not line.startswith("After calling runtime.list_primitives")
+        ]
+        assert stdout_lines == [
             "True",
             "True",
             "False",
@@ -898,6 +916,17 @@ class TestPyReplRuntimePrimitives:
             "True",
             "True",
         ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_list_primitives_prints_next_steps(self):
+        """runtime.list_primitives should emit next-step guidance."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("runtime.list_primitives()")
+
+        assert result["success"] is True
+        assert "After calling runtime.list_primitives" in result["stdout"]
 
     @pytest.mark.asyncio
     async def test_execute_exposes_runtime_list_primitive_specs(self):
@@ -955,6 +984,19 @@ class TestPyReplRuntimePrimitives:
             "True",
             "True",
         ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_primitive_param_error_includes_hint(self):
+        """Primitive parameter errors should include parameter guidance."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("runtime.get_primitive_spec()")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "Parameter requirements" in result["error"]
+        assert "name" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_runtime_spec_queries_support_xml_format(self):

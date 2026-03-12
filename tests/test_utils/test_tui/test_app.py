@@ -236,8 +236,8 @@ async def test_fork_stream_adds_peer_column_and_unloads_on_finish() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fork_error_column_stays_visible_for_inspection() -> None:
-    """Errored fork column should remain visible instead of unloading immediately."""
+async def test_fork_error_column_unloads_after_failure() -> None:
+    """Errored fork column should unload after failure."""
     app = _make_app()
 
     async with app.run_test() as pilot:
@@ -247,10 +247,15 @@ async def test_fork_error_column_stays_visible_for_inspection() -> None:
         await app.finish_model_response("fork::fork_1", "fork | error")
         await pilot.pause(0.05)
 
+        await pilot.pause(0.05)
+
+        with pytest.raises(NoMatches):
+            app.query_one("#agent-column-fork_fork_1", VerticalScroll)
+
         board = app.query_one("#agent-board")
         columns = list(board.query(".agent-column"))
-        assert len(columns) == 2
-        app.query_one("#agent-column-fork_fork_1", VerticalScroll)
+        assert len(columns) == 1
+        app.query_one("#agent-column-main", VerticalScroll)
 
 
 @pytest.mark.asyncio

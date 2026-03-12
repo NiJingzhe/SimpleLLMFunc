@@ -319,7 +319,12 @@ class PyRepl:
                 format=format,
             )
 
-        @primitive()
+        @primitive(
+            next_steps=(
+                "Use runtime.get_primitive_spec(name) for one contract, "
+                "or runtime.list_primitive_specs(names=[...], contains='...') for batches."
+            )
+        )
         def runtime_list_primitives(
             _ctx: Any,
             *,

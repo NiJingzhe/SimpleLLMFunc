@@ -1032,10 +1032,10 @@ class AgentTUIApp(App[None]):
         model.stats_widget.update(stats_line)
         self._update_render_stats_widget()
 
-        if (
-            self._is_fork_model_call_id(model_call_id)
-            and stats_line == "fork | completed"
-        ):
+        if self._is_fork_model_call_id(model_call_id) and stats_line in {
+            "fork | completed",
+            "fork | error",
+        }:
             agent_key = self._model_agent_key.get(model_call_id)
             if agent_key is not None:
                 await self._teardown_agent_column(agent_key)

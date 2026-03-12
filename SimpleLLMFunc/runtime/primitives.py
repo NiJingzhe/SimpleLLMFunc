@@ -17,6 +17,11 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, cas
 
 PrimitiveHandler = Callable[..., Any]
 
+RUNTIME_RESULT_SENTINEL = "__simplellmfunc_runtime_result__"
+RUNTIME_RESULT_VALUE_KEY = "value"
+RUNTIME_RESULT_NEXT_STEPS_KEY = "next_steps"
+RUNTIME_RESULT_PRIMITIVE_KEY = "primitive"
+
 _PRIMITIVE_NAME_PATTERN = re.compile(
     r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)*$"
 )
@@ -247,6 +252,30 @@ def _coerce_best_practices(
     return tuple(normalized)
 
 
+def _coerce_next_steps(raw_next_steps: Optional[Any]) -> tuple[str, ...]:
+    if raw_next_steps is None:
+        return ()
+
+    if isinstance(raw_next_steps, str):
+        text = raw_next_steps.strip()
+        return (text,) if text else ()
+
+    if isinstance(raw_next_steps, Sequence):
+        normalized: List[str] = []
+        seen: set[str] = set()
+        for item in raw_next_steps:
+            if not isinstance(item, str):
+                continue
+            text = item.strip()
+            if not text or text in seen:
+                continue
+            normalized.append(text)
+            seen.add(text)
+        return tuple(normalized)
+
+    return ()
+
+
 def _normalize_parameter_lookup_name(name: str) -> str:
     return name.lstrip("*").strip()
 
@@ -338,6 +367,7 @@ def primitive(
     *,
     parameters: Optional[Sequence[Any]] = None,
     best_practices: Optional[Sequence[Any]] = None,
+    next_steps: Optional[Any] = None,
 ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
     """Attach primitive spec metadata parsed from the handler docstring.
 
@@ -350,6 +380,8 @@ def primitive(
             metadata["parameters"] = _coerce_parameter_specs(parameters)
         if best_practices is not None:
             metadata["best_practices"] = _coerce_best_practices(best_practices)
+        if next_steps is not None:
+            metadata["next_steps"] = _coerce_next_steps(next_steps)
         setattr(handler, "__simplellmfunc_primitive_spec__", metadata)
         return handler
 
@@ -360,10 +392,15 @@ def primitive_spec(
     *,
     parameters: Optional[Sequence[Any]] = None,
     best_practices: Optional[Sequence[Any]] = None,
+    next_steps: Optional[Any] = None,
 ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
     """Backward-compatible alias for :func:`primitive`."""
 
-    return primitive(parameters=parameters, best_practices=best_practices)
+    return primitive(
+        parameters=parameters,
+        best_practices=best_practices,
+        next_steps=next_steps,
+    )
 
 
 def _extract_handler_primitive_spec(handler: PrimitiveHandler) -> Dict[str, Any]:
@@ -437,6 +474,7 @@ class PrimitiveSpec:
     output_parsing: str = ""
     parameters: tuple[PrimitiveParameterSpec, ...] = ()
     best_practices: tuple[str, ...] = ()
+    next_steps: tuple[str, ...] = ()
 
     def to_public_dict(self) -> Dict[str, Any]:
         resolved_parameters = self.parameters or _infer_parameter_specs(self.handler)
@@ -492,6 +530,63 @@ class PrimitiveSpec:
         return "\n".join(lines)
 
 
+def _format_parameter_hints(spec: PrimitiveSpec) -> str:
+    parameters = spec.parameters or _infer_parameter_specs(spec.handler)
+    if not parameters:
+        return "Parameter requirements: none"
+
+    chunks: List[str] = []
+    for parameter in parameters:
+        required_text = "required" if parameter.required else "optional"
+        default_text = (
+            f", default={parameter.default}" if parameter.default is not None else ""
+        )
+        chunks.append(
+            f"{parameter.name}({parameter.type}, {required_text}{default_text})"
+        )
+    return "Parameter requirements: " + "; ".join(chunks)
+
+
+def _wrap_runtime_result(
+    value: Any,
+    next_steps: tuple[str, ...],
+    primitive_name: str,
+) -> Any:
+    if not next_steps:
+        return value
+
+    return {
+        RUNTIME_RESULT_SENTINEL: True,
+        RUNTIME_RESULT_VALUE_KEY: value,
+        RUNTIME_RESULT_NEXT_STEPS_KEY: list(next_steps),
+        RUNTIME_RESULT_PRIMITIVE_KEY: primitive_name,
+    }
+
+
+def _append_hint_message(message: str, hint: str) -> str:
+    if not hint:
+        return message
+    if hint in message:
+        return message
+    if not message:
+        return hint
+    return f"{message}\n{hint}"
+
+
+def _is_argument_error(exc: Exception) -> bool:
+    if not isinstance(exc, TypeError):
+        return False
+    text = str(exc)
+    tokens = (
+        "missing",
+        "positional argument",
+        "unexpected keyword",
+        "got an unexpected",
+        "keyword-only",
+    )
+    return any(token in text for token in tokens)
+
+
 class PrimitiveRegistry:
     """Host-side primitive registry.
 
@@ -515,6 +610,7 @@ class PrimitiveRegistry:
         output_type: str = "",
         parameters: Optional[Sequence[Any]] = None,
         best_practices: Optional[Sequence[Any]] = None,
+        next_steps: Optional[Any] = None,
         replace: bool = False,
     ) -> None:
         """Register one primitive handler.
@@ -557,6 +653,10 @@ class PrimitiveRegistry:
             best_practices=(
                 _coerce_best_practices(best_practices)
                 or cast(tuple[str, ...], handler_spec.get("best_practices", ()))
+            ),
+            next_steps=(
+                _coerce_next_steps(next_steps)
+                or cast(tuple[str, ...], handler_spec.get("next_steps", ()))
             ),
         )
 
@@ -711,8 +811,15 @@ class PrimitiveRegistry:
         context: PrimitiveCallContext,
     ) -> Any:
         """Invoke a registered primitive handler."""
-
-        spec = self._get_spec(name)
+        try:
+            spec = self._get_spec(name)
+        except KeyError as exc:
+            base_message = str(exc.args[0]) if exc.args else str(exc)
+            hint = (
+                "Hint: primitive is not registered. Use "
+                "runtime.list_primitives(contains='...') to discover names."
+            )
+            raise KeyError(_append_hint_message(base_message, hint)) from exc
         payload_args = list(args) if isinstance(args, list) else []
         payload_kwargs = dict(kwargs) if isinstance(kwargs, dict) else {}
 
@@ -732,17 +839,22 @@ class PrimitiveRegistry:
             else:
                 result = maybe_result
         except Exception as exc:
+            enhanced_exc = exc
+            if _is_argument_error(exc) or isinstance(exc, ValueError):
+                hint = _format_parameter_hints(spec)
+                enhanced_message = _append_hint_message(str(exc), hint)
+                enhanced_exc = type(exc)(enhanced_message)
             await context.emit(
                 "runtime_primitive_error",
                 {
                     "call_id": context.call_id,
                     "execution_id": context.execution_id,
                     "primitive": spec.name,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
+                    "error_type": type(enhanced_exc).__name__,
+                    "error_message": str(enhanced_exc),
                 },
             )
-            raise
+            raise enhanced_exc from exc
 
         await context.emit(
             "runtime_primitive_end",
@@ -754,10 +866,14 @@ class PrimitiveRegistry:
             },
         )
 
-        return result
+        return _wrap_runtime_result(result, spec.next_steps, spec.name)
 
 
 __all__ = [
+    "RUNTIME_RESULT_NEXT_STEPS_KEY",
+    "RUNTIME_RESULT_PRIMITIVE_KEY",
+    "RUNTIME_RESULT_SENTINEL",
+    "RUNTIME_RESULT_VALUE_KEY",
     "PrimitiveCallContext",
     "PrimitiveHandler",
     "primitive",

@@ -264,6 +264,17 @@ class _PyReplWorker:
         if pointer is not None:
             summary_lines.append(pointer)
 
+        hint: Optional[str] = None
+        if isinstance(exc, (ModuleNotFoundError, ImportError)):
+            normalized_message = raw_message.lower()
+            if "runtime" in normalized_message or "import runtime" in code:
+                hint = (
+                    "Hint: runtime is an injected global and cannot be imported. "
+                    "Call primitives as runtime.<namespace>.<name>(...) instead."
+                )
+        if hint:
+            summary_lines.append(hint)
+
         return {
             "error_type": error_type,
             "message": raw_message,
@@ -273,6 +284,7 @@ class _PyReplWorker:
             "snippet": snippet,
             "pointer": pointer,
             "summary": "\n".join(summary_lines),
+            "hint": hint,
             "user_traceback": user_traceback,
             "full_traceback": full_traceback,
         }
