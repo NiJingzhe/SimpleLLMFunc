@@ -10,7 +10,7 @@ What this example demonstrates:
 4. Forked context inherits memory snapshot from current selfref key.
 
 Try prompts:
-- "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.wait')"
+- "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.gather_all')"
 - "Append a durable preference with runtime.selfref.history.append_system_prompt"
 - "Remember a note in memory, then read it back"
 - "Split this task into two forks and merge their results"
@@ -94,7 +94,7 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["z-ai/glm-4.7"]
+    return models["openrouter"]["z-ai/glm-5"]
 
 
 llm = load_llm()
@@ -133,8 +133,8 @@ async def agent(message: str, history: HistoryList):
     Fork policy:
     - Fork only when a subtask is concrete, isolated, and verifiable.
     - Do not fork tiny trivial work that is faster inline.
-    - Use ``fork.spawn`` for independent subtasks, then ``fork.wait``/``fork.wait_all`` to collect.
-    - ``fork.wait_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()``/``.values()``.
+    - Use ``fork.spawn`` for independent subtasks, then ``fork.gather_all`` to collect.
+    - ``fork.gather_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()``/``.values()``.
 
     Sub-agent task contract (must be explicit):
     - Always include: goal, scope, inputs, required outputs, and acceptance checks.

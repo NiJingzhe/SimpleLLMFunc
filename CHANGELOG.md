@@ -1,5 +1,19 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.1 (2026-03-14) - Fork API Simplification
+
+### ⚠️ Breaking Changes
+
+1. **SelfReference Forking**:
+   - Removed `selfref.fork.run`, `selfref.fork.wait`, and `selfref.fork.wait_all` (plus chat variants).
+   - Use `selfref.fork.spawn` + `selfref.fork.gather_all` for async fork collection; `gather_all` accepts a single fork id/handle or a list.
+
+### 🔧 Improvements
+
+1. **Docs & Tests**:
+   - Updated runtime docs, examples, and tests to match the simplified fork API.
+
+
 ## 0.7.0 (2026-03-11) - Runtime Primitives, Forking, and Docs Refresh
 
 ### 🎉 Major Features

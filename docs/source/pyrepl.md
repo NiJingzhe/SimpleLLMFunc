@@ -395,10 +395,8 @@ Runtime SelfReference 原语参考：
 - `runtime.selfref.history.get_system_prompt(key=None)`: 读取最新 system prompt 文本。
 - `runtime.selfref.history.set_system_prompt(text, key=None)`: 覆盖当前 system prompt。
 - `runtime.selfref.history.append_system_prompt(text, key=None)`: 追加 system prompt 文本。
-- `runtime.selfref.fork.run(..., include_history=False)`: 运行单个子 fork 并等待结果。
-- `runtime.selfref.fork.spawn(...)`: 异步创建子 fork。
-- `runtime.selfref.fork.wait(fork_id, include_history=False)`: 等待指定 fork 结果。
-- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: 等待多个 fork，返回 `dict[fork_id -> ForkResult]`（用 `.items()`/`.values()` 遍历）。
+- `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 fork（chat 形态）。
+- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()`/`.values()` 遍历）。
 
 默认情况下 fork 结果为紧凑模式，仅返回 `fork_id`、`memory_key`、`response`、`history_count`、`history_included=False` 等元数据。
 只有确实需要子历史时才设置 `include_history=True`。

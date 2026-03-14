@@ -114,7 +114,7 @@ def test_pyrepl_tool_event_hook_renders_fork_error() -> None:
     snapshot = ToolRenderSnapshot(
         tool_name="execute_code",
         tool_call_id="call-1",
-        arguments={"code": "self_reference.instance.fork_wait('fork_1')"},
+        arguments={"code": "self_reference.instance.fork_gather_all('fork_1')"},
     )
     event = _build_event(
         "selfref_fork_error",
@@ -138,7 +138,7 @@ def test_pyrepl_tool_event_hook_ignores_unknown_event() -> None:
     snapshot = ToolRenderSnapshot(
         tool_name="execute_code",
         tool_call_id="call-1",
-        arguments={"code": "runtime.selfref.fork.run('task')"},
+        arguments={"code": "runtime.selfref.fork.spawn('task')"},
     )
 
     event = _build_event("unknown_event", {"value": 1})

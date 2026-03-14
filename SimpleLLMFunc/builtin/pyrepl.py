@@ -351,7 +351,7 @@ class PyRepl:
         ) -> Union[Dict[str, Any], str]:
             """
             Use: Read one runtime primitive contract (input/output shape, parameters). Primitive = callable without import.
-            Input: name (full name e.g. selfref.fork.wait), format (xml default, dict for field access).
+            Input: name (full name e.g. selfref.fork.gather_all), format (xml default, dict for field access).
             Output: XML or dict with description, parameters, output_type, output_parsing.
             Parse: XML parse <primitive_spec>. Dict read description, parameters, output_type, output_parsing.
             Parameters:
@@ -527,7 +527,7 @@ class PyRepl:
                     "<self_reference_namespace>",
                     "<definition>selfref = your agent state: (1) your memory (message history), (2) your clones (forked child agents).</definition>",
                     "<history>runtime.selfref.history.* operates on your memory.</history>",
-                    "<fork>runtime.selfref.fork.* creates and waits for your clones.</fork>",
+                    "<fork>runtime.selfref.fork.* creates and gathers your clones.</fork>",
                     "</self_reference_namespace>",
                 ]
             )
@@ -536,11 +536,11 @@ class PyRepl:
             lines.extend(
                 [
                     "<fork_result_safety>",
-                    "<rule>selfref.fork.run/wait/wait_all return compact results by default.</rule>",
+                    "<rule>selfref.fork.gather_all returns compact results by default.</rule>",
                     "<rule>Read only required keys: status, response, memory_key, history_count.</rule>",
                     "<rule>If status == 'error', inspect error_type and error_message before retrying.</rule>",
-                    "<rule>selfref.fork.wait_all returns dict[fork_id -> ForkResult]; iterate with result.items() or result.values().</rule>",
-                    "<rule>Do not treat wait_all result as a list (enumerating the dict yields fork_id strings).</rule>",
+                    "<rule>selfref.fork.gather_all returns dict[fork_id -> ForkResult]; iterate with result.items() or result.values().</rule>",
+                    "<rule>Do not treat gather_all result as a list (enumerating the dict yields fork_id strings).</rule>",
                     "<rule>NEVER print raw fork result dicts.</rule>",
                     "<rule>Use include_history=True only when full child history is truly required.</rule>",
                     "</fork_result_safety>",

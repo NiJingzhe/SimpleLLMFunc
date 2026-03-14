@@ -333,10 +333,8 @@ Runtime self-reference primitive reference:
 - `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
 - `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
 - `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
-- `runtime.selfref.fork.run(..., include_history=False)`: run one child self-fork and wait.
-- `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
-- `runtime.selfref.fork.wait(fork_id, include_history=False)`: wait one spawned fork.
-- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait multiple forks and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+- `runtime.selfref.fork.spawn(message, ...)`: spawn child self-fork asynchronously (chat-style).
+- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: gather fork results and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
 
 Fork results are compact by default (`history_included=False`, with `history_count` metadata) to avoid main-context pollution.
 Use `include_history=True` only when full child history is explicitly required.

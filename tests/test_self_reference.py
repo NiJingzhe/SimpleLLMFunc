@@ -306,7 +306,7 @@ class TestSelfReferenceInstanceProxy:
         }
 
     @pytest.mark.asyncio
-    async def test_instance_fork_spawn_and_wait(self) -> None:
+    async def test_instance_fork_spawn_and_gather(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
@@ -326,7 +326,10 @@ class TestSelfReferenceInstanceProxy:
         assert spawned["status"] == "running"
         assert spawned["fork_id"].startswith("fork_")
 
-        completed = await self_reference.instance.fork_wait(spawned["fork_id"])
+        completed_results = await self_reference.instance.fork_gather_all(
+            spawned["fork_id"]
+        )
+        completed = completed_results[spawned["fork_id"]]
         assert completed["status"] == "completed"
         assert completed["response"] == "done:task-a"
         assert completed["memory_key"] == spawned["memory_key"]
@@ -369,7 +372,9 @@ class TestSelfReferenceInstanceProxy:
         }
 
     @pytest.mark.asyncio
-    async def test_instance_fork_wait_can_hydrate_history_on_demand(self) -> None:
+    async def test_instance_fork_gather_single_can_hydrate_history_on_demand(
+        self,
+    ) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
@@ -387,15 +392,19 @@ class TestSelfReferenceInstanceProxy:
 
         spawned = await self_reference.instance.fork_spawn("task-a")
 
-        compact = await self_reference.instance.fork_wait(spawned["fork_id"])
+        compact_results = await self_reference.instance.fork_gather_all(
+            spawned["fork_id"]
+        )
+        compact = compact_results[spawned["fork_id"]]
         assert compact["history_included"] is False
         assert "history" not in compact
         assert compact["history_count"] == 2
 
-        hydrated = await self_reference.instance.fork_wait(
+        hydrated_results = await self_reference.instance.fork_gather_all(
             spawned["fork_id"],
             include_history=True,
         )
+        hydrated = hydrated_results[spawned["fork_id"]]
         assert hydrated["history_included"] is True
         assert isinstance(hydrated.get("history"), list)
         assert hydrated["history_count"] == 2
@@ -405,7 +414,7 @@ class TestSelfReferenceInstanceProxy:
         }
 
     @pytest.mark.asyncio
-    async def test_instance_fork_wait_all_can_hydrate_history_on_demand(self) -> None:
+    async def test_instance_fork_gather_all_can_hydrate_history_on_demand(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
@@ -423,7 +432,7 @@ class TestSelfReferenceInstanceProxy:
 
         first = await self_reference.instance.fork_spawn("task-a")
         second = await self_reference.instance.fork_spawn("task-b")
-        all_results = await self_reference.instance.fork_wait_all(
+        all_results = await self_reference.instance.fork_gather_all(
             [first["fork_id"], second["fork_id"]],
             include_history=True,
         )
@@ -435,7 +444,7 @@ class TestSelfReferenceInstanceProxy:
         assert all(result["history_count"] == 2 for result in all_results.values())
 
     @pytest.mark.asyncio
-    async def test_instance_fork_wait_all_collects_spawned_children(self) -> None:
+    async def test_instance_fork_gather_all_collects_spawned_children(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
@@ -454,7 +463,7 @@ class TestSelfReferenceInstanceProxy:
         first = await self_reference.instance.fork_spawn("task-a")
         second = await self_reference.instance.fork_spawn("task-b")
 
-        all_results = await self_reference.instance.fork_wait_all(
+        all_results = await self_reference.instance.fork_gather_all(
             [first["fork_id"], second["fork_id"]]
         )
         assert set(all_results.keys()) == {first["fork_id"], second["fork_id"]}

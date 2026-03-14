@@ -259,7 +259,7 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     assert "<spec_rule>For each primitive" in captured_system_prompt
     assert "<fork_result_safety>" in captured_system_prompt
     assert "NEVER print raw fork result dicts" in captured_system_prompt
-    assert "Do not treat wait_all result as a list" in captured_system_prompt
+    assert "Do not treat gather_all result as a list" in captured_system_prompt
     assert _MUST_PROMPT_BLOCK in captured_system_prompt
     assert _MUST_PROMPT_RULE in captured_system_prompt
     assert "<active_selfref_key>agent</active_selfref_key>" in captured_system_prompt
