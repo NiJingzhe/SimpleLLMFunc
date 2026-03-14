@@ -45,6 +45,12 @@ def _extract_text_payload(data: Any) -> str:
     return ""
 
 
+_PRIMITIVE_LIFECYCLE_EVENTS = {
+    "runtime_primitive_start",
+    "runtime_primitive_end",
+}
+
+
 def pyrepl_tool_event_hook(
     event: CustomEvent,
     snapshot: ToolRenderSnapshot,
@@ -53,6 +59,9 @@ def pyrepl_tool_event_hook(
 
     if snapshot.tool_name != "execute_code":
         return None
+
+    if event.event_name in _PRIMITIVE_LIFECYCLE_EVENTS:
+        return ToolEventRenderUpdate()
 
     if event.event_name == "kernel_stdout":
         text = _extract_text_payload(event.data)
