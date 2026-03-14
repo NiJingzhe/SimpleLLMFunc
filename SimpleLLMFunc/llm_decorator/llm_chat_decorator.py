@@ -42,6 +42,7 @@ from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
 from SimpleLLMFunc.hooks.events import ReactEndEvent
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_event_yield
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
     langfuse_client,
@@ -601,6 +602,9 @@ def llm_chat(
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            abort_signal = kwargs.pop(ABORT_SIGNAL_PARAM, None)
+            if not isinstance(abort_signal, AbortSignal):
+                abort_signal = None
             # Step 1: 解析函数签名
             function_signature, template_params = parse_function_signature(
                 func,
@@ -777,6 +781,7 @@ def llm_chat(
                                 enable_event=enable_event,
                                 trace_id=function_signature.trace_id,
                                 user_task_prompt=user_task_prompt,
+                                abort_signal=abort_signal,
                             )
 
                             collected_responses = []

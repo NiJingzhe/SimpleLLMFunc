@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, Optional, Protocol, Sequence
+import asyncio
+import inspect
+from typing import AsyncGenerator, Optional, Protocol, Sequence, Any, Awaitable, cast
 
 from SimpleLLMFunc.hooks.events import (
     CustomEvent,
@@ -18,6 +20,7 @@ from SimpleLLMFunc.hooks.events import (
     ToolCallStartEvent,
 )
 from SimpleLLMFunc.hooks.stream import EventOrigin, ReactOutput, is_event_yield
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.formatters import (
     extract_reasoning_delta,
@@ -807,14 +810,54 @@ async def consume_react_stream(
     stream: AsyncGenerator[ReactOutput, None],
     adapter: TUIStreamAdapter,
     custom_hooks: Optional[Sequence[ToolCustomEventHook]] = None,
+    abort_signal: Optional[AbortSignal] = None,
 ) -> MessageList:
     """Consume one react event stream and update the adapter in real-time."""
+
+    async def _close_stream(stream_obj: Any) -> None:
+        close_method = getattr(stream_obj, "aclose", None)
+        if callable(close_method):
+            try:
+                result = close_method()
+                if inspect.isawaitable(result):
+                    await cast(Awaitable[Any], result)
+            except Exception:
+                pass
+
+    async def _next_output(stream_iter: Any) -> ReactOutput:
+        if abort_signal is None:
+            return await stream_iter.__anext__()
+
+        abort_task = asyncio.create_task(abort_signal.wait())
+        next_task = asyncio.create_task(stream_iter.__anext__())
+        done, _ = await asyncio.wait(
+            {abort_task, next_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if abort_task in done:
+            next_task.cancel()
+            await asyncio.gather(next_task, return_exceptions=True)
+            abort_task.cancel()
+            raise asyncio.CancelledError
+        abort_task.cancel()
+        return next_task.result()
 
     hooks = list(custom_hooks or [])
     state = _StreamConsumeState()
     saw_event = False
+    aborted = False
 
-    async for output in stream:
+    stream_iter = stream.__aiter__()
+    while True:
+        try:
+            output = await _next_output(stream_iter)
+        except StopAsyncIteration:
+            break
+        except asyncio.CancelledError:
+            aborted = True
+            await _close_stream(stream)
+            break
+
         if not is_event_yield(output):
             continue
 
@@ -838,7 +881,7 @@ async def consume_react_stream(
         if isinstance(output.event, ReactEndEvent) and fork_id is None:
             break
 
-    if not saw_event:
+    if not saw_event and not aborted:
         raise ValueError(
             "TUI requires llm_chat(enable_event=True). No event stream was received."
         )

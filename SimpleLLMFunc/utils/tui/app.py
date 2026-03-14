@@ -14,6 +14,7 @@ from textual.widgets import Input, Static
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
 from SimpleLLMFunc.hooks.stream import ReactOutput
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
 from SimpleLLMFunc.utils.tui.formatters import format_tool_arguments_markdown
@@ -240,6 +241,8 @@ class AgentTUIApp(App[None]):
 
         self.history: MessageList = list(initial_history or [])
         self._busy = False
+        self._active_abort_signal: Optional[AbortSignal] = None
+        self._pending_user_text: Optional[str] = None
 
         if input_router is not None:
             self._input_router = input_router
@@ -637,11 +640,24 @@ class AgentTUIApp(App[None]):
             return
 
         self._set_chat_placeholder()
-        if self._busy:
-            input_widget.disabled = True
-        else:
-            input_widget.disabled = False
-            input_widget.focus()
+        input_widget.disabled = False
+        input_widget.focus()
+
+    def _prepend_abort_marker(self, text: str) -> str:
+        marker = "我要打断你的回复。"
+        if not text:
+            return marker
+        stripped = text.lstrip()
+        if stripped.startswith(marker):
+            return text
+        return f"{marker}\n{text}"
+
+    def _request_abort_current_turn(self, reason: str = "steering") -> None:
+        if self._active_abort_signal is None:
+            return
+        if self._active_abort_signal.is_aborted:
+            return
+        self._active_abort_signal.abort(reason)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         input_widget = self.query_one("#chat-input", Input)
@@ -697,30 +713,39 @@ class AgentTUIApp(App[None]):
         user_text = route_result.chat_text
 
         if self._busy:
-            await self._append_system_hint("Agent is still responding, please wait.")
+            input_widget.value = ""
+            steered_text = self._prepend_abort_marker(user_text)
+            await self._append_user_message(steered_text)
+            self._pending_user_text = steered_text
+            self._request_abort_current_turn()
+            self._refresh_input_widget_state()
             return
 
         input_widget.value = ""
 
         await self._append_user_message(user_text)
         self._busy = True
-        input_widget.disabled = True
 
         self.run_worker(self._run_turn(user_text), thread=False)
 
     async def _run_turn(self, user_text: str) -> None:
         input_widget = self.query_one("#chat-input", Input)
+        abort_signal = AbortSignal()
+        self._active_abort_signal = abort_signal
+        pending_text: Optional[str] = None
         try:
             call_kwargs = dict(self.static_kwargs)
             call_kwargs[self.input_param] = user_text
             if self.history_param:
                 call_kwargs[self.history_param] = self.history
 
+            call_kwargs[ABORT_SIGNAL_PARAM] = abort_signal
             stream = self.agent_func(**call_kwargs)
             new_history = await consume_react_stream(
                 stream,
                 adapter=self,
                 custom_hooks=self.custom_hooks,
+                abort_signal=abort_signal,
             )
             if new_history:
                 self.history = new_history
@@ -729,6 +754,15 @@ class AgentTUIApp(App[None]):
         finally:
             self._busy = False
             self._input_router.clear_all_requests()
+            if self._active_abort_signal is abort_signal:
+                self._active_abort_signal = None
+            pending_text = self._pending_user_text
+            self._pending_user_text = None
+
+        if pending_text:
+            self._busy = True
+            self.run_worker(self._run_turn(pending_text), thread=False)
+        else:
             self._refresh_input_widget_state()
 
     async def _append_user_message(self, text: str) -> None:

@@ -10,6 +10,7 @@ from functools import wraps
 from typing import Any, AsyncGenerator, Optional, Sequence, TextIO
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
@@ -277,12 +278,15 @@ class _StdIOSession:
         call_kwargs[self.input_param] = user_text
         if self.history_param:
             call_kwargs[self.history_param] = self.history
+        abort_signal = AbortSignal()
+        call_kwargs[ABORT_SIGNAL_PARAM] = abort_signal
 
         stream = self.agent_func(**call_kwargs)
         new_history = await consume_react_stream(
             stream,
             adapter=self._adapter,
             custom_hooks=self.custom_hooks,
+            abort_signal=abort_signal,
         )
         if new_history:
             self.history = new_history

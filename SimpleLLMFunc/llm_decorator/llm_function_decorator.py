@@ -57,6 +57,7 @@ from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
     langfuse_client,
 )
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
 
 T = TypeVar("T")
@@ -158,6 +159,9 @@ def llm_function(
 
             解析后的结果会存储在外层的 parsed_result 变量中
             """
+            abort_signal = kwargs.pop(ABORT_SIGNAL_PARAM, None)
+            if not isinstance(abort_signal, AbortSignal):
+                abort_signal = None
             # Step 1: 解析函数签名
             sig, template_params = parse_function_signature(func, args, kwargs)
 
@@ -209,6 +213,7 @@ def llm_function(
                             enable_event=True,
                             trace_id=sig.trace_id,
                             user_task_prompt=user_task_prompt,
+                            abort_signal=abort_signal,
                         )
 
                         # Step 5: 处理事件流，解析响应后再 yield

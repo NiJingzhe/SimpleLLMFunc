@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -16,6 +17,7 @@ from openai.types.chat.chat_completion_chunk import (
 from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.base.ReAct import execute_llm
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.hooks.events import (
     LLMCallEndEvent,
     ReactEndEvent,
@@ -26,6 +28,17 @@ from SimpleLLMFunc.hooks.stream import EventYield
 
 class TestExecuteLLM:
     """Tests for execute_llm function."""
+
+    def _make_chunk(self, content: str) -> ChatCompletionChunk:
+        delta = ChoiceDelta(content=content, role="assistant")
+        choice = ChunkChoice(delta=delta, finish_reason=None, index=0)
+        return ChatCompletionChunk(
+            id="chunk-id",
+            choices=[choice],
+            created=123,
+            model="test-model",
+            object="chat.completion.chunk",
+        )
 
     @pytest.mark.asyncio
     @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
@@ -190,6 +203,57 @@ class TestExecuteLLM:
             responses.append(response)
 
         assert len(responses) >= 1
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_execute_streaming_abort_appends_partial_history(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+    ) -> None:
+        """Abort should close stream and persist partial assistant content."""
+        mock_get_context.return_value = "test_func"
+        abort_signal = AbortSignal()
+
+        async def stream_generator(**kwargs):
+            yield self._make_chunk("Hello ")
+            abort_signal.abort("user_interrupt")
+            await asyncio.sleep(0)
+            yield self._make_chunk("world")
+
+        mock_llm_interface.chat_stream = stream_generator
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        outputs = []
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=True,
+            enable_event=True,
+            abort_signal=abort_signal,
+        ):
+            outputs.append(output)
+
+        end_events = [
+            item.event
+            for item in outputs
+            if isinstance(item, EventYield) and isinstance(item.event, ReactEndEvent)
+        ]
+        assert end_events
+        final_messages = end_events[-1].final_messages
+        assert final_messages[-1]["role"] == "assistant"
+        assert "Hello" in final_messages[-1]["content"]
+        assert "world" not in final_messages[-1]["content"]
+        assert end_events[-1].extra.get("aborted") is True
 
     @pytest.mark.asyncio
     @patch("SimpleLLMFunc.base.ReAct.langfuse_client")

@@ -12,6 +12,8 @@ LLM calls with tool usage. It manages:
 from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import asyncio
+import inspect
 import json
 import time
 
@@ -41,6 +43,7 @@ from SimpleLLMFunc.logger import app_log, push_debug
 from SimpleLLMFunc.logger.logger import get_current_context_attribute, get_location
 from SimpleLLMFunc.logger.context_manager import get_current_trace_id
 from SimpleLLMFunc.hooks.event_bus import EventBus
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.hooks.stream import EventYield, ReactOutput, ResponseYield
 from SimpleLLMFunc.hooks.events import (
     ReActEventType,
@@ -228,6 +231,7 @@ async def _process_tool_calls_with_events_gen(
     trace_id: str,
     func_name: str,
     iteration: int,
+    abort_signal: Optional[AbortSignal] = None,
 ) -> AsyncGenerator[Union[EventYield, MessageList], None]:
     """处理工具调用并发射事件（异步生成器版本）
 
@@ -244,7 +248,15 @@ async def _process_tool_calls_with_events_gen(
         EventYield: 事件对象
         MessageList: 更新后的消息列表（作为最后一个 yield）
     """
+
+    def _abort_requested() -> bool:
+        return abort_signal is not None and abort_signal.is_aborted
+
     if not tool_calls:
+        yield messages
+        return
+
+    if _abort_requested():
         yield messages
         return
 
@@ -454,11 +466,60 @@ async def _process_tool_calls_with_events_gen(
 
     # 启动所有任务
     tasks = [asyncio.create_task(_execute_with_events_task(tc)) for tc in tool_calls]
+    task_tool_calls = dict(zip(tasks, tool_calls))
     batch_start_time = time.time()
 
     # 实时消费事件流（与工具执行并发）
     if enable_event:
         while True:
+            if _abort_requested():
+                for task in tasks:
+                    if task.done():
+                        continue
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                abort_reason = abort_signal.reason if abort_signal is not None else ""
+                for task, tool_call in task_tool_calls.items():
+                    if task.done() and not task.cancelled():
+                        continue
+                    tool_call_id = tool_call.get("id", "")
+                    function_call = tool_call.get("function", {})
+                    tool_name = function_call.get("name", "")
+                    arguments_str = function_call.get("arguments", "{}")
+                    try:
+                        parsed_arguments_end = parse_tool_call_arguments(
+                            arguments_str,
+                            allow_closure=True,
+                        )
+                        arguments_end: ToolCallArguments = (
+                            parsed_arguments_end
+                            if parsed_arguments_end is not None
+                            else {}
+                        )
+                        await _publish_tool_event(
+                            ToolCallErrorEvent(
+                                event_type=ReActEventType.TOOL_CALL_ERROR,
+                                timestamp=datetime.now(timezone.utc),
+                                trace_id=trace_id,
+                                func_name=func_name,
+                                iteration=iteration,
+                                tool_name=tool_name,
+                                tool_call_id=tool_call_id,
+                                arguments=arguments_end,
+                                error=RuntimeError(abort_reason or "Tool call aborted"),
+                                error_message=abort_reason or "Tool call aborted",
+                                error_type="CancelledError",
+                                execution_time=0.0,
+                            ),
+                            origin_overrides={
+                                "tool_name": tool_name,
+                                "tool_call_id": tool_call_id,
+                            },
+                        )
+                    except Exception:
+                        continue
+                yield messages
+                return
             queue_empty = (
                 event_bus.empty()
                 if event_bus is not None
@@ -479,6 +540,15 @@ async def _process_tool_calls_with_events_gen(
                 continue
 
             yield event
+
+    if _abort_requested():
+        for task in tasks:
+            if task.done():
+                continue
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        yield messages
+        return
 
     # 收集结果
     tool_results: List[ToolCallResult] = []
@@ -603,6 +673,7 @@ async def execute_llm(
     enable_event: bool = False,
     trace_id: str = "",
     user_task_prompt: str = "",
+    abort_signal: Optional[AbortSignal] = None,
     **llm_kwargs,
 ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
     """Execute LLM calls and orchestrate iterative tool usage.
@@ -697,6 +768,52 @@ async def execute_llm(
 
         return emitted
 
+    def _abort_requested() -> bool:
+        return abort_signal is not None and abort_signal.is_aborted
+
+    def _abort_reason() -> str:
+        return abort_signal.reason if abort_signal is not None else ""
+
+    async def _close_stream(stream_obj: Any) -> None:
+        close_method = getattr(stream_obj, "aclose", None)
+        if callable(close_method):
+            try:
+                result = close_method()
+                if inspect.isawaitable(result):
+                    await cast(Awaitable[Any], result)
+            except Exception:
+                pass
+
+    async def _next_stream_item(
+        stream_iter: Any,
+    ) -> Any:
+        if abort_signal is None:
+            return await stream_iter.__anext__()
+
+        abort_task = asyncio.create_task(abort_signal.wait())
+        next_task = asyncio.create_task(stream_iter.__anext__())
+        done, pending = await asyncio.wait(
+            {abort_task, next_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if abort_task in done:
+            next_task.cancel()
+            await asyncio.gather(next_task, return_exceptions=True)
+            abort_task.cancel()
+            raise asyncio.CancelledError
+        abort_task.cancel()
+        return next_task.result()
+
+    def _set_abort_metadata(event: ReactEndEvent) -> None:
+        event_extra = getattr(event, "extra", None)
+        if not isinstance(event_extra, dict):
+            event_extra = {}
+            setattr(event, "extra", event_extra)
+        event_extra["aborted"] = True
+        abort_reason = _abort_reason()
+        if abort_reason:
+            event_extra["abort_reason"] = abort_reason
+
     push_debug(
         f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
         location=get_location(),
@@ -763,6 +880,8 @@ async def execute_llm(
 
     llm_input_tokens_before, llm_output_tokens_before = _read_context_token_counters()
 
+    aborted = False
+
     with langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_initial_llm_call",
@@ -783,11 +902,22 @@ async def execute_llm(
             stream_tool_call_states: Dict[int, _StreamingToolCallState] = {}
             chunk_index = 0
             accumulated_content = ""
-            async for chunk in llm_interface.chat_stream(
+            stream_response = llm_interface.chat_stream(
                 messages=cast(List[Dict[str, Any]], current_messages),
                 tools=tools,
                 **llm_kwargs_filtered,
-            ):
+            )
+            stream_iter = stream_response.__aiter__()
+            while True:
+                try:
+                    chunk = await _next_stream_item(stream_iter)
+                except StopAsyncIteration:
+                    break
+                except asyncio.CancelledError:
+                    aborted = True
+                    await _close_stream(stream_response)
+                    break
+
                 chunk_content = extract_content_from_stream_response(chunk, func_name)
                 content += chunk_content
                 accumulated_content += chunk_content
@@ -839,23 +969,33 @@ async def execute_llm(
                 else:
                     yield chunk, cast(MessageList, current_messages.copy())
 
+                if _abort_requested():
+                    aborted = True
+                    await _close_stream(stream_response)
+                    break
+
             tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
             reasoning_details = reasoning_details_list
         else:
             # Handle non-streaming response
-            initial_response = await llm_interface.chat(
-                messages=cast(List[Dict[str, Any]], current_messages),
-                tools=tools,
-                **llm_kwargs_filtered,
-            )
+            if _abort_requested():
+                aborted = True
+                initial_response = None
+            else:
+                initial_response = await llm_interface.chat(
+                    messages=cast(List[Dict[str, Any]], current_messages),
+                    tools=tools,
+                    **llm_kwargs_filtered,
+                )
 
-            content = extract_content_from_response(initial_response, func_name)
-            tool_calls = extract_tool_calls(initial_response)
-            reasoning_details = extract_reasoning_details(initial_response)  # type: ignore
-            last_response = initial_response
+            if not aborted and initial_response is not None:
+                content = extract_content_from_response(initial_response, func_name)
+                tool_calls = extract_tool_calls(initial_response)
+                reasoning_details = extract_reasoning_details(initial_response)  # type: ignore
+                last_response = initial_response
 
             # 发射响应
-            if enable_event:
+            if enable_event and not aborted and initial_response is not None:
                 try:
                     yield ResponseYield(
                         type="response",
@@ -864,7 +1004,7 @@ async def execute_llm(
                     )
                 except Exception:
                     pass
-            else:
+            elif not aborted and initial_response is not None:
                 yield initial_response, cast(MessageList, current_messages.copy())
 
         # 发射 LLM 调用结束事件
@@ -907,6 +1047,67 @@ async def execute_llm(
         if content.strip() != "":
             assistant_message = build_assistant_response_message(content)
             current_messages.append(cast(Any, assistant_message))
+
+        if aborted or _abort_requested():
+            total_execution_time = time.time() - start_time
+            if enable_event:
+                try:
+                    usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            llm_input_tokens_before,
+                            llm_output_tokens_before,
+                        )
+                    if stream:
+                        final_content = content
+                    else:
+                        final_content = (
+                            extract_content_from_response(last_response, func_name)
+                            if last_response
+                            else content
+                        )
+                    react_end = ReactEndEvent(
+                        event_type=ReActEventType.REACT_END,
+                        timestamp=datetime.now(timezone.utc),
+                        trace_id=current_trace_id,
+                        func_name=func_name,
+                        iteration=0,
+                        final_response=final_content,
+                        final_messages=current_messages.copy(),
+                        total_iterations=0,
+                        total_execution_time=total_execution_time,
+                        total_tool_calls=0,
+                        total_llm_calls=total_llm_calls,
+                        total_token_usage=usage_info,
+                    )
+                    _set_abort_metadata(react_end)
+                    yield await _emit_event(react_end)
+                except Exception:
+                    pass
+
+            app_log(
+                f"LLM 函数 '{func_name}' aborted",
+                location=get_location(),
+            )
+
+            usage_info = extract_usage_from_response(last_response)
+            if usage_info is None:
+                usage_info = _usage_from_context_delta(
+                    llm_input_tokens_before,
+                    llm_output_tokens_before,
+                )
+            usage_dict_abort: Optional[Dict[str, int]] = None
+            if usage_info:
+                usage_dict_abort = {
+                    "prompt_tokens": usage_info.prompt_tokens,
+                    "completion_tokens": usage_info.completion_tokens,
+                    "total_tokens": usage_info.total_tokens,
+                }
+            generation_span.update(
+                output={"content": content, "tool_calls": []},
+                usage_details=usage_dict_abort,
+            )
+            return
 
         if len(tool_calls) != 0:
             assistant_tool_call_message = build_assistant_tool_message(
@@ -1019,6 +1220,7 @@ async def execute_llm(
             trace_id=current_trace_id,
             func_name=func_name,
             iteration=iteration,
+            abort_signal=abort_signal,
         ):
             if isinstance(item, EventYield):
                 yield item
@@ -1026,13 +1228,67 @@ async def execute_llm(
                 # 最后一个 yield 是 MessageList
                 current_messages = item
     else:
-        result_messages_iteration = await process_tool_calls(
-            tool_calls=tool_calls,
-            messages=cast(List[Dict[str, Any]], current_messages),
-            tool_map=tool_map,
-            event_emitter=NoOpEventEmitter(),
-        )
-        current_messages = cast(MessageList, result_messages_iteration)
+        if abort_signal is None:
+            result_messages_iteration = await process_tool_calls(
+                tool_calls=tool_calls,
+                messages=cast(List[Dict[str, Any]], current_messages),
+                tool_map=tool_map,
+                event_emitter=NoOpEventEmitter(),
+            )
+            current_messages = cast(MessageList, result_messages_iteration)
+        else:
+            tool_task = asyncio.create_task(
+                process_tool_calls(
+                    tool_calls=tool_calls,
+                    messages=cast(List[Dict[str, Any]], current_messages),
+                    tool_map=tool_map,
+                    event_emitter=NoOpEventEmitter(),
+                    abort_signal=abort_signal,
+                )
+            )
+            abort_task = asyncio.create_task(abort_signal.wait())
+            done, _ = await asyncio.wait(
+                {tool_task, abort_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            if abort_task in done:
+                tool_task.cancel()
+                await asyncio.gather(tool_task, return_exceptions=True)
+            else:
+                abort_task.cancel()
+                result_messages_iteration = tool_task.result()
+                current_messages = cast(MessageList, result_messages_iteration)
+
+    if _abort_requested():
+        total_execution_time = time.time() - start_time
+        if enable_event:
+            try:
+                usage_info = extract_usage_from_response(last_response)
+                if usage_info is None:
+                    usage_info = _usage_from_context_delta(
+                        llm_input_tokens_before,
+                        llm_output_tokens_before,
+                    )
+                final_content = content
+                react_end = ReactEndEvent(
+                    event_type=ReActEventType.REACT_END,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id=current_trace_id,
+                    func_name=func_name,
+                    iteration=iteration,
+                    final_response=final_content,
+                    final_messages=current_messages.copy(),
+                    total_iterations=iteration,
+                    total_execution_time=total_execution_time,
+                    total_tool_calls=total_tool_calls,
+                    total_llm_calls=total_llm_calls,
+                    total_token_usage=usage_info,
+                )
+                _set_abort_metadata(react_end)
+                yield await _emit_event(react_end)
+            except Exception:
+                pass
+        return
 
     while call_count < max_tool_calls:
         # Phase 3: Iterative LLM-tool interaction
@@ -1112,11 +1368,22 @@ async def execute_llm(
                 stream_tool_call_states = {}
                 chunk_index = 0
                 accumulated_content = ""
-                async for chunk in llm_interface.chat_stream(
+                stream_response = llm_interface.chat_stream(
                     messages=cast(List[Dict[str, Any]], current_messages),
                     tools=tools,
                     **llm_kwargs_filtered,
-                ):
+                )
+                stream_iter = stream_response.__aiter__()
+                while True:
+                    try:
+                        chunk = await _next_stream_item(stream_iter)
+                    except StopAsyncIteration:
+                        break
+                    except asyncio.CancelledError:
+                        aborted = True
+                        await _close_stream(stream_response)
+                        break
+
                     chunk_content = extract_content_from_stream_response(
                         chunk, func_name
                     )
@@ -1171,23 +1438,32 @@ async def execute_llm(
                             pass
                     else:
                         yield chunk, cast(MessageList, current_messages.copy())
+                    if _abort_requested():
+                        aborted = True
+                        await _close_stream(stream_response)
+                        break
                 tool_calls = accumulate_tool_calls_from_chunks(tool_call_chunks)
                 reasoning_details = reasoning_details_list
             else:
                 # Handle non-streaming response after tool calls
-                response = await llm_interface.chat(
-                    messages=cast(List[Dict[str, Any]], current_messages),
-                    tools=tools,
-                    **llm_kwargs_filtered,
-                )
+                if _abort_requested():
+                    aborted = True
+                    response = None
+                else:
+                    response = await llm_interface.chat(
+                        messages=cast(List[Dict[str, Any]], current_messages),
+                        tools=tools,
+                        **llm_kwargs_filtered,
+                    )
 
-                content = extract_content_from_response(response, func_name)
-                tool_calls = extract_tool_calls(response)
-                reasoning_details = extract_reasoning_details(response)  # type: ignore
-                last_response = response
+                if not aborted and response is not None:
+                    content = extract_content_from_response(response, func_name)
+                    tool_calls = extract_tool_calls(response)
+                    reasoning_details = extract_reasoning_details(response)  # type: ignore
+                    last_response = response
 
                 # 发射响应
-                if enable_event:
+                if enable_event and not aborted and response is not None:
                     try:
                         yield ResponseYield(
                             type="response",
@@ -1196,7 +1472,7 @@ async def execute_llm(
                         )
                     except Exception:
                         pass
-                else:
+                elif not aborted and response is not None:
                     yield response, cast(MessageList, current_messages.copy())
 
             # 发射迭代中的 LLM 调用结束事件
@@ -1254,6 +1530,45 @@ async def execute_llm(
         if content.strip() != "":
             assistant_message = build_assistant_response_message(content)
             current_messages.append(cast(Any, assistant_message))
+
+        if aborted or _abort_requested():
+            total_execution_time = time.time() - start_time
+            if enable_event:
+                try:
+                    usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            iteration_input_tokens_before,
+                            iteration_output_tokens_before,
+                        )
+                    final_content = (
+                        content
+                        if stream
+                        else (
+                            extract_content_from_response(last_response, func_name)
+                            if last_response
+                            else content
+                        )
+                    )
+                    react_end = ReactEndEvent(
+                        event_type=ReActEventType.REACT_END,
+                        timestamp=datetime.now(timezone.utc),
+                        trace_id=current_trace_id,
+                        func_name=func_name,
+                        iteration=iteration,
+                        final_response=final_content,
+                        final_messages=current_messages.copy(),
+                        total_iterations=iteration,
+                        total_execution_time=total_execution_time,
+                        total_tool_calls=total_tool_calls,
+                        total_llm_calls=total_llm_calls,
+                        total_token_usage=usage_info,
+                    )
+                    _set_abort_metadata(react_end)
+                    yield await _emit_event(react_end)
+                except Exception:
+                    pass
+            return
 
         if len(tool_calls) != 0:
             assistant_tool_call_message = build_assistant_tool_message(
@@ -1351,6 +1666,7 @@ async def execute_llm(
                 trace_id=current_trace_id,
                 func_name=func_name,
                 iteration=iteration,
+                abort_signal=abort_signal,
             ):
                 if isinstance(item, EventYield):
                     yield item
@@ -1358,13 +1674,67 @@ async def execute_llm(
                     # 最后一个 yield 是 MessageList
                     current_messages = item
         else:
-            result_messages = await process_tool_calls(
-                tool_calls=tool_calls,
-                messages=cast(List[Dict[str, Any]], current_messages),
-                tool_map=tool_map,
-                event_emitter=NoOpEventEmitter(),
-            )
-            current_messages = cast(MessageList, result_messages)
+            if abort_signal is None:
+                result_messages = await process_tool_calls(
+                    tool_calls=tool_calls,
+                    messages=cast(List[Dict[str, Any]], current_messages),
+                    tool_map=tool_map,
+                    event_emitter=NoOpEventEmitter(),
+                )
+                current_messages = cast(MessageList, result_messages)
+            else:
+                tool_task = asyncio.create_task(
+                    process_tool_calls(
+                        tool_calls=tool_calls,
+                        messages=cast(List[Dict[str, Any]], current_messages),
+                        tool_map=tool_map,
+                        event_emitter=NoOpEventEmitter(),
+                        abort_signal=abort_signal,
+                    )
+                )
+                abort_task = asyncio.create_task(abort_signal.wait())
+                done, _ = await asyncio.wait(
+                    {tool_task, abort_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                if abort_task in done:
+                    tool_task.cancel()
+                    await asyncio.gather(tool_task, return_exceptions=True)
+                else:
+                    abort_task.cancel()
+                    result_messages = tool_task.result()
+                    current_messages = cast(MessageList, result_messages)
+
+        if _abort_requested():
+            total_execution_time = time.time() - start_time
+            if enable_event:
+                try:
+                    usage_info = extract_usage_from_response(last_response)
+                    if usage_info is None:
+                        usage_info = _usage_from_context_delta(
+                            iteration_input_tokens_before,
+                            iteration_output_tokens_before,
+                        )
+                    final_content = content
+                    react_end = ReactEndEvent(
+                        event_type=ReActEventType.REACT_END,
+                        timestamp=datetime.now(timezone.utc),
+                        trace_id=current_trace_id,
+                        func_name=func_name,
+                        iteration=iteration,
+                        final_response=final_content,
+                        final_messages=current_messages.copy(),
+                        total_iterations=iteration,
+                        total_execution_time=total_execution_time,
+                        total_tool_calls=total_tool_calls,
+                        total_llm_calls=total_llm_calls,
+                        total_token_usage=usage_info,
+                    )
+                    _set_abort_metadata(react_end)
+                    yield await _emit_event(react_end)
+                except Exception:
+                    pass
+            return
 
         # 发射迭代结束事件
         iteration_time = time.time() - iteration_llm_start_time
@@ -1392,6 +1762,36 @@ async def execute_llm(
         f"LLM 函数 '{func_name}' 达到最大工具调用次数限制 ({max_tool_calls})",
         location=get_location(),
     )
+
+    if _abort_requested():
+        total_execution_time = time.time() - start_time
+        if enable_event:
+            try:
+                usage_info = extract_usage_from_response(last_response)
+                if usage_info is None:
+                    usage_info = _usage_from_context_delta(
+                        llm_input_tokens_before,
+                        llm_output_tokens_before,
+                    )
+                react_end = ReactEndEvent(
+                    event_type=ReActEventType.REACT_END,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id=current_trace_id,
+                    func_name=func_name,
+                    iteration=call_count,
+                    final_response=content,
+                    final_messages=current_messages.copy(),
+                    total_iterations=call_count,
+                    total_execution_time=total_execution_time,
+                    total_tool_calls=total_tool_calls,
+                    total_llm_calls=total_llm_calls,
+                    total_token_usage=usage_info,
+                )
+                _set_abort_metadata(react_end)
+                yield await _emit_event(react_end)
+            except Exception:
+                pass
+        return
 
     # 发射最终 LLM 调用开始事件
     final_llm_start_time = time.time()

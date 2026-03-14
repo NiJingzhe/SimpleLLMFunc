@@ -11,6 +11,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Optional,
     get_type_hints,
     get_origin,
     get_args,
@@ -20,6 +21,7 @@ from typing import (
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
     langfuse_client,
@@ -479,6 +481,7 @@ async def process_tool_calls(
     messages: List[Dict[str, Any]],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
     event_emitter: Any = None,
+    abort_signal: Optional[AbortSignal] = None,
 ) -> List[Dict[str, Any]]:
     """Execute tool calls concurrently and append results to the message history.
 
@@ -515,12 +518,35 @@ async def process_tool_calls(
     if not tool_calls:
         return messages
 
+    if abort_signal is not None and abort_signal.is_aborted:
+        return messages
+
     # Execute all tool calls concurrently
     tasks = [
-        _execute_single_tool_call(tool_call, tool_map, event_emitter)
+        asyncio.create_task(
+            _execute_single_tool_call(tool_call, tool_map, event_emitter)
+        )
         for tool_call in tool_calls
     ]
-    results = await asyncio.gather(*tasks)
+
+    if abort_signal is None:
+        results = await asyncio.gather(*tasks)
+    else:
+        abort_task = asyncio.create_task(abort_signal.wait())
+        gather_future = asyncio.gather(*tasks)
+        done, _ = await asyncio.wait(
+            {abort_task, gather_future},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if abort_task in done:
+            gather_future.cancel()
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(gather_future, return_exceptions=True)
+            return messages
+        abort_task.cancel()
+        results = await gather_future
 
     # 分类结果：普通工具调用和多模态工具调用
     normal_results: List[List[Dict[str, Any]]] = []

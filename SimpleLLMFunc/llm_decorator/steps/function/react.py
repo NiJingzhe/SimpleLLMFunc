@@ -3,16 +3,33 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Union, cast
+from typing import (
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Union,
+    cast,
+)
 
 from SimpleLLMFunc.base.ReAct import execute_llm
 from SimpleLLMFunc.base.post_process import extract_content_from_response
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import push_debug, push_error, push_warning
 from SimpleLLMFunc.logger.logger import get_location, get_current_context_attribute
 from SimpleLLMFunc.logger.context_manager import get_current_trace_id
 from SimpleLLMFunc.type import MessageList, ToolDefinitionList
-from SimpleLLMFunc.hooks.stream import ReactOutput, ResponseYield, is_response_yield, EventYield, is_event_yield
+from SimpleLLMFunc.hooks.stream import (
+    ReactOutput,
+    ResponseYield,
+    is_response_yield,
+    EventYield,
+    is_event_yield,
+)
 
 
 from SimpleLLMFunc.tool import Tool
@@ -38,16 +55,17 @@ async def execute_llm_call(
     enable_event: bool = False,
     trace_id: str = "",
     user_task_prompt: str = "",
+    abort_signal: Optional[AbortSignal] = None,
     **llm_kwargs: Any,
 ) -> AsyncGenerator[Union[Any, ReactOutput], None]:
     """执行 LLM 调用
-    
+
     当 enable_event=True 时，yield ReactOutput（包括事件和响应）
     当 enable_event=False 时，yield response（向后兼容）
     """
     func_name = get_current_context_attribute("function_name") or "Unknown Function"
     current_trace_id = trace_id or get_current_trace_id() or ""
-    
+
     async for output in execute_llm(
         llm_interface=llm_interface,
         messages=messages,
@@ -58,6 +76,7 @@ async def execute_llm_call(
         enable_event=enable_event,
         trace_id=current_trace_id,
         user_task_prompt=user_task_prompt,
+        abort_signal=abort_signal,
         **llm_kwargs,
     ):
         if enable_event:
@@ -80,7 +99,7 @@ async def get_final_response(
     enable_event: bool = False,
 ) -> Any:
     """从响应流中获取最后一个响应
-    
+
     当 enable_event=True 时，从 ReactOutput 中提取最后一个响应
     当 enable_event=False 时，直接获取最后一个响应值
     """
@@ -117,6 +136,7 @@ async def retry_llm_call(
     enable_event: bool = False,
     trace_id: str = "",
     user_task_prompt: str = "",
+    abort_signal: Optional[AbortSignal] = None,
     **llm_kwargs: Any,
 ) -> Any:
     """重试 LLM 调用"""
@@ -140,6 +160,7 @@ async def retry_llm_call(
             enable_event=enable_event,
             trace_id=trace_id,
             user_task_prompt=user_task_prompt,
+            abort_signal=abort_signal,
             **llm_kwargs,
         )
 
@@ -175,9 +196,10 @@ async def execute_react_loop(
     enable_event: bool = False,
     trace_id: str = "",
     user_task_prompt: str = "",
+    abort_signal: Optional[AbortSignal] = None,
 ) -> Union[Any, AsyncGenerator[ReactOutput, None]]:
     """执行 ReAct 循环的完整流程（包含重试）
-    
+
     当 enable_event=True 时，返回事件流生成器
     当 enable_event=False 时，返回最终响应值（向后兼容）
     """
@@ -198,16 +220,17 @@ async def execute_react_loop(
                 enable_event=True,
                 trace_id=trace_id,
                 user_task_prompt=user_task_prompt,
+                abort_signal=abort_signal,
                 **llm_kwargs,
             )
-            
+
             # 收集所有输出和最后一个响应
             last_response = None
             async for output in response_stream:
                 yield output
                 if is_response_yield(output):
                     last_response = output.response
-            
+
             # 检查响应内容是否为空
             if last_response and check_response_content_empty(last_response, func_name):
                 push_warning(
@@ -215,7 +238,7 @@ async def execute_react_loop(
                     "will retry automatically.",
                     location=get_location(),
                 )
-                
+
                 # 重试 LLM 调用
                 retry_times = llm_kwargs.get("retry_times", 2)
                 retry_stream = execute_llm_call(
@@ -228,15 +251,16 @@ async def execute_react_loop(
                     enable_event=True,
                     trace_id=trace_id,
                     user_task_prompt=user_task_prompt,
+                    abort_signal=abort_signal,
                     **llm_kwargs,
                 )
-                
+
                 # Yield 重试的事件流
                 async for output in retry_stream:
                     yield output
                     if is_response_yield(output):
                         last_response = output.response
-            
+
             # 记录最终响应
             if last_response:
                 push_debug(
@@ -244,7 +268,7 @@ async def execute_react_loop(
                     f"{json.dumps(last_response, default=str, ensure_ascii=False, indent=2)}",
                     location=get_location(),
                 )
-        
+
         return event_stream()
     else:
         # 向后兼容模式：返回最终响应值
@@ -259,6 +283,7 @@ async def execute_react_loop(
             enable_event=False,
             trace_id=trace_id,
             user_task_prompt=user_task_prompt,
+            abort_signal=abort_signal,
             **llm_kwargs,
         )
 
@@ -286,6 +311,7 @@ async def execute_react_loop(
                 enable_event=False,
                 trace_id=trace_id,
                 user_task_prompt=user_task_prompt,
+                abort_signal=abort_signal,
                 **llm_kwargs,
             )
 
@@ -297,4 +323,3 @@ async def execute_react_loop(
         )
 
         return final_response
-
