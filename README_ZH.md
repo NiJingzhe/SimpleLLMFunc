@@ -21,13 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.0)
+### 更新说明 (0.7.1)
 
-🧠 **Runtime 原语 + SelfRef 分叉**：新增 `runtime.*` 原语发现、自引用 history/fork 原语与 `run`/`spawn`/`wait` 分叉流程。
+🧰 **FileToolset + Sandbox**：新增文件工具集与通用 TUI agent 示例，工作区限定在 `./sandbox`。
 
-🧭 **事件 Origin 路由**：统一事件来源元数据，并在 Textual TUI 中加入 fork 路由与可视化。
+⛔ **AbortSignal 控制**：新增回合中断能力，并在 `ReactEndEvent` 中提供中断元数据。
 
-📘 **文档与多语言同步**：更新文档并重新生成 EN/zh 翻译。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+🔧 **PyRepl 工具调整**：`execute_code` 输出改为自然语言摘要；移除 `list_variables` 工具/API；支持 `working_directory`。
+
+📘 **文档更新**：重整导航并补齐 runtime/tool 文档。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -919,7 +921,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.0},
+  version = {0.7.1},
   year = {2026}
 }
 ```

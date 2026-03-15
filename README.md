@@ -21,13 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.0)
+### Update Notes (0.7.1)
 
-🧠 **Runtime Primitives + SelfRef Forking**: introduced `runtime.*` primitive discovery, selfref history/fork primitives, and fork lifecycle helpers (`run`/`spawn`/`wait`).
+🧰 **FileToolset + Sandbox**: added workspace-safe file tools and a new general TUI agent demo scoped to `./sandbox`.
 
-🧭 **Origin-Aware Event Routing**: normalized event origin metadata and added fork-aware routing/visualization in the Textual TUI.
+⛔ **AbortSignal Control**: added cooperative aborts for in-flight turns with `ReactEndEvent` abort metadata.
 
-📘 **Docs & Locale Refresh**: aligned docs with current behavior and regenerated EN/zh translations. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+🔧 **PyRepl Tooling**: `execute_code` now returns a natural-language summary; `list_variables` tool/API removed; supports `working_directory`.
+
+📘 **Docs Refresh**: reorganized navigation and updated runtime/tool documentation. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -914,7 +916,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.0},
+  version = {0.7.1},
   year = {2026}
 }
 ```

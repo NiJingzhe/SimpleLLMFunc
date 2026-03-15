@@ -1,6 +1,6 @@
 # Change log for SimpleLLMFunc
 
-## 0.7.1 (2026-03-14) - Fork API Simplification
+## 0.7.1 (2026-03-15) - Runtime Polish & File Tools
 
 ### ⚠️ Breaking Changes
 
@@ -8,10 +8,38 @@
    - Removed `selfref.fork.run`, `selfref.fork.wait`, and `selfref.fork.wait_all` (plus chat variants).
    - Use `selfref.fork.spawn` + `selfref.fork.gather_all` for async fork collection; `gather_all` accepts a single fork id/handle or a list.
 
+2. **PyRepl Toolset Changes**:
+   - `execute_code` tool now returns a natural-language summary string (not JSON).
+   - Removed `list_variables` from the toolset and from the PyRepl API.
+
+### ✨ New Features
+
+1. **FileToolset (builtin)**:
+   - Added workspace-scoped file tools: `read_file`, `grep`, `sed`, `echo_into` with hash-based stale-write protection.
+
+2. **AbortSignal Control**:
+   - Added cooperative abort support for in-flight turns; event streams now mark abort metadata on `ReactEndEvent.extra`.
+
 ### 🔧 Improvements
 
-1. **Docs & Tests**:
-   - Updated runtime docs, examples, and tests to match the simplified fork API.
+1. **TUI/StdIO UX**:
+   - Suppress primitive lifecycle marker events in TUI output.
+   - Disable input while busy; stdio only injects `_abort_signal` when supported.
+
+2. **Runtime & Tooling**:
+   - `read_file` now warns when start/end range is inverted but clamped.
+   - Runtime primitive specs include clearer parsing guidance.
+   - PyRepl now supports an initial working directory (`working_directory`).
+
+3. **Examples & Sandbox**:
+   - Added `sandbox/` (tracked, contents ignored) and moved all file tool workspaces to this directory.
+   - New general TUI agent demo combines selfref primitives + FileToolset.
+
+### 📚 Docs
+
+1. **New Guides & Navigation**:
+   - Added AbortSignal guide and reorganized documentation navigation.
+   - Documented FileToolset and updated PyRepl/tool references.
 
 
 ## 0.7.0 (2026-03-11) - Runtime Primitives, Forking, and Docs Refresh
