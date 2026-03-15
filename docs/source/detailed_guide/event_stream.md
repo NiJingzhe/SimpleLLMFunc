@@ -426,6 +426,11 @@ class ReactEndEvent(ReActEvent):
     total_token_usage: Optional[LLMUsage]  # 总 token 使用统计
 ```
 
+当通过 `AbortSignal` 中断回合时，`ReactEndEvent.extra` 会附加：
+
+- `aborted: true`
+- `abort_reason: <reason>`（如果调用 `abort(reason)` 时提供了 reason）
+
 **使用场景**：显示完整统计、性能分析、保存执行记录
 
 ## Fork 场景事件路由
@@ -891,6 +896,28 @@ async def chat(message: str, history=None):
 async for response, history in responses_only(chat("Hello")):
     print(response)
 ```
+
+### 7. 中断与取消（AbortSignal）
+
+事件流模式下可以通过 `AbortSignal` 中断当前回合，停止流式输出并取消正在执行的工具调用。
+中断后仍会收到 `ReactEndEvent`（`extra.aborted == true`）。
+
+```python
+from SimpleLLMFunc.hooks import AbortSignal, ABORT_SIGNAL_PARAM
+
+abort_signal = AbortSignal()
+
+async for output in chat(
+    "请列出 30 个要点",
+    history=[],
+    **{ABORT_SIGNAL_PARAM: abort_signal},
+):
+    ...
+
+abort_signal.abort("user_interrupt")
+```
+
+更完整的说明请参阅 [中断与取消](abort.md)。
 
 ## 常见问题
 

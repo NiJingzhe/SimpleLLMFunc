@@ -640,6 +640,9 @@ class AgentTUIApp(App[None]):
             return
 
         self._set_chat_placeholder()
+        if self._busy:
+            input_widget.disabled = True
+            return
         input_widget.disabled = False
         input_widget.focus()
 

@@ -156,7 +156,14 @@ class TestPyReplToolset:
         tool_names = [tool.name for tool in toolset]
         assert "execute_code" in tool_names
         assert "reset_repl" in tool_names
-        assert "list_variables" in tool_names
+        assert "list_variables" not in tool_names
+
+    def test_list_variables_api_removed(self):
+        """list_variables API should not be exposed on PyRepl."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        assert not hasattr(repl, "list_variables")
 
     def test_execute_tool_description_has_repl_guidance(self):
         """execute_code description should guide LLM usage clearly."""
@@ -173,13 +180,11 @@ class TestPyReplToolset:
         assert "input()" in description
         assert "timeout_seconds" in description
         assert "runtime.list_primitives()" in description
-        assert "runtime.list_primitives(prefix='...')" in description
+        assert "runtime.list_primitives(contains='selfref.fork.')" in description
         assert "runtime.list_primitive_specs(" in description
         assert "runtime.get_primitive_spec(name)" in description
-        assert "runtime.list_primitive_specs(names=[...])" in description
-        assert "does not delete runtime memory managed by registered primitives" in (
-            description
-        )
+        assert "runtime.list_primitive_specs(contains='...')" in description
+        assert "runtime memory is unchanged" in description
 
     def test_execute_tool_schema_exposes_timeout_seconds(self):
         """execute_code tool schema should expose per-call timeout controls."""
@@ -216,8 +221,26 @@ class TestPyReplToolset:
             "preserves registered runtime primitive backends"
             in descriptions["reset_repl"]
         )
-        assert "List user-defined variables" in descriptions["list_variables"]
-        assert "excluding private names and runtime" in descriptions["list_variables"]
+
+
+class TestPyReplToolsetOutput:
+    """Toolset outputs should be natural language strings."""
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_returns_text_summary(self):
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        result = await execute_tool.run("print('hello')")
+
+        assert isinstance(result, str)
+        assert "Execution succeeded" in result
+        assert "stdout:" in result
+        assert "hello" in result
 
 
 class TestPyReplExecute:
@@ -423,39 +446,9 @@ class TestPyReplReset:
         result = await repl.reset()
         assert "已重置" in result
 
-        # Verify variables are cleared
-        vars = await repl.list_variables()
-        assert len(vars) == 0
-
-
-class TestPyReplListVariables:
-    """Test PyRepl list_variables functionality."""
-
-    @pytest.mark.asyncio
-    async def test_list_variables_empty(self):
-        """Test listing variables when empty."""
-        from SimpleLLMFunc.builtin import PyRepl
-
-        repl = PyRepl()
-        vars = await repl.list_variables()
-
-        assert isinstance(vars, list)
-
-    @pytest.mark.asyncio
-    async def test_list_variables_with_data(self):
-        """Test listing variables with data."""
-        from SimpleLLMFunc.builtin import PyRepl
-
-        repl = PyRepl()
-        await repl.execute("x = 100")
-        await repl.execute("name = 'test'")
-
-        vars = await repl.list_variables()
-        assert len(vars) == 2
-
-        names = [v["name"] for v in vars]
-        assert "x" in names
-        assert "name" in names
+        # Verify variables are cleared by attempting to access a cleared name
+        post_reset = await repl.execute("x")
+        assert post_reset["success"] is False
 
 
 class TestPyReplPrimitivePacks:

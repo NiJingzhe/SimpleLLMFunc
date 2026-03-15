@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-11 21:21+0800\n"
+"POT-Creation-Date: 2026-03-14 21:05+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -89,107 +89,107 @@ msgstr "Get the project's Public Key and Secret Key"
 msgid "3. 配置环境变量"
 msgstr "3. Configure environment variables"
 
-#: ../../source/langfuse_integration.md:41
+#: ../../source/langfuse_integration.md:42
 msgid "4. 初始化观测系统"
 msgstr "4. Initialize observation system"
 
-#: ../../source/langfuse_integration.md:43
+#: ../../source/langfuse_integration.md:44
 msgid "SimpleLLMFunc 会自动从环境变量读取 Langfuse 配置，无需额外初始化。框架内部会在需要时自动连接 Langfuse："
 msgstr ""
 "SimpleLLMFunc will automatically read Langfuse configuration from "
 "environment variables and does not require additional initialization. The "
 "framework will automatically connect to Langfuse when needed."
 
-#: ../../source/langfuse_integration.md:45
+#: ../../source/langfuse_integration.md:46
 msgid "提示：当前实现不会根据 `LANGFUSE_ENABLED` 自动跳过观测调用；请确保 key 可用，或在应用层自行控制是否启用。"
 msgstr ""
 "Note: The current implementation does not automatically skip observation "
 "calls based on `LANGFUSE_ENABLED`; please ensure the key is available, or "
 "control whether to enable it at the application layer."
 
-#: ../../source/langfuse_integration.md:64
+#: ../../source/langfuse_integration.md:65
 msgid "如需手动获取 Langfuse 客户端或配置信息，可使用以下方式："
 msgstr ""
 "If you need to manually obtain the Langfuse client or configuration "
 "information, you can use the following methods:"
 
-#: ../../source/langfuse_integration.md:80
+#: ../../source/langfuse_integration.md:81
 msgid "使用示例"
 msgstr "Usage Example"
 
-#: ../../source/langfuse_integration.md:82
+#: ../../source/langfuse_integration.md:83
 msgid "基本 LLM 函数追踪"
 msgstr "Basic LLM function tracing"
 
-#: ../../source/langfuse_integration.md:104
+#: ../../source/langfuse_integration.md:105
 msgid "带工具调用的追踪"
 msgstr "Trace with tool call"
 
-#: ../../source/langfuse_integration.md:128
+#: ../../source/langfuse_integration.md:129
 msgid "聊天对话追踪"
 msgstr "Chat conversation tracking"
 
-#: ../../source/langfuse_integration.md:150
+#: ../../source/langfuse_integration.md:151
 msgid "追踪数据结构"
 msgstr "tracking data structure"
 
-#: ../../source/langfuse_integration.md:152
+#: ../../source/langfuse_integration.md:153
 msgid "Generation 追踪"
 msgstr "Generation Tracking"
 
-#: ../../source/langfuse_integration.md:154
+#: ../../source/langfuse_integration.md:155
 msgid "每个 LLM 调用会创建一个 Generation 观测，包含："
 msgstr "Each LLM call creates a Generation observation, which includes:"
 
-#: ../../source/langfuse_integration.md:156
+#: ../../source/langfuse_integration.md:157
 msgid "**输入**: 发送给 LLM 的消息列表"
 msgstr "**Output**: List of messages sent to LLM"
 
-#: ../../source/langfuse_integration.md:157
+#: ../../source/langfuse_integration.md:158
 msgid "**输出**: LLM 的响应内容和工具调用"
 msgstr "**Output**: LLM's response content and tool calls"
 
-#: ../../source/langfuse_integration.md:158
+#: ../../source/langfuse_integration.md:159
 msgid "**模型信息**: 模型名称和参数"
 msgstr "**Model Information**: Model Name and Parameters"
 
-#: ../../source/langfuse_integration.md:159
+#: ../../source/langfuse_integration.md:160
 msgid "**使用统计**: Token 使用量和成本信息"
 msgstr "Usage Statistics: Token Usage and Cost Information"
 
-#: ../../source/langfuse_integration.md:160
+#: ../../source/langfuse_integration.md:161
 msgid "**元数据**: 流式模式、可用工具数量等"
 msgstr "**Metadata**: Streaming mode, number of available tools, etc."
 
-#: ../../source/langfuse_integration.md:162
+#: ../../source/langfuse_integration.md:163
 msgid "Tool 追踪"
 msgstr "Tool Tracking"
 
-#: ../../source/langfuse_integration.md:164
+#: ../../source/langfuse_integration.md:165
 msgid "每个工具调用会创建一个 Tool 观测，包含："
 msgstr "Each tool invocation creates a Tool observation, which includes:"
 
-#: ../../source/langfuse_integration.md:166
+#: ../../source/langfuse_integration.md:167
 msgid "**输入**: 工具调用的参数"
 msgstr "**Input**: Tool call parameters"
 
-#: ../../source/langfuse_integration.md:167
+#: ../../source/langfuse_integration.md:168
 msgid "**输出**: 工具执行的结果"
 msgstr "**Output**: The result of the tool execution"
 
-#: ../../source/langfuse_integration.md:168
+#: ../../source/langfuse_integration.md:169
 msgid "**元数据**: 工具调用 ID、执行时间等"
 msgstr "**Metadata**: Tool call ID, execution time, etc."
 
-#: ../../source/langfuse_integration.md:170
+#: ../../source/langfuse_integration.md:171
 msgid "层级结构"
 msgstr "Hierarchical structure"
 
-#: ../../source/langfuse_integration.md:190
+#: ../../source/langfuse_integration.md:191
 msgid "配置选项"
 msgstr "Configuration Options"
 
-#: ../../source/langfuse_integration.md:192
+#: ../../source/langfuse_integration.md:193
 msgid "环境变量"
 msgstr "environment variable"
 
@@ -252,6 +252,18 @@ msgid "否"
 msgstr "No"
 
 #: ../../source/langfuse_integration.md
+msgid "`LANGFUSE_EXPORT_ALL_SPANS`"
+msgstr "`LANGFUSE_EXPORT_ALL_SPANS`"
+
+#: ../../source/langfuse_integration.md
+msgid "导出所有 OpenTelemetry spans（保持 v3 行为）"
+msgstr "Export all OpenTelemetry spans (maintain v3 behavior)"
+
+#: ../../source/langfuse_integration.md
+msgid "`true`"
+msgstr "`true`"
+
+#: ../../source/langfuse_integration.md
 msgid "`LANGFUSE_ENABLED`"
 msgstr "LANGFUSE_ENABLED"
 
@@ -260,160 +272,175 @@ msgid "是否启用观测（当前实现不强制）"
 msgstr ""
 "Whether to enable observation (current implementation does not enforce)"
 
-#: ../../source/langfuse_integration.md
-msgid "`true`"
-msgstr "`true`"
+#: ../../source/langfuse_integration.md:203
+msgid "Langfuse v4 注意事项"
+msgstr "Langfuse v4 Precautions"
 
-#: ../../source/langfuse_integration.md:201
+#: ../../source/langfuse_integration.md:205
+msgid ""
+"v4 默认会过滤非 LLM 的 OpenTelemetry spans；框架默认保持 v3 的“导出全部 spans”行为，若希望使用 v4 "
+"的智能过滤，请设置 `LANGFUSE_EXPORT_ALL_SPANS=false`。"
+msgstr ""
+"v4 filters non-LLM OpenTelemetry spans by default; the framework keeps v3's "
+"\"export all spans\" behavior by default. To use v4's intelligent filtering,"
+" please set `LANGFUSE_EXPORT_ALL_SPANS=false`."
+
+#: ../../source/langfuse_integration.md:206
+msgid "v4 会将 `metadata` 值规范化为字符串并限制长度，框架侧已自动做字符串化处理。"
+msgstr ""
+"v4 will normalize `metadata` values to strings and limit their length; the "
+"framework side has already automatically handled the stringification."
+
+#: ../../source/langfuse_integration.md:208
 msgid "高级配置"
 msgstr "Advanced configuration"
 
-#: ../../source/langfuse_integration.md:203
+#: ../../source/langfuse_integration.md:210
 msgid "如需自定义 Langfuse 配置（例如在生产环境动态设置密钥），可在启动应用前修改环境变量："
 msgstr ""
 "If you need to customize Langfuse configuration (e.g., dynamically set keys "
 "in a production environment), you can modify environment variables before "
 "starting the application:"
 
-#: ../../source/langfuse_integration.md:220
+#: ../../source/langfuse_integration.md:227
 msgid "最佳实践"
 msgstr "Best Practices"
 
-#: ../../source/langfuse_integration.md:222
+#: ../../source/langfuse_integration.md:229
 msgid "1. 环境分离"
 msgstr "1. Environmental separation"
 
-#: ../../source/langfuse_integration.md:234
+#: ../../source/langfuse_integration.md:241
 msgid "说明：当前版本不会自动读取 `LANGFUSE_ENABLED` 来跳过观测调用。如需按环境开关，请在应用层自行判断。"
 msgstr ""
 "Note: The current version does not automatically read `LANGFUSE_ENABLED` to "
 "skip observation calls. If you need to toggle based on environment, please "
 "implement the judgment in the application layer."
 
-#: ../../source/langfuse_integration.md:236
+#: ../../source/langfuse_integration.md:243
 msgid "2. 错误处理"
 msgstr "2. Error Handling"
 
-#: ../../source/langfuse_integration.md:238
+#: ../../source/langfuse_integration.md:245
 msgid "框架会自动处理 Langfuse 相关错误，但建议监控日志："
 msgstr ""
 "The framework will automatically handle Langfuse related errors, but it is "
 "recommended to monitor the logs:"
 
-#: ../../source/langfuse_integration.md:247
+#: ../../source/langfuse_integration.md:254
 msgid "3. 性能考虑"
 msgstr "3. Performance Considerations"
 
-#: ../../source/langfuse_integration.md:249
+#: ../../source/langfuse_integration.md:256
 msgid "Langfuse 调用是异步的，不会阻塞主要业务逻辑"
 msgstr ""
 "Langfuse calls are asynchronous and do not block the main business logic"
 
-#: ../../source/langfuse_integration.md:250
+#: ../../source/langfuse_integration.md:257
 msgid "在高并发场景下，考虑设置合适的 Langfuse 客户端配置"
 msgstr ""
 "In high concurrency scenarios, consider setting appropriate Langfuse client "
 "configurations"
 
-#: ../../source/langfuse_integration.md:251
+#: ../../source/langfuse_integration.md:258
 msgid "可以通过 `LANGFUSE_ENABLED=false` 临时禁用观测"
 msgstr "You can temporarily disable observation with `LANGFUSE_ENABLED=false`"
 
-#: ../../source/langfuse_integration.md:253
+#: ../../source/langfuse_integration.md:260
 msgid "4. 数据隐私"
 msgstr "4. Data Privacy"
 
-#: ../../source/langfuse_integration.md:255
+#: ../../source/langfuse_integration.md:262
 msgid "确保敏感数据在发送到 Langfuse 前已脱敏"
 msgstr ""
 "Ensure that sensitive data has been desensitized before sending it to "
 "Langfuse."
 
-#: ../../source/langfuse_integration.md:256
+#: ../../source/langfuse_integration.md:263
 msgid "考虑使用自托管的 Langfuse 实例处理敏感数据"
 msgstr ""
 "Consider using a self-hosted Langfuse instance to handle sensitive data"
 
-#: ../../source/langfuse_integration.md:258
+#: ../../source/langfuse_integration.md:265
 msgid "故障排除"
 msgstr "Troubleshooting"
 
-#: ../../source/langfuse_integration.md:260
+#: ../../source/langfuse_integration.md:267
 msgid "常见问题"
 msgstr "Frequently Asked Questions"
 
-#: ../../source/langfuse_integration.md:262
+#: ../../source/langfuse_integration.md:269
 msgid "**观测器未启用**"
 msgstr "Observer not available"
 
-#: ../../source/langfuse_integration.md:266
+#: ../../source/langfuse_integration.md:273
 msgid "检查环境变量是否正确设置"
 msgstr "Check if environment variables are set correctly"
 
-#: ../../source/langfuse_integration.md:267
+#: ../../source/langfuse_integration.md:274
 msgid "确认 Langfuse 包已安装"
 msgstr "Confirm that the Langfuse package is installed"
 
-#: ../../source/langfuse_integration.md:269
+#: ../../source/langfuse_integration.md:276
 msgid "**连接失败**"
 msgstr "Connection Failed"
 
-#: ../../source/langfuse_integration.md:273
+#: ../../source/langfuse_integration.md:280
 msgid "检查网络连接"
 msgstr "Check network connection"
 
-#: ../../source/langfuse_integration.md:274
+#: ../../source/langfuse_integration.md:281
 msgid "验证 API 密钥是否正确"
 msgstr "Verify that the API key is correct"
 
-#: ../../source/langfuse_integration.md:275
+#: ../../source/langfuse_integration.md:282
 msgid "确认 LANGFUSE_BASE_URL 设置正确"
 msgstr "Confirm LANGFUSE_BASE_URL is set correctly"
 
-#: ../../source/langfuse_integration.md:277
+#: ../../source/langfuse_integration.md:284
 msgid "**数据未显示**"
 msgstr "Data not displayed"
 
-#: ../../source/langfuse_integration.md:278
+#: ../../source/langfuse_integration.md:285
 msgid "检查 Langfuse 仪表板的项目设置"
 msgstr "Check the project settings of the Langfuse dashboard"
 
-#: ../../source/langfuse_integration.md:279
+#: ../../source/langfuse_integration.md:286
 msgid "确认使用的是正确的项目密钥"
 msgstr "confirm that the correct project key is being used"
 
-#: ../../source/langfuse_integration.md:280
+#: ../../source/langfuse_integration.md:287
 msgid "等待数据同步（通常几秒钟）"
 msgstr "Waiting for data synchronization (usually a few seconds)"
 
-#: ../../source/langfuse_integration.md:282
+#: ../../source/langfuse_integration.md:289
 msgid "调试模式"
 msgstr "Debug mode"
 
-#: ../../source/langfuse_integration.md:294
+#: ../../source/langfuse_integration.md:301
 msgid "示例项目"
 msgstr "Sample project"
 
-#: ../../source/langfuse_integration.md:296
+#: ../../source/langfuse_integration.md:303
 msgid "可参考以下示例了解完整链路："
 msgstr "You can refer to the following examples for the complete workflow:"
 
-#: ../../source/langfuse_integration.md:298
+#: ../../source/langfuse_integration.md:305
 msgid "`examples/llm_function_token_usage.py`（事件流 + 用量统计）"
 msgstr ""
 "`examples/llm_function_token_usage.py` (event stream + usage statistics)"
 
-#: ../../source/langfuse_integration.md:299
+#: ../../source/langfuse_integration.md:306
 msgid "`examples/event_stream_chatbot.py`（对话 + 工具调用 + 事件流）"
 msgstr ""
 "`examples/event_stream_chatbot.py` (conversation + tool calls + event "
 "stream)"
 
-#: ../../source/langfuse_integration.md:301
+#: ../../source/langfuse_integration.md:308
 msgid "相关链接"
 msgstr "Related Links"
 
-#: ../../source/langfuse_integration.md:303
+#: ../../source/langfuse_integration.md:310
 msgid "[Langfuse 官方文档](https://langfuse.com/docs)"
 msgstr "[Langfuse Official Documentation](https://langfuse.com/docs)"
 

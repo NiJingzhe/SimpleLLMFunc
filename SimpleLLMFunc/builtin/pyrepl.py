@@ -34,14 +34,12 @@ from .primitive import SelfReference
 from .pyrepl_worker import (
     COMMAND_EXECUTE,
     COMMAND_INPUT_REPLY,
-    COMMAND_LIST_VARIABLES,
     COMMAND_PRIMITIVE_RESULT,
     COMMAND_RESET,
     COMMAND_SHUTDOWN,
     EVENT_EXECUTE_RESULT,
     EVENT_INPUT_ACCEPTED,
     EVENT_INPUT_REQUEST,
-    EVENT_LIST_VARIABLES_RESULT,
     EVENT_PRIMITIVE_CALL,
     EVENT_RESET_RESULT,
     EVENT_STDERR,
@@ -97,10 +95,6 @@ class PyRepl:
         "Reset REPL runtime variables in the current session. This clears "
         "Python variables only and preserves registered runtime primitive backends."
     )
-    LIST_VARIABLES_TOOL_DESCRIPTION = (
-        "List user-defined variables currently available in REPL namespace "
-        "(excluding private names and runtime)."
-    )
     EXECUTE_TOOL_BEST_PRACTICES = [
         "Primitive = callable without import; use runtime.namespace.name(...). Filter discovery with contains='selfref.fork.' not prefix='fork'.",
         "Spec lookups return XML by default; use format='dict' only when code needs direct field access.",
@@ -110,9 +104,6 @@ class PyRepl:
     RESET_TOOL_BEST_PRACTICES = [
         "Use reset_repl only for variable cleanup; runtime backend state remains unchanged.",
         "Clear selfref memory with runtime.selfref.history.delete/replace/clear when needed (clear preserves current system prompt).",
-    ]
-    LIST_VARIABLES_TOOL_BEST_PRACTICES = [
-        "Use this to confirm REPL state before reusing variables across execute_code calls.",
     ]
 
     DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
@@ -305,7 +296,7 @@ class PyRepl:
             Use: Read structured specs for runtime primitives (host-registered callables, no import needed).
             Input: Keyword-only filters. `names` exact names. `contains` substring filter (prefer contains='selfref.fork.' over prefix='fork'). `format` defaults to `xml`.
             Output: XML when format='xml', or list[dict] when format='dict'.
-            Parse: XML: parse <primitive_specs>/<primitive>. Dict: iterate list.
+            Parse: XML: parse <primitive_specs>/<primitive>. Dict: iterate the list.
             Parameters:
             - names: Exact primitive names.
             - prefix: Names starting with prefix.
@@ -382,6 +373,10 @@ class PyRepl:
         self._primitive_registry.register(
             "runtime.list_primitive_specs",
             runtime_list_primitive_specs,
+            description=(
+                "Read structured specs for runtime primitives (host-registered "
+                "callables, no import needed)."
+            ),
             best_practices=[
                 "Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.",
                 "Specs return XML by default; format='dict' only when code needs direct field access.",
@@ -624,13 +619,68 @@ class PyRepl:
             self._tools = self._create_tools()
         return self._tools
 
+    @staticmethod
+    def _format_execute_tool_output(result: Dict[str, Any]) -> str:
+        success = bool(result.get("success"))
+        execution_time_ms = result.get("execution_time_ms")
+        if isinstance(execution_time_ms, (int, float)):
+            duration_text = f"{execution_time_ms:.0f} ms"
+        else:
+            duration_text = "unknown duration"
+
+        status = "succeeded" if success else "failed"
+        lines = [f"Execution {status} in {duration_text}."]
+
+        stdout = result.get("stdout")
+        if isinstance(stdout, str) and stdout:
+            lines.append("stdout:\n" + stdout)
+        else:
+            lines.append("stdout: (empty)")
+
+        stderr = result.get("stderr")
+        if isinstance(stderr, str) and stderr:
+            lines.append("stderr:\n" + stderr)
+        else:
+            lines.append("stderr: (empty)")
+
+        return_value = result.get("return_value")
+        if isinstance(return_value, str) and return_value:
+            lines.append(f"return_value: {return_value}")
+        else:
+            lines.append("return_value: (none)")
+
+        error = result.get("error")
+        if isinstance(error, str) and error:
+            lines.append(f"error: {error}")
+
+        error_details = result.get("error_details")
+        if isinstance(error_details, dict):
+            summary = error_details.get("summary")
+            if isinstance(summary, str) and summary:
+                lines.append(f"error_summary: {summary}")
+
+        return "\n".join(lines)
+
+    async def _execute_tool(
+        self,
+        code: str,
+        timeout_seconds: Optional[float] = None,
+        event_emitter: Optional[ToolEventEmitter] = None,
+    ) -> str:
+        result = await self.execute(
+            code,
+            timeout_seconds=timeout_seconds,
+            event_emitter=event_emitter,
+        )
+        return self._format_execute_tool_output(result)
+
     def _create_tools(self) -> List[Tool]:
         tools = []
 
         execute_tool = Tool(
             name="execute_code",
             description=self.EXECUTE_TOOL_DESCRIPTION,
-            func=self.execute,
+            func=self._execute_tool,
             best_practices=self.EXECUTE_TOOL_BEST_PRACTICES,
             prompt_injection_builder=self._build_execute_tool_prompt_injection,
         )
@@ -643,14 +693,6 @@ class PyRepl:
             best_practices=self.RESET_TOOL_BEST_PRACTICES,
         )
         tools.append(reset_tool)
-
-        list_vars_tool = Tool(
-            name="list_variables",
-            description=self.LIST_VARIABLES_TOOL_DESCRIPTION,
-            func=self.list_variables,
-            best_practices=self.LIST_VARIABLES_TOOL_BEST_PRACTICES,
-        )
-        tools.append(list_vars_tool)
 
         return tools
 
@@ -1305,59 +1347,6 @@ class PyRepl:
                         if isinstance(message, str)
                         else "REPL 已重置，所有变量已清除"
                     )
-
-    async def list_variables(self) -> List[Dict[str, str]]:
-        """List currently defined user variables in REPL namespace."""
-        request_id = uuid.uuid4().hex
-
-        async with self._operation_lock:
-            with self._lock:
-                self._ensure_worker_locked()
-                self._send_worker_command_locked(
-                    {
-                        "type": COMMAND_LIST_VARIABLES,
-                        "request_id": request_id,
-                        "runtime_enabled": True,
-                    }
-                )
-
-            deadline = time.monotonic() + 5.0
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    with self._lock:
-                        self._restart_worker_locked()
-                    return []
-
-                event = await self._receive_worker_event(min(0.1, remaining))
-                if event is None:
-                    continue
-
-                event_type = str(event.get("type", ""))
-                if event_type == EVENT_PRIMITIVE_CALL:
-                    response = await self._execute_primitive_call(
-                        event,
-                        event_emitter=None,
-                    )
-                    with self._lock:
-                        self._send_worker_command_locked(response)
-                    continue
-
-                if (
-                    event_type == EVENT_LIST_VARIABLES_RESULT
-                    and str(event.get("request_id", "")) == request_id
-                ):
-                    variables = event.get("variables")
-                    if isinstance(variables, list):
-                        return [
-                            {
-                                "name": str(item.get("name", "")),
-                                "type": str(item.get("type", "")),
-                            }
-                            for item in variables
-                            if isinstance(item, dict)
-                        ]
-                    return []
 
     def close(self) -> None:
         """Close worker process and release resources."""

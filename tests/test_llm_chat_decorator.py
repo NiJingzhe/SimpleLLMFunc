@@ -164,9 +164,9 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     assert "execute_code" in captured_system_prompt
     assert "<runtime_primitive_contract>" in captured_system_prompt
     assert "runtime.list_primitives()" in captured_system_prompt
-    assert "runtime.list_primitives(prefix='...')" in captured_system_prompt
+    assert "runtime.list_primitives(contains='selfref.fork.')" in captured_system_prompt
     assert "runtime.get_primitive_spec(name)" in captured_system_prompt
-    assert "runtime.list_primitive_specs(names=[...])" in captured_system_prompt
+    assert "runtime.list_primitive_specs(contains='...')" in captured_system_prompt
     assert _MUST_PROMPT_BLOCK in captured_system_prompt
     assert _MUST_PROMPT_RULE in captured_system_prompt
     assert "永远不要" not in captured_system_prompt
@@ -283,12 +283,10 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
             for tool in runtime_toolkit
             if isinstance(tool, Tool) and tool.name == "execute_code"
         )
-        execute_func = cast(Any, execute_tool.func)
-
-        execute_result = await execute_func(
+        execute_result = await execute_tool.run(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'from-selfref'})"
         )
-        assert execute_result["success"] is True
+        assert "Execution succeeded" in execute_result
 
         yield "ok", kwargs["messages"]
 

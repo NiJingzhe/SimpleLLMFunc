@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-11 21:21+0800\n"
+"POT-Creation-Date: 2026-03-14 21:05+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -140,48 +140,78 @@ msgstr ""
 " item automatically grows with its content."
 
 #: ../../source/tui.md:59
+msgid "中断当前回复"
+msgstr "Interrupt current reply"
+
+#: ../../source/tui.md:61
+msgid "当 Agent 仍在生成回复时再次发送消息，TUI 会触发中断并开启新回合："
+msgstr ""
+"When the Agent is still generating a response and a message is sent again, "
+"TUI will trigger an interruption and start a new round:"
+
+#: ../../source/tui.md:63
+msgid "当前回合会被终止（停止流式输出、取消工具调用）"
+msgstr ""
+"The current turn will be terminated (stop streaming output, cancel tool "
+"calls)"
+
+#: ../../source/tui.md:64
+msgid "新消息会自动加上中断提示语：`\"我要打断你的回复。\"`"
+msgstr ""
+"New messages will automatically add an interruption prompt: `\"我要打断你的回复。\"`"
+
+#: ../../source/tui.md:66
+msgid ""
+"这用于快速打断长回复或纠正方向。如需更细粒度控制，可手动传入 `AbortSignal`（详见 "
+"[中断与取消](detailed_guide/abort.md)）。"
+msgstr ""
+"This is used to quickly interrupt long replies or correct the direction. For"
+" more granular control, you can manually pass in `AbortSignal` (see "
+"[Interruption and Cancellation](detailed_guide/abort.md) for details)."
+
+#: ../../source/tui.md:68
 msgid "交互与退出"
 msgstr "Interaction and Exit"
 
-#: ../../source/tui.md:61
+#: ../../source/tui.md:70
 msgid "发送消息：输入后按 Enter"
 msgstr "Send message: press Enter after typing"
 
-#: ../../source/tui.md:62
+#: ../../source/tui.md:71
 msgid "当存在待处理的工具输入请求时，Enter 会优先把输入提交给该请求"
 msgstr ""
 "When a pending tool-input request exists, pressing Enter submits input to "
 "that request first."
 
-#: ../../source/tui.md:63
+#: ../../source/tui.md:72
 msgid "强制发送新一轮聊天：`/chat <message>`（可在有待处理工具输入时绕过优先路由）"
 msgstr ""
 "Force a new chat turn: `/chat <message>` (bypasses priority routing while a "
 "tool input request is pending)."
 
-#: ../../source/tui.md:64
+#: ../../source/tui.md:73
 msgid "复制完整转录：`/copy` 或 `Ctrl+Y`"
 msgstr "Copy full transcript: `/copy` or `Ctrl+Y`"
 
-#: ../../source/tui.md:65
+#: ../../source/tui.md:74
 msgid "退出命令：`/exit`、`/quit`、`/q`"
 msgstr "Exit commands: `/exit`, `/quit`, `/q`"
 
-#: ../../source/tui.md:66
+#: ../../source/tui.md:75
 msgid "快捷键退出：`Ctrl+Q`（同时保留 `Ctrl+C`）"
 msgstr "Hotkey exit: `Ctrl+Q` (while keeping `Ctrl+C`)"
 
-#: ../../source/tui.md:68
+#: ../../source/tui.md:77
 msgid "自定义 Tool 事件 Hook"
 msgstr "Custom Tool Event Hook"
 
-#: ../../source/tui.md:70
+#: ../../source/tui.md:79
 msgid "`@tui` 支持通过 `custom_event_hook` 注入自定义事件解析逻辑："
 msgstr ""
 "`@tui` supports injecting custom event parsing logic via "
 "`custom_event_hook`:"
 
-#: ../../source/tui.md:95
+#: ../../source/tui.md:104
 msgid ""
 "框架也内置了部分常见工具事件的默认解析（例如 PyRepl 的 "
 "`kernel_stdout`/`kernel_stderr`/`kernel_input_request`）。"
@@ -189,10 +219,10 @@ msgstr ""
 "The framework also includes default parsers for common tool events (e.g., "
 "PyRepl `kernel_stdout`/`kernel_stderr`/`kernel_input_request`)."
 
-#: ../../source/tui.md:97
+#: ../../source/tui.md:106
 msgid "运行示例"
 msgstr "Run the Example"
 
-#: ../../source/tui.md:99
+#: ../../source/tui.md:108
 msgid "参考示例：`examples/tui_chat_example.py`"
 msgstr "Example: `examples/tui_chat_example.py`"

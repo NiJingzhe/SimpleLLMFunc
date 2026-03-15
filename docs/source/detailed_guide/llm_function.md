@@ -55,6 +55,37 @@ async def your_function(param1: Type1, param2: Type2) -> ReturnType:
   - 详细说明请参考 [事件流系统文档](event_stream.md)
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）；可传入 `retry_times` 控制空响应重试次数（默认 2）
 
+### 运行时中断（AbortSignal）
+
+通过 `_abort_signal` 传入 `AbortSignal`，可在运行中中断当前回合（停止流式输出并取消正在执行的工具调用）。
+当 `enable_event=True` 时可以用 `async for` 消费输出并随时触发中断；非事件流模式也可传入 `_abort_signal` 来提前终止 `await`。
+
+```python
+import asyncio
+from SimpleLLMFunc.hooks import AbortSignal, ABORT_SIGNAL_PARAM
+
+abort_signal = AbortSignal()
+
+async def run():
+    async def abort_later():
+        await asyncio.sleep(1.0)
+        abort_signal.abort("timeout")
+
+    asyncio.create_task(abort_later())
+
+    # 注意：your_function 需要 enable_event=True 才能用 async for 消费
+    async for output in your_function(
+        param1,
+        **{ABORT_SIGNAL_PARAM: abort_signal},
+    ):
+        ...
+
+asyncio.run(run())
+```
+
+当 `enable_event=True` 时，`ReactEndEvent.extra` 会包含 `aborted: true` 和可选的 `abort_reason`。
+详见 [中断与取消](abort.md)。
+
 ### 自定义提示模板
 
 #### 系统提示模板占位符
