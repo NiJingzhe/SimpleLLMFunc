@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 import sys
+from typing import Any, cast
 from pathlib import Path
 
 import pytest
@@ -133,6 +134,34 @@ class TestPyReplCreation:
 
         with pytest.raises(ValueError, match="input_idle_timeout_seconds"):
             PyRepl(input_idle_timeout_seconds=0)
+
+    def test_repl_rejects_invalid_working_directory(self, tmp_path: Path) -> None:
+        """PyRepl should reject non-directory working_directory values."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        missing = tmp_path / "missing"
+        file_path = tmp_path / "file.txt"
+        file_path.write_text("hello", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=missing)
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=file_path)
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=cast(Any, 123))
+
+    @pytest.mark.asyncio
+    async def test_repl_uses_working_directory(self, tmp_path: Path) -> None:
+        """PyRepl should start worker in the provided working directory."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl(working_directory=tmp_path)
+        result = await repl.execute("import os\nprint(os.getcwd())")
+
+        assert result["success"] is True
+        assert Path(result["stdout"].strip()).resolve() == tmp_path.resolve()
 
 
 class TestPyReplToolset:

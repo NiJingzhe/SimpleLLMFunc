@@ -254,6 +254,9 @@ repl = PyRepl(input_idle_timeout_seconds=300)
 
 # 两者都可配置
 repl = PyRepl(execution_timeout_seconds=180, input_idle_timeout_seconds=300)
+
+# 设置初始工作目录（子进程启动后即生效）
+repl = PyRepl(working_directory="./sandbox")
 ```
 
 ## 使用 SelfReference 后端的 Runtime 原语

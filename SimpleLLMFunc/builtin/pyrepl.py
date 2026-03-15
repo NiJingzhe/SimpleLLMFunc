@@ -112,6 +112,7 @@ class PyRepl:
         self,
         execution_timeout_seconds: float = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         input_idle_timeout_seconds: float = DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS,
+        working_directory: Optional[Union[str, Path]] = None,
     ):
         execution_timeout = float(execution_timeout_seconds)
         if execution_timeout <= 0:
@@ -121,8 +122,18 @@ class PyRepl:
         if input_idle_timeout <= 0:
             raise ValueError("input_idle_timeout_seconds must be greater than 0")
 
+        resolved_working_directory: Optional[Path] = None
+        if working_directory is not None:
+            if not isinstance(working_directory, (str, Path)):
+                raise ValueError("working_directory must be a path string or Path")
+            resolved = Path(working_directory).expanduser().resolve()
+            if not resolved.exists() or not resolved.is_dir():
+                raise ValueError("working_directory must be an existing directory")
+            resolved_working_directory = resolved
+
         self.execution_timeout_seconds = execution_timeout
         self.input_idle_timeout_seconds = input_idle_timeout
+        self._working_directory = resolved_working_directory
 
         self.namespace: Dict[str, Any] = {}
         self._runtime_backends: Dict[str, Any] = {}
@@ -158,6 +169,12 @@ class PyRepl:
     @property
     def audit_log_file(self) -> str:
         return str(self._audit_file)
+
+    @property
+    def working_directory(self) -> Optional[str]:
+        if self._working_directory is None:
+            return None
+        return str(self._working_directory)
 
     @staticmethod
     def _normalize_backend_name(name: str) -> str:
@@ -784,7 +801,11 @@ class PyRepl:
             self._event_queue = self._ctx.Queue()
             process = self._ctx.Process(
                 target=run_pyrepl_worker,
-                args=(self._command_queue, self._event_queue),
+                args=(
+                    self._command_queue,
+                    self._event_queue,
+                    self.working_directory,
+                ),
                 daemon=True,
             )
             process.start()
@@ -804,6 +825,10 @@ class PyRepl:
             event_type = str(event.get("type", "")) if isinstance(event, dict) else ""
             if event_type == EVENT_WORKER_READY:
                 return
+
+            if event_type == EVENT_WORKER_ERROR:
+                message = str(event.get("message", "PyRepl worker error"))
+                raise RuntimeError(message)
 
             if isinstance(event, dict):
                 self._prefetched_events.append(event)

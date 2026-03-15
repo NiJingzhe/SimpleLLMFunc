@@ -10,6 +10,7 @@ import ast
 import builtins
 import io
 import linecache
+import os
 import queue
 import sys
 import time
@@ -529,8 +530,24 @@ class _PyReplWorker:
         )
 
 
-def run_pyrepl_worker(command_queue: Any, event_queue: Any) -> None:
+def run_pyrepl_worker(
+    command_queue: Any,
+    event_queue: Any,
+    working_directory: Optional[str] = None,
+) -> None:
     """Entrypoint executed inside PyRepl subprocess worker."""
+
+    if working_directory:
+        try:
+            os.chdir(working_directory)
+        except Exception as exc:
+            event_queue.put(
+                {
+                    "type": EVENT_WORKER_ERROR,
+                    "message": f"Failed to set working_directory: {exc}",
+                }
+            )
+            return
 
     worker = _PyReplWorker(command_queue=command_queue, event_queue=event_queue)
     worker.run_forever()
