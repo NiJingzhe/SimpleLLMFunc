@@ -514,4 +514,4 @@ print(result)  # "REPL 已重置，所有变量已清除"
 
 - Example: `examples/pyrepl_example.py`
 - Local runtime memory demo: `examples/runtime_primitives_basic_example.py`
-- Unified TUI runtime selfref demo: `examples/tui_runtime_selfref_example.py`
+- General TUI agent demo: `examples/tui_general_agent_example.py` (workspace scoped to `./sandbox`)

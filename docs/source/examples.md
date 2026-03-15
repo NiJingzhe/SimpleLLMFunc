@@ -148,21 +148,23 @@ Run:
 poetry run python examples/runtime_primitives_basic_example.py
 ```
 
-### Unified Runtime Selfref Agent (memory + fork)
+### General TUI Agent (selfref + file tools)
 
-**File**: [examples/tui_runtime_selfref_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_selfref_example.py)
+**File**: [examples/tui_general_agent_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_general_agent_example.py)
 
-Recommended single entry for runtime self-reference workflow:
+Recommended single entry for a TUI-first agent workflow:
 
 - One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
+- `FileToolset` provides read/grep/sed/echo tools scoped to the workspace
 - `llm_chat` injects runtime primitive guidance through `Tool Best Practices` (when `PyRepl` is mounted)
 - Forked contexts inherit parent memory snapshot from the same selfref key
 - Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
+- Workspace is scoped to `./sandbox` under the project root
 
 Run:
 
 ```bash
-poetry run python examples/tui_runtime_selfref_example.py
+poetry run python examples/tui_general_agent_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控
