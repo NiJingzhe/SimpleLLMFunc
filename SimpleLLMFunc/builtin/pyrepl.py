@@ -572,6 +572,16 @@ class PyRepl:
                 f"<active_selfref_key>{resolved_memory_key}</active_selfref_key>"
             )
 
+        if self._working_directory is not None:
+            lines.extend(
+                [
+                    "<working_directory>",
+                    f"<path>{self._working_directory.as_posix()}</path>",
+                    "<rule>All relative paths resolve from this directory.</rule>",
+                    "</working_directory>",
+                ]
+            )
+
         lines.extend(
             [
                 "<reset_behavior>",

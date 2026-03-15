@@ -215,6 +215,38 @@ class TestPyReplToolset:
         assert "runtime.list_primitive_specs(contains='...')" in description
         assert "runtime memory is unchanged" in description
 
+    def test_execute_tool_prompt_includes_working_directory(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Prompt injection should include working_directory when configured."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl(working_directory=tmp_path)
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<working_directory>" in prompt
+        assert tmp_path.resolve().as_posix() in prompt
+
+    def test_execute_tool_prompt_omits_working_directory_when_unset(self) -> None:
+        """Prompt injection should skip working_directory when not configured."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<working_directory>" not in prompt
+
     def test_execute_tool_schema_exposes_timeout_seconds(self):
         """execute_code tool schema should expose per-call timeout controls."""
         from SimpleLLMFunc.builtin import PyRepl

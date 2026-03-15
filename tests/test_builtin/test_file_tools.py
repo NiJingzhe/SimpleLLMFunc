@@ -31,6 +31,17 @@ def test_toolset_exposes_expected_tools(tmp_path: Path) -> None:
     assert names == ["read_file", "grep", "sed", "echo_into"]
 
 
+def test_toolset_injects_workspace_prompt(tmp_path: Path) -> None:
+    toolset = FileToolset(tmp_path).toolset
+    workspace_text = tmp_path.resolve().as_posix()
+
+    for tool in toolset:
+        prompt = tool.build_system_prompt_injection()
+        assert isinstance(prompt, str)
+        assert workspace_text in prompt
+        assert "workspace" in prompt
+
+
 @pytest.mark.asyncio
 async def test_read_file_formats_output_and_tracks_hash(tmp_path: Path) -> None:
     path = tmp_path / "script.py"

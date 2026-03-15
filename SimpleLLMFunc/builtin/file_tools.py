@@ -89,32 +89,44 @@ class FileToolset:
         return self._tools
 
     def _create_tools(self) -> List[Tool]:
+        prompt_injection_builder = self._build_workspace_prompt_injection
         return [
             Tool(
                 name="read_file",
                 description=self.READ_FILE_DESCRIPTION,
                 func=self.read_file,
                 best_practices=self.READ_FILE_BEST_PRACTICES,
+                prompt_injection_builder=prompt_injection_builder,
             ),
             Tool(
                 name="grep",
                 description=self.GREP_DESCRIPTION,
                 func=self.grep,
                 best_practices=self.GREP_BEST_PRACTICES,
+                prompt_injection_builder=prompt_injection_builder,
             ),
             Tool(
                 name="sed",
                 description=self.SED_DESCRIPTION,
                 func=self.sed,
                 best_practices=self.SED_BEST_PRACTICES,
+                prompt_injection_builder=prompt_injection_builder,
             ),
             Tool(
                 name="echo_into",
                 description=self.ECHO_DESCRIPTION,
                 func=self.echo_into,
                 best_practices=self.ECHO_BEST_PRACTICES,
+                prompt_injection_builder=prompt_injection_builder,
             ),
         ]
+
+    def _build_workspace_prompt_injection(self, context: Dict[str, Any]) -> str:
+        return (
+            "File tool workspace root: "
+            + self.workspace.as_posix()
+            + ". Paths must stay within this workspace; hidden files are not accessible."
+        )
 
     def _resolve_path(self, path: str) -> Tuple[Optional[Path], Optional[str]]:
         if not isinstance(path, str) or not path.strip():
