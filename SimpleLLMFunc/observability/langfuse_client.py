@@ -75,7 +75,11 @@ def set_langfuse_trace_context(
 def reset_langfuse_trace_context(
     token: contextvars.Token[Optional[TraceContext]],
 ) -> None:
-    _langfuse_trace_context_var.reset(token)
+    try:
+        _langfuse_trace_context_var.reset(token)
+    except (ValueError, RuntimeError):
+        # Token may be from a different context or already reset.
+        return
 
 
 def update_langfuse_parent_span(parent_span_id: Optional[str]) -> None:
