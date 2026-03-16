@@ -85,6 +85,7 @@ from SimpleLLMFunc.base.tool_call import (
 
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
+    get_langfuse_trace_context,
     langfuse_client,
 )
 
@@ -260,6 +261,8 @@ async def _process_tool_calls_with_events_gen(
         yield messages
         return
 
+    trace_context = get_langfuse_trace_context()
+
     # 准备执行环境
     from SimpleLLMFunc.base.tool_call.execution import _execute_single_tool_call
     import asyncio
@@ -371,7 +374,10 @@ async def _process_tool_calls_with_events_gen(
                 messages_to_append,
                 is_multimodal,
             ) = await _execute_single_tool_call(
-                tool_call, tool_map, event_emitter=tool_event_emitter
+                tool_call,
+                tool_map,
+                event_emitter=tool_event_emitter,
+                trace_context=trace_context,
             )
 
             # 从消息中提取工具结果

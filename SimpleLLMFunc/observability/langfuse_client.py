@@ -2,6 +2,7 @@ from functools import lru_cache
 from typing import Any, Callable, Optional
 
 from langfuse import Langfuse
+from langfuse.types import TraceContext
 
 from SimpleLLMFunc.observability.langfuse_config import langfuse_config
 
@@ -59,8 +60,21 @@ def flush_all_observations() -> None:
     langfuse_client.flush()
 
 
+def get_langfuse_trace_context() -> Optional[TraceContext]:
+    trace_id = langfuse_client.get_current_trace_id()
+    if not trace_id:
+        return None
+
+    context: TraceContext = {"trace_id": trace_id}
+    parent_span_id = langfuse_client.get_current_observation_id()
+    if parent_span_id:
+        context["parent_span_id"] = parent_span_id
+    return context
+
+
 __all__ = [
     "langfuse_client",
     "coerce_langfuse_metadata",
+    "get_langfuse_trace_context",
     "flush_all_observations",
 ]

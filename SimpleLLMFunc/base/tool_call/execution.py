@@ -24,6 +24,7 @@ from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
+    get_langfuse_trace_context,
     langfuse_client,
 )
 from SimpleLLMFunc.base.tool_call.extraction import (
@@ -193,6 +194,7 @@ async def _execute_single_tool_call(
     tool_call: Dict[str, Any],
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
     event_emitter: Any = None,
+    trace_context: Optional[dict[str, str]] = None,
 ) -> tuple[Dict[str, Any], List[Dict[str, Any]], bool]:
     """Execute a single tool call and return its results.
 
@@ -238,6 +240,7 @@ async def _execute_single_tool_call(
         name=tool_name,
         input={"raw_arguments": arguments_str},
         metadata=coerce_langfuse_metadata({"tool_call_id": tool_call_id}),
+        trace_context=trace_context,
     ) as tool_span:
         try:
             repaired_arguments_str = repair_tool_call_arguments(arguments_str)
@@ -522,9 +525,15 @@ async def process_tool_calls(
         return messages
 
     # Execute all tool calls concurrently
+    trace_context = get_langfuse_trace_context()
     tasks = [
         asyncio.create_task(
-            _execute_single_tool_call(tool_call, tool_map, event_emitter)
+            _execute_single_tool_call(
+                tool_call,
+                tool_map,
+                event_emitter,
+                trace_context=trace_context,
+            )
         )
         for tool_call in tool_calls
     ]
