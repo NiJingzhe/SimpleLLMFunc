@@ -45,7 +45,9 @@ from SimpleLLMFunc.hooks.stream import ReactOutput, is_event_yield
 from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
+    get_langfuse_trace_context,
     langfuse_client,
+    update_langfuse_parent_span,
 )
 
 # Type aliases
@@ -645,6 +647,7 @@ def llm_chat(
                     trace_id=function_signature.trace_id,
                     arguments=function_signature.bound_args.arguments,
                 ):
+                    trace_context = get_langfuse_trace_context()
                     # 创建 Langfuse parent span
                     with langfuse_client.start_as_current_observation(
                         as_type="span",
@@ -667,7 +670,11 @@ def llm_chat(
                                 "self_reference_key": self_reference_key,
                             }
                         ),
+                        trace_context=trace_context,
                     ) as chat_span:
+                        update_langfuse_parent_span(
+                            langfuse_client.get_current_observation_id()
+                        )
                         try:
                             raw_history_reference = _extract_raw_history_reference(
                                 function_signature.bound_args.arguments

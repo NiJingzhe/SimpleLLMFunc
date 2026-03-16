@@ -3,7 +3,15 @@
 from __future__ import annotations
 
 import json
-from typing import Any, AsyncContextManager, Dict
+from contextlib import asynccontextmanager
+from typing import Any, AsyncContextManager, Dict, AsyncGenerator, Optional
+
+from SimpleLLMFunc.observability.langfuse_client import (
+    get_langfuse_trace_context,
+    langfuse_client,
+    reset_langfuse_trace_context,
+    set_langfuse_trace_context,
+)
 
 from SimpleLLMFunc.logger import app_log, async_log_context
 from SimpleLLMFunc.logger.logger import get_location
@@ -30,15 +38,26 @@ def create_log_context_manager(
     )
 
 
-def setup_log_context(
+@asynccontextmanager
+async def setup_log_context(
     func_name: str,
     trace_id: str,
     arguments: Dict[str, Any],
-) -> AsyncContextManager[None]:
+) -> AsyncGenerator[None, None]:
     """设置日志上下文的完整流程"""
     # 1. 记录函数调用日志
     log_function_call(func_name, arguments)
 
-    # 2. 创建并返回日志上下文管理器
-    return create_log_context_manager(func_name, trace_id)
+    trace_context = get_langfuse_trace_context()
+    trace_token: Optional[object] = None
+    if trace_context is None:
+        trace_context = {"trace_id": langfuse_client.create_trace_id()}
+        trace_token = set_langfuse_trace_context(trace_context)
 
+    # 2. 创建并返回日志上下文管理器
+    async with create_log_context_manager(func_name, trace_id):
+        try:
+            yield
+        finally:
+            if trace_token is not None:
+                reset_langfuse_trace_context(trace_token)

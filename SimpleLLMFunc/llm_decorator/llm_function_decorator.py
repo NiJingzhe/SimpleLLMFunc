@@ -55,7 +55,9 @@ from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
+    get_langfuse_trace_context,
     langfuse_client,
+    update_langfuse_parent_span,
 )
 from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
@@ -171,6 +173,7 @@ def llm_function(
                 trace_id=sig.trace_id,
                 arguments=sig.bound_args.arguments,
             ):
+                trace_context = get_langfuse_trace_context()
                 # 创建 Langfuse parent span
                 with langfuse_client.start_as_current_observation(
                     as_type="span",
@@ -185,7 +188,11 @@ def llm_function(
                             "enable_event": enable_event,
                         }
                     ),
+                    trace_context=trace_context,
                 ) as function_span:
+                    update_langfuse_parent_span(
+                        langfuse_client.get_current_observation_id()
+                    )
                     try:
                         # Step 3: 构建初始提示
                         messages = build_initial_prompts(

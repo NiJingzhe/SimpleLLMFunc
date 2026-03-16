@@ -888,6 +888,8 @@ async def execute_llm(
 
     aborted = False
 
+    trace_context = get_langfuse_trace_context()
+
     with langfuse_client.start_as_current_observation(
         as_type="generation",
         name=f"{func_name}_initial_llm_call",
@@ -901,6 +903,7 @@ async def execute_llm(
             }
         ),
         completion_start_time=datetime.now(timezone.utc),
+        trace_context=trace_context,
     ) as generation_span:
         if stream:
             # Handle streaming response
@@ -1363,6 +1366,7 @@ async def execute_llm(
                 }
             ),
             completion_start_time=datetime.now(timezone.utc),
+            trace_context=trace_context,
         ) as iteration_generation_span:
             last_response = None
 
@@ -1840,6 +1844,7 @@ async def execute_llm(
             }
         ),
         completion_start_time=datetime.now(timezone.utc),
+        trace_context=trace_context,
     ) as final_generation_span:
         final_response = None
         final_content = ""
