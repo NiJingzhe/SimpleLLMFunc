@@ -39,25 +39,29 @@ def create_log_context_manager(
 
 
 @asynccontextmanager
-async def setup_log_context(
-    func_name: str,
-    trace_id: str,
-    arguments: Dict[str, Any],
+async def _log_context_manager(
+    base_manager: AsyncContextManager[None],
 ) -> AsyncGenerator[None, None]:
-    """设置日志上下文的完整流程"""
-    # 1. 记录函数调用日志
-    log_function_call(func_name, arguments)
-
     trace_context = get_langfuse_trace_context()
     trace_token: Optional[object] = None
     if trace_context is None:
         trace_context = {"trace_id": langfuse_client.create_trace_id()}
         trace_token = set_langfuse_trace_context(trace_context)
 
-    # 2. 创建并返回日志上下文管理器
-    async with create_log_context_manager(func_name, trace_id):
+    async with base_manager:
         try:
             yield
         finally:
             if trace_token is not None:
                 reset_langfuse_trace_context(trace_token)
+
+
+def setup_log_context(
+    func_name: str,
+    trace_id: str,
+    arguments: Dict[str, Any],
+) -> AsyncContextManager[None]:
+    """设置日志上下文的完整流程"""
+    log_function_call(func_name, arguments)
+    base_manager = create_log_context_manager(func_name, trace_id)
+    return _log_context_manager(base_manager)

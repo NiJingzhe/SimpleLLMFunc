@@ -34,13 +34,15 @@ class TestCreateLogContextManager:
     """Tests for create_log_context_manager function."""
 
     @patch("SimpleLLMFunc.llm_decorator.steps.common.log_context.async_log_context")
-    def test_create_log_context_manager(self, mock_async_log_context: MagicMock) -> None:
+    def test_create_log_context_manager(
+        self, mock_async_log_context: MagicMock
+    ) -> None:
         """Test creating log context manager."""
         mock_context = AsyncMock()
         mock_async_log_context.return_value = mock_context
-        
+
         result = create_log_context_manager("test_func", "trace_123")
-        
+
         assert result == mock_context
         mock_async_log_context.assert_called_once_with(
             trace_id="trace_123",
@@ -54,7 +56,9 @@ class TestSetupLogContext:
     """Tests for setup_log_context function."""
 
     @patch("SimpleLLMFunc.llm_decorator.steps.common.log_context.log_function_call")
-    @patch("SimpleLLMFunc.llm_decorator.steps.common.log_context.create_log_context_manager")
+    @patch(
+        "SimpleLLMFunc.llm_decorator.steps.common.log_context.create_log_context_manager"
+    )
     def test_setup_log_context(
         self,
         mock_create_manager: MagicMock,
@@ -63,14 +67,16 @@ class TestSetupLogContext:
         """Test setting up log context."""
         mock_context = AsyncMock()
         mock_create_manager.return_value = mock_context
-        
+
         result = setup_log_context(
             func_name="test_func",
             trace_id="trace_123",
             arguments={"param1": "value1"},
         )
-        
+
         mock_log_call.assert_called_once_with("test_func", {"param1": "value1"})
         mock_create_manager.assert_called_once_with("test_func", "trace_123")
-        assert result == mock_context
-
+        assert result is not None
+        assert result is not mock_context
+        assert hasattr(result, "__aenter__")
+        assert hasattr(result, "__aexit__")
