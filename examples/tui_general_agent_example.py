@@ -1,19 +1,24 @@
-"""Unified TUI demo for runtime selfref primitives (memory + fork).
+"""General TUI agent demo with runtime selfref + file tools.
 
 Run:
-    poetry run python examples/tui_runtime_selfref_example.py
+    poetry run python examples/tui_general_agent_example.py
 
 What this example demonstrates:
 1. ``SelfReference`` mounted as a ``PyRepl`` runtime backend via ``selfref`` pack.
 2. One agent can use both ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
-3. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
-4. Forked context inherits memory snapshot from current selfref key.
+3. ``FileToolset`` mounted for workspace-safe file operations.
+4. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
+5. Forked context inherits memory snapshot from current selfref key.
+
+Workspace:
+- File tools are scoped to ``./sandbox`` under the project root.
 
 Try prompts:
-- "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.wait')"
+- "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.gather_all')"
 - "Append a durable preference with runtime.selfref.history.append_system_prompt"
 - "Remember a note in memory, then read it back"
 - "Split this task into two forks and merge their results"
+- "Use grep to search for 'selfref' in README.md, then read the file"
 """
 
 from __future__ import annotations
@@ -25,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from SimpleLLMFunc import OpenAICompatible, llm_chat
-from SimpleLLMFunc.builtin import PyRepl, SelfReference
+from SimpleLLMFunc.builtin import FileToolset, PyRepl, SelfReference
 from SimpleLLMFunc.hooks.events import CustomEvent
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.utils.tui import ToolRenderSnapshot
@@ -35,11 +40,12 @@ from SimpleLLMFunc.utils.tui import tui
 MEMORY_KEY = "agent_main"
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
-DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "tui_runtime_selfref_debug.log"
+SANDBOX_DIR = PROJECT_ROOT / "sandbox"
+DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "tui_general_agent_debug.log"
 
 
 def _build_local_debug_logger() -> logging.Logger:
-    logger = logging.getLogger("simplellmfunc.examples.tui_runtime_selfref")
+    logger = logging.getLogger("simplellmfunc.examples.tui_general_agent")
     if logger.handlers:
         return logger
 
@@ -52,7 +58,7 @@ def _build_local_debug_logger() -> logging.Logger:
         logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     )
     logger.addHandler(file_handler)
-    logger.info("=== unified selfref TUI session started ===")
+    logger.info("=== general TUI agent session started ===")
     return logger
 
 
@@ -94,30 +100,32 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["minimax/minimax-m2.5"]
+    return models["openrouter"]["z-ai/glm-5"]
 
 
 llm = load_llm()
 self_reference = SelfReference()
-repl = PyRepl()
+SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
+repl = PyRepl(working_directory=SANDBOX_DIR)
 repl.install_primitive_pack("selfref", backend=self_reference)
+file_tools = FileToolset(SANDBOX_DIR).toolset
 
 
 @tui(custom_event_hook=[local_debug_event_hook])  # type: ignore
 @llm_chat(
     llm_interface=llm,
-    toolkit=[*repl.toolset],
+    toolkit=[*repl.toolset, *file_tools],
     stream=True,
     enable_event=True,
     self_reference_key=MEMORY_KEY,
-    temperature=1.0
+    temperature=1.0,
 )
 async def agent(message: str, history: HistoryList):
     """
     <WHO ARE YOU>
     You are a practical coding assistant with one persistent Python REPL.
     </WHO ARE YOU>
-    
+
     <HOW YOU SHOULD ACT>
     Planning and execution policy:
     - Start with a short plan: objective, assumptions, milestones, deliverables.
@@ -133,8 +141,8 @@ async def agent(message: str, history: HistoryList):
     Fork policy:
     - Fork only when a subtask is concrete, isolated, and verifiable.
     - Do not fork tiny trivial work that is faster inline.
-    - Use ``fork.spawn`` for independent subtasks, then ``fork.wait``/``fork.wait_all`` to collect.
-    - ``fork.wait_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()``/``.values()``.
+    - Use ``fork.spawn`` for independent subtasks, then ``fork.gather_all`` to collect.
+    - ``fork.gather_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()``/``.values()``.
 
     Sub-agent task contract (must be explicit):
     - Always include: goal, scope, inputs, required outputs, and acceptance checks.

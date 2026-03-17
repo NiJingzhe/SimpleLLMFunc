@@ -10,6 +10,7 @@ import ast
 import builtins
 import io
 import linecache
+import os
 import queue
 import sys
 import time
@@ -28,13 +29,11 @@ EVENT_INPUT_ACCEPTED = "input_accepted"
 EVENT_PRIMITIVE_CALL = "primitive_call"
 EVENT_EXECUTE_RESULT = "execute_result"
 EVENT_RESET_RESULT = "reset_result"
-EVENT_LIST_VARIABLES_RESULT = "list_variables_result"
 EVENT_WORKER_ERROR = "worker_error"
 EVENT_WORKER_READY = "worker_ready"
 
 COMMAND_EXECUTE = "execute"
 COMMAND_RESET = "reset"
-COMMAND_LIST_VARIABLES = "list_variables"
 COMMAND_INPUT_REPLY = "input_reply"
 COMMAND_PRIMITIVE_RESULT = "primitive_result"
 COMMAND_SHUTDOWN = "shutdown"
@@ -112,10 +111,6 @@ class _PyReplWorker:
 
             if command_type == COMMAND_RESET:
                 self._handle_reset(command)
-                continue
-
-            if command_type == COMMAND_LIST_VARIABLES:
-                self._handle_list_variables(command)
                 continue
 
             if command_type in {COMMAND_INPUT_REPLY, COMMAND_PRIMITIVE_RESULT}:
@@ -264,6 +259,17 @@ class _PyReplWorker:
         if pointer is not None:
             summary_lines.append(pointer)
 
+        hint: Optional[str] = None
+        if isinstance(exc, (ModuleNotFoundError, ImportError)):
+            normalized_message = raw_message.lower()
+            if "runtime" in normalized_message or "import runtime" in code:
+                hint = (
+                    "Hint: runtime is an injected global and cannot be imported. "
+                    "Call primitives as runtime.<namespace>.<name>(...) instead."
+                )
+        if hint:
+            summary_lines.append(hint)
+
         return {
             "error_type": error_type,
             "message": raw_message,
@@ -273,6 +279,7 @@ class _PyReplWorker:
             "snippet": snippet,
             "pointer": pointer,
             "summary": "\n".join(summary_lines),
+            "hint": hint,
             "user_traceback": user_traceback,
             "full_traceback": full_traceback,
         }
@@ -522,31 +529,25 @@ class _PyReplWorker:
             message="REPL 已重置，所有变量已清除",
         )
 
-    def _handle_list_variables(self, command: dict[str, Any]) -> None:
-        request_id = str(command.get("request_id", ""))
-        self._sync_runtime_binding(
-            runtime_enabled=bool(command.get("runtime_enabled", True)),
-        )
 
-        variables = []
-        for name, value in self._namespace.items():
-            if name.startswith("_"):
-                continue
-            if name in self._baseline_names:
-                continue
-            if name == RUNTIME_GLOBAL_NAME:
-                continue
-            variables.append({"name": name, "type": type(value).__name__})
-
-        self._emit(
-            EVENT_LIST_VARIABLES_RESULT,
-            request_id=request_id,
-            variables=variables,
-        )
-
-
-def run_pyrepl_worker(command_queue: Any, event_queue: Any) -> None:
+def run_pyrepl_worker(
+    command_queue: Any,
+    event_queue: Any,
+    working_directory: Optional[str] = None,
+) -> None:
     """Entrypoint executed inside PyRepl subprocess worker."""
+
+    if working_directory:
+        try:
+            os.chdir(working_directory)
+        except Exception as exc:
+            event_queue.put(
+                {
+                    "type": EVENT_WORKER_ERROR,
+                    "message": f"Failed to set working_directory: {exc}",
+                }
+            )
+            return
 
     worker = _PyReplWorker(command_queue=command_queue, event_queue=event_queue)
     worker.run_forever()
@@ -560,12 +561,10 @@ __all__ = [
     "EVENT_PRIMITIVE_CALL",
     "EVENT_EXECUTE_RESULT",
     "EVENT_RESET_RESULT",
-    "EVENT_LIST_VARIABLES_RESULT",
     "EVENT_WORKER_ERROR",
     "EVENT_WORKER_READY",
     "COMMAND_EXECUTE",
     "COMMAND_RESET",
-    "COMMAND_LIST_VARIABLES",
     "COMMAND_INPUT_REPLY",
     "COMMAND_PRIMITIVE_RESULT",
     "COMMAND_SHUTDOWN",

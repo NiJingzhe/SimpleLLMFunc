@@ -206,12 +206,23 @@ def _extract_response_and_history_from_output(
     return output, None
 
 
-def _normalize_fork_ids(value: Optional[List[Any]]) -> Optional[List[str]]:
+def _normalize_fork_ids(value: Optional[Any]) -> Optional[List[str]]:
     if value is None:
         return None
 
+    if isinstance(value, str):
+        return [_normalize_key(value)]
+
+    if isinstance(value, dict):
+        fork_id = value.get("fork_id")
+        if isinstance(fork_id, str) and fork_id.strip():
+            return [_normalize_key(fork_id)]
+        raise ValueError("fork_ids dict must include fork_id")
+
     if not isinstance(value, list):
-        raise ValueError("fork_ids must be a list of fork_id strings")
+        raise ValueError(
+            "fork_ids must be a fork_id string, fork handle dict, or list of either"
+        )
 
     normalized: list[str] = []
     for item in value:
@@ -595,22 +606,12 @@ class SelfReferenceInstanceHandle:
             **agent_kwargs,
         )
 
-    async def fork_wait(
+    async def fork_gather_all(
         self,
-        fork_id: str,
-        include_history: bool = False,
-    ) -> Dict[str, Any]:
-        return await self._owner.wait_fork_result(
-            fork_id,
-            include_history=include_history,
-        )
-
-    async def fork_wait_all(
-        self,
-        fork_ids: Optional[List[str]] = None,
+        fork_ids: Optional[Any] = None,
         include_history: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        return await self._owner.wait_all_fork_results(
+        return await self._owner.gather_all_fork_results(
             fork_ids,
             include_history=include_history,
         )
@@ -1311,13 +1312,13 @@ class SelfReference:
             include_history=include_history,
         )
 
-    async def wait_all_fork_results(
+    async def gather_all_fork_results(
         self,
-        fork_ids: Optional[List[Any]] = None,
+        fork_ids: Optional[Any] = None,
         include_history: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        """Wait for multiple fork results; accepts fork_id strings or fork-handle dicts."""
-        normalized_ids = _normalize_fork_ids(cast(Optional[List[Any]], fork_ids))
+        """Gather fork results; accepts fork_id strings, fork handles, or lists."""
+        normalized_ids = _normalize_fork_ids(fork_ids)
 
         if normalized_ids is None:
             with self._lock:

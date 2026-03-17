@@ -8,6 +8,7 @@ import inspect
 import json
 import os
 import sys
+from typing import Any, cast
 from pathlib import Path
 
 import pytest
@@ -134,6 +135,34 @@ class TestPyReplCreation:
         with pytest.raises(ValueError, match="input_idle_timeout_seconds"):
             PyRepl(input_idle_timeout_seconds=0)
 
+    def test_repl_rejects_invalid_working_directory(self, tmp_path: Path) -> None:
+        """PyRepl should reject non-directory working_directory values."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        missing = tmp_path / "missing"
+        file_path = tmp_path / "file.txt"
+        file_path.write_text("hello", encoding="utf-8")
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=missing)
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=file_path)
+
+        with pytest.raises(ValueError, match="working_directory"):
+            PyRepl(working_directory=cast(Any, 123))
+
+    @pytest.mark.asyncio
+    async def test_repl_uses_working_directory(self, tmp_path: Path) -> None:
+        """PyRepl should start worker in the provided working directory."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl(working_directory=tmp_path)
+        result = await repl.execute("import os\nprint(os.getcwd())")
+
+        assert result["success"] is True
+        assert Path(result["stdout"].strip()).resolve() == tmp_path.resolve()
+
 
 class TestPyReplToolset:
     """Test PyRepl.toolset property."""
@@ -156,7 +185,14 @@ class TestPyReplToolset:
         tool_names = [tool.name for tool in toolset]
         assert "execute_code" in tool_names
         assert "reset_repl" in tool_names
-        assert "list_variables" in tool_names
+        assert "list_variables" not in tool_names
+
+    def test_list_variables_api_removed(self):
+        """list_variables API should not be exposed on PyRepl."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        assert not hasattr(repl, "list_variables")
 
     def test_execute_tool_description_has_repl_guidance(self):
         """execute_code description should guide LLM usage clearly."""
@@ -173,13 +209,43 @@ class TestPyReplToolset:
         assert "input()" in description
         assert "timeout_seconds" in description
         assert "runtime.list_primitives()" in description
-        assert "runtime.list_primitives(prefix='...')" in description
+        assert "runtime.list_primitives(contains='selfref.fork.')" in description
         assert "runtime.list_primitive_specs(" in description
         assert "runtime.get_primitive_spec(name)" in description
-        assert "runtime.list_primitive_specs(names=[...])" in description
-        assert "does not delete runtime memory managed by registered primitives" in (
-            description
+        assert "runtime.list_primitive_specs(contains='...')" in description
+        assert "runtime memory is unchanged" in description
+
+    def test_execute_tool_prompt_includes_working_directory(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        """Prompt injection should include working_directory when configured."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl(working_directory=tmp_path)
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
         )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<working_directory>" in prompt
+        assert tmp_path.resolve().as_posix() in prompt
+
+    def test_execute_tool_prompt_omits_working_directory_when_unset(self) -> None:
+        """Prompt injection should skip working_directory when not configured."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<working_directory>" not in prompt
 
     def test_execute_tool_schema_exposes_timeout_seconds(self):
         """execute_code tool schema should expose per-call timeout controls."""
@@ -216,8 +282,26 @@ class TestPyReplToolset:
             "preserves registered runtime primitive backends"
             in descriptions["reset_repl"]
         )
-        assert "List user-defined variables" in descriptions["list_variables"]
-        assert "excluding private names and runtime" in descriptions["list_variables"]
+
+
+class TestPyReplToolsetOutput:
+    """Toolset outputs should be natural language strings."""
+
+    @pytest.mark.asyncio
+    async def test_execute_tool_returns_text_summary(self):
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        result = await execute_tool.run("print('hello')")
+
+        assert isinstance(result, str)
+        assert "Execution succeeded" in result
+        assert "stdout:" in result
+        assert "hello" in result
 
 
 class TestPyReplExecute:
@@ -317,6 +401,19 @@ class TestPyReplExecute:
         assert details["pointer"] == " " * 17 + "^"
 
     @pytest.mark.asyncio
+    async def test_execute_import_runtime_includes_hint(self):
+        """Importing runtime should return a guidance hint."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("import runtime")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "runtime" in result["error"]
+        assert "cannot be imported" in result["error"]
+
+    @pytest.mark.asyncio
     async def test_execute_handles_stderr_with_invalid_fileno(self, monkeypatch):
         """Worker startup should survive environments where stderr has fileno=-1."""
         from SimpleLLMFunc.builtin import PyRepl
@@ -410,39 +507,9 @@ class TestPyReplReset:
         result = await repl.reset()
         assert "已重置" in result
 
-        # Verify variables are cleared
-        vars = await repl.list_variables()
-        assert len(vars) == 0
-
-
-class TestPyReplListVariables:
-    """Test PyRepl list_variables functionality."""
-
-    @pytest.mark.asyncio
-    async def test_list_variables_empty(self):
-        """Test listing variables when empty."""
-        from SimpleLLMFunc.builtin import PyRepl
-
-        repl = PyRepl()
-        vars = await repl.list_variables()
-
-        assert isinstance(vars, list)
-
-    @pytest.mark.asyncio
-    async def test_list_variables_with_data(self):
-        """Test listing variables with data."""
-        from SimpleLLMFunc.builtin import PyRepl
-
-        repl = PyRepl()
-        await repl.execute("x = 100")
-        await repl.execute("name = 'test'")
-
-        vars = await repl.list_variables()
-        assert len(vars) == 2
-
-        names = [v["name"] for v in vars]
-        assert "x" in names
-        assert "name" in names
+        # Verify variables are cleared by attempting to access a cleared name
+        post_reset = await repl.execute("x")
+        assert post_reset["success"] is False
 
 
 class TestPyReplPrimitivePacks:
@@ -463,11 +530,15 @@ class TestPyReplPrimitivePacks:
         assert repl.get_runtime_backend("selfref") is self_reference
         assert repl.list_runtime_backends() == ["selfref"]
         assert "selfref.history.keys" in repl.list_primitives()
-        assert "selfref.fork.run" in repl.list_primitives()
-        assert "selfref.fork.run_chat" in repl.list_primitives()
-        assert "selfref.fork.spawn_chat" in repl.list_primitives()
+        assert "selfref.fork.spawn" in repl.list_primitives()
+        assert "selfref.fork.gather_all" in repl.list_primitives()
         assert "memory.keys" not in repl.list_primitives()
         assert "fork.run" not in repl.list_primitives()
+        assert "selfref.fork.run" not in repl.list_primitives()
+        assert "selfref.fork.run_chat" not in repl.list_primitives()
+        assert "selfref.fork.spawn_chat" not in repl.list_primitives()
+        assert "selfref.fork.wait_all" not in repl.list_primitives()
+        assert "selfref.fork.wait" not in repl.list_primitives()
 
     def test_install_unknown_primitive_pack_raises(self):
         from SimpleLLMFunc.builtin import PyRepl
@@ -496,7 +567,7 @@ class TestPyReplPrimitivePacks:
 
         assert repl.get_runtime_backend("selfref") is self_reference
         assert "selfref.history.keys" in repl.list_primitives()
-        assert "selfref.fork.run" in repl.list_primitives()
+        assert "selfref.fork.spawn" in repl.list_primitives()
 
     @pytest.mark.asyncio
     async def test_execute_can_mutate_memory_via_runtime_primitives(self):
@@ -558,7 +629,7 @@ class TestPyReplPrimitivePacks:
 
     @pytest.mark.asyncio
     async def test_execute_can_fork_bound_agent_instance_with_memory_snapshot(self):
-        """REPL runtime.selfref.fork.run should inherit memory as child context."""
+        """REPL runtime.selfref.fork.spawn should inherit memory as child context."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -587,7 +658,9 @@ class TestPyReplPrimitivePacks:
         repl.install_primitive_pack("selfref", backend=self_reference)
 
         result = await repl.execute(
-            "fork_result = runtime.selfref.fork.run('sub-task')\n"
+            "handle = runtime.selfref.fork.spawn('sub-task')\n"
+            "results = runtime.selfref.fork.gather_all(handle)\n"
+            "fork_result = results[handle['fork_id']]\n"
             "print(fork_result['source_memory_key'])\n"
             "print(fork_result['memory_key'])\n"
             "print(fork_result['response'])\n"
@@ -613,8 +686,8 @@ class TestPyReplPrimitivePacks:
         ]
 
     @pytest.mark.asyncio
-    async def test_execute_can_spawn_and_wait_fork_from_code_act(self):
-        """Code-act fork should be runtime-hooked and support spawn/wait APIs."""
+    async def test_execute_can_spawn_and_gather_fork_from_code_act(self):
+        """Code-act fork should be runtime-hooked and support spawn/gather APIs."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -637,7 +710,8 @@ class TestPyReplPrimitivePacks:
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
             "print(spawned['status'])\n"
-            "final = runtime.selfref.fork.wait(spawned['fork_id'])\n"
+            "results = runtime.selfref.fork.gather_all(spawned['fork_id'])\n"
+            "final = results[spawned['fork_id']]\n"
             "print(final['status'])\n"
             "print(final['response']['runtime_pid'])\n"
         )
@@ -648,8 +722,8 @@ class TestPyReplPrimitivePacks:
         assert str(os.getpid()) in result["stdout"]
 
     @pytest.mark.asyncio
-    async def test_execute_wait_can_include_history_on_demand(self):
-        """runtime.selfref.fork.wait should keep compact default and support include_history."""
+    async def test_execute_gather_all_can_include_history_on_demand(self):
+        """runtime.selfref.fork.gather_all should keep compact default and support include_history."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -671,10 +745,12 @@ class TestPyReplPrimitivePacks:
 
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
-            "compact = runtime.selfref.fork.wait(spawned['fork_id'])\n"
+            "compact_results = runtime.selfref.fork.gather_all(spawned['fork_id'])\n"
+            "compact = compact_results[spawned['fork_id']]\n"
             "print('history' in compact)\n"
             "print(compact['history_included'])\n"
-            "hydrated = runtime.selfref.fork.wait(spawned['fork_id'], include_history=True)\n"
+            "hydrated_results = runtime.selfref.fork.gather_all(spawned['fork_id'], include_history=True)\n"
+            "hydrated = hydrated_results[spawned['fork_id']]\n"
             "print('history' in hydrated)\n"
             "print(hydrated['history_included'])\n"
             "print(hydrated['history_count'])\n"
@@ -684,8 +760,8 @@ class TestPyReplPrimitivePacks:
         assert result["stdout"].splitlines() == ["False", "False", "True", "True", "2"]
 
     @pytest.mark.asyncio
-    async def test_execute_can_wait_all_spawned_forks(self):
-        """Code-act runtime.selfref.fork.wait_all should collect spawned forks."""
+    async def test_execute_can_gather_all_spawned_forks(self):
+        """Code-act runtime.selfref.fork.gather_all should collect spawned forks."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -711,8 +787,8 @@ class TestPyReplPrimitivePacks:
             "    runtime.selfref.fork.spawn('task-b'),\n"
             "]\n"
             "ids = [item['fork_id'] for item in handles]\n"
-            "all_results = runtime.selfref.fork.wait_all(ids)\n"
-            "all_handle_results = runtime.selfref.fork.wait_all(handles)\n"
+            "all_results = runtime.selfref.fork.gather_all(ids)\n"
+            "all_handle_results = runtime.selfref.fork.gather_all(handles)\n"
             "print(len(all_results))\n"
             "print(sorted(all_results.keys()) == sorted(ids))\n"
             "print(all(v['status'] == 'completed' for v in all_results.values()))\n"
@@ -749,7 +825,7 @@ class TestPyReplPrimitivePacks:
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('task-a')\n"
-            "_ = runtime.selfref.fork.wait(handle['fork_id'])\n",
+            "_ = runtime.selfref.fork.gather_all(handle)\n",
             event_emitter=emitter,
         )
 
@@ -768,7 +844,7 @@ class TestPyReplPrimitivePacks:
 
     @pytest.mark.asyncio
     async def test_execute_does_not_emit_fork_stream_events(self):
-        """Fork run should not emit fork stream events (use lifecycle only)."""
+        """Fork spawn/gather should not emit fork stream events (use lifecycle only)."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
         from SimpleLLMFunc.self_reference import SelfReference
@@ -800,7 +876,9 @@ class TestPyReplPrimitivePacks:
         emitter = ToolEventEmitter()
 
         result = await repl.execute(
-            "fork_result = runtime.selfref.fork.run('task-a')\n"
+            "handle = runtime.selfref.fork.spawn('task-a')\n"
+            "results = runtime.selfref.fork.gather_all(handle)\n"
+            "fork_result = results[handle['fork_id']]\n"
             "print(fork_result['status'])\n",
             event_emitter=emitter,
         )
@@ -847,11 +925,8 @@ class TestPyReplRuntimePrimitives:
             "selfref.history.append",
             "selfref.history.clear",
             "runtime.list_primitives",
-            "selfref.fork.run",
-            "selfref.fork.run_chat",
-            "selfref.fork.spawn_chat",
-            "selfref.fork.wait",
-            "selfref.fork.wait_all",
+            "selfref.fork.spawn",
+            "selfref.fork.gather_all",
         ]:
             spec = repl.get_primitive_spec(primitive_name, format="dict")
             assert isinstance(spec, dict)
@@ -890,7 +965,12 @@ class TestPyReplRuntimePrimitives:
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == [
+        stdout_lines = [
+            line
+            for line in result["stdout"].splitlines()
+            if not line.startswith("After calling runtime.list_primitives")
+        ]
+        assert stdout_lines == [
             "True",
             "True",
             "False",
@@ -898,6 +978,17 @@ class TestPyReplRuntimePrimitives:
             "True",
             "True",
         ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_list_primitives_prints_next_steps(self):
+        """runtime.list_primitives should emit next-step guidance."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("runtime.list_primitives()")
+
+        assert result["success"] is True
+        assert "After calling runtime.list_primitives" in result["stdout"]
 
     @pytest.mark.asyncio
     async def test_execute_exposes_runtime_list_primitive_specs(self):
@@ -955,6 +1046,19 @@ class TestPyReplRuntimePrimitives:
             "True",
             "True",
         ]
+
+    @pytest.mark.asyncio
+    async def test_runtime_primitive_param_error_includes_hint(self):
+        """Primitive parameter errors should include parameter guidance."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        result = await repl.execute("runtime.get_primitive_spec()")
+
+        assert result["success"] is False
+        assert isinstance(result["error"], str)
+        assert "Parameter requirements" in result["error"]
+        assert "name" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_runtime_spec_queries_support_xml_format(self):
@@ -1025,28 +1129,19 @@ class TestPyReplRuntimePrimitives:
         result = await repl.execute(
             "specs = runtime.list_primitive_specs(format='dict')\n"
             "spawn_spec = next(item for item in specs if item.get('name') == 'selfref.fork.spawn')\n"
-            "run_spec = next(item for item in specs if item.get('name') == 'selfref.fork.run')\n"
-            "run_chat_spec = next(item for item in specs if item.get('name') == 'selfref.fork.run_chat')\n"
-            "spawn_chat_spec = next(item for item in specs if item.get('name') == 'selfref.fork.spawn_chat')\n"
-            "wait_spec = next(item for item in specs if item.get('name') == 'selfref.fork.wait')\n"
-            "wait_all_spec = next(item for item in specs if item.get('name') == 'selfref.fork.wait_all')\n"
-            "best_text = ' '.join(str(item) for item in run_spec.get('best_practices', []))\n"
+            "gather_all_spec = next(item for item in specs if item.get('name') == 'selfref.fork.gather_all')\n"
+            "best_text = ' '.join(str(item) for item in spawn_spec.get('best_practices', []))\n"
             "print(\"status:'running'\" in str(spawn_spec.get('output_type')))\n"
-            "print(\"status:'completed'\" in str(run_spec.get('output_type')))\n"
-            "run_chat_params = [item.get('name') for item in run_chat_spec.get('parameters', [])]\n"
-            "spawn_chat_params = [item.get('name') for item in spawn_chat_spec.get('parameters', [])]\n"
-            "print('message' in run_chat_params)\n"
-            "print('message' in spawn_chat_params)\n"
-            "wait_output = str(wait_spec.get('output_type')).lower()\n"
-            'print("status:\'completed\'" in wait_output and "error_message:str" in wait_output)\n'
-            "print('check `status` first' in str(wait_spec.get('output_parsing')).lower())\n"
-            "print('history_count' in str(run_spec.get('output_type')))\n"
-            "print('history_included' in str(run_spec.get('output_type')))\n"
-            "print('same shape as `selfref.fork.wait`' in str(wait_all_spec.get('output_type')).lower())\n"
-            "wait_all_output = str(wait_all_spec.get('output_type')).lower()\n"
-            "wait_all_parse = str(wait_all_spec.get('output_parsing')).lower()\n"
-            "print('keyed by' in wait_all_output and 'fork_id' in wait_all_output)\n"
-            "print('.items()' in wait_all_parse)\n"
+            "spawn_params = [item.get('name') for item in spawn_spec.get('parameters', [])]\n"
+            "print('message' in spawn_params)\n"
+            "gather_output = str(gather_all_spec.get('output_type')).lower()\n"
+            "gather_parse = str(gather_all_spec.get('output_parsing')).lower()\n"
+            'print("status:\'completed\'" in gather_output and "error_message:str" in gather_output)\n'
+            "print('check `status` first' in gather_parse)\n"
+            "print('history_count' in gather_output)\n"
+            "print('history_included' in gather_output)\n"
+            "print('keyed by' in gather_output and 'fork_id' in gather_output)\n"
+            "print('.items()' in gather_parse)\n"
             "print('never print raw fork result dict' in best_text.lower())\n"
             "print('print(result)' in best_text)\n"
             "print('include_history=True' in best_text)\n"
@@ -1054,9 +1149,6 @@ class TestPyReplRuntimePrimitives:
 
         assert result["success"] is True
         assert result["stdout"].splitlines() == [
-            "True",
-            "True",
-            "True",
             "True",
             "True",
             "True",
@@ -1123,7 +1215,7 @@ class TestPyReplRuntimePrimitives:
 
     @pytest.mark.asyncio
     async def test_execute_can_run_fork_via_runtime_primitive_calls(self):
-        """runtime.selfref.fork.run should fork bound agent instance."""
+        """runtime.selfref.fork.spawn should fork bound agent instance."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -1144,7 +1236,9 @@ class TestPyReplRuntimePrimitives:
         repl.install_primitive_pack("selfref", backend=self_reference)
 
         result = await repl.execute(
-            "fork_result = runtime.selfref.fork.run('sub-task')\n"
+            "handle = runtime.selfref.fork.spawn('sub-task')\n"
+            "results = runtime.selfref.fork.gather_all(handle)\n"
+            "fork_result = results[handle['fork_id']]\n"
             "print(fork_result['source_memory_key'])\n"
             "print(fork_result['response'])\n"
         )
@@ -1154,8 +1248,8 @@ class TestPyReplRuntimePrimitives:
         assert "runtime:sub-task" in result["stdout"]
 
     @pytest.mark.asyncio
-    async def test_execute_run_can_include_history_on_demand(self):
-        """runtime.selfref.fork.run should honor include_history per spec."""
+    async def test_execute_gather_all_include_history_on_demand(self):
+        """runtime.selfref.fork.gather_all should honor include_history per spec."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -1176,7 +1270,9 @@ class TestPyReplRuntimePrimitives:
         repl.install_primitive_pack("selfref", backend=self_reference)
 
         result = await repl.execute(
-            "fork_result = runtime.selfref.fork.run('task-a', include_history=True)\n"
+            "handle = runtime.selfref.fork.spawn('task-a')\n"
+            "results = runtime.selfref.fork.gather_all(handle, include_history=True)\n"
+            "fork_result = results[handle['fork_id']]\n"
             "print('history' in fork_result)\n"
             "print(fork_result['history_included'])\n"
             "print(fork_result['history_count'])\n"
@@ -1210,8 +1306,8 @@ class TestPyReplRuntimePrimitives:
         assert "does not accept include_history" in str(result["error"])
 
     @pytest.mark.asyncio
-    async def test_execute_wait_all_can_include_history_on_demand(self):
-        """runtime.selfref.fork.wait_all should hydrate histories when requested."""
+    async def test_execute_gather_all_can_include_history_on_demand(self):
+        """runtime.selfref.fork.gather_all should hydrate histories when requested."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
@@ -1234,7 +1330,7 @@ class TestPyReplRuntimePrimitives:
         result = await repl.execute(
             "handles = [runtime.selfref.fork.spawn('task-a'), runtime.selfref.fork.spawn('task-b')]\n"
             "ids = [item['fork_id'] for item in handles]\n"
-            "all_results = runtime.selfref.fork.wait_all(ids, include_history=True)\n"
+            "all_results = runtime.selfref.fork.gather_all(ids, include_history=True)\n"
             "print(len(all_results))\n"
             "print(sorted(all_results.keys()) == sorted(ids))\n"
             "print(all(v['history_included'] for v in all_results.values()))\n"

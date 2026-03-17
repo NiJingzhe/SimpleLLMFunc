@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-11 21:21+0800\n"
+"POT-Creation-Date: 2026-03-15 22:35+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -40,11 +40,10 @@ msgstr "Features"
 
 #: ../../source/pyrepl.md:7
 msgid ""
-"**IPython subprocess backend**：每个 `PyRepl` 实例对应一个独立子进程，内部运行 `IPython "
-"InteractiveShell`"
+"**IPython 子进程后端**：每个 `PyRepl` 实例对应一个独立子进程，内部运行 `IPython InteractiveShell`"
 msgstr ""
-"**IPython subprocess backend**: Each `PyRepl` instance corresponds to an "
-"independent child process, which internally runs `IPython InteractiveShell`"
+"**IPython Subprocess Backend**: Each `PyRepl` instance corresponds to an "
+"independent subprocess, internally running `IPython InteractiveShell`"
 
 #: ../../source/pyrepl.md:8
 msgid "**连续上下文**：变量在多次调用间持久化，LLM 可以分步执行任务"
@@ -53,10 +52,10 @@ msgstr ""
 "step execution"
 
 #: ../../source/pyrepl.md:9
-msgid "**实时 Streaming**：通过 `event_emitter` 实时获取 stdout/stderr 输出"
+msgid "**实时流式输出**：通过 `event_emitter` 实时获取 stdout/stderr 输出"
 msgstr ""
-"**Real-time streaming**: Receive stdout/stderr in real time via "
-"`event_emitter`"
+"**Real-time streaming output**: Real-time acquisition of stdout/stderr "
+"output via `event_emitter`"
 
 #: ../../source/pyrepl.md:10
 msgid "**异步不阻塞**：代码执行在独立线程运行，不阻塞主事件循环（适合 TUI/流式 UI）"
@@ -71,10 +70,9 @@ msgstr ""
 " interfere"
 
 #: ../../source/pyrepl.md:12
-msgid "**完整工具集**：提供 execute_code、reset_repl、list_variables 等工具"
+msgid "**完整工具集**：提供 execute_code、reset_repl 等工具"
 msgstr ""
-"**Complete toolset**: Provides `execute_code`, `reset_repl`, "
-"`list_variables`, and more"
+"**Complete Toolset**: Provides execute_code, reset_repl and other tools"
 
 #: ../../source/pyrepl.md:13
 msgid ""
@@ -90,19 +88,20 @@ msgstr ""
 
 #: ../../source/pyrepl.md:14
 msgid ""
-"**Runtime primitives**: expose controlled self-reference APIs through "
-"`runtime.selfref.history.*` and `runtime.selfref.fork.*`"
+"**Runtime 原语**：通过 `runtime.selfref.history.*` 与 `runtime.selfref.fork.*` "
+"暴露受控的 self-reference API"
 msgstr ""
-"**Runtime primitives**: expose controlled self-reference APIs through "
+"**Runtime primitives**: Expose controlled self-reference API via "
 "`runtime.selfref.history.*` and `runtime.selfref.fork.*`"
 
 #: ../../source/pyrepl.md:15
 msgid ""
-"**Origin-aware event stream**: each `EventYield` carries `origin` metadata "
-"for stable main/fork routing in TUI or custom UIs"
+"**Origin 感知事件流**：每个 `EventYield` 都携带 `origin` 元数据，方便在 TUI 或自定义 UI 中稳定区分主链路和 "
+"fork 链路"
 msgstr ""
-"**Origin-aware event stream**: each `EventYield` carries `origin` metadata "
-"for stable main/fork routing in TUI or custom UIs"
+"**Origin-aware Event Stream**: Each `EventYield` carries `origin` metadata, "
+"facilitating stable differentiation between the main chain and fork chain in"
+" TUI or custom UI"
 
 #: ../../source/pyrepl.md:17
 msgid "快速开始"
@@ -145,25 +144,19 @@ msgstr ""
 
 #: ../../source/pyrepl.md:76
 msgid ""
-"Agent guidance in tool description (sent to model): write direct snippets "
-"instead of standalone scripts, **do not** add `if __name__ == "
-"\"__main__\":`, `input()` is supported, use "
-"`runtime.list_primitives(contains=\"selfref.\")` for discovery, then "
-"`runtime.get_primitive_spec(name)` or "
-"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` for "
-"targeted contracts (XML by default; use `format=\"dict\"` only when code "
-"needs field access), and `reset_repl` does **not** delete attached memory "
-"state."
+"工具说明（发送给模型）的指引：请直接编写可执行片段，不要加 `if __name__ == \"__main__\":`，支持 `input()`；用 "
+"`runtime.list_primitives(contains=\"selfref.\")` 发现原语，再用 "
+"`runtime.get_primitive_spec(name)` 或 "
+"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` 查看契约（默认 "
+"XML，只有需要字段访问时才用 `format=\"dict\"`）；`reset_repl` **不会**删除已挂载的记忆状态。"
 msgstr ""
-"Agent guidance in tool description (sent to model): write direct snippets "
-"instead of standalone scripts, **do not** add `if __name__ == "
-"\"__main__\":`, `input()` is supported, use "
-"`runtime.list_primitives(contains=\"selfref.\")` for discovery, then "
-"`runtime.get_primitive_spec(name)` or "
-"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` for "
-"targeted contracts (XML by default; use `format=\"dict\"` only when code "
-"needs field access), and `reset_repl` does **not** delete attached memory "
-"state."
+"Tool instructions (sent to the model) guidance: Please directly write "
+"executable snippets, do not add `if __name__ == \"__main__\":`, support "
+"`input()`; use `runtime.list_primitives(contains=\"selfref.\")` to discover "
+"primitives, then use `runtime.get_primitive_spec(name)` or "
+"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` to view "
+"contracts (default XML, only use `format=\"dict\"` when field access is "
+"needed); `reset_repl` **will not** delete the mounted memory state."
 
 #: ../../source/pyrepl.md:78
 msgid "**参数：**"
@@ -220,93 +213,89 @@ msgid "可选，事件发射器用于实时输出"
 msgstr "Optional event emitter for real-time output"
 
 #: ../../source/pyrepl.md:86
-msgid "**返回值：**"
-msgstr "**Returns:**"
+msgid "**工具输出（面向模型）：**"
+msgstr "**Tool Output (for model):**"
 
-#: ../../source/pyrepl.md:100
+#: ../../source/pyrepl.md:88
+msgid ""
+"返回自然语言摘要字符串，包含执行状态、耗时、stdout/stderr、return_value 与错误信息。 如需结构化数据，请直接调用 "
+"`PyRepl.execute()`。"
+msgstr ""
+"Returns a natural language summary string, containing execution status, time"
+" taken, stdout/stderr, return_value and error information. For structured "
+"data, please directly call `PyRepl.execute()`."
+
+#: ../../source/pyrepl.md:91
+msgid "**Python API 返回值：**"
+msgstr "**Python API Return Value:**"
+
+#: ../../source/pyrepl.md:105
 msgid "错误定位增强"
 msgstr "Error Localization Enhancement"
 
-#: ../../source/pyrepl.md:102
+#: ../../source/pyrepl.md:107
 msgid "`execute_code` 会尽量直接返回输入代码的定位信息，而不是仅显示框架内部 `exec` 栈。"
 msgstr ""
 "`execute_code` will try to directly return the location information of the "
 "input code, instead of just showing the framework's internal `exec` stack."
 
-#: ../../source/pyrepl.md:104
+#: ../../source/pyrepl.md:109
 msgid "典型字段（在 `error_details` 中）："
 msgstr "Typical fields (in `error_details`):"
 
-#: ../../source/pyrepl.md:106
+#: ../../source/pyrepl.md:111
 msgid "`error_type`: 异常类型（如 `SyntaxError`、`ZeroDivisionError`）"
 msgstr ""
 "`error_type`: exception type (such as `SyntaxError`, `ZeroDivisionError`)"
 
-#: ../../source/pyrepl.md:107
+#: ../../source/pyrepl.md:112
 msgid "`message`: 异常原始消息"
 msgstr "\"message\": original exception message"
 
-#: ../../source/pyrepl.md:108
+#: ../../source/pyrepl.md:113
 msgid "`line` / `column`: 出错行列（若可解析）"
 msgstr "line / column: Error line/column (if parseable)"
 
-#: ../../source/pyrepl.md:109
+#: ../../source/pyrepl.md:114
 msgid "`snippet`: 出错行源码"
 msgstr "snippet: error line source code"
 
-#: ../../source/pyrepl.md:110
+#: ../../source/pyrepl.md:115
 msgid "`pointer`: 列指针（例如 `^`）"
 msgstr "`pointer`: column pointer (for example `^`)"
 
-#: ../../source/pyrepl.md:111
+#: ../../source/pyrepl.md:116
 msgid "`summary`: 面向模型/用户的简洁可读报错摘要"
 msgstr "`summary`: Concise readable error summary for model/user"
 
-#: ../../source/pyrepl.md:112
+#: ../../source/pyrepl.md:117
 msgid "`user_traceback`: 聚焦用户代码栈的 traceback 文本"
 msgstr "`user_traceback`: traceback text focused on the user code stack"
 
-#: ../../source/pyrepl.md:114
+#: ../../source/pyrepl.md:119
 msgid "示例："
 msgstr "Example:"
 
-#: ../../source/pyrepl.md:124
+#: ../../source/pyrepl.md:129
 msgid "reset_repl"
 msgstr "reset_repl"
 
-#: ../../source/pyrepl.md:126
+#: ../../source/pyrepl.md:131
 msgid "重置 repl 状态，清除所有变量。"
 msgstr "Reset REPL state and clear all variables."
 
-#: ../../source/pyrepl.md:128
-msgid ""
-"Model-facing tool description is in English and explicitly states: reset "
-"only affects REPL variables and preserves registered runtime backends."
+#: ../../source/pyrepl.md:133
+msgid "面向模型的工具描述为英文，明确说明：`reset_repl` 只清理 REPL 变量，保留已注册的 runtime backend。"
 msgstr ""
-"Model-facing tool description is in English and explicitly states: reset "
-"only affects REPL variables and preserves registered runtime backends."
+"The model-oriented tool description is in English, explicitly stating: "
+"`reset_repl` only clears REPL variables, retaining the registered runtime "
+"backend."
 
-#: ../../source/pyrepl.md:135
-msgid "list_variables"
-msgstr "list_variables"
-
-#: ../../source/pyrepl.md:137
-msgid "列出当前 repl 中定义的所有变量。"
-msgstr "List all variables currently defined in the REPL."
-
-#: ../../source/pyrepl.md:139
-msgid ""
-"Model-facing tool description is in English and clarifies that private names"
-" and runtime global (`runtime`) are excluded."
-msgstr ""
-"Model-facing tool description is in English and clarifies that private names"
-" and runtime global (`runtime`) are excluded."
-
-#: ../../source/pyrepl.md:146
+#: ../../source/pyrepl.md:140
 msgid "Streaming 事件"
 msgstr "Streaming Events"
 
-#: ../../source/pyrepl.md:148
+#: ../../source/pyrepl.md:142
 msgid "当 `enable_event=True` 时，`execute_code` 会实时发射以下事件："
 msgstr ""
 "When `enable_event=True`, `execute_code` emits the following events in real "
@@ -355,11 +344,11 @@ msgid "`input()` 请求用户输入（含本次输入空闲超时）"
 msgstr ""
 "`input()` requests user input (including the idle timeout for this request)"
 
-#: ../../source/pyrepl.md:156
+#: ../../source/pyrepl.md:150
 msgid "捕获 Streaming 事件"
 msgstr "Capture Streaming Events"
 
-#: ../../source/pyrepl.md:174
+#: ../../source/pyrepl.md:168
 msgid ""
 "当你通过 `@llm_chat(enable_event=True)` 消费事件流时，可直接使用 `output.origin` 区分主链路和 fork"
 " 链路："
@@ -368,471 +357,423 @@ msgstr ""
 "you can directly use `output.origin` to distinguish the main chain from the "
 "fork chain:"
 
-#: ../../source/pyrepl.md:186
+#: ../../source/pyrepl.md:180
 msgid "使用示例"
 msgstr "Usage Example"
 
-#: ../../source/pyrepl.md:188
+#: ../../source/pyrepl.md:182
 msgid "数据分析助手"
 msgstr "Data Analysis Assistant"
 
-#: ../../source/pyrepl.md:221
+#: ../../source/pyrepl.md:215
 msgid "连续编程上下文"
 msgstr "Continuous Programming Context"
 
-#: ../../source/pyrepl.md:244
+#: ../../source/pyrepl.md:238
 msgid "配置选项"
 msgstr "Configuration Options"
 
-#: ../../source/pyrepl.md:246
+#: ../../source/pyrepl.md:240
 msgid "PyRepl 构造函数参数"
 msgstr "PyRepl Constructor Parameters"
 
-#: ../../source/pyrepl.md:265
-msgid "Runtime primitives with SelfReference backend"
-msgstr "Runtime primitives with SelfReference backend"
+#: ../../source/pyrepl.md:259
+msgid "使用 SelfReference 后端的 Runtime 原语"
+msgstr "Runtime Primitives Using SelfReference Backend"
 
-#: ../../source/pyrepl.md:267
-msgid ""
-"Use explicit wiring for `SelfReference` as the host-side memory backend:"
+#: ../../source/pyrepl.md:261
+msgid "通过显式绑定把 `SelfReference` 作为 host 侧记忆后端："
 msgstr ""
-"Use explicit wiring for `SelfReference` as the host-side memory backend:"
+"By explicitly binding `SelfReference` as the host-side memory backend:"
 
-#: ../../source/pyrepl.md:287
-msgid "Generic runtime backend / primitive registration"
-msgstr "Generic runtime backend / primitive registration"
+#: ../../source/pyrepl.md:281
+msgid "通用 runtime 后端 / 原语注册"
+msgstr "General runtime backend / Primitive registration"
 
-#: ../../source/pyrepl.md:289
-msgid ""
-"`PyRepl` also supports generic runtime extension points, not only `selfref` "
-"pack wiring:"
+#: ../../source/pyrepl.md:283
+msgid "`PyRepl` 也支持通用 runtime 扩展点，不仅限于 `selfref` 包："
 msgstr ""
-"`PyRepl` also supports generic runtime extension points, not only `selfref` "
-"pack wiring:"
+"`PyRepl` also supports generic runtime extension points, not limited to the "
+"`selfref` package:"
 
-#: ../../source/pyrepl.md:291
+#: ../../source/pyrepl.md:285
 msgid "`register_runtime_backend(name, backend, replace=False)`"
 msgstr "register_runtime_backend(name, backend, replace=False)"
 
-#: ../../source/pyrepl.md:292
+#: ../../source/pyrepl.md:286
 msgid "`register_primitive(name, handler, description=\"\", replace=False)`"
 msgstr "register_primitive(name, handler, description=\"\", replace=False)"
 
-#: ../../source/pyrepl.md:293
+#: ../../source/pyrepl.md:287
 msgid ""
 "`register_primitive_pack_installer(pack_name, installer, replace=False)`"
 msgstr ""
 "register_primitive_pack_installer(pack_name, installer, replace=False)"
 
-#: ../../source/pyrepl.md:294
+#: ../../source/pyrepl.md:288
 msgid "`install_primitive_pack(pack_name, **options)`"
 msgstr "install_primitive_pack(pack_name, **options)"
 
-#: ../../source/pyrepl.md:295
+#: ../../source/pyrepl.md:289
 msgid "`list_runtime_backends()` and `list_primitives()`"
 msgstr "list_runtime_backends() and list_primitives()"
 
-#: ../../source/pyrepl.md:296
-msgid ""
-"`runtime.get_primitive_spec(name)` (inside REPL) for one exact contract"
+#: ../../source/pyrepl.md:290
+msgid "`runtime.get_primitive_spec(name)`（在 REPL 内）查看单个原语契约"
 msgstr ""
-"`runtime.get_primitive_spec(name)` (inside REPL) for one exact contract"
+"`runtime.get_primitive_spec(name)` (in REPL) View a single primitive spec"
 
-#: ../../source/pyrepl.md:297
+#: ../../source/pyrepl.md:291
 msgid ""
-"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` (inside "
-"REPL) for filtered contract discovery: name, description, input/output, "
-"parameters, and best practices"
+"`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")`（在 REPL "
+"内）按条件过滤查看：名称、描述、输入/输出、参数与最佳实践"
 msgstr ""
 "`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` (inside "
-"REPL) for filtered contract discovery: name, description, input/output, "
-"parameters, and best practices"
+"REPL) Filter by condition to view: name, description, input/output, "
+"parameters and best practices"
+
+#: ../../source/pyrepl.md:318
+msgid ""
+"当 `@llm_chat(...)` 使用带 runtime 的工具（如 `PyRepl`）时，框架会在 prompt 顶部注入去重后的 `Tool "
+"Best Practices` 块；runtime 原语指引会包含在工具的最佳实践条目中。"
+msgstr ""
+"When `@llm_chat(...)` uses tools with runtime (such as `PyRepl`), the "
+"framework injects a deduplicated `Tool Best Practices` block at the top of "
+"the prompt; runtime primitive guidance will be included in the tool's best "
+"practices entries."
+
+#: ../../source/pyrepl.md:320
+msgid ""
+"当 `PyRepl` 挂载了 `SelfReference` 后端时，`llm_chat` 可从 toolkit 的 runtime backend "
+"自动解析（无需强制传 `self_reference=`），同时仍支持显式传入 `self_reference=`。"
+msgstr ""
+"When `PyRepl` mounts the `SelfReference` backend, `llm_chat` can be "
+"automatically resolved from the toolkit's runtime backend (no need to "
+"forcibly pass `self_reference=`), while still supporting explicitly passing "
+"`self_reference=`."
+
+#: ../../source/pyrepl.md:322
+msgid ""
+"首次回合安全：若 memory key 为空，会在执行工具前把当前 system prompt 写入 `self_reference`，确保 "
+"runtime 读取不为空且包含 system 消息。"
+msgstr ""
+"First round safety: If the memory key is empty, the current system prompt "
+"will be written to `self_reference` before tool execution, ensuring that the"
+" runtime reads a non-empty value containing the system message."
 
 #: ../../source/pyrepl.md:324
-msgid ""
-"When `@llm_chat(...)` runs with mounted runtime-enabled tools (for example "
-"`PyRepl`), the framework injects a deduplicated `Tool Best Practices` block "
-"at prompt head; runtime primitive guidance is included inside tool-owned "
-"best-practice entries."
-msgstr ""
-"When `@llm_chat(...)` runs with mounted runtime-enabled tools (for example "
-"`PyRepl`), the framework injects a deduplicated `Tool Best Practices` block "
-"at prompt head; runtime primitive guidance is included inside tool-owned "
-"best-practice entries."
+msgid "在 `execute_code` 中通过 runtime 原语访问记忆："
+msgstr "Access memory through runtime primitives in `execute_code`:"
 
-#: ../../source/pyrepl.md:326
-msgid ""
-"When a `SelfReference` backend is mounted in `PyRepl`, `llm_chat` can auto-"
-"resolve it from toolkit runtime backends (no mandatory `self_reference=` "
-"wiring), while still supporting explicit `self_reference=` when you want to "
-"pass one directly."
-msgstr ""
-"When a `SelfReference` backend is mounted in `PyRepl`, `llm_chat` can auto-"
-"resolve it from toolkit runtime backends (no mandatory `self_reference=` "
-"wiring), while still supporting explicit `self_reference=` when you want to "
-"pass one directly."
+#: ../../source/pyrepl.md:334
+msgid "将持久记忆追加到 system prompt"
+msgstr "Append persistent memory to system prompt"
 
-#: ../../source/pyrepl.md:328
-msgid ""
-"For first-turn safety, if this memory key is empty, the current durable "
-"system prompt is seeded into `self_reference` before tool execution, so "
-"runtime memory reads are not empty and include a system message."
+#: ../../source/pyrepl.md:336
+msgid "这是最常见且推荐的模式：把用户偏好落到 system prompt 记忆中。"
 msgstr ""
-"For first-turn safety, if this memory key is empty, the current durable "
-"system prompt is seeded into `self_reference` before tool execution, so "
-"runtime memory reads are not empty and include a system message."
+"This is the most common and recommended pattern: storing user preferences in"
+" the system prompt memory."
 
-#: ../../source/pyrepl.md:330
-msgid ""
-"Inside `execute_code`, the agent accesses memory through runtime primitives:"
-msgstr ""
-"Inside `execute_code`, the agent accesses memory through runtime primitives:"
-
-#: ../../source/pyrepl.md:340
-msgid "Append durable memory into system prompt"
-msgstr "Append durable memory into system prompt"
-
-#: ../../source/pyrepl.md:342
-msgid ""
-"This is the most common and recommended pattern: persist user preferences in"
-" system prompt memory."
-msgstr ""
-"This is the most common and recommended pattern: persist user preferences in"
-" system prompt memory."
+#: ../../source/pyrepl.md:350
+msgid "也可以直接覆盖 system prompt："
+msgstr "You can also directly override the system prompt:"
 
 #: ../../source/pyrepl.md:356
-msgid "You can also overwrite the system prompt directly:"
-msgstr "You can also overwrite the system prompt directly:"
+msgid "常见记忆操作示例"
+msgstr "Common Memory Operation Examples"
 
-#: ../../source/pyrepl.md:362
-msgid "Common memory operation examples"
-msgstr "Common memory operation examples"
+#: ../../source/pyrepl.md:375
+msgid "Runtime SelfReference 原语参考："
+msgstr "Runtime SelfReference Primitives Reference:"
 
-#: ../../source/pyrepl.md:381
-msgid "Runtime self-reference primitive reference:"
-msgstr "Runtime self-reference primitive reference:"
-
-#: ../../source/pyrepl.md:383
-msgid ""
-"`runtime.selfref.guide()`: return namespace overview and fork/memory best-"
-"practice checklist."
+#: ../../source/pyrepl.md:377
+msgid "`runtime.selfref.guide()`: 返回命名空间概览与 fork/记忆最佳实践清单。"
 msgstr ""
-"`runtime.selfref.guide()`: return namespace overview and fork/memory best-"
-"practice checklist."
+"`runtime.selfref.guide()`: Returns namespace overview and fork/memory best "
+"practices checklist."
 
-#: ../../source/pyrepl.md:384
-msgid "`runtime.selfref.history.keys()`: list all bound memory keys."
+#: ../../source/pyrepl.md:378
+msgid "`runtime.selfref.history.keys()`: 列出所有已绑定的 memory key。"
 msgstr "`runtime.selfref.history.keys()`: list all bound memory keys."
 
-#: ../../source/pyrepl.md:385
-msgid ""
-"`runtime.selfref.history.active_key()`: resolve active key for current "
-"execution context."
+#: ../../source/pyrepl.md:379
+msgid "`runtime.selfref.history.active_key()`: 获取当前执行上下文的 active key。"
 msgstr ""
-"`runtime.selfref.history.active_key()`: resolve active key for current "
+"`runtime.selfref.history.active_key()`: Gets the active key of the current "
 "execution context."
+
+#: ../../source/pyrepl.md:380
+msgid "`runtime.selfref.history.count(key=None)`: 返回当前消息数量。"
+msgstr ""
+"`runtime.selfref.history.count(key=None)`: Returns the current message "
+"count."
+
+#: ../../source/pyrepl.md:381
+msgid "`runtime.selfref.history.all(key=None)`: 返回全部消息的深拷贝快照。"
+msgstr ""
+"`runtime.selfref.history.all(key=None)`: Returns a deep copy snapshot of all"
+" messages."
+
+#: ../../source/pyrepl.md:382
+msgid "`runtime.selfref.history.get(index, key=None)`: 读取指定索引消息。"
+msgstr ""
+"`runtime.selfref.history.get(index, key=None)`: Get message at specified "
+"index."
+
+#: ../../source/pyrepl.md:383
+msgid "`runtime.selfref.history.append(message, key=None)`: 追加消息到末尾。"
+msgstr ""
+"`runtime.selfref.history.append(message, key=None)`: append message to end."
+
+#: ../../source/pyrepl.md:384
+msgid "`runtime.selfref.history.insert(index, message, key=None)`: 在指定位置插入消息。"
+msgstr ""
+"`runtime.selfref.history.insert(index, message, key=None)`: Insert a message"
+" at the specified position."
+
+#: ../../source/pyrepl.md:385
+msgid "`runtime.selfref.history.update(index, message, key=None)`: 替换指定索引消息。"
+msgstr ""
+"`runtime.selfref.history.update(index, message, key=None)`: Replace the "
+"message at the specified index."
 
 #: ../../source/pyrepl.md:386
-msgid ""
-"`runtime.selfref.history.count(key=None)`: return current message count."
+msgid "`runtime.selfref.history.delete(index, key=None)`: 删除指定索引消息。"
 msgstr ""
-"`runtime.selfref.history.count(key=None)`: return current message count."
+"`runtime.selfref.history.delete(index, key=None)`: Delete the message at the"
+" specified index."
 
 #: ../../source/pyrepl.md:387
-msgid ""
-"`runtime.selfref.history.all(key=None)`: return a deep-copied snapshot of "
-"all messages."
+msgid "`runtime.selfref.history.replace(messages, key=None)`: 用新列表替换全部历史。"
 msgstr ""
-"`runtime.selfref.history.all(key=None)`: return a deep-copied snapshot of "
-"all messages."
+"`runtime.selfref.history.replace(messages, key=None)`: Replace all history "
+"with a new list."
 
 #: ../../source/pyrepl.md:388
 msgid ""
-"`runtime.selfref.history.get(index, key=None)`: read one message by index."
+"`runtime.selfref.history.clear(key=None)`: 清空非 system 消息并保留当前 system prompt。"
 msgstr ""
-"`runtime.selfref.history.get(index, key=None)`: read one message by index."
+"`runtime.selfref.history.clear(key=None)`: Clear non-system messages and "
+"retain the current system prompt."
 
 #: ../../source/pyrepl.md:389
 msgid ""
-"`runtime.selfref.history.append(message, key=None)`: append one message to "
-"the tail."
+"`runtime.selfref.history.get_system_prompt(key=None)`: 读取最新 system prompt "
+"文本。"
 msgstr ""
-"`runtime.selfref.history.append(message, key=None)`: append one message to "
-"the end."
+"`runtime.selfref.history.get_system_prompt(key=None)`: reads the latest "
+"system prompt text."
 
 #: ../../source/pyrepl.md:390
 msgid ""
-"`runtime.selfref.history.insert(index, message, key=None)`: insert one "
-"message at index."
+"`runtime.selfref.history.set_system_prompt(text, key=None)`: 覆盖当前 system "
+"prompt。"
 msgstr ""
-"`runtime.selfref.history.insert(index, message, key=None)`: insert one "
-"message at index."
+"`runtime.selfref.history.set_system_prompt(text, key=None)`: Overrides the "
+"current system prompt."
 
 #: ../../source/pyrepl.md:391
 msgid ""
-"`runtime.selfref.history.update(index, message, key=None)`: replace one "
-"message at index."
+"`runtime.selfref.history.append_system_prompt(text, key=None)`: 追加 system "
+"prompt 文本。"
 msgstr ""
-"`runtime.selfref.history.update(index, message, key=None)`: replace one "
-"message at index."
+"`runtime.selfref.history.append_system_prompt(text, key=None)`: append "
+"system prompt text."
 
 #: ../../source/pyrepl.md:392
-msgid ""
-"`runtime.selfref.history.delete(index, key=None)`: remove one message by "
-"index."
+msgid "`runtime.selfref.fork.spawn(message, ...)`: 异步创建子 fork（chat 形态）。"
 msgstr ""
-"`runtime.selfref.history.delete(index, key=None)`: remove one message by "
-"index."
+"`runtime.selfref.fork.spawn(message, ...)`: Asynchronously create child fork"
+" (chat form)."
 
 #: ../../source/pyrepl.md:393
 msgid ""
-"`runtime.selfref.history.replace(messages, key=None)`: replace full history "
-"with a validated list."
+"`runtime.selfref.fork.gather_all(fork_id_or_list=None, "
+"include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 "
+"`.items()`/`.values()` 遍历）。"
 msgstr ""
-"`runtime.selfref.history.replace(messages, key=None)`: replace full history "
-"with a validated list."
-
-#: ../../source/pyrepl.md:394
-msgid ""
-"`runtime.selfref.history.clear(key=None)`: clear non-system messages and "
-"keep current system prompt."
-msgstr ""
-"`runtime.selfref.history.clear(key=None)`: clear non-system messages and "
-"keep current system prompt."
+"`runtime.selfref.fork.gather_all(fork_id_or_list=None, "
+"include_history=False)`: Aggregate fork results, return `dict[fork_id -> "
+"ForkResult]` (use `.items()`/`.values()` to iterate)."
 
 #: ../../source/pyrepl.md:395
 msgid ""
-"`runtime.selfref.history.get_system_prompt(key=None)`: read the latest "
-"system prompt text."
+"默认情况下 fork 结果为紧凑模式，仅返回 "
+"`fork_id`、`memory_key`、`response`、`history_count`、`history_included=False` "
+"等元数据。 只有确实需要子历史时才设置 `include_history=True`。"
 msgstr ""
-"`runtime.selfref.history.get_system_prompt(key=None)`: read the latest "
-"system prompt text."
-
-#: ../../source/pyrepl.md:396
-msgid ""
-"`runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite "
-"current system prompt."
-msgstr ""
-"`runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite "
-"current system prompt."
-
-#: ../../source/pyrepl.md:397
-msgid ""
-"`runtime.selfref.history.append_system_prompt(text, key=None)`: append text "
-"to system prompt."
-msgstr ""
-"`runtime.selfref.history.append_system_prompt(text, key=None)`: append text "
-"to system prompt."
+"By default, fork results are in compact mode, returning only metadata such "
+"as `fork_id`, `memory_key`, `response`, `history_count`, and "
+"`history_included=False`. Only set `include_history=True` when you actually "
+"need the child history."
 
 #: ../../source/pyrepl.md:398
 msgid ""
-"`runtime.selfref.fork.run(..., include_history=False)`: run one child self-"
-"fork and wait for result."
+"Fork planning checklist (same guidance returned by "
+"`runtime.selfref.guide()`):"
 msgstr ""
-"`runtime.selfref.fork.run(..., include_history=False)`: run one child self-"
-"fork and wait for result."
-
-#: ../../source/pyrepl.md:399
-msgid ""
-"`runtime.selfref.fork.spawn(...)`: spawn one child self-fork asynchronously."
-msgstr ""
-"`runtime.selfref.fork.spawn(...)`: spawn one child self-fork asynchronously."
+"Fork planning checklist (same guidance returned by "
+"`runtime.selfref.guide()`):"
 
 #: ../../source/pyrepl.md:400
-msgid ""
-"`runtime.selfref.fork.wait(fork_id, include_history=False)`: wait for one "
-"spawned self-fork result."
-msgstr ""
-"`runtime.selfref.fork.wait(fork_id, include_history=False)`: wait for one "
-"spawned self-fork result."
-
-#: ../../source/pyrepl.md:401
-msgid ""
-"`runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait"
-" for multiple self-fork results, returning `dict[fork_id -> ForkResult]` "
-"(iterate with `.items()`/`.values()`)."
-msgstr ""
-"`runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait"
-" for multiple self-fork results, returning `dict[fork_id -> ForkResult]` "
-"(iterate with `.items()`/`.values()`)."
-
-#: ../../source/pyrepl.md:403
-msgid ""
-"By default, fork results are compact and return metadata like `fork_id`, "
-"`memory_key`, `response`, `history_count`, and `history_included=False`. Set"
-" `include_history=True` only when you truly need full child message history."
-msgstr ""
-"By default, fork results are compact and return metadata like `fork_id`, "
-"`memory_key`, `response`, `history_count`, and `history_included=False`. Set"
-" `include_history=True` only when you truly need full child message history."
-
-#: ../../source/pyrepl.md:406
-msgid ""
-"Fork planning checklist (same guidance returned by "
-"`runtime.selfref.guide()`):"
-msgstr ""
-"Fork planning checklist (same guidance returned by "
-"`runtime.selfref.guide()`):"
-
-#: ../../source/pyrepl.md:408
 msgid "每一层 agent 只做本层规划，执行下放给子 fork。"
 msgstr ""
 "Each agent layer only performs planning at its own layer, delegating "
 "execution to child forks."
 
-#: ../../source/pyrepl.md:409
+#: ../../source/pyrepl.md:401
 msgid "无依赖的任务尽量并行 `fork.spawn(...)`。"
 msgstr ""
 "Tasks without dependencies should be parallelized as much as possible using "
 "`fork.spawn(...)`."
 
-#: ../../source/pyrepl.md:410
+#: ../../source/pyrepl.md:402
 msgid "fork 前先整理记忆：弱相关信息先总结或落盘。"
 msgstr ""
 "Before forking, organize memory first: summarize or persist weak related "
 "information first."
 
-#: ../../source/pyrepl.md:411
+#: ../../source/pyrepl.md:403
 msgid "fork 提示词写清完成边界和验收标准，优先文件+回传消息交接。"
 msgstr ""
 "Clearly state the completion boundaries and acceptance criteria in the fork "
 "prompt, prioritizing file + return message handover."
 
-#: ../../source/pyrepl.md:412
+#: ../../source/pyrepl.md:404
 msgid "fork 结果默认是紧凑模式；需要子历史时再按需 `include_history=True`。"
 msgstr ""
 "The fork result is in compact mode by default; when you need child history, "
 "set `include_history=True` on demand."
 
-#: ../../source/pyrepl.md:413
+#: ../../source/pyrepl.md:405
 msgid "每个里程碑后回收并整理记忆，再进入下一阶段。"
 msgstr ""
 "After each milestone, retrieve and organize memories, then enter the next "
 "phase."
 
+#: ../../source/pyrepl.md:407
+msgid "忘记记忆的注意事项："
+msgstr "Notes on forgetting memory:"
+
+#: ../../source/pyrepl.md:409
+msgid "忘记记忆 **不是** `reset_repl`。"
+msgstr "Forget memory **is not** `reset_repl`."
+
+#: ../../source/pyrepl.md:410
+msgid "`reset_repl` 仅清理 REPL 命名空间中的 Python 变量。"
+msgstr "`reset_repl` only cleans up Python variables in the REPL namespace."
+
+#: ../../source/pyrepl.md:411
+msgid ""
+"需要清除记忆时，请使用 `runtime.selfref.history.delete(...)` 或 "
+"`runtime.selfref.history.replace(...)`；`runtime.selfref.history.clear(...)` "
+"会保留当前 system prompt。"
+msgstr ""
+"When you need to clear the memory, please use "
+"`runtime.selfref.history.delete(...)` or "
+"`runtime.selfref.history.replace(...)`; `runtime.selfref.history.clear(...)`"
+" will retain the current system prompt."
+
+#: ../../source/pyrepl.md:413
+msgid ""
+"所有操作都会写入 `SelfReference` 的内部存储，而不是直接暴露原始列表。单次对话中的记忆变更会在回合结束时合并进返回的 "
+"`updated_history`（事件模式下为 `ReactEndEvent.final_messages`）。"
+msgstr ""
+"All operations are written to the internal storage of `SelfReference`, "
+"rather than directly exposing the original list. Memory changes in a single "
+"conversation will be merged into the returned `updated_history` at the end "
+"of the turn (in event mode, it's `ReactEndEvent.final_messages`)."
+
 #: ../../source/pyrepl.md:415
-msgid "Forgetting note:"
-msgstr "Forgetting note:"
+msgid "单个 REPL 中多 agent 共享"
+msgstr "Multi-agent sharing in a single REPL"
 
 #: ../../source/pyrepl.md:417
-msgid "Forgetting memory is **not** `reset_repl`."
-msgstr "Forgetting memory is **not** `reset_repl`."
+msgid "为不同 agent 使用不同的 `self_reference_key`："
+msgstr "Use different `self_reference_key` for different agents:"
 
-#: ../../source/pyrepl.md:418
-msgid "`reset_repl` only clears Python variables in the REPL namespace."
-msgstr "`reset_repl` only clears Python variables in the REPL namespace."
+#: ../../source/pyrepl.md:429
+msgid "这样可以为每个 agent 提供隔离的记忆空间。"
+msgstr "This can provide each agent with an isolated memory space."
 
-#: ../../source/pyrepl.md:419
-msgid ""
-"Forget memory by deleting/replacing message records with "
-"`runtime.selfref.history.delete(...)` or "
-"`runtime.selfref.history.replace(...)`; `runtime.selfref.history.clear(...)`"
-" keeps only the current system prompt."
-msgstr ""
-"Forget memory by deleting/replacing message records with "
-"`runtime.selfref.history.delete(...)` or "
-"`runtime.selfref.history.replace(...)`; `runtime.selfref.history.clear(...)`"
-" keeps only the current system prompt."
-
-#: ../../source/pyrepl.md:421
-msgid ""
-"All operations write into `SelfReference`'s internal store instead of "
-"exposing raw lists. Memory edits performed within a turn are merged into "
-"returned `updated_history` (and `ReactEndEvent.final_messages` in event "
-"mode) at turn end."
-msgstr ""
-"All operations write into `SelfReference`'s internal store instead of "
-"exposing raw lists. Memory edits performed within a turn are merged into "
-"returned `updated_history` (and `ReactEndEvent.final_messages` in event "
-"mode) at turn end."
-
-#: ../../source/pyrepl.md:423
-msgid "Multi-agent sharing in one REPL"
-msgstr "Multi-agent sharing in one REPL"
-
-#: ../../source/pyrepl.md:425
-msgid "Use different `self_reference_key` values for different agents:"
-msgstr "Use different `self_reference_key` values for different agents:"
-
-#: ../../source/pyrepl.md:437
-msgid "This gives each agent an isolated memory space."
-msgstr "This gives each agent an isolated memory space."
-
-#: ../../source/pyrepl.md:439
+#: ../../source/pyrepl.md:431
 msgid "最佳实践"
 msgstr "Best Practices"
 
-#: ../../source/pyrepl.md:441
+#: ../../source/pyrepl.md:433
 msgid "1. Session 隔离"
 msgstr "1. Session Isolation"
 
-#: ../../source/pyrepl.md:459
+#: ../../source/pyrepl.md:451
 msgid "2. 错误处理"
 msgstr "2. Error Handling"
 
-#: ../../source/pyrepl.md:473
+#: ../../source/pyrepl.md:465
 msgid "5. 审计日志（每实例独立）"
 msgstr "5. Audit Log (Per Instance)"
 
-#: ../../source/pyrepl.md:475
+#: ../../source/pyrepl.md:467
 msgid "`PyRepl` 会把代码执行审计记录落盘到独立目录："
 msgstr "PyRepl writes code execution audit records to a separate directory:"
 
-#: ../../source/pyrepl.md:477
+#: ../../source/pyrepl.md:469
 msgid "根目录来自 `.env` / 环境变量中的 `LOG_DIR`"
 msgstr "Root directory from `.env` / environment variable `LOG_DIR`"
 
-#: ../../source/pyrepl.md:478
+#: ../../source/pyrepl.md:470
 msgid "每个实例独立子目录：`<LOG_DIR>/pyrepl/<instance_id>/`"
 msgstr ""
 "Each instance independent subdirectory: `<LOG_DIR>/pyrepl/<instance_id>/`"
 
-#: ../../source/pyrepl.md:479
+#: ../../source/pyrepl.md:471
 msgid "审计文件：`executions.jsonl`"
 msgstr "Audit file: `executions.jsonl`"
 
-#: ../../source/pyrepl.md:481
+#: ../../source/pyrepl.md:473
 msgid "每条记录包含：执行时间、代码、执行结果、结构化错误详情、超时配置等。"
 msgstr ""
 "Each record contains: execution time, code, execution result, structured "
 "error details, timeout configuration, etc."
 
-#: ../../source/pyrepl.md:490
+#: ../../source/pyrepl.md:482
 msgid "3. 实时反馈"
 msgstr "3. Real-Time Feedback"
 
-#: ../../source/pyrepl.md:492
+#: ../../source/pyrepl.md:484
 msgid "启用 `event_emitter` 获取实时输出，提供更好的用户体验："
 msgstr ""
 "Enable `event_emitter` to get real-time output for a better user experience:"
 
-#: ../../source/pyrepl.md:511
+#: ../../source/pyrepl.md:503
 msgid "4. 重置状态"
 msgstr "4. Reset State"
 
-#: ../../source/pyrepl.md:513
+#: ../../source/pyrepl.md:505
 msgid "当需要重新开始时，可以使用 `reset_repl` 清除所有变量："
 msgstr "When you need to start over, use `reset_repl` to clear all variables:"
 
-#: ../../source/pyrepl.md:521
+#: ../../source/pyrepl.md:513
 msgid "Related Links"
 msgstr "Related Links"
 
-#: ../../source/pyrepl.md:523
+#: ../../source/pyrepl.md:515
 msgid "Example: `examples/pyrepl_example.py`"
 msgstr "examples/pyrepl_example.py"
 
-#: ../../source/pyrepl.md:524
+#: ../../source/pyrepl.md:516
 msgid ""
 "Local runtime memory demo: `examples/runtime_primitives_basic_example.py`"
 msgstr ""
 "Local runtime memory demo: `examples/runtime_primitives_basic_example.py`"
 
-#: ../../source/pyrepl.md:525
+#: ../../source/pyrepl.md:517
 msgid ""
-"Unified TUI runtime selfref demo: `examples/tui_runtime_selfref_example.py`"
+"General TUI agent demo: `examples/tui_general_agent_example.py` (workspace "
+"scoped to `./sandbox`)"
 msgstr ""
-"Unified TUI runtime selfref demo: `examples/tui_runtime_selfref_example.py`"
+"General TUI agent demo: `examples/tui_general_agent_example.py` (workspace "
+"scoped to `./sandbox`)"
 
 #~ msgid "**超时保护**：单次 `execute_code` 默认 30 秒超时，超时会返回错误信息"
 #~ msgstr ""
@@ -846,3 +787,211 @@ msgstr ""
 
 #~ msgid "相关链接"
 #~ msgstr "Related Links"
+
+#~ msgid ""
+#~ "**Runtime primitives**: expose controlled self-reference APIs through "
+#~ "`runtime.selfref.history.*` and `runtime.selfref.fork.*`"
+#~ msgstr ""
+#~ "**Runtime primitives**: expose controlled self-reference APIs through "
+#~ "`runtime.selfref.history.*` and `runtime.selfref.fork.*`"
+
+#~ msgid ""
+#~ "**Origin-aware event stream**: each `EventYield` carries `origin` metadata "
+#~ "for stable main/fork routing in TUI or custom UIs"
+#~ msgstr ""
+#~ "**Origin-aware event stream**: each `EventYield` carries `origin` metadata "
+#~ "for stable main/fork routing in TUI or custom UIs"
+
+#~ msgid ""
+#~ "Agent guidance in tool description (sent to model): write direct snippets "
+#~ "instead of standalone scripts, **do not** add `if __name__ == "
+#~ "\"__main__\":`, `input()` is supported, use "
+#~ "`runtime.list_primitives(contains=\"selfref.\")` for discovery, then "
+#~ "`runtime.get_primitive_spec(name)` or "
+#~ "`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` for "
+#~ "targeted contracts (XML by default; use `format=\"dict\"` only when code "
+#~ "needs field access), and `reset_repl` does **not** delete attached memory "
+#~ "state."
+#~ msgstr ""
+#~ "Agent guidance in tool description (sent to model): write direct snippets "
+#~ "instead of standalone scripts, **do not** add `if __name__ == "
+#~ "\"__main__\":`, `input()` is supported, use "
+#~ "`runtime.list_primitives(contains=\"selfref.\")` for discovery, then "
+#~ "`runtime.get_primitive_spec(name)` or "
+#~ "`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` for "
+#~ "targeted contracts (XML by default; use `format=\"dict\"` only when code "
+#~ "needs field access), and `reset_repl` does **not** delete attached memory "
+#~ "state."
+
+#~ msgid ""
+#~ "Model-facing tool description is in English and explicitly states: reset "
+#~ "only affects REPL variables and preserves registered runtime backends."
+#~ msgstr ""
+#~ "Model-facing tool description is in English and explicitly states: reset "
+#~ "only affects REPL variables and preserves registered runtime backends."
+
+#~ msgid ""
+#~ "Model-facing tool description is in English and clarifies that private names"
+#~ " and runtime global (`runtime`) are excluded."
+#~ msgstr ""
+#~ "Model-facing tool description is in English and clarifies that private names"
+#~ " and runtime global (`runtime`) are excluded."
+
+#~ msgid "Runtime primitives with SelfReference backend"
+#~ msgstr "Runtime primitives with SelfReference backend"
+
+#~ msgid ""
+#~ "Use explicit wiring for `SelfReference` as the host-side memory backend:"
+#~ msgstr ""
+#~ "Use explicit wiring for `SelfReference` as the host-side memory backend:"
+
+#~ msgid "Generic runtime backend / primitive registration"
+#~ msgstr "Generic runtime backend / primitive registration"
+
+#~ msgid ""
+#~ "`PyRepl` also supports generic runtime extension points, not only `selfref` "
+#~ "pack wiring:"
+#~ msgstr ""
+#~ "`PyRepl` also supports generic runtime extension points, not only `selfref` "
+#~ "pack wiring:"
+
+#~ msgid ""
+#~ "`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` (inside "
+#~ "REPL) for filtered contract discovery: name, description, input/output, "
+#~ "parameters, and best practices"
+#~ msgstr ""
+#~ "`runtime.list_primitive_specs(names=[...], contains=\"selfref.\")` (inside "
+#~ "REPL) for filtered contract discovery: name, description, input/output, "
+#~ "parameters, and best practices"
+
+#~ msgid ""
+#~ "When `@llm_chat(...)` runs with mounted runtime-enabled tools (for example "
+#~ "`PyRepl`), the framework injects a deduplicated `Tool Best Practices` block "
+#~ "at prompt head; runtime primitive guidance is included inside tool-owned "
+#~ "best-practice entries."
+#~ msgstr ""
+#~ "When `@llm_chat(...)` runs with mounted runtime-enabled tools (for example "
+#~ "`PyRepl`), the framework injects a deduplicated `Tool Best Practices` block "
+#~ "at prompt head; runtime primitive guidance is included inside tool-owned "
+#~ "best-practice entries."
+
+#~ msgid ""
+#~ "When a `SelfReference` backend is mounted in `PyRepl`, `llm_chat` can auto-"
+#~ "resolve it from toolkit runtime backends (no mandatory `self_reference=` "
+#~ "wiring), while still supporting explicit `self_reference=` when you want to "
+#~ "pass one directly."
+#~ msgstr ""
+#~ "When a `SelfReference` backend is mounted in `PyRepl`, `llm_chat` can auto-"
+#~ "resolve it from toolkit runtime backends (no mandatory `self_reference=` "
+#~ "wiring), while still supporting explicit `self_reference=` when you want to "
+#~ "pass one directly."
+
+#~ msgid ""
+#~ "For first-turn safety, if this memory key is empty, the current durable "
+#~ "system prompt is seeded into `self_reference` before tool execution, so "
+#~ "runtime memory reads are not empty and include a system message."
+#~ msgstr ""
+#~ "For first-turn safety, if this memory key is empty, the current durable "
+#~ "system prompt is seeded into `self_reference` before tool execution, so "
+#~ "runtime memory reads are not empty and include a system message."
+
+#~ msgid ""
+#~ "Inside `execute_code`, the agent accesses memory through runtime primitives:"
+#~ msgstr ""
+#~ "Inside `execute_code`, the agent accesses memory through runtime primitives:"
+
+#~ msgid "Append durable memory into system prompt"
+#~ msgstr "Append durable memory into system prompt"
+
+#~ msgid ""
+#~ "This is the most common and recommended pattern: persist user preferences in"
+#~ " system prompt memory."
+#~ msgstr ""
+#~ "This is the most common and recommended pattern: persist user preferences in"
+#~ " system prompt memory."
+
+#~ msgid "You can also overwrite the system prompt directly:"
+#~ msgstr "You can also overwrite the system prompt directly:"
+
+#~ msgid "Common memory operation examples"
+#~ msgstr "Common memory operation examples"
+
+#~ msgid ""
+#~ "`runtime.selfref.guide()`: return namespace overview and fork/memory best-"
+#~ "practice checklist."
+#~ msgstr ""
+#~ "`runtime.selfref.guide()`: return namespace overview and fork/memory best-"
+#~ "practice checklist."
+
+#~ msgid ""
+#~ "`runtime.selfref.history.all(key=None)`: return a deep-copied snapshot of "
+#~ "all messages."
+#~ msgstr ""
+#~ "`runtime.selfref.history.all(key=None)`: return a deep-copied snapshot of "
+#~ "all messages."
+
+#~ msgid ""
+#~ "`runtime.selfref.fork.run(..., include_history=False)`: run one child self-"
+#~ "fork and wait for result."
+#~ msgstr ""
+#~ "`runtime.selfref.fork.run(..., include_history=False)`: run one child self-"
+#~ "fork and wait for result."
+
+#~ msgid ""
+#~ "`runtime.selfref.fork.wait(fork_id, include_history=False)`: wait for one "
+#~ "spawned self-fork result."
+#~ msgstr ""
+#~ "`runtime.selfref.fork.wait(fork_id, include_history=False)`: wait for one "
+#~ "spawned self-fork result."
+
+#~ msgid ""
+#~ "By default, fork results are compact and return metadata like `fork_id`, "
+#~ "`memory_key`, `response`, `history_count`, and `history_included=False`. Set"
+#~ " `include_history=True` only when you truly need full child message history."
+#~ msgstr ""
+#~ "By default, fork results are compact and return metadata like `fork_id`, "
+#~ "`memory_key`, `response`, `history_count`, and `history_included=False`. Set"
+#~ " `include_history=True` only when you truly need full child message history."
+
+#~ msgid "Forgetting note:"
+#~ msgstr "Forgetting note:"
+
+#~ msgid "Forgetting memory is **not** `reset_repl`."
+#~ msgstr "Forgetting memory is **not** `reset_repl`."
+
+#~ msgid "`reset_repl` only clears Python variables in the REPL namespace."
+#~ msgstr "`reset_repl` only clears Python variables in the REPL namespace."
+
+#~ msgid ""
+#~ "All operations write into `SelfReference`'s internal store instead of "
+#~ "exposing raw lists. Memory edits performed within a turn are merged into "
+#~ "returned `updated_history` (and `ReactEndEvent.final_messages` in event "
+#~ "mode) at turn end."
+#~ msgstr ""
+#~ "All operations write into `SelfReference`'s internal store instead of "
+#~ "exposing raw lists. Memory edits performed within a turn are merged into "
+#~ "returned `updated_history` (and `ReactEndEvent.final_messages` in event "
+#~ "mode) at turn end."
+
+#~ msgid "Multi-agent sharing in one REPL"
+#~ msgstr "Multi-agent sharing in one REPL"
+
+#~ msgid "Use different `self_reference_key` values for different agents:"
+#~ msgstr "Use different `self_reference_key` values for different agents:"
+
+#~ msgid "This gives each agent an isolated memory space."
+#~ msgstr "This gives each agent an isolated memory space."
+
+#~ msgid "**返回值：**"
+#~ msgstr "**Returns:**"
+
+#~ msgid "list_variables"
+#~ msgstr "list_variables"
+
+#~ msgid "列出当前 repl 中定义的所有变量。"
+#~ msgstr "List all variables currently defined in the REPL."
+
+#~ msgid "面向模型的工具描述为英文，明确说明：私有变量与运行时全局对象（`runtime`）会被排除。"
+#~ msgstr ""
+#~ "Model-oriented tool description is in English, explicitly stating: private "
+#~ "variables and runtime global objects (`runtime`) will be excluded."

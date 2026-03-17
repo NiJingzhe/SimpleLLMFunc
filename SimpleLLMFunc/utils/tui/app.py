@@ -14,6 +14,7 @@ from textual.widgets import Input, Static
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
 from SimpleLLMFunc.hooks.stream import ReactOutput
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
 from SimpleLLMFunc.utils.tui.formatters import format_tool_arguments_markdown
@@ -52,6 +53,11 @@ class _ToolWidgets:
     result_widget: Static
     stats_widget: Static
     arguments: dict[str, Any] = field(default_factory=dict)
+    arguments_markdown: str = ""
+    argument_markdown_cache: dict[str, str] = field(default_factory=dict)
+    argument_order: list[str] = field(default_factory=list)
+    last_argument_changed: Optional[str] = None
+    arguments_tool_name: str = ""
     output: str = ""
     status: str = "running"
     result_markdown: str = ""
@@ -235,6 +241,8 @@ class AgentTUIApp(App[None]):
 
         self.history: MessageList = list(initial_history or [])
         self._busy = False
+        self._active_abort_signal: Optional[AbortSignal] = None
+        self._pending_user_text: Optional[str] = None
 
         if input_router is not None:
             self._input_router = input_router
@@ -254,6 +262,10 @@ class AgentTUIApp(App[None]):
         self._next_user_block_index = 1
         self._archive_count = 0
         self._render_flush_count = 0
+        self._total_blocks = 0
+        self._archived_blocks = 0
+        self._active_models = 0
+        self._active_tools = 0
         self._virtual_keep_live_blocks = self.VIRTUAL_KEEP_LIVE_BLOCKS
         self._virtualize_near_bottom_margin = self.VIRTUALIZE_NEAR_BOTTOM_MARGIN
         self._scroll_after_refresh_pending = False
@@ -354,18 +366,11 @@ class AgentTUIApp(App[None]):
 
     def _update_render_stats_widget(self) -> None:
         stats_widget = self.query_one("#render-stats", Static)
-        total_blocks = sum(len(blocks) for blocks in self._agent_blocks.values())
-        archived_blocks = sum(
-            1
-            for blocks in self._agent_blocks.values()
-            for block in blocks
-            if block.archived
-        )
-        active_models = sum(1 for model in self._models.values() if not model.finished)
-        active_tools = sum(
-            1 for tool in self._tools.values() if tool.status == "running"
-        )
-        live_blocks = total_blocks - archived_blocks
+        total_blocks = self._total_blocks
+        archived_blocks = self._archived_blocks
+        active_models = self._active_models
+        active_tools = self._active_tools
+        live_blocks = max(total_blocks - archived_blocks, 0)
         stats_widget.update(
             "Render "
             f"| live {live_blocks}/{total_blocks} "
@@ -392,6 +397,7 @@ class AgentTUIApp(App[None]):
     def _register_render_block(self, block: _RenderBlock) -> None:
         blocks = self._agent_blocks.setdefault(block.agent_key, [])
         blocks.append(block)
+        self._total_blocks += 1
         self._update_render_stats_widget()
 
     def _is_block_pinned(self, block: _RenderBlock) -> bool:
@@ -403,6 +409,66 @@ class AgentTUIApp(App[None]):
             return False
 
         return (not model.finished) or bool(model.running_tool_call_ids)
+
+    def _refresh_tool_arguments_markdown(self, tool: _ToolWidgets) -> None:
+        if not tool.arguments:
+            tool.argument_order = []
+            tool.argument_markdown_cache = {}
+            tool.arguments_markdown = "_No arguments_"
+            tool.last_argument_changed = None
+            tool.arguments_tool_name = tool.tool_name
+            return
+
+        tool_name_changed = tool.arguments_tool_name != tool.tool_name
+        if tool_name_changed:
+            tool.argument_markdown_cache = {}
+            tool.argument_order = []
+        tool.arguments_tool_name = tool.tool_name
+
+        changed_key = tool.last_argument_changed
+        if (
+            changed_key is None
+            or tool_name_changed
+            or changed_key not in tool.arguments
+        ):
+            tool.argument_order = list(tool.arguments.keys())
+            tool.argument_markdown_cache = {
+                key: format_tool_arguments_markdown(
+                    {key: tool.arguments[key]},
+                    tool_name=tool.tool_name,
+                )
+                for key in tool.argument_order
+            }
+        else:
+            if changed_key not in tool.argument_order:
+                tool.argument_order.append(changed_key)
+            tool.argument_markdown_cache[changed_key] = format_tool_arguments_markdown(
+                {changed_key: tool.arguments[changed_key]},
+                tool_name=tool.tool_name,
+            )
+            missing_keys = [
+                key
+                for key in tool.argument_order
+                if key not in tool.argument_markdown_cache
+            ]
+            if missing_keys:
+                tool.argument_order = list(tool.arguments.keys())
+                tool.argument_markdown_cache = {
+                    key: format_tool_arguments_markdown(
+                        {key: tool.arguments[key]},
+                        tool_name=tool.tool_name,
+                    )
+                    for key in tool.argument_order
+                }
+
+        tool.arguments_markdown = "\n".join(
+            tool.argument_markdown_cache[key]
+            for key in tool.argument_order
+            if key in tool.argument_markdown_cache
+        )
+        if not tool.arguments_markdown.strip():
+            tool.arguments_markdown = "_No arguments_"
+        tool.last_argument_changed = None
 
     def _compose_tool_plain_text(self, tool: _ToolWidgets) -> str:
         lines: list[str] = [f"Tool: {tool.tool_name}", f"Status: {tool.status}"]
@@ -481,6 +547,7 @@ class AgentTUIApp(App[None]):
         )
         block.archived = True
         self._archive_count += 1
+        self._archived_blocks += 1
         self._update_render_stats_widget()
         return True
 
@@ -575,9 +642,25 @@ class AgentTUIApp(App[None]):
         self._set_chat_placeholder()
         if self._busy:
             input_widget.disabled = True
-        else:
-            input_widget.disabled = False
-            input_widget.focus()
+            return
+        input_widget.disabled = False
+        input_widget.focus()
+
+    def _prepend_abort_marker(self, text: str) -> str:
+        marker = "我要打断你的回复。"
+        if not text:
+            return marker
+        stripped = text.lstrip()
+        if stripped.startswith(marker):
+            return text
+        return f"{marker}\n{text}"
+
+    def _request_abort_current_turn(self, reason: str = "steering") -> None:
+        if self._active_abort_signal is None:
+            return
+        if self._active_abort_signal.is_aborted:
+            return
+        self._active_abort_signal.abort(reason)
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
         input_widget = self.query_one("#chat-input", Input)
@@ -633,30 +716,39 @@ class AgentTUIApp(App[None]):
         user_text = route_result.chat_text
 
         if self._busy:
-            await self._append_system_hint("Agent is still responding, please wait.")
+            input_widget.value = ""
+            steered_text = self._prepend_abort_marker(user_text)
+            await self._append_user_message(steered_text)
+            self._pending_user_text = steered_text
+            self._request_abort_current_turn()
+            self._refresh_input_widget_state()
             return
 
         input_widget.value = ""
 
         await self._append_user_message(user_text)
         self._busy = True
-        input_widget.disabled = True
 
         self.run_worker(self._run_turn(user_text), thread=False)
 
     async def _run_turn(self, user_text: str) -> None:
         input_widget = self.query_one("#chat-input", Input)
+        abort_signal = AbortSignal()
+        self._active_abort_signal = abort_signal
+        pending_text: Optional[str] = None
         try:
             call_kwargs = dict(self.static_kwargs)
             call_kwargs[self.input_param] = user_text
             if self.history_param:
                 call_kwargs[self.history_param] = self.history
 
+            call_kwargs[ABORT_SIGNAL_PARAM] = abort_signal
             stream = self.agent_func(**call_kwargs)
             new_history = await consume_react_stream(
                 stream,
                 adapter=self,
                 custom_hooks=self.custom_hooks,
+                abort_signal=abort_signal,
             )
             if new_history:
                 self.history = new_history
@@ -665,6 +757,15 @@ class AgentTUIApp(App[None]):
         finally:
             self._busy = False
             self._input_router.clear_all_requests()
+            if self._active_abort_signal is abort_signal:
+                self._active_abort_signal = None
+            pending_text = self._pending_user_text
+            self._pending_user_text = None
+
+        if pending_text:
+            self._busy = True
+            self.run_worker(self._run_turn(pending_text), thread=False)
+        else:
             self._refresh_input_widget_state()
 
     async def _append_user_message(self, text: str) -> None:
@@ -805,11 +906,17 @@ class AgentTUIApp(App[None]):
 
         removed_blocks = self._agent_blocks.pop(agent_key, [])
         if removed_blocks:
+            removed_archived = sum(1 for block in removed_blocks if block.archived)
+            self._total_blocks = max(0, self._total_blocks - len(removed_blocks))
+            self._archived_blocks = max(0, self._archived_blocks - removed_archived)
             transcript = self._compose_agent_transcript(agent_key, removed_blocks)
             if transcript:
                 self._detached_transcript_sections.append(transcript)
 
         for model_call_id in removed_model_call_ids:
+            model = self._models.get(model_call_id)
+            if model is not None and not model.finished:
+                self._active_models = max(0, self._active_models - 1)
             self._model_agent_key.pop(model_call_id, None)
             self._models.pop(model_call_id, None)
 
@@ -819,6 +926,9 @@ class AgentTUIApp(App[None]):
             if tool.model_call_id in removed_model_call_ids
         ]
         for tool_call_id in removed_tool_call_ids:
+            tool = self._tools.get(tool_call_id)
+            if tool is not None and tool.status == "running":
+                self._active_tools = max(0, self._active_tools - 1)
             self._tools.pop(tool_call_id, None)
             self._input_router.clear_tool_requests(tool_call_id)
 
@@ -900,14 +1010,8 @@ class AgentTUIApp(App[None]):
         if tool.arguments_dirty:
             tool.arguments_dirty = False
             try:
-                tool.arguments_widget.update(
-                    Markdown(
-                        format_tool_arguments_markdown(
-                            tool.arguments,
-                            tool_name=tool.tool_name,
-                        )
-                    )
-                )
+                self._refresh_tool_arguments_markdown(tool)
+                tool.arguments_widget.update(Markdown(tool.arguments_markdown))
                 updated = True
             except Exception:
                 pass
@@ -958,6 +1062,10 @@ class AgentTUIApp(App[None]):
     # ------------------------------------------------------------------
 
     async def start_model_response(self, model_call_id: str) -> None:
+        existing_model = self._models.get(model_call_id)
+        if existing_model is not None and not existing_model.finished:
+            self._active_models = max(0, self._active_models - 1)
+
         root = VerticalGroup(classes="bubble model-bubble")
         role = Static("Assistant", classes="role")
         reasoning_widget = Static("", classes="reasoning")
@@ -984,6 +1092,7 @@ class AgentTUIApp(App[None]):
             stats_widget=stats_widget,
         )
         self._models[model_call_id] = model_widgets
+        self._active_models += 1
 
         self._register_render_block(
             _RenderBlock(
@@ -1028,14 +1137,18 @@ class AgentTUIApp(App[None]):
             return
 
         model.stats_line = stats_line
-        model.finished = True
+        if not model.finished:
+            model.finished = True
+            self._active_models = max(0, self._active_models - 1)
+        else:
+            model.finished = True
         model.stats_widget.update(stats_line)
         self._update_render_stats_widget()
 
-        if (
-            self._is_fork_model_call_id(model_call_id)
-            and stats_line == "fork | completed"
-        ):
+        if self._is_fork_model_call_id(model_call_id) and stats_line in {
+            "fork | completed",
+            "fork | error",
+        }:
             agent_key = self._model_agent_key.get(model_call_id)
             if agent_key is not None:
                 await self._teardown_agent_column(agent_key)
@@ -1054,11 +1167,15 @@ class AgentTUIApp(App[None]):
     ) -> None:
         existing_tool = self._tools.get(tool_call_id)
         if existing_tool is not None:
+            previous_status = existing_tool.status
             existing_tool.tool_name = tool_name
             existing_tool.arguments = dict(arguments)
             existing_tool.status = "running"
             existing_tool.arguments_dirty = True
             existing_tool.status_dirty = True
+            existing_tool.last_argument_changed = None
+            if previous_status != "running":
+                self._active_tools += 1
             self._schedule_tool_render(tool_call_id)
 
             model_for_existing_tool = self._models.get(existing_tool.model_call_id)
@@ -1083,24 +1200,7 @@ class AgentTUIApp(App[None]):
         result_widget = Static()
         stats_widget = Static("", classes="stats")
 
-        args_widget.update(
-            Markdown(
-                format_tool_arguments_markdown(
-                    arguments,
-                    tool_name=tool_name,
-                )
-            )
-        )
-
-        await model.tool_list_widget.mount(root)
-        await root.mount(title)
-        await root.mount(args_widget)
-        await root.mount(status_widget)
-        await root.mount(output_widget)
-        await root.mount(result_widget)
-        await root.mount(stats_widget)
-
-        self._tools[tool_call_id] = _ToolWidgets(
+        tool_widgets = _ToolWidgets(
             tool_call_id=tool_call_id,
             root=root,
             model_call_id=model_call_id,
@@ -1113,6 +1213,18 @@ class AgentTUIApp(App[None]):
             arguments=dict(arguments),
             status="running",
         )
+        self._tools[tool_call_id] = tool_widgets
+        self._active_tools += 1
+        self._refresh_tool_arguments_markdown(tool_widgets)
+        args_widget.update(Markdown(tool_widgets.arguments_markdown))
+
+        await model.tool_list_widget.mount(root)
+        await root.mount(title)
+        await root.mount(args_widget)
+        await root.mount(status_widget)
+        await root.mount(output_widget)
+        await root.mount(result_widget)
+        await root.mount(stats_widget)
 
         model.tool_call_ids.append(tool_call_id)
         model.running_tool_call_ids.add(tool_call_id)
@@ -1134,6 +1246,7 @@ class AgentTUIApp(App[None]):
             previous = str(previous)
         tool.arguments[argname] = previous + argcontent_delta
         tool.arguments_dirty = True
+        tool.last_argument_changed = argname
         self._schedule_tool_render(tool_call_id)
 
     async def append_tool_output(self, tool_call_id: str, output_delta: str) -> None:
@@ -1150,7 +1263,12 @@ class AgentTUIApp(App[None]):
         if tool is None:
             return
 
+        previous_status = tool.status
         tool.status = status
+        if previous_status == "running" and status != "running":
+            self._active_tools = max(0, self._active_tools - 1)
+        elif previous_status != "running" and status == "running":
+            self._active_tools += 1
         tool.status_dirty = True
         self._schedule_tool_render(tool_call_id)
         self._update_render_stats_widget()
@@ -1183,7 +1301,10 @@ class AgentTUIApp(App[None]):
         if tool is None:
             return
 
+        previous_status = tool.status
         tool.status = "success" if success else "error"
+        if previous_status == "running":
+            self._active_tools = max(0, self._active_tools - 1)
         tool.result_markdown = result_markdown or ""
         tool.stats_line = stats_line
         tool.status_dirty = True

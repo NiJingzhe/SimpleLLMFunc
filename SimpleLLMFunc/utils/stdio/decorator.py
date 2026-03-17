@@ -6,10 +6,12 @@ import asyncio
 import json
 import sys
 from dataclasses import dataclass, field
+import inspect
 from functools import wraps
 from typing import Any, AsyncGenerator, Optional, Sequence, TextIO
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput
 from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
@@ -267,6 +269,22 @@ class _StdIOSession:
         self._pending_tool_inputs: dict[str, str] = {}
         self._output_stream = output_stream
         self._error_stream = error_stream
+        self._supports_abort_signal = self._check_abort_signal_support(agent_func)
+
+    @staticmethod
+    def _check_abort_signal_support(agent_func: Any) -> bool:
+        try:
+            signature = inspect.signature(agent_func)
+        except (TypeError, ValueError):
+            return False
+
+        if ABORT_SIGNAL_PARAM in signature.parameters:
+            return True
+
+        return any(
+            parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in signature.parameters.values()
+        )
 
     def _submit_tool_input(self, request_id: str, value: str) -> bool:
         self._pending_tool_inputs[request_id] = value
@@ -277,12 +295,16 @@ class _StdIOSession:
         call_kwargs[self.input_param] = user_text
         if self.history_param:
             call_kwargs[self.history_param] = self.history
+        abort_signal = AbortSignal()
+        if self._supports_abort_signal:
+            call_kwargs[ABORT_SIGNAL_PARAM] = abort_signal
 
         stream = self.agent_func(**call_kwargs)
         new_history = await consume_react_stream(
             stream,
             adapter=self._adapter,
             custom_hooks=self.custom_hooks,
+            abort_signal=abort_signal,
         )
         if new_history:
             self.history = new_history

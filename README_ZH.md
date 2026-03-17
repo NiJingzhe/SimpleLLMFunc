@@ -21,13 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.0)
+### 更新说明 (0.7.1)
 
-🧠 **Runtime 原语 + SelfRef 分叉**：新增 `runtime.*` 原语发现、自引用 history/fork 原语与 `run`/`spawn`/`wait` 分叉流程。
+🧰 **FileToolset + Sandbox**：新增文件工具集与通用 TUI agent 示例，工作区限定在 `./sandbox`。
 
-🧭 **事件 Origin 路由**：统一事件来源元数据，并在 Textual TUI 中加入 fork 路由与可视化。
+⛔ **AbortSignal 控制**：新增回合中断能力，并在 `ReactEndEvent` 中提供中断元数据。
 
-📘 **文档与多语言同步**：更新文档并重新生成 EN/zh 翻译。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+🔧 **PyRepl 工具调整**：`execute_code` 输出改为自然语言摘要；移除 `list_variables` 工具/API；支持 `working_directory`。
+
+📘 **文档更新**：重整导航并补齐 runtime/tool 文档。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -404,17 +406,23 @@ asyncio.run(main())
 @llm_function(
     llm_interface=llm_interface,          # LLM 接口实例
     toolkit=[tool1, tool2],                # 工具列表
-    _template_params={                     # 动态 Prompt 模板参数
-        "language": "中文",
-        "style": "专业"
-    },
     retry_on_exception=True,               # 异常时自动重试
     timeout=60                              # 超时设置
 )
 async def my_function(param: str) -> str:
     """支持 {language} 的 {style} 分析"""
     pass
+
+result = await my_function(
+    "输入内容",
+    _template_params={
+        "language": "中文",
+        "style": "专业",
+    },
+)
 ```
+
+`_template_params` 需要在**调用时**传入，仅用于对 DocString 执行 `str.format` 替换。该参数会在函数签名绑定前被移除，不属于 LLM 输入。若占位符缺失，会记录 warning 并回退使用原始 DocString。
 
 ### 2. LLM 供应商接口
 
@@ -752,7 +760,7 @@ SimpleLLMFunc/
 │   ├── multi_modality_toolcall.py   # 多模态示例
 │   ├── pyrepl_example.py            # 内置 PyRepl 示例
 │   ├── runtime_primitives_basic_example.py # 本地 runtime memory primitive 示例
-│   ├── tui_runtime_selfref_example.py # 统一 TUI selfref 示例（memory + fork）
+│   ├── tui_general_agent_example.py  # 通用 TUI agent 示例（selfref + 文件工具）
 │   ├── custom_tool_event_example.py # 自定义工具事件示例
 │   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例
@@ -795,8 +803,10 @@ SimpleLLMFunc 支持灵活的配置：
 # .env 文件示例
 LOG_DIR=./logs                          # 日志目录（可选）
 LOG_LEVEL=INFO                          # 日志级别, 只控制控制台日志的输出，不会影响文件日志的输出
+LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse 服务器地址（可选）
 LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse 公钥（可选）
 LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse 密钥（可选）
+LANGFUSE_EXPORT_ALL_SPANS=true         # 导出所有 OpenTelemetry spans（可选）
 ```
 
 ## 🎯 常见使用场景
@@ -871,7 +881,7 @@ python examples/llm_function_pydantic_example.py
 python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
 python examples/runtime_primitives_basic_example.py
-python examples/tui_runtime_selfref_example.py
+python examples/tui_general_agent_example.py
 ```
 
 ## 🤝 贡献指南
@@ -911,7 +921,7 @@ python examples/tui_runtime_selfref_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.0},
+  version = {0.7.1},
   year = {2026}
 }
 ```

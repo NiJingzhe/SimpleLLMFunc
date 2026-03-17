@@ -606,7 +606,7 @@ async def test_consume_react_stream_routes_fork_lifecycle_to_peer_model_block() 
         type="function",
         function=OpenAIFunction(
             name="execute_code",
-            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+            arguments='{"code": "runtime.selfref.fork.spawn(\'task\')"}',
         ),
     )
 
@@ -633,7 +633,7 @@ async def test_consume_react_stream_routes_fork_lifecycle_to_peer_model_block() 
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 tool_call=tool_call,
             )
         )
@@ -682,7 +682,7 @@ async def test_consume_react_stream_routes_fork_lifecycle_to_peer_model_block() 
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 result={
                     "success": True,
                     "stdout": "",
@@ -729,7 +729,7 @@ async def test_consume_react_stream_routes_origin_scoped_fork_tool_events() -> N
         type="function",
         function=OpenAIFunction(
             name="execute_code",
-            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+            arguments='{"code": "runtime.selfref.fork.spawn(\'task\')"}',
         ),
     )
     child_tool_call = ChatCompletionMessageToolCall(
@@ -803,7 +803,7 @@ async def test_consume_react_stream_routes_origin_scoped_fork_tool_events() -> N
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 tool_call=parent_tool_call,
             )
         )
@@ -850,7 +850,7 @@ async def test_consume_react_stream_routes_origin_scoped_fork_tool_events() -> N
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 result={
                     "success": True,
                     "stdout": "",
@@ -900,7 +900,7 @@ async def test_consume_react_stream_origin_fork_creates_new_model_block_after_to
         type="function",
         function=OpenAIFunction(
             name="execute_code",
-            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+            arguments='{"code": "runtime.selfref.fork.spawn(\'task\')"}',
         ),
     )
     child_tool_call = ChatCompletionMessageToolCall(
@@ -934,7 +934,7 @@ async def test_consume_react_stream_origin_fork_creates_new_model_block_after_to
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 tool_call=parent_tool_call,
             )
         )
@@ -1085,7 +1085,7 @@ async def test_consume_react_stream_origin_fork_creates_new_model_block_after_to
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 result={
                     "success": True,
                     "stdout": "",
@@ -1134,7 +1134,7 @@ async def test_consume_react_stream_routes_nested_origin_fork_events() -> None:
         type="function",
         function=OpenAIFunction(
             name="execute_code",
-            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+            arguments='{"code": "runtime.selfref.fork.spawn(\'task\')"}',
         ),
     )
     child_tool_call = ChatCompletionMessageToolCall(
@@ -1190,7 +1190,7 @@ async def test_consume_react_stream_routes_nested_origin_fork_events() -> None:
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 tool_call=parent_tool_call,
             )
         )
@@ -1257,7 +1257,7 @@ async def test_consume_react_stream_ignores_fork_react_end_for_turn_completion()
         type="function",
         function=OpenAIFunction(
             name="execute_code",
-            arguments='{"code": "runtime.selfref.fork.run(\'task\')"}',
+            arguments='{"code": "runtime.selfref.fork.spawn(\'task\')"}',
         ),
     )
     parent_final_messages = [
@@ -1275,7 +1275,7 @@ async def test_consume_react_stream_ignores_fork_react_end_for_turn_completion()
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 tool_call=parent_tool_call,
             )
         )
@@ -1348,7 +1348,7 @@ async def test_consume_react_stream_ignores_fork_react_end_for_turn_completion()
                 iteration=1,
                 tool_name="execute_code",
                 tool_call_id="call-parent",
-                arguments={"code": "runtime.selfref.fork.run('task')"},
+                arguments={"code": "runtime.selfref.fork.spawn('task')"},
                 result={
                     "success": True,
                     "stdout": "",

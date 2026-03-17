@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "SimpleLLMFunc"
-version = "0.7.0"
+version = "0.7.1"
 description = "A lightweight yet complete LLM/Agent application development framework. Provides decorators that use function docstrings as prompts, requiring no function body implementation while allowing you to benefit from function definitions and type annotations for higher development efficiency. Seamlessly integrate LLM capabilities into any Python project with minimal code."
 authors = ["Ni Jingzhe <nijingzhe@zju.edu.cn>"]
 readme = "README.md"
@@ -14,7 +14,7 @@ pydantic-settings = ">=2.9.1,<3.0.0"
 httpx = { extras = ["socks"], version = "^0.28.1" }
 rich = "^14.0.0"
 textual = ">=0.63.0,<1.0.0"
-langfuse = "^3.6.1"
+langfuse = "^4.0.0"
 ipython = "^9.0.0"
 
 [tool.poetry.group.dev.dependencies]

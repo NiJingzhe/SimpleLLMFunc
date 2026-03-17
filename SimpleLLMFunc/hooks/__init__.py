@@ -45,6 +45,10 @@ from SimpleLLMFunc.hooks.stream import (
     responses_only,
     with_event_observer,
 )
+from SimpleLLMFunc.hooks.abort import (
+    AbortSignal,
+    ABORT_SIGNAL_PARAM,
+)
 
 __all__ = [
     # 基础类型
@@ -89,4 +93,7 @@ __all__ = [
     "ToolInputRequest",
     "InputRouteResult",
     "AgentInputRouter",
+    # Abort
+    "AbortSignal",
+    "ABORT_SIGNAL_PARAM",
 ]

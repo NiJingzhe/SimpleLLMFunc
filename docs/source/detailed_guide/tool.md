@@ -118,6 +118,38 @@ async def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 
 **⚠️ 注意：`@tool` 装饰器要求被装饰的函数本身定义为 `async def`，以便在异步执行链路中无缝协作。**
 
+## 内置工具集
+
+### FileToolset（文件工具）
+
+提供安全的文件读取、搜索与编辑能力，带哈希校验以避免陈旧写入。仅允许访问工作区内的非隐藏文件。
+
+**工具列表：**
+
+- `read_file`：读取文件内容，可指定起止行并附带行号
+- `grep`：在工作区内进行正则搜索（必须提供 `path_pattern`）
+- `sed`：按行范围进行正则替换（需先 read_file）
+- `echo_into`：覆盖写入整个文件（需先 read_file）
+
+**使用示例：**
+
+```python
+from SimpleLLMFunc.builtin import FileToolset
+from SimpleLLMFunc import llm_chat
+
+file_tools = FileToolset("/path/to/workspace").toolset
+
+@llm_chat(toolkit=file_tools)
+async def agent(message: str, history=None):
+    """文件操作助手"""
+```
+
+**注意事项：**
+
+- 修改前务必先 `read_file`，否则会返回 “file has been changed” 提示
+- `grep` 必须提供 `path_pattern` 以限定搜索范围
+- 隐藏文件/目录不可访问
+
 ## 使用方法
 
 ### 基本语法

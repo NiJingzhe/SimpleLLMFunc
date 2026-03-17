@@ -1,7 +1,5 @@
-import contextvars
 import inspect
 import json
-import sys
 from functools import wraps
 from typing import (
     Any,
@@ -44,7 +42,13 @@ from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
 from SimpleLLMFunc.hooks.events import ReactEndEvent
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_event_yield
-from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
+from SimpleLLMFunc.observability.langfuse_client import (
+    coerce_langfuse_metadata,
+    get_langfuse_trace_context,
+    langfuse_client,
+    update_langfuse_parent_span,
+)
 
 # Type aliases
 ToolkitList = List[Union[Tool, Callable[..., Awaitable[Any]]]]
@@ -560,7 +564,10 @@ def llm_chat(
                 or message_annotation is None
                 or (
                     message_annotation is not str
-                    and not (isinstance(message_annotation, str) and message_annotation == "str")
+                    and not (
+                        isinstance(message_annotation, str)
+                        and message_annotation == "str"
+                    )
                 )
             ):
                 raise TypeError(
@@ -597,6 +604,9 @@ def llm_chat(
 
         @wraps(func)
         async def wrapper(*args, **kwargs):
+            abort_signal = kwargs.pop(ABORT_SIGNAL_PARAM, None)
+            if not isinstance(abort_signal, AbortSignal):
+                abort_signal = None
             # Step 1: 解析函数签名
             function_signature, template_params = parse_function_signature(
                 func,
@@ -637,30 +647,34 @@ def llm_chat(
                     trace_id=function_signature.trace_id,
                     arguments=function_signature.bound_args.arguments,
                 ):
+                    trace_context = get_langfuse_trace_context()
                     # 创建 Langfuse parent span
-                    span_context = contextvars.copy_context()
-                    span_cm = langfuse_client.start_as_current_observation(
+                    with langfuse_client.start_as_current_observation(
                         as_type="span",
                         name=f"{function_signature.func_name}_chat_call",
                         input=function_signature.bound_args.arguments,
-                        metadata={
-                            "function_name": function_signature.func_name,
-                            "trace_id": function_signature.trace_id,
-                            "tools_available": len(runtime_toolkit)
-                            if runtime_toolkit
-                            else 0,
-                            "max_tool_calls": max_tool_calls,
-                            "stream": stream,
-                            "return_mode": return_mode,
-                            "enable_event": enable_event,
-                            "self_reference_enabled": (
-                                effective_self_reference is not None
-                            ),
-                            "self_reference_key": self_reference_key,
-                        },
-                    )
-                    chat_span = span_context.run(span_cm.__enter__)
-                    try:
+                        metadata=coerce_langfuse_metadata(
+                            {
+                                "function_name": function_signature.func_name,
+                                "trace_id": function_signature.trace_id,
+                                "tools_available": len(runtime_toolkit)
+                                if runtime_toolkit
+                                else 0,
+                                "max_tool_calls": max_tool_calls,
+                                "stream": stream,
+                                "return_mode": return_mode,
+                                "enable_event": enable_event,
+                                "self_reference_enabled": (
+                                    effective_self_reference is not None
+                                ),
+                                "self_reference_key": self_reference_key,
+                            }
+                        ),
+                        trace_context=trace_context,
+                    ) as chat_span:
+                        update_langfuse_parent_span(
+                            langfuse_client.get_current_observation_id()
+                        )
                         try:
                             raw_history_reference = _extract_raw_history_reference(
                                 function_signature.bound_args.arguments
@@ -774,6 +788,7 @@ def llm_chat(
                                 enable_event=enable_event,
                                 trace_id=function_signature.trace_id,
                                 user_task_prompt=user_task_prompt,
+                                abort_signal=abort_signal,
                             )
 
                             collected_responses = []
@@ -880,13 +895,6 @@ def llm_chat(
                                 output={"error": str(exc)},
                             )
                             raise
-                    finally:
-                        exc_type, exc, tb = sys.exc_info()
-                        try:
-                            span_context.run(span_cm.__exit__, exc_type, exc, tb)
-                        except ValueError as exc_detach:
-                            if "different Context" not in str(exc_detach):
-                                raise
             finally:
                 _close_fork_cloned_pyrepls(runtime_toolkit)
                 if (

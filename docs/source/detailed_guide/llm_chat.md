@@ -71,6 +71,31 @@ async def your_chat_function(
 - **self_reference_key** (可选): 本聊天函数的记忆键，默认为函数名
 - ****llm_kwargs**: 额外的关键字参数，将直接传递给 LLM 接口（如 temperature、top_p 等）
 
+### 运行时中断（AbortSignal）
+
+你可以在调用时传入 `_abort_signal` 来中断正在执行的回合（停止流式输出并取消正在执行的工具调用）。
+
+推荐使用常量 `ABORT_SIGNAL_PARAM`，避免硬编码参数名：
+
+```python
+from SimpleLLMFunc.hooks import AbortSignal, ABORT_SIGNAL_PARAM
+
+abort_signal = AbortSignal()
+
+async for output in your_chat_function(
+    "你好",
+    history=[],
+    **{ABORT_SIGNAL_PARAM: abort_signal},
+):
+    ...
+
+# 在其他协程中触发中断
+abort_signal.abort("user_interrupt")
+```
+
+当 `enable_event=True` 时，`ReactEndEvent.extra` 会包含 `aborted: true` 和可选的 `abort_reason`。
+详见 [中断与取消](abort.md)。
+
 ### 返回值
 
 当 `enable_event=False`（默认）时，`llm_chat` 装饰的函数返回一个异步生成器，每次迭代返回：
@@ -333,10 +358,8 @@ Runtime self-reference primitive reference:
 - `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
 - `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
 - `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
-- `runtime.selfref.fork.run(..., include_history=False)`: run one child self-fork and wait.
-- `runtime.selfref.fork.spawn(...)`: spawn child self-fork asynchronously.
-- `runtime.selfref.fork.wait(fork_id, include_history=False)`: wait one spawned fork.
-- `runtime.selfref.fork.wait_all([fork_id, ...], include_history=False)`: wait multiple forks and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+- `runtime.selfref.fork.spawn(message, ...)`: spawn child self-fork asynchronously (chat-style).
+- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: gather fork results and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
 
 Fork results are compact by default (`history_included=False`, with `history_count` metadata) to avoid main-context pollution.
 Use `include_history=True` only when full child history is explicitly required.

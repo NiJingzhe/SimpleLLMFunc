@@ -12,6 +12,7 @@ from textual.widgets import Input, Static
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter
 from SimpleLLMFunc.hooks.stream import ReactOutput
+from SimpleLLMFunc.utils.tui import app as app_module
 from SimpleLLMFunc.utils.tui.app import AgentTUIApp
 
 
@@ -236,8 +237,8 @@ async def test_fork_stream_adds_peer_column_and_unloads_on_finish() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fork_error_column_stays_visible_for_inspection() -> None:
-    """Errored fork column should remain visible instead of unloading immediately."""
+async def test_fork_error_column_unloads_after_failure() -> None:
+    """Errored fork column should unload after failure."""
     app = _make_app()
 
     async with app.run_test() as pilot:
@@ -247,10 +248,15 @@ async def test_fork_error_column_stays_visible_for_inspection() -> None:
         await app.finish_model_response("fork::fork_1", "fork | error")
         await pilot.pause(0.05)
 
+        await pilot.pause(0.05)
+
+        with pytest.raises(NoMatches):
+            app.query_one("#agent-column-fork_fork_1", VerticalScroll)
+
         board = app.query_one("#agent-board")
         columns = list(board.query(".agent-column"))
-        assert len(columns) == 2
-        app.query_one("#agent-column-fork_fork_1", VerticalScroll)
+        assert len(columns) == 1
+        app.query_one("#agent-column-main", VerticalScroll)
 
 
 @pytest.mark.asyncio
@@ -466,3 +472,84 @@ async def test_virtualization_archives_old_blocks_but_copy_keeps_full_text() -> 
     transcript = copied[-1]
     assert "msg-0" in transcript
     assert "msg-17" in transcript
+
+
+@pytest.mark.asyncio
+async def test_render_stats_counters_track_lifecycle_changes() -> None:
+    """Render stats counters should update on model/tool lifecycle."""
+    app = _make_app()
+
+    async with app.run_test():
+        assert app._total_blocks == 0
+        assert app._archived_blocks == 0
+        assert app._active_models == 0
+        assert app._active_tools == 0
+
+        await app._append_user_message("hello")
+        assert app._total_blocks == 1
+        assert app._archived_blocks == 0
+
+        await app.start_model_response("llm_call_1")
+        assert app._total_blocks == 2
+        assert app._active_models == 1
+
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-1",
+            tool_name="search",
+            arguments={"query": "hi"},
+        )
+        assert app._active_tools == 1
+
+        await app.finish_tool_call(
+            tool_call_id="call-1",
+            result_markdown="ok",
+            stats_line="Tool | 0.01s | success",
+            success=True,
+        )
+        assert app._active_tools == 0
+
+        await app.finish_model_response("llm_call_1", "model | 0.01s")
+        assert app._active_models == 0
+
+        block = app._agent_blocks[app.MAIN_AGENT_KEY][0]
+        archived = await app._archive_render_block(block)
+        assert archived is True
+        assert app._archived_blocks == 1
+
+
+@pytest.mark.asyncio
+async def test_tool_argument_markdown_cache_updates_changed_key_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tool argument rendering should only reformat changed arguments."""
+    app = _make_app()
+    calls: list[list[str]] = []
+    original = app_module.format_tool_arguments_markdown
+
+    def _spy(arguments: dict, tool_name: str | None = None) -> str:
+        calls.append(list(arguments.keys()))
+        return original(arguments, tool_name=tool_name)
+
+    monkeypatch.setattr(app_module, "format_tool_arguments_markdown", _spy)
+
+    async with app.run_test() as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-1",
+            tool_name="lookup",
+            arguments={"alpha": "1", "beta": "2"},
+        )
+        await pilot.pause(0.05)
+
+        assert {tuple(keys) for keys in calls} == {("alpha",), ("beta",)}
+
+        calls.clear()
+        await app.append_tool_argument("call-1", "alpha", "3")
+        await pilot.pause(0.05)
+
+        assert calls == [["alpha"]]
+        tool = app._tools["call-1"]
+        assert "- `alpha`: `13`" in tool.arguments_markdown
+        assert "- `beta`: `2`" in tool.arguments_markdown

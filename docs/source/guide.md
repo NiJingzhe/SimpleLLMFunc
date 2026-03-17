@@ -6,14 +6,49 @@
 
 ```{toctree}
 :maxdepth: 1
-:caption: 核心功能
+:caption: 基础设施
 
 配置与环境 <detailed_guide/config>
 LLM 接口层 <detailed_guide/llm_interface>
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: 开发体验
+
 llm_function 装饰器 <detailed_guide/llm_function>
 llm_chat 装饰器 <detailed_guide/llm_chat>
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: Agent 主体逻辑
+
 事件流系统 <detailed_guide/event_stream>
+中断与取消 <detailed_guide/abort>
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: 工具与运行时
+
 工具系统 <detailed_guide/tool>
+PyRepl运行时 <pyrepl>
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: UI 与交互
+
+终端TUI <tui>
+```
+
+```{toctree}
+:maxdepth: 1
+:caption: 集成与示例
+
+Langfuse集成 <langfuse_integration>
+示例代码 <examples>
 ```
 
 ## 🎯 按使用场景查找文档
@@ -32,6 +67,9 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 
 ### 我想要观察执行过程
 👉 [事件流系统](detailed_guide/event_stream.md) - 实时观察 ReAct 循环的执行过程
+
+### 我想要中断正在执行的回合
+👉 [中断与取消](detailed_guide/abort.md) - AbortSignal 用法与事件流收尾说明
 
 ### 我想要整合工具/API
 👉 [工具系统](detailed_guide/tool.md) - 让 LLM 调用外部函数和 API
@@ -67,6 +105,7 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 | 简单任务 | [llm_function 装饰器](detailed_guide/llm_function.md) | 无状态函数、文本处理、数据转换 |
 | 对话应用 | [llm_chat 装饰器](detailed_guide/llm_chat.md) | 多轮对话、历史管理、流式响应 |
 | 事件流 | [事件流系统](detailed_guide/event_stream.md) | 实时观察、工具调用监控、性能分析 |
+| 中断控制 | [中断与取消](detailed_guide/abort.md) | 终止流式输出、取消工具调用 |
 | 工具集成 | [工具系统](detailed_guide/tool.md) | 工具定义、调用、多模态返回 |
 | 系统设计 | [LLM 接口层](detailed_guide/llm_interface.md) | 接口抽象、密钥池、流量控制 |
 | 实战示例 | [示例代码](examples.md) | 各种场景的完整代码 |
@@ -76,6 +115,7 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 - **如何配置 API 密钥？** → [配置与环境](detailed_guide/config.md)
 - **装饰器支持同步函数吗？** → [llm_function 装饰器 - 重要说明](detailed_guide/llm_function.md)
 - **如何做多轮对话？** → [llm_chat 装饰器](detailed_guide/llm_chat.md)
+- **如何中断当前回复？** → [中断与取消](detailed_guide/abort.md)
 - **如何让 LLM 调用函数？** → [工具系统](detailed_guide/tool.md)
 - **支持哪些 LLM 提供商？** → [LLM 接口层 - OpenAICompatible 实现](detailed_guide/llm_interface.md)
 - **如何处理错误和重试？** → [LLM 接口层 - 故障排除](detailed_guide/llm_interface.md)

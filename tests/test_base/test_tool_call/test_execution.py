@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,6 +12,7 @@ from SimpleLLMFunc.base.tool_call.execution import (
     _execute_single_tool_call,
     process_tool_calls,
 )
+from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 
 
@@ -248,3 +250,45 @@ class TestProcessToolCalls:
         assert len(result) > len(messages)
         user_messages = [msg for msg in result if msg["role"] == "user"]
         assert len(user_messages) >= 1
+
+    @pytest.mark.asyncio
+    async def test_process_tool_calls_aborts_running_tasks(self) -> None:
+        """Abort signal should cancel running tool tasks."""
+        tool_calls = [
+            {
+                "id": "call_123",
+                "type": "function",
+                "function": {"name": "slow_tool", "arguments": "{}"},
+            }
+        ]
+        messages = [{"role": "user", "content": "test"}]
+        cancel_seen = asyncio.Event()
+        ready = asyncio.Event()
+
+        async def slow_tool() -> str:
+            ready.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancel_seen.set()
+                raise
+            return "done"
+
+        tool_map = {"slow_tool": slow_tool}
+        abort_signal = AbortSignal()
+
+        task = asyncio.create_task(
+            process_tool_calls(
+                tool_calls,
+                messages,
+                tool_map,
+                abort_signal=abort_signal,
+            )
+        )
+
+        await ready.wait()
+        abort_signal.abort("user_interrupt")
+        result = await task
+
+        assert result == messages
+        await asyncio.wait_for(cancel_seen.wait(), timeout=1.0)

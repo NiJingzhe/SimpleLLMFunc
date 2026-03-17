@@ -21,13 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.0)
+### Update Notes (0.7.1)
 
-🧠 **Runtime Primitives + SelfRef Forking**: introduced `runtime.*` primitive discovery, selfref history/fork primitives, and fork lifecycle helpers (`run`/`spawn`/`wait`).
+🧰 **FileToolset + Sandbox**: added workspace-safe file tools and a new general TUI agent demo scoped to `./sandbox`.
 
-🧭 **Origin-Aware Event Routing**: normalized event origin metadata and added fork-aware routing/visualization in the Textual TUI.
+⛔ **AbortSignal Control**: added cooperative aborts for in-flight turns with `ReactEndEvent` abort metadata.
 
-📘 **Docs & Locale Refresh**: aligned docs with current behavior and regenerated EN/zh translations. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+🔧 **PyRepl Tooling**: `execute_code` now returns a natural-language summary; `list_variables` tool/API removed; supports `working_directory`.
+
+📘 **Docs Refresh**: reorganized navigation and updated runtime/tool documentation. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -400,17 +402,23 @@ asyncio.run(main())
 @llm_function(
     llm_interface=llm_interface,          # LLM interface instance
     toolkit=[tool1, tool2],                # Tool list
-    _template_params={                     # Dynamic Prompt template parameters
-        "language": "English",
-        "style": "Professional"
-    },
     retry_on_exception=True,               # Auto retry on exception
     timeout=60                              # Timeout setting
 )
 async def my_function(param: str) -> str:
     """Supports {language} {style} analysis"""
     pass
+
+result = await my_function(
+    "some input",
+    _template_params={
+        "language": "English",
+        "style": "Professional",
+    },
+)
 ```
+
+`_template_params` is passed **at call time** and only used to format the function DocString via `str.format`. It is removed before signature binding and is not part of the LLM input. If a placeholder is missing, the original DocString is used (with a warning).
 
 ### 2. LLM Provider Interface
 
@@ -748,7 +756,7 @@ SimpleLLMFunc/
 │   ├── multi_modality_toolcall.py   # Multimodal examples
 │   ├── pyrepl_example.py            # Builtin PyRepl usage
 │   ├── runtime_primitives_basic_example.py # Local runtime memory primitives
-│   ├── tui_runtime_selfref_example.py # Unified TUI selfref demo (memory + fork)
+│   ├── tui_general_agent_example.py  # General TUI agent demo (selfref + file tools)
 │   ├── custom_tool_event_example.py # Custom tool event examples
 │   ├── tui_chat_example.py          # Textual TUI example
 │   ├── provider.json          # Provider configuration examples
@@ -791,8 +799,10 @@ SimpleLLMFunc supports flexible configuration:
 # .env file example
 LOG_DIR=./logs                          # Log directory (optional)
 LOG_LEVEL=INFO                          # Log level, only controls console log output, doesn't affect file log output
+LANGFUSE_BASE_URL=https://cloud.langfuse.com  # Langfuse base URL (optional)
 LANGFUSE_PUBLIC_KEY=pk_xxx             # Langfuse public key (optional)
 LANGFUSE_SECRET_KEY=sk_xxx             # Langfuse secret key (optional)
+LANGFUSE_EXPORT_ALL_SPANS=true         # Export all OpenTelemetry spans (optional)
 ```
 
 ## 🎯 Common Use Cases
@@ -867,7 +877,7 @@ python examples/llm_function_pydantic_example.py
 python examples/event_stream_chatbot.py
 python examples/parallel_toolcall_example.py
 python examples/runtime_primitives_basic_example.py
-python examples/tui_runtime_selfref_example.py
+python examples/tui_general_agent_example.py
 ```
 
 ## 🤝 Contributing Guide
@@ -906,7 +916,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.0},
+  version = {0.7.1},
   year = {2026}
 }
 ```

@@ -10,9 +10,10 @@ This directory is for runnable user-facing examples.
 
 ## Interactive TUI Demos (Requires `examples/provider.json`)
 
-- `tui_runtime_selfref_example.py` (recommended)
-  - Run: `poetry run python examples/tui_runtime_selfref_example.py`
-  - Unified demo for both `runtime.selfref.history.*` and `runtime.selfref.fork.*`.
+- `tui_general_agent_example.py` (recommended)
+  - Run: `poetry run python examples/tui_general_agent_example.py`
+  - General TUI agent demo with runtime selfref primitives + FileToolset.
+  - Workspace: `./sandbox` (FileToolset is scoped here).
 - `tui_chat_example.py`
   - Run: `poetry run python examples/tui_chat_example.py`
   - Basic TUI chat + persistent `PyRepl`.

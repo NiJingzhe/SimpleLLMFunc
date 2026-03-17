@@ -53,7 +53,13 @@ from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.logger import push_error
 from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
-from SimpleLLMFunc.observability.langfuse_client import langfuse_client
+from SimpleLLMFunc.observability.langfuse_client import (
+    coerce_langfuse_metadata,
+    get_langfuse_trace_context,
+    langfuse_client,
+    update_langfuse_parent_span,
+)
+from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
 
 T = TypeVar("T")
@@ -155,6 +161,9 @@ def llm_function(
 
             解析后的结果会存储在外层的 parsed_result 变量中
             """
+            abort_signal = kwargs.pop(ABORT_SIGNAL_PARAM, None)
+            if not isinstance(abort_signal, AbortSignal):
+                abort_signal = None
             # Step 1: 解析函数签名
             sig, template_params = parse_function_signature(func, args, kwargs)
 
@@ -164,19 +173,26 @@ def llm_function(
                 trace_id=sig.trace_id,
                 arguments=sig.bound_args.arguments,
             ):
+                trace_context = get_langfuse_trace_context()
                 # 创建 Langfuse parent span
                 with langfuse_client.start_as_current_observation(
                     as_type="span",
                     name=f"{sig.func_name}_function_call",
                     input=sig.bound_args.arguments,
-                    metadata={
-                        "function_name": sig.func_name,
-                        "trace_id": sig.trace_id,
-                        "tools_available": len(toolkit) if toolkit else 0,
-                        "max_tool_calls": max_tool_calls,
-                        "enable_event": enable_event,
-                    },
+                    metadata=coerce_langfuse_metadata(
+                        {
+                            "function_name": sig.func_name,
+                            "trace_id": sig.trace_id,
+                            "tools_available": len(toolkit) if toolkit else 0,
+                            "max_tool_calls": max_tool_calls,
+                            "enable_event": enable_event,
+                        }
+                    ),
+                    trace_context=trace_context,
                 ) as function_span:
+                    update_langfuse_parent_span(
+                        langfuse_client.get_current_observation_id()
+                    )
                     try:
                         # Step 3: 构建初始提示
                         messages = build_initial_prompts(
@@ -204,6 +220,7 @@ def llm_function(
                             enable_event=True,
                             trace_id=sig.trace_id,
                             user_task_prompt=user_task_prompt,
+                            abort_signal=abort_signal,
                         )
 
                         # Step 5: 处理事件流，解析响应后再 yield
@@ -218,6 +235,8 @@ def llm_function(
                             else:
                                 # EventYield 直接透传
                                 yield output
+
+                        result: Optional[T] = None
 
                         # 解析和验证最终响应
                         if last_response:
@@ -240,12 +259,11 @@ def llm_function(
                             )
 
                         # 更新 Langfuse span
-                        function_span.update(
-                            output={
-                                "result": result,
-                                "return_type": str(sig.return_type),
-                            },
-                        )
+                        output_payload: Dict[str, Any] = {
+                            "return_type": str(sig.return_type),
+                            "result": result,
+                        }
+                        function_span.update(output=output_payload)
                     except Exception as exc:
                         # 更新 span 错误信息
                         function_span.update(

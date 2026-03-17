@@ -282,64 +282,15 @@ def register_self_reference_primitives(
         """
         return require_self_reference().instance.is_bound()
 
-    async def fork_run(
-        ctx: PrimitiveCallContext,
-        *agent_args: Any,
-        include_history: bool = False,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        call_kwargs = dict(agent_kwargs)
-        call_kwargs.pop("_event_emitter", None)
-        return await require_self_reference().instance.fork(
-            *agent_args,
-            _event_emitter=ctx.event_emitter,
-            include_history=include_history,
-            **call_kwargs,
-        )
-
     async def fork_spawn(
         ctx: PrimitiveCallContext,
-        *agent_args: Any,
+        message: str,
         **agent_kwargs: Any,
     ) -> dict[str, Any]:
         if "include_history" in agent_kwargs:
             raise TypeError(
                 "selfref.fork.spawn does not accept include_history; "
-                "call selfref.fork.wait(..., include_history=True) instead"
-            )
-        call_kwargs = dict(agent_kwargs)
-        call_kwargs.pop("_event_emitter", None)
-        return await require_self_reference().instance.fork_spawn(
-            *agent_args,
-            _event_emitter=ctx.event_emitter,
-            **call_kwargs,
-        )
-
-    async def fork_run_chat(
-        ctx: PrimitiveCallContext,
-        message: str,
-        *,
-        include_history: bool = False,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        call_kwargs = dict(agent_kwargs)
-        call_kwargs.pop("_event_emitter", None)
-        return await require_self_reference().instance.fork(
-            message=message,
-            _event_emitter=ctx.event_emitter,
-            include_history=include_history,
-            **call_kwargs,
-        )
-
-    async def fork_spawn_chat(
-        ctx: PrimitiveCallContext,
-        message: str,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        if "include_history" in agent_kwargs:
-            raise TypeError(
-                "selfref.fork.spawn_chat does not accept include_history; "
-                "call selfref.fork.wait(..., include_history=True) instead"
+                "call selfref.fork.gather_all(..., include_history=True) instead"
             )
         call_kwargs = dict(agent_kwargs)
         call_kwargs.pop("_event_emitter", None)
@@ -349,24 +300,13 @@ def register_self_reference_primitives(
             **call_kwargs,
         )
 
-    async def fork_wait(
+    async def fork_gather_all(
         _ctx: PrimitiveCallContext,
-        fork_id: str,
-        *,
-        include_history: bool = False,
-    ) -> dict[str, Any]:
-        return await require_self_reference().instance.fork_wait(
-            fork_id,
-            include_history=include_history,
-        )
-
-    async def fork_wait_all(
-        _ctx: PrimitiveCallContext,
-        fork_ids: Optional[list[str]] = None,
+        fork_ids: Optional[Any] = None,
         *,
         include_history: bool = False,
     ) -> dict[str, dict[str, Any]]:
-        return await require_self_reference().instance.fork_wait_all(
+        return await require_self_reference().instance.fork_gather_all(
             fork_ids,
             include_history=include_history,
         )
@@ -377,128 +317,45 @@ def register_self_reference_primitives(
         Use: Diagnostic helper for checking whether recursive self-reference fork delegation is available.
         Input: No arguments.
         Output: `bool`.
-        Parse: `True` means a child agent can be spawned or run. Use this only when debugging setup issues.
+        Parse: `True` means a child agent can be spawned. Use this only when debugging setup issues.
         """
         return fork_is_bound(_ctx)
 
     @primitive()
-    async def selfref_fork_run(
-        ctx: PrimitiveCallContext,
-        *agent_args: Any,
-        include_history: bool = False,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        """
-        Use: Run one child self-reference agent immediately and wait for its result.
-        Input: Positional `*agent_args: primitive`, keyword-only `include_history: bool = False`, and `**agent_kwargs: primitive`. Child args and kwargs must match the current agent callable signature.
-        Output: `dict[str, primitive]` with keys `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, `status:'completed'`, `response:primitive`, `history_count:int`, `history_included:bool`, and optional `history:list[dict[str, primitive]]` when `include_history=True`.
-        Parse: Call directly and read `status` first. If status is `error`, inspect `error_type` and `error_message`. Otherwise read `response`, `memory_key`, and `history_count`. If you requested history, check `history_included` before reading `history`.
-        Parameters:
-        - *agent_args: Positional child-agent inputs.
-        - include_history: When `True`, include full child history in the returned dict.
-        - **agent_kwargs: Keyword child-agent inputs plus supported selfref control kwargs.
-        """
-        return await fork_run(
-            ctx,
-            *agent_args,
-            include_history=include_history,
-            **agent_kwargs,
-        )
-
     @primitive()
     async def selfref_fork_spawn(
         ctx: PrimitiveCallContext,
-        *agent_args: Any,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        """
-        Use: Spawn one child self-reference agent asynchronously and return a handle.
-        Input: Positional `*agent_args: primitive` and `**agent_kwargs: primitive`. Child args and kwargs must match the current agent callable signature.
-        Output: `dict[str, primitive]` with keys `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, and `status:'running'`.
-        Parse: Call directly without `is_bound` preflight checks. Save `fork_id` and later pass it to `selfref.fork.wait` or `selfref.fork.wait_all`.
-        Parameters:
-        - *agent_args: Positional child-agent inputs.
-        - **agent_kwargs: Keyword child-agent inputs plus supported selfref control kwargs.
-        """
-        return await fork_spawn(ctx, *agent_args, **agent_kwargs)
-
-    @primitive()
-    async def selfref_fork_run_chat(
-        ctx: PrimitiveCallContext,
-        message: str,
-        *,
-        include_history: bool = False,
-        **agent_kwargs: Any,
-    ) -> dict[str, Any]:
-        """
-        Use: Run one child chat-style self-reference agent with canonical signature and wait for its result.
-        Input: `message: str` plus keyword-only `include_history: bool = False` and `**agent_kwargs: primitive`.
-        Output: Same result shape as `selfref.fork.run`.
-        Parse: Check `status` first; then read `response` and `memory_key`. Fetch full history only when needed.
-        Parameters:
-        - message: User message string passed to the child agent as keyword argument `message=...`.
-        - include_history: When `True`, include full child history in the returned dict.
-        - **agent_kwargs: Optional fork control kwargs such as `source_memory_key` / `fork_memory_key`.
-        """
-        return await fork_run_chat(
-            ctx,
-            message,
-            include_history=include_history,
-            **agent_kwargs,
-        )
-
-    @primitive()
-    async def selfref_fork_spawn_chat(
-        ctx: PrimitiveCallContext,
         message: str,
         **agent_kwargs: Any,
     ) -> dict[str, Any]:
         """
-        Use: Spawn one child chat-style self-reference agent with canonical signature asynchronously and return a handle.
+        Use: Spawn one child chat-style self-reference agent asynchronously and return a handle.
         Input: `message: str` plus `**agent_kwargs: primitive`.
-        Output: Same handle shape as `selfref.fork.spawn` (`status:'running'` with `fork_id` and `memory_key`).
-        Parse: Save `fork_id`, then call `selfref.fork.wait` / `selfref.fork.wait_all`.
+        Output: `dict[str, primitive]` with keys `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, and `status:'running'`.
+        Parse: Save `fork_id`, then call `selfref.fork.gather_all`.
         Parameters:
         - message: User message string passed to the child agent as keyword argument `message=...`.
         - **agent_kwargs: Optional fork control kwargs such as `source_memory_key` / `fork_memory_key`.
         """
-        return await fork_spawn_chat(ctx, message, **agent_kwargs)
+        return await fork_spawn(ctx, message, **agent_kwargs)
 
     @primitive()
-    async def selfref_fork_wait(
+    async def selfref_fork_gather_all(
         _ctx: PrimitiveCallContext,
-        fork_id: str,
-        *,
-        include_history: bool = False,
-    ) -> dict[str, Any]:
-        """
-        Use: Wait for one spawned self-reference child and read its result.
-        Input: `fork_id: str` plus keyword-only `include_history: bool = False`.
-        Output: `dict[str, primitive]` with keys `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, `status:'completed' | 'error'`, `response:primitive`, `error_type:str` when status is `error`, `error_message:str` when status is `error`, `history_count:int`, `history_included:bool`, and optional `history:list[dict[str, primitive]]` when `include_history=True`.
-        Parse: Check `status` first. If it is `error`, read `error_type` and `error_message`. Otherwise read `response`. Only read `history` when `history_included` is `True`.
-        Parameters:
-        - fork_id: Fork handle returned by spawn or run.
-        - include_history: When `True`, include full child history in the returned dict.
-        """
-        return await fork_wait(_ctx, fork_id, include_history=include_history)
-
-    @primitive()
-    async def selfref_fork_wait_all(
-        _ctx: PrimitiveCallContext,
-        fork_ids: Optional[list[Any]] = None,
+        fork_ids: Optional[Any] = None,
         *,
         include_history: bool = False,
     ) -> dict[str, dict[str, Any]]:
         """
-        Use: Wait for multiple spawned self-reference children.
-        Input: Optional `fork_ids: list[str] | list[dict[str, primitive]] | None` plus keyword-only `include_history: bool = False`. Omit `fork_ids` to wait for all pending children. If passing dicts, each must contain `fork_id`.
-        Output: `dict[str, dict[str, primitive]]` keyed by `fork_id`. Each value follows the same shape as `selfref.fork.wait`.
+        Use: Gather results for spawned self-reference children.
+        Input: Optional `fork_ids: str | dict[str, primitive] | list[str] | list[dict[str, primitive]] | None` plus keyword-only `include_history: bool = False`. Omit `fork_ids` to gather all pending children. If passing dicts, each must contain `fork_id`.
+        Output: `dict[str, dict[str, primitive]]` keyed by `fork_id`. Each value includes `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, `status:'completed' | 'error'`, `response:primitive`, `error_type:str` when status is `error`, `error_message:str` when status is `error`, `history_count:int`, `history_included:bool`, and optional `history:list[dict[str, primitive]]` when `include_history=True`.
         Parse: Iterate with `.items()`. For each value, check `status` first, then read `response` or `error_type` / `error_message`.
         Parameters:
-        - fork_ids: Optional fork id subset. You may pass fork handle dicts with `fork_id` instead of strings.
+        - fork_ids: Optional fork id or handle subset. You may pass fork handle dicts with `fork_id` instead of strings.
         - include_history: When `True`, include full child history in each result dict.
         """
-        return await fork_wait_all(
+        return await fork_gather_all(
             _ctx,
             fork_ids,
             include_history=include_history,
@@ -510,10 +367,10 @@ def register_self_reference_primitives(
         "When `key` is omitted, selfref resolves an active memory key for the current execution context. Use selfref.history.active_key() to see which key is currently in scope.",
         "Safety: do not assume internal data structures; only interact via runtime primitives (runtime.selfref.history.* and runtime.selfref.fork.*). Do not invent fields in message dicts.",
         "Each layer focuses on planning for its own scope; delegate concrete execution to child forks.",
-        "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then join results (selfref.fork.wait_all).",
+        "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then gather results (selfref.fork.gather_all).",
         "Before forking, review and trim memory; summarize irrelevant context or dump it to files.",
         "runtime.selfref.history.clear clears non-system history only; the current system prompt is preserved.",
-        "Call selfref.fork.run/spawn directly; do not use selfref.fork.is_bound as routine preflight. If fork status is error, read error_type/error_message and fix call arguments.",
+        "Call selfref.fork.spawn directly; do not use selfref.fork.is_bound as routine preflight. If fork status is error, read error_type/error_message and fix call arguments.",
         "Child args/kwargs must satisfy the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Do not invent unsupported kwargs such as goal=/scope= unless the agent actually accepts them.",
         "In fork prompts, define completion boundaries and require explicit acceptance criteria; prefer file-based handoff plus parent-agent messaging over dumping everything in chat.",
         "Fork results are compact by default (history omitted). Use include_history=True only when full child history is explicitly required; otherwise use memory_key + selfref.history.* to fetch details on demand.",
@@ -546,7 +403,7 @@ def register_self_reference_primitives(
             "namespace": "selfref",
             "overview": (
                 "selfref = your agent state. (1) Your memory: message history via selfref.history.*. "
-                "(2) Your clones: child agents via selfref.fork.run/spawn/wait. "
+                "(2) Your clones: child agents via selfref.fork.spawn/gather_all. "
                 "You operate on your own memory and create your own clones. "
                 "Not philosophical self-reference, not Python self."
             ),
@@ -619,28 +476,12 @@ def register_self_reference_primitives(
         selfref_fork_is_bound,
     )
     _register_selfref_primitive(
-        "selfref.fork.run",
-        selfref_fork_run,
-    )
-    _register_selfref_primitive(
         "selfref.fork.spawn",
         selfref_fork_spawn,
     )
     _register_selfref_primitive(
-        "selfref.fork.run_chat",
-        selfref_fork_run_chat,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.spawn_chat",
-        selfref_fork_spawn_chat,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.wait",
-        selfref_fork_wait,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.wait_all",
-        selfref_fork_wait_all,
+        "selfref.fork.gather_all",
+        selfref_fork_gather_all,
     )
 
 
