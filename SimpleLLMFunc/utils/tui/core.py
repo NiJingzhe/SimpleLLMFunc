@@ -824,12 +824,26 @@ async def consume_react_stream(
             except Exception:
                 pass
 
-    async def _next_output(stream_iter: Any) -> ReactOutput:
+    stream_queue: asyncio.Queue[object] = asyncio.Queue()
+    done_marker = object()
+
+    async def _drain_stream() -> None:
+        try:
+            async for output in stream:
+                await stream_queue.put(output)
+        except Exception as exc:
+            await stream_queue.put(exc)
+        finally:
+            await stream_queue.put(done_marker)
+
+    stream_task = asyncio.create_task(_drain_stream())
+
+    async def _next_output() -> object:
         if abort_signal is None:
-            return await stream_iter.__anext__()
+            return await stream_queue.get()
 
         abort_task = asyncio.create_task(abort_signal.wait())
-        next_task = asyncio.create_task(stream_iter.__anext__())
+        next_task = asyncio.create_task(stream_queue.get())
         done, _ = await asyncio.wait(
             {abort_task, next_task},
             return_when=asyncio.FIRST_COMPLETED,
@@ -847,16 +861,23 @@ async def consume_react_stream(
     saw_event = False
     aborted = False
 
-    stream_iter = stream.__aiter__()
     while True:
         try:
-            output = await _next_output(stream_iter)
+            payload = await _next_output()
         except StopAsyncIteration:
             break
         except asyncio.CancelledError:
             aborted = True
             await _close_stream(stream)
             break
+
+        if payload is done_marker:
+            break
+
+        if isinstance(payload, Exception):
+            raise payload
+
+        output = cast(ReactOutput, payload)
 
         if not is_event_yield(output):
             continue
@@ -879,7 +900,12 @@ async def consume_react_stream(
             origin=output.origin,
         )
         if isinstance(output.event, ReactEndEvent) and fork_id is None:
+            await _close_stream(stream)
             break
+
+    if not stream_task.done():
+        stream_task.cancel()
+        await asyncio.gather(stream_task, return_exceptions=True)
 
     if not saw_event and not aborted:
         raise ValueError(
