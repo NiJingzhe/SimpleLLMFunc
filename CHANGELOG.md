@@ -35,6 +35,10 @@
    - Added `sandbox/` (tracked, contents ignored) and moved all file tool workspaces to this directory.
    - New general TUI agent demo combines selfref primitives + FileToolset.
 
+4. **Observability (Langfuse)**:
+   - Preserve trace context across async tool calls and TUI stream consumption to avoid split spans.
+   - Added `scripts/langfuse_tool_debug.py` for tool-call trace debugging.
+
 ### 📚 Docs
 
 1. **New Guides & Navigation**:
