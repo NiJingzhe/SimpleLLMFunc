@@ -11,8 +11,8 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion import Choice
 from openai.types.chat.chat_completion_chunk import ChoiceDelta
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
-from openai.types.chat.chat_completion_message_tool_call import (
-    ChatCompletionMessageToolCall,
+from openai.types.chat.chat_completion_message_function_tool_call import (
+    ChatCompletionMessageFunctionToolCall as ChatCompletionMessageToolCall,
     Function,
 )
 from pydantic import BaseModel
@@ -237,4 +237,3 @@ def sample_bound_args() -> inspect.BoundArguments:
     bound = sig.bind("test", param2=20)
     bound.apply_defaults()
     return bound
-

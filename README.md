@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.1)
+### Update Notes (0.7.2)
 
-🧰 **FileToolset + Sandbox**: added workspace-safe file tools and a new general TUI agent demo scoped to `./sandbox`.
+🚀 **OpenAI SDK 2.x Baseline**: SimpleLLMFunc now targets `openai >=2.0.0,<3.0.0` and ships with an updated lockfile.
 
-⛔ **AbortSignal Control**: added cooperative aborts for in-flight turns with `ReactEndEvent` abort metadata.
+🧩 **Tool Call Type Stability**: switched the runtime and tests to the concrete function tool-call types used by modern OpenAI SDK releases.
 
-🔧 **PyRepl Tooling**: `execute_code` now returns a natural-language summary; `list_variables` tool/API removed; supports `working_directory`.
+⚠️ **Compatibility Change**: OpenAI Python SDK 1.x is no longer supported in this release.
 
-📘 **Docs Refresh**: reorganized navigation and updated runtime/tool documentation. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Release Docs**: updated package metadata, README references, and release notes for the 0.7.2 cut. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -916,7 +916,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.1},
+  version = {0.7.2},
   year = {2026}
 }
 ```

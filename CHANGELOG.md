@@ -1,5 +1,26 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.2 (2026-03-18) - OpenAI SDK 2.x Baseline
+
+### ⚠️ Breaking Changes
+
+1. **OpenAI Python SDK Requirement**:
+   - Updated the supported dependency range to `openai >=2.0.0,<3.0.0`.
+   - OpenAI Python SDK 1.x is no longer supported.
+
+### 🔧 Improvements
+
+1. **Tool Call Type Handling**:
+   - Switched internal tool-call construction to the concrete function tool-call model used by OpenAI SDK 2.x.
+   - Removed reliance on the older `chat_completion_message_tool_call` import path for runtime code and tests.
+
+2. **Release Metadata**:
+   - Bumped the package version to `0.7.2` and refreshed release references in the English and Chinese README files.
+
+### 🧪 Testing
+
+- Re-locked dependencies on OpenAI SDK 2.x and verified the full pytest suite against the upgraded stack.
+
 ## 0.7.1 (2026-03-15) - Runtime Polish & File Tools
 
 ### ⚠️ Breaking Changes
