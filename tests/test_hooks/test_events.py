@@ -9,8 +9,8 @@ from openai.types.chat.chat_completion import ChatCompletion, Choice
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion_message import ChatCompletionMessage
 from SimpleLLMFunc.type.message import MessageParam
-from openai.types.chat.chat_completion_message_tool_call import (
-    ChatCompletionMessageToolCall,
+from openai.types.chat.chat_completion_message_function_tool_call import (
+    ChatCompletionMessageFunctionToolCall as ChatCompletionMessageToolCall,
     Function as OpenAIFunction,
 )
 from openai.types.completion_usage import CompletionUsage

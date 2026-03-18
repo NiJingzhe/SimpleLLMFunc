@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.1)
+### 更新说明 (0.7.2)
 
-🧰 **FileToolset + Sandbox**：新增文件工具集与通用 TUI agent 示例，工作区限定在 `./sandbox`。
+🚀 **OpenAI SDK 2.x 基线**：SimpleLLMFunc 现在明确要求 `openai >=2.0.0,<3.0.0`，并同步更新了锁文件。
 
-⛔ **AbortSignal 控制**：新增回合中断能力，并在 `ReactEndEvent` 中提供中断元数据。
+🧩 **工具调用类型稳定性**：运行时代码与测试统一切换到新版 OpenAI SDK 使用的函数工具调用具体类型。
 
-🔧 **PyRepl 工具调整**：`execute_code` 输出改为自然语言摘要；移除 `list_variables` 工具/API；支持 `working_directory`。
+⚠️ **兼容性变更**：本版本不再支持 OpenAI Python SDK 1.x。
 
-📘 **文档更新**：重整导航并补齐 runtime/tool 文档。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **发布文档更新**：已同步更新包元数据、README 引用版本与 0.7.2 发布说明。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -921,7 +921,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.1},
+  version = {0.7.2},
   year = {2026}
 }
 ```

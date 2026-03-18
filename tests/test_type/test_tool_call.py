@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from openai.types.chat.chat_completion_message_tool_call import (
-    ChatCompletionMessageToolCall,
+from openai.types.chat.chat_completion_message_function_tool_call import (
+    ChatCompletionMessageFunctionToolCall as ChatCompletionMessageToolCall,
     Function as OpenAIFunction,
 )
 
@@ -223,5 +223,3 @@ class TestToolCallConversion:
         tool_call = dict_to_tool_call(original_data)
         converted_data = tool_call_to_dict(tool_call)
         assert converted_data == original_data
-
-
