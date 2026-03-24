@@ -674,7 +674,7 @@ async def execute_llm(
     messages: MessageList,
     tools: ToolDefinitionList,
     tool_map: Dict[str, Callable[..., Awaitable[Any]]],
-    max_tool_calls: int,
+    max_tool_calls: Optional[int],
     stream: bool = False,
     enable_event: bool = False,
     trace_id: str = "",
@@ -689,14 +689,15 @@ async def execute_llm(
     2. Extracting tool calls from the response
     3. Executing the requested tools via tool_map
     4. Feeding tool results back to the LLM
-    5. Repeating steps 2-4 until no more tools are called or max_tool_calls is reached
+    5. Repeating steps 2-4 until no more tools are called or ``max_tool_calls`` is reached
 
     Args:
             llm_interface: The LLM service interface for making chat requests.
             messages: Initial message history to send to the LLM.
             tools: Optional list of tool definitions available to the LLM.
             tool_map: Mapping of tool names to their async callable implementations.
-            max_tool_calls: Maximum number of tool call iterations before forcing termination.
+            max_tool_calls: Optional maximum number of tool-call iterations before
+                forcing termination. ``None`` means no framework-imposed cap.
             stream: Whether to stream responses or return complete responses.
             **llm_kwargs: Additional keyword arguments to pass to the LLM interface.
 
@@ -1299,7 +1300,13 @@ async def execute_llm(
                 pass
         return
 
-    while call_count < max_tool_calls:
+    max_tool_calls_reached = False
+
+    while True:
+        if max_tool_calls is not None and call_count >= max_tool_calls:
+            max_tool_calls_reached = True
+            break
+
         # Phase 3: Iterative LLM-tool interaction
         iteration = call_count + 1
 
@@ -1766,6 +1773,9 @@ async def execute_llm(
                 pass
 
         call_count += 1
+
+    if not max_tool_calls_reached:
+        return
 
     # Phase 4: Handle max_tool_calls limit reached
     push_debug(

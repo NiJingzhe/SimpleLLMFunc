@@ -357,6 +357,27 @@ async def main():
         print(response)
 ```
 
+#### 工具调用上限默认值
+
+`llm_function` 和 `llm_chat` 现在默认都使用 `max_tool_calls=None`。
+
+- `None` 表示 SimpleLLMFunc 默认不主动施加框架级的工具调用轮数上限
+- 这更适合长链路 agent 和深度工具调用工作流
+- 如果你希望更保守地防止循环或失控规划，可以显式传入整数，例如 `max_tool_calls=8`
+
+```python
+@llm_function(llm_interface=my_llm_interface, max_tool_calls=None)
+async def analyze(text: str) -> str:
+    """分析文本。"""
+    pass
+
+
+@llm_chat(llm_interface=my_llm_interface, stream=True, max_tool_calls=12)
+async def cautious_agent(message: str, history=None):
+    """显式设置安全上限的对话 agent。"""
+    pass
+```
+
 #### 多模态支持
 
 SimpleLLMFunc 支持多种模态的输入和输出，让 LLM 可以处理文本、图片等多种内容：

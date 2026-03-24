@@ -17,15 +17,22 @@ import sys
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
 from SimpleLLMFunc.logger.logger_config import logger_config
-from SimpleLLMFunc.runtime import PrimitiveCallContext, PrimitiveRegistry
+from SimpleLLMFunc.runtime import (
+    ForkContext,
+    PrimitiveCallContext,
+    PrimitivePack,
+    PrimitiveRegistry,
+    RuntimePrimitiveBackend,
+)
 from SimpleLLMFunc.runtime.primitives import primitive
 from SimpleLLMFunc.runtime.builtin_self_reference import (
-    register_self_reference_primitives,
+    build_self_reference_pack,
 )
 from SimpleLLMFunc.tool import Tool
 
@@ -48,6 +55,22 @@ from .pyrepl_worker import (
     EVENT_WORKER_ERROR,
     run_pyrepl_worker,
 )
+
+
+@dataclass(frozen=True)
+class _LegacyPrimitiveRegistration:
+    """Replayable low-level primitive registration record."""
+
+    name: str
+    handler: Any
+    contract: Optional[Any] = None
+    description: str = ""
+    input_type: str = ""
+    output_type: str = ""
+    output_parsing: str = ""
+    parameters: Optional[List[Dict[str, Any]]] = None
+    next_steps: Optional[Any] = None
+    backend_name: Optional[str] = None
 
 
 class PyRepl:
@@ -138,6 +161,10 @@ class PyRepl:
         self.namespace: Dict[str, Any] = {}
         self._runtime_backends: Dict[str, Any] = {}
         self._primitive_pack_installers: Dict[str, Any] = {}
+        self._installed_packs: Dict[str, PrimitivePack] = {}
+        self._legacy_primitive_registrations: Dict[
+            str, _LegacyPrimitiveRegistration
+        ] = {}
         self._tools: Optional[List[Tool]] = None
         self._lock = threading.RLock()
         self._operation_lock = asyncio.Lock()
@@ -263,26 +290,24 @@ class PyRepl:
             raise ValueError("selfref primitive pack requires SelfReference backend")
 
         normalized_backend_name = self._normalize_backend_name(backend_name)
-        self.register_runtime_backend(normalized_backend_name, backend, replace=True)
-
-        def get_self_reference() -> Optional[SelfReference]:
-            current_backend = self.get_runtime_backend(normalized_backend_name)
-            if current_backend is None:
-                return None
-            if not isinstance(current_backend, SelfReference):
-                raise RuntimeError(
-                    f"runtime backend '{normalized_backend_name}' must be SelfReference"
-                )
-            return current_backend
-
-        register_self_reference_primitives(
-            self._primitive_registry,
-            get_self_reference=get_self_reference,
+        pack = build_self_reference_pack(
+            backend,
+            backend_name=normalized_backend_name,
             replace=replace,
         )
+        self.install_pack(pack, replace=replace)
 
     def install_primitive_pack(self, pack_name: str, **options: Any) -> None:
         """Install one registered primitive pack into this REPL."""
+
+        if isinstance(pack_name, PrimitivePack):
+            replace = bool(options.pop("replace", False))
+            if options:
+                raise ValueError(
+                    "installing a PrimitivePack object only accepts replace=..."
+                )
+            self.install_pack(pack_name, replace=replace)
+            return
 
         normalized = self._normalize_backend_name(pack_name)
         with self._lock:
@@ -292,6 +317,61 @@ class PyRepl:
             raise KeyError(f"primitive pack '{normalized}' is not registered")
 
         installer(**options)
+
+    def install_pack(self, pack: PrimitivePack, *, replace: bool = False) -> None:
+        """Install a first-class PrimitivePack into this REPL."""
+
+        if not isinstance(pack, PrimitivePack):
+            raise ValueError("pack must be a PrimitivePack instance")
+        if pack.backend is None:
+            raise ValueError("pack backend must not be None")
+
+        normalized_pack_name = self._normalize_backend_name(pack.name)
+        normalized_backend_name = self._normalize_backend_name(pack.backend_name)
+        snapshot = pack.clone(backend_name=normalized_backend_name)
+
+        with self._lock:
+            if normalized_pack_name in self._installed_packs and not replace:
+                raise ValueError(
+                    f"primitive pack '{normalized_pack_name}' is already installed"
+                )
+
+        self.register_runtime_backend(
+            normalized_backend_name,
+            snapshot.backend,
+            replace=replace,
+        )
+
+        for entry in snapshot.primitives:
+            contract = entry.contract
+            self._primitive_registry.register(
+                entry.name,
+                entry.handler,
+                contract=contract,
+                backend_name=normalized_backend_name,
+                replace=replace,
+            )
+
+        with self._lock:
+            self._installed_packs[normalized_pack_name] = snapshot
+
+        if isinstance(snapshot.backend, RuntimePrimitiveBackend):
+            snapshot.backend.on_install(self)
+
+    def pack(
+        self,
+        name: str,
+        *,
+        backend: Any,
+        backend_name: Optional[str] = None,
+    ) -> PrimitivePack:
+        """Create a declarative PrimitivePack bound to this REPL host."""
+
+        return PrimitivePack(
+            name,
+            backend=backend,
+            backend_name=backend_name,
+        )
 
     def _register_builtin_primitives(self) -> None:
         self.register_primitive_pack_installer(
@@ -319,6 +399,9 @@ class PyRepl:
             - prefix: Names starting with prefix.
             - contains: Names containing substring (preferred for namespace: contains='selfref.fork.').
             - format: xml (default) or dict.
+            Best Practices:
+            - Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.
+            - Specs return XML by default; format='dict' only when code needs direct field access.
             """
             return self.list_primitive_specs(
                 names=names,
@@ -347,6 +430,9 @@ class PyRepl:
             Parameters:
             - prefix: Names starting with prefix.
             - contains: Names containing substring (prefer contains='selfref.fork.' over prefix='fork').
+            Best Practices:
+            - Filter by namespace with contains='selfref.fork.'; avoid prefix='fork' (ambiguous).
+            - After discovery, call runtime.get_primitive_spec(name) or runtime.list_primitive_specs(contains='...').
             """
             return self._primitive_registry.list_names(prefix=prefix, contains=contains)
 
@@ -365,6 +451,9 @@ class PyRepl:
             Parameters:
             - name: Full primitive name.
             - format: xml (default) or dict.
+            Best Practices:
+            - Default contract lookup for one primitive. Resolve names first via runtime.list_primitives(contains='...').
+            - Spec returns XML by default; format='dict' only for direct field access.
             """
             return self.get_primitive_spec(name, format=format)
 
@@ -375,16 +464,14 @@ class PyRepl:
             Input: No arguments.
             Output: `list[str]`. Each item is one backend name such as `selfref`.
             Parse: Treat the result as a plain string list. Check membership before calling backend-specific primitives.
+            Best Practices:
+            - Check backend availability before using backend-dependent primitives.
             """
             return self.list_runtime_backends()
 
         self._primitive_registry.register(
             "runtime.list_primitives",
             runtime_list_primitives,
-            best_practices=[
-                "Filter by namespace with contains='selfref.fork.'; avoid prefix='fork' (ambiguous).",
-                "After discovery, call runtime.get_primitive_spec(name) or runtime.list_primitive_specs(contains='...').",
-            ],
         )
 
         self._primitive_registry.register(
@@ -394,27 +481,16 @@ class PyRepl:
                 "Read structured specs for runtime primitives (host-registered "
                 "callables, no import needed)."
             ),
-            best_practices=[
-                "Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.",
-                "Specs return XML by default; format='dict' only when code needs direct field access.",
-            ],
         )
 
         self._primitive_registry.register(
             "runtime.get_primitive_spec",
             runtime_get_primitive_spec,
-            best_practices=[
-                "Default contract lookup for one primitive. Resolve names first via runtime.list_primitives(contains='...').",
-                "Spec returns XML by default; format='dict' only for direct field access.",
-            ],
         )
 
         self._primitive_registry.register(
             "runtime.list_backends",
             runtime_list_backends,
-            best_practices=[
-                "Check backend availability before using backend-dependent primitives.",
-            ],
         )
 
     def register_primitive(
@@ -422,11 +498,14 @@ class PyRepl:
         name: str,
         handler: Any,
         *,
+        contract: Optional[Any] = None,
         description: str = "",
         input_type: str = "",
         output_type: str = "",
+        output_parsing: str = "",
         parameters: Optional[List[Dict[str, Any]]] = None,
-        best_practices: Optional[List[str]] = None,
+        next_steps: Optional[Any] = None,
+        backend_name: Optional[str] = None,
         replace: bool = False,
     ) -> None:
         """Register one host primitive for worker-side runtime calls."""
@@ -434,23 +513,188 @@ class PyRepl:
         self._primitive_registry.register(
             name,
             handler,
+            contract=contract,
             description=description,
             input_type=input_type,
             output_type=output_type,
+            output_parsing=output_parsing,
             parameters=parameters,
-            best_practices=best_practices,
+            next_steps=next_steps,
+            backend_name=backend_name,
             replace=replace,
+        )
+
+        normalized_name = str(name).strip()
+        self._legacy_primitive_registrations[normalized_name] = (
+            _LegacyPrimitiveRegistration(
+                name=normalized_name,
+                handler=handler,
+                contract=contract,
+                description=description,
+                input_type=input_type,
+                output_type=output_type,
+                output_parsing=output_parsing,
+                parameters=list(parameters) if parameters is not None else None,
+                next_steps=next_steps,
+                backend_name=backend_name,
+            )
         )
 
     def unregister_primitive(self, name: str) -> None:
         """Unregister one host primitive by name."""
 
         self._primitive_registry.unregister(name)
+        self._legacy_primitive_registrations.pop(str(name).strip(), None)
+
+    def primitive(
+        self,
+        name: str,
+        *,
+        contract: Optional[Any] = None,
+        description: str = "",
+        input_type: str = "",
+        output_type: str = "",
+        output_parsing: str = "",
+        parameters: Optional[List[Dict[str, Any]]] = None,
+        next_steps: Optional[Any] = None,
+        backend: Optional[str] = None,
+        replace: bool = False,
+    ):
+        """Decorator sugar for registering one backend-aware primitive."""
+
+        def decorator(handler: Any) -> Any:
+            self.register_primitive(
+                name,
+                handler,
+                contract=contract,
+                description=description,
+                input_type=input_type,
+                output_type=output_type,
+                output_parsing=output_parsing,
+                parameters=parameters,
+                next_steps=next_steps,
+                backend_name=backend,
+                replace=replace,
+            )
+            return handler
+
+        return decorator
 
     def list_primitives(self) -> List[str]:
         """List currently registered runtime primitive names."""
 
         return self._primitive_registry.list_names()
+
+    def list_primitive_contracts(
+        self,
+        names: Optional[List[str]] = None,
+        prefix: Optional[str] = None,
+        contains: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List structured primitive contracts as dict payloads."""
+
+        return self._primitive_registry.list_spec_payloads(
+            names=names,
+            prefix=prefix,
+            contains=contains,
+        )
+
+    def get_primitive_contract(self, name: str) -> Dict[str, Any]:
+        """Get one structured primitive contract as a dict payload."""
+
+        return self._primitive_registry.get_spec_payload(name)
+
+    def list_installed_packs(self) -> List[str]:
+        """List first-class PrimitivePack names installed on this REPL."""
+
+        with self._lock:
+            names = list(self._installed_packs.keys())
+        names.sort()
+        return names
+
+    def _clone_for_fork(
+        self,
+        *,
+        backend_overrides: Optional[Dict[str, Any]] = None,
+    ) -> "PyRepl":
+        """Clone runtime primitive/backends configuration for forked agents."""
+
+        cloned_repl = PyRepl(
+            execution_timeout_seconds=self.execution_timeout_seconds,
+            input_idle_timeout_seconds=self.input_idle_timeout_seconds,
+            working_directory=self._working_directory,
+        )
+
+        normalized_overrides: Dict[str, Any] = {}
+        if backend_overrides:
+            for name, value in backend_overrides.items():
+                normalized_overrides[self._normalize_backend_name(name)] = value
+
+        with self._lock:
+            installed_packs = [pack.clone() for pack in self._installed_packs.values()]
+            runtime_backends = dict(self._runtime_backends)
+            legacy_primitives = list(self._legacy_primitive_registrations.values())
+
+        installed_backend_names: set[str] = set()
+
+        for pack in installed_packs:
+            override = normalized_overrides.get(pack.backend_name)
+            fork_context = ForkContext(
+                parent_pack_name=pack.name,
+                backend_name=pack.backend_name,
+            )
+            if override is not None:
+                cloned_pack = pack.clone(
+                    backend=override,
+                    backend_name=pack.backend_name,
+                )
+            else:
+                cloned_pack = pack.clone(
+                    backend_name=pack.backend_name,
+                    fork_context=fork_context,
+                )
+            cloned_repl.install_pack(
+                cloned_pack,
+                replace=True,
+            )
+            installed_backend_names.add(pack.backend_name)
+
+        for backend_name, backend_value in runtime_backends.items():
+            if backend_name in installed_backend_names:
+                continue
+
+            override = normalized_overrides.get(backend_name)
+            resolved_backend = override if override is not None else backend_value
+            if isinstance(resolved_backend, RuntimePrimitiveBackend):
+                resolved_backend = resolved_backend.clone_for_fork(
+                    context=ForkContext(
+                        parent_pack_name=backend_name,
+                        backend_name=backend_name,
+                    )
+                )
+
+            cloned_repl.register_runtime_backend(
+                backend_name,
+                resolved_backend,
+                replace=True,
+            )
+
+        for record in legacy_primitives:
+            cloned_repl.register_primitive(
+                record.name,
+                record.handler,
+                contract=record.contract,
+                description=record.description,
+                input_type=record.input_type,
+                output_type=record.output_type,
+                output_parsing=record.output_parsing,
+                parameters=record.parameters,
+                next_steps=record.next_steps,
+                backend_name=record.backend_name,
+                replace=True,
+            )
+
+        return cloned_repl
 
     def list_primitive_specs(
         self,
@@ -950,6 +1194,8 @@ class PyRepl:
             execution_id=execution_id,
             event_emitter=event_emitter,
             metadata={"pyrepl_instance_id": self._instance_id},
+            repl=self,
+            registry=self._primitive_registry,
         )
 
         try:
@@ -1389,8 +1635,14 @@ class PyRepl:
         with self._lock:
             if self._closed:
                 return
+            installed_packs = list(self._installed_packs.values())
             self._shutdown_worker_locked()
             self._closed = True
+
+        for pack in installed_packs:
+            backend = pack.backend
+            if isinstance(backend, RuntimePrimitiveBackend):
+                backend.on_close(self)
 
     def __del__(self) -> None:
         try:

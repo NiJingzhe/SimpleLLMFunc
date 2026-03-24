@@ -68,7 +68,7 @@ T = TypeVar("T")
 def llm_function(
     llm_interface: LLM_Interface,
     toolkit: Optional[List[Union[Tool, Callable[..., Awaitable[Any]]]]] = None,
-    max_tool_calls: int = 5,
+    max_tool_calls: Optional[int] = None,
     system_prompt_template: Optional[str] = None,
     user_prompt_template: Optional[str] = None,
     enable_event: bool = False,
@@ -105,6 +105,8 @@ def llm_function(
     ## Tool Usage
     - Tools provided via `toolkit` can be invoked by LLM during reasoning
     - Supports `Tool` instances or async functions decorated with `@tool`
+    - `max_tool_calls=None` means the framework does not impose a default
+      tool-call iteration cap
 
     ## Custom Prompt Templates
     - Override default prompt format via `system_prompt_template` and `user_prompt_template`
