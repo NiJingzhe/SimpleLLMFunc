@@ -617,6 +617,50 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+#### 将 `@llm_function` 暴露为工具（Agent as a Tool）
+
+当你希望一个上层 agent 把下层 specialist 当成工具调用时，可以把
+`@tool` 叠加在 `@llm_function` 外层：
+
+```python
+from typing import List, Dict
+from SimpleLLMFunc import llm_function, llm_chat, tool
+
+
+@tool(
+    name="requirements_specialist",
+    description="Delegate focused requirement analysis",
+)
+@llm_function(llm_interface=llm)
+async def requirements_specialist(task: str) -> str:
+    """Analyze the task and return a compact requirement breakdown.
+
+    Args:
+        task: The task to analyze.
+    """
+    pass
+
+
+@llm_chat(
+    llm_interface=llm,
+    toolkit=[requirements_specialist],
+    stream=True,
+)
+async def supervisor(
+    message: str,
+    history: List[Dict[str, str]] | None = None,
+):
+    """Use requirements_specialist for focused sub-analysis before answering."""
+    pass
+```
+
+要点：
+
+- 推荐顺序写成 `@tool` 外层、`@llm_function` 内层。
+- 子 agent 推荐使用 `@llm_function(enable_event=False)`，这样它表现为普通 `async` tool。
+- `@llm_chat` 返回的是异步生成器；如果一定要把它当工具复用，通常需要先写一个手动 wrapper。
+- 可运行完整示例见 `examples/agent_as_tool_example.py`。
+
 ### 高级用法
 
 #### 工具序列化和检查

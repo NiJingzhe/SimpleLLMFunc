@@ -2,67 +2,139 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from typing import Any, Optional, Sequence
 
 from SimpleLLMFunc.builtin.self_reference import SelfReference
 
-from .primitives import PrimitiveCallContext, PrimitiveRegistry, primitive
+from .primitives import (
+    PrimitiveCallContext,
+    PrimitivePack,
+    PrimitiveRegistry,
+    primitive,
+)
+
+
+DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
 
 
 def register_self_reference_primitives(
     registry: PrimitiveRegistry,
     *,
-    get_self_reference: Callable[[], Optional[SelfReference]],
+    backend_name: str = DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     replace: bool = False,
 ) -> None:
-    """Register selfref history/fork primitives backed by ``SelfReference``.
+    """Register selfref history/fork primitives backed by ``SelfReference``."""
 
-    Notes:
-    - This function only installs primitive handlers.
-    - The caller controls lifecycle of the ``SelfReference`` instance via
-      ``get_self_reference``.
-    """
+    handlers = _build_self_reference_handlers(backend_name)
 
-    def require_self_reference() -> SelfReference:
-        self_reference = get_self_reference()
-        if self_reference is None:
+    for name, handler in handlers:
+        registry.register(
+            name,
+            handler,
+            backend_name=backend_name,
+            replace=replace,
+        )
+
+
+def build_self_reference_pack(
+    backend: SelfReference,
+    *,
+    backend_name: str = DEFAULT_SELF_REFERENCE_BACKEND_NAME,
+    replace: bool = False,
+) -> PrimitivePack:
+    """Build a selfref PrimitivePack for installation into PyRepl."""
+
+    pack = PrimitivePack(
+        "selfref",
+        backend=backend,
+        backend_name=backend_name,
+    )
+    handlers = _build_self_reference_handlers(backend_name)
+    for name, handler in handlers:
+        pack.add_primitive(
+            name,
+            handler,
+            replace=replace,
+        )
+    return pack
+
+
+def _append_best_practices_to_docstring(
+    handler: Any,
+    best_practices: Sequence[str],
+) -> Any:
+    if not best_practices:
+        return handler
+
+    docstring = handler.__doc__ or ""
+    from .primitives import _parse_primitive_docstring
+
+    parsed_existing = _parse_primitive_docstring(docstring)
+    if isinstance(parsed_existing.get("best_practices"), tuple):
+        return handler
+
+    block = "\n".join(f"- {item}" for item in best_practices)
+    suffix = f"\n\nBest Practices:\n{block}\n"
+    handler.__doc__ = f"{docstring.rstrip()}{suffix}" if docstring.strip() else suffix
+
+    metadata = getattr(handler, "__simplellmfunc_primitive_spec__", None)
+    if isinstance(metadata, dict):
+        parsed = _parse_primitive_docstring(handler.__doc__)
+        if isinstance(parsed.get("best_practices"), tuple):
+            metadata["best_practices"] = parsed["best_practices"]
+
+    return handler
+
+
+def _build_self_reference_handlers(
+    backend_name: str,
+) -> list[tuple[str, Any]]:
+    def require_self_reference(ctx: PrimitiveCallContext) -> SelfReference:
+        backend = ctx.backend
+        if backend is None:
             raise RuntimeError(
                 "No self_reference backend registered. "
                 "Install the 'selfref' primitive pack first."
             )
-        return self_reference
+        if not isinstance(backend, SelfReference):
+            raise RuntimeError(
+                f"runtime backend '{backend_name}' must be SelfReference"
+            )
+        return backend
 
-    def resolve_history_key(key: Optional[str] = None) -> str:
-        return require_self_reference().resolve_history_key(key)
+    def resolve_history_key(
+        ctx: PrimitiveCallContext, key: Optional[str] = None
+    ) -> str:
+        return require_self_reference(ctx).resolve_history_key(key)
 
-    def get_history_handle(key: Optional[str] = None):
-        self_reference = require_self_reference()
+    def get_history_handle(ctx: PrimitiveCallContext, key: Optional[str] = None):
+        self_reference = require_self_reference(ctx)
         resolved_key = self_reference.resolve_history_key(key)
         return self_reference.memory[resolved_key]
 
     @primitive()
-    def selfref_history_keys(_ctx: PrimitiveCallContext) -> list[str]:
+    def selfref_history_keys(ctx: PrimitiveCallContext) -> list[str]:
         """
         Use: List all bound self-reference history keys.
         Input: No arguments.
         Output: `list[str]`. Each item is one history key.
         Parse: Iterate the string list directly. Use one returned key in other `selfref.history.*` calls.
         """
-        return require_self_reference().memory.keys()
+        return require_self_reference(ctx).memory.keys()
 
     @primitive()
-    def selfref_history_active_key(_ctx: PrimitiveCallContext) -> str:
+    def selfref_history_active_key(ctx: PrimitiveCallContext) -> str:
         """
         Use: Resolve the active history key for the current self-reference context.
         Input: No arguments.
         Output: `str`. The resolved history key.
         Parse: Treat the result as the default key that other history and fork primitives will use when `key` is omitted.
         """
-        return resolve_history_key(None)
+        return resolve_history_key(ctx, None)
 
     @primitive()
     def selfref_history_count(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         *,
         key: Optional[str] = None,
     ) -> int:
@@ -74,11 +146,11 @@ def register_self_reference_primitives(
         Parameters:
         - key: Optional history key.
         """
-        return get_history_handle(key).count()
+        return get_history_handle(ctx, key).count()
 
     @primitive()
     def selfref_history_all(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         *,
         key: Optional[str] = None,
     ) -> list[dict[str, Any]]:
@@ -90,11 +162,11 @@ def register_self_reference_primitives(
         Parameters:
         - key: Optional history key.
         """
-        return get_history_handle(key).all()
+        return get_history_handle(ctx, key).all()
 
     @primitive()
     def selfref_history_get(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         index: int,
         *,
         key: Optional[str] = None,
@@ -108,11 +180,11 @@ def register_self_reference_primitives(
         - index: Zero-based message index.
         - key: Optional history key.
         """
-        return get_history_handle(key).get(index)
+        return get_history_handle(ctx, key).get(index)
 
     @primitive()
     def selfref_history_append(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         message: dict[str, Any],
         *,
         key: Optional[str] = None,
@@ -126,11 +198,11 @@ def register_self_reference_primitives(
         - message: Message dict to append.
         - key: Optional history key.
         """
-        get_history_handle(key).append(message)
+        get_history_handle(ctx, key).append(message)
 
     @primitive()
     def selfref_history_insert(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         index: int,
         message: dict[str, Any],
         *,
@@ -146,11 +218,11 @@ def register_self_reference_primitives(
         - message: Message dict to insert.
         - key: Optional history key.
         """
-        get_history_handle(key).insert(index, message)
+        get_history_handle(ctx, key).insert(index, message)
 
     @primitive()
     def selfref_history_update(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         index: int,
         message: dict[str, Any],
         *,
@@ -166,11 +238,11 @@ def register_self_reference_primitives(
         - message: Replacement message dict.
         - key: Optional history key.
         """
-        get_history_handle(key).update(index, message)
+        get_history_handle(ctx, key).update(index, message)
 
     @primitive()
     def selfref_history_delete(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         index: int,
         *,
         key: Optional[str] = None,
@@ -184,11 +256,11 @@ def register_self_reference_primitives(
         - index: Zero-based message index to delete.
         - key: Optional history key.
         """
-        get_history_handle(key).delete(index)
+        get_history_handle(ctx, key).delete(index)
 
     @primitive()
     def selfref_history_replace(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         messages: list[dict[str, Any]],
         *,
         key: Optional[str] = None,
@@ -202,11 +274,11 @@ def register_self_reference_primitives(
         - messages: Full replacement message list.
         - key: Optional history key.
         """
-        get_history_handle(key).replace(messages)
+        get_history_handle(ctx, key).replace(messages)
 
     @primitive()
     def selfref_history_clear(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         *,
         key: Optional[str] = None,
     ) -> None:
@@ -218,11 +290,11 @@ def register_self_reference_primitives(
         Parameters:
         - key: Optional history key.
         """
-        get_history_handle(key).clear()
+        get_history_handle(ctx, key).clear()
 
     @primitive()
     def selfref_history_get_system_prompt(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         *,
         key: Optional[str] = None,
     ) -> Optional[str]:
@@ -234,11 +306,11 @@ def register_self_reference_primitives(
         Parameters:
         - key: Optional history key.
         """
-        return get_history_handle(key).get_system_prompt()
+        return get_history_handle(ctx, key).get_system_prompt()
 
     @primitive()
     def selfref_history_set_system_prompt(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         text: str,
         *,
         key: Optional[str] = None,
@@ -252,11 +324,11 @@ def register_self_reference_primitives(
         - text: Full replacement system prompt text.
         - key: Optional history key.
         """
-        get_history_handle(key).set_system_prompt(text)
+        get_history_handle(ctx, key).set_system_prompt(text)
 
     @primitive()
     def selfref_history_append_system_prompt(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         text: str,
         *,
         key: Optional[str] = None,
@@ -270,17 +342,17 @@ def register_self_reference_primitives(
         - text: Prompt suffix to append.
         - key: Optional history key.
         """
-        get_history_handle(key).append_system_prompt(text)
+        get_history_handle(ctx, key).append_system_prompt(text)
 
     @primitive()
-    def fork_is_bound(_ctx: PrimitiveCallContext) -> bool:
+    def fork_is_bound(ctx: PrimitiveCallContext) -> bool:
         """
         Use: Diagnostic helper for checking whether a self-reference agent callable is available for fork delegation.
         Input: No arguments.
         Output: `bool`.
         Parse: `True` means `selfref.fork.*` can delegate. Use this only for diagnostics, not as a routine preflight step.
         """
-        return require_self_reference().instance.is_bound()
+        return require_self_reference(ctx).instance.is_bound()
 
     async def fork_spawn(
         ctx: PrimitiveCallContext,
@@ -294,32 +366,32 @@ def register_self_reference_primitives(
             )
         call_kwargs = dict(agent_kwargs)
         call_kwargs.pop("_event_emitter", None)
-        return await require_self_reference().instance.fork_spawn(
+        return await require_self_reference(ctx).instance.fork_spawn(
             message=message,
             _event_emitter=ctx.event_emitter,
             **call_kwargs,
         )
 
     async def fork_gather_all(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         fork_ids: Optional[Any] = None,
         *,
         include_history: bool = False,
     ) -> dict[str, dict[str, Any]]:
-        return await require_self_reference().instance.fork_gather_all(
+        return await require_self_reference(ctx).instance.fork_gather_all(
             fork_ids,
             include_history=include_history,
         )
 
     @primitive()
-    def selfref_fork_is_bound(_ctx: PrimitiveCallContext) -> bool:
+    def selfref_fork_is_bound(ctx: PrimitiveCallContext) -> bool:
         """
         Use: Diagnostic helper for checking whether recursive self-reference fork delegation is available.
         Input: No arguments.
         Output: `bool`.
         Parse: `True` means a child agent can be spawned. Use this only when debugging setup issues.
         """
-        return fork_is_bound(_ctx)
+        return fork_is_bound(ctx)
 
     @primitive()
     @primitive()
@@ -341,7 +413,7 @@ def register_self_reference_primitives(
 
     @primitive()
     async def selfref_fork_gather_all(
-        _ctx: PrimitiveCallContext,
+        ctx: PrimitiveCallContext,
         fork_ids: Optional[Any] = None,
         *,
         include_history: bool = False,
@@ -355,11 +427,7 @@ def register_self_reference_primitives(
         - fork_ids: Optional fork id or handle subset. You may pass fork handle dicts with `fork_id` instead of strings.
         - include_history: When `True`, include full child history in each result dict.
         """
-        return await fork_gather_all(
-            _ctx,
-            fork_ids,
-            include_history=include_history,
-        )
+        return await fork_gather_all(ctx, fork_ids, include_history=include_history)
 
     selfref_best_practices = [
         "Mental model: selfref = your agent state. (1) Your memory: message history via selfref.history.*. (2) Your clones: forked child agents via selfref.fork.*. Not philosophical self-reference, not Python self.",
@@ -380,17 +448,6 @@ def register_self_reference_primitives(
         "After each milestone, review and reorganize memory before moving forward.",
     ]
 
-    def _register_selfref_primitive(
-        name: str,
-        handler: Any,
-    ) -> None:
-        registry.register(
-            name,
-            handler,
-            best_practices=selfref_best_practices,
-            replace=replace,
-        )
-
     @primitive()
     def selfref_guide(_ctx: PrimitiveCallContext) -> dict[str, Any]:
         """
@@ -410,79 +467,35 @@ def register_self_reference_primitives(
             "best_practices": list(selfref_best_practices),
         }
 
-    # Self-reference first-class namespace.
-    _register_selfref_primitive(
-        "selfref.guide",
-        selfref_guide,
-    )
-    _register_selfref_primitive(
-        "selfref.history.keys",
-        selfref_history_keys,
-    )
-    _register_selfref_primitive(
-        "selfref.history.active_key",
-        selfref_history_active_key,
-    )
-    _register_selfref_primitive(
-        "selfref.history.count",
-        selfref_history_count,
-    )
-    _register_selfref_primitive(
-        "selfref.history.all",
-        selfref_history_all,
-    )
-    _register_selfref_primitive(
-        "selfref.history.get",
-        selfref_history_get,
-    )
-    _register_selfref_primitive(
-        "selfref.history.append",
-        selfref_history_append,
-    )
-    _register_selfref_primitive(
-        "selfref.history.insert",
-        selfref_history_insert,
-    )
-    _register_selfref_primitive(
-        "selfref.history.update",
-        selfref_history_update,
-    )
-    _register_selfref_primitive(
-        "selfref.history.delete",
-        selfref_history_delete,
-    )
-    _register_selfref_primitive(
-        "selfref.history.replace",
-        selfref_history_replace,
-    )
-    _register_selfref_primitive(
-        "selfref.history.clear",
-        selfref_history_clear,
-    )
-    _register_selfref_primitive(
-        "selfref.history.get_system_prompt",
-        selfref_history_get_system_prompt,
-    )
-    _register_selfref_primitive(
-        "selfref.history.set_system_prompt",
-        selfref_history_set_system_prompt,
-    )
-    _register_selfref_primitive(
-        "selfref.history.append_system_prompt",
-        selfref_history_append_system_prompt,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.is_bound",
-        selfref_fork_is_bound,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.spawn",
-        selfref_fork_spawn,
-    )
-    _register_selfref_primitive(
-        "selfref.fork.gather_all",
-        selfref_fork_gather_all,
-    )
+    handlers = [
+        ("selfref.guide", selfref_guide),
+        ("selfref.history.keys", selfref_history_keys),
+        ("selfref.history.active_key", selfref_history_active_key),
+        ("selfref.history.count", selfref_history_count),
+        ("selfref.history.all", selfref_history_all),
+        ("selfref.history.get", selfref_history_get),
+        ("selfref.history.append", selfref_history_append),
+        ("selfref.history.insert", selfref_history_insert),
+        ("selfref.history.update", selfref_history_update),
+        ("selfref.history.delete", selfref_history_delete),
+        ("selfref.history.replace", selfref_history_replace),
+        ("selfref.history.clear", selfref_history_clear),
+        ("selfref.history.get_system_prompt", selfref_history_get_system_prompt),
+        ("selfref.history.set_system_prompt", selfref_history_set_system_prompt),
+        ("selfref.history.append_system_prompt", selfref_history_append_system_prompt),
+        ("selfref.fork.is_bound", selfref_fork_is_bound),
+        ("selfref.fork.spawn", selfref_fork_spawn),
+        ("selfref.fork.gather_all", selfref_fork_gather_all),
+    ]
+
+    for _, handler in handlers:
+        _append_best_practices_to_docstring(handler, selfref_best_practices)
+
+    return handlers
 
 
-__all__ = ["register_self_reference_primitives"]
+__all__ = [
+    "DEFAULT_SELF_REFERENCE_BACKEND_NAME",
+    "build_self_reference_pack",
+    "register_self_reference_primitives",
+]

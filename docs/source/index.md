@@ -39,6 +39,7 @@ llm_chat 装饰器<detailed_guide/llm_chat>
 :maxdepth: 1
 :caption: 工具与运行时
 
+Primitive 原语<detailed_guide/primitive>
 工具系统<detailed_guide/tool>
 PyRepl运行时<pyrepl.md>
 ```

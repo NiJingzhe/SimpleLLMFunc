@@ -383,6 +383,70 @@ class TestExecuteLLM:
     @pytest.mark.asyncio
     @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
     @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    @patch("SimpleLLMFunc.base.ReAct.process_tool_calls")
+    async def test_execute_max_tool_calls_none_keeps_iterating_until_no_tools(
+        self,
+        mock_process_tools: AsyncMock,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+        mock_chat_completion_with_tool_calls: Any,
+    ) -> None:
+        """None max_tool_calls should not force a final cap-based LLM call."""
+
+        mock_get_context.return_value = "test_func"
+        mock_llm_interface.chat = AsyncMock(
+            side_effect=[
+                mock_chat_completion_with_tool_calls,
+                mock_chat_completion_with_tool_calls,
+                mock_chat_completion,
+            ]
+        )
+
+        updated_messages_first = sample_messages + [
+            {"role": "tool", "tool_call_id": "call_123", "content": "result-1"}
+        ]
+        updated_messages_second = updated_messages_first + [
+            {"role": "tool", "tool_call_id": "call_123", "content": "result-2"}
+        ]
+        mock_process_tools.side_effect = [
+            updated_messages_first,
+            updated_messages_second,
+        ]
+
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        tools = [{"type": "function", "function": {"name": "test_tool"}}]
+        tool_map = {"test_tool": AsyncMock(return_value="result")}
+
+        responses = []
+        async for response, _ in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=tools,
+            tool_map=tool_map,
+            max_tool_calls=None,
+            stream=False,
+        ):
+            responses.append(response)
+
+        assert responses == [
+            mock_chat_completion_with_tool_calls,
+            mock_chat_completion_with_tool_calls,
+            mock_chat_completion,
+        ]
+        assert mock_llm_interface.chat.await_count == 3
+        assert mock_process_tools.await_count == 2
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
     async def test_execute_empty_messages(
         self,
         mock_get_context: MagicMock,

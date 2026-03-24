@@ -529,6 +529,7 @@ class TestPyReplPrimitivePacks:
 
         assert repl.get_runtime_backend("selfref") is self_reference
         assert repl.list_runtime_backends() == ["selfref"]
+        assert repl.list_installed_packs() == ["selfref"]
         assert "selfref.history.keys" in repl.list_primitives()
         assert "selfref.fork.spawn" in repl.list_primitives()
         assert "selfref.fork.gather_all" in repl.list_primitives()
@@ -568,6 +569,130 @@ class TestPyReplPrimitivePacks:
         assert repl.get_runtime_backend("selfref") is self_reference
         assert "selfref.history.keys" in repl.list_primitives()
         assert "selfref.fork.spawn" in repl.list_primitives()
+
+    @pytest.mark.asyncio
+    async def test_install_pack_supports_backend_aware_custom_primitives(self):
+        """First-class PrimitivePack should install backend-aware custom primitives."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        constants = repl.pack(
+            "constants",
+            backend={
+                "app_name": "SimpleLLMFunc",
+                "memory_key": "agent_main",
+            },
+        )
+
+        @constants.primitive(
+            "get",
+            description="Read one value from constants backend.",
+        )
+        def constants_get(ctx, key: str):
+            """
+            Use: Read one value from constants backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Keep lookups to single keys.
+            """
+            backend = ctx.backend
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        @constants.primitive("lookup_via_context")
+        def constants_lookup_via_context(ctx, key: str):
+            """
+            Use: Read one value from constants backend via ctx.get_backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Prefer ctx.backend when available.
+            """
+            backend = ctx.get_backend("constants")
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        repl.install_pack(constants)
+
+        assert repl.list_installed_packs() == ["constants"]
+        assert repl.get_runtime_backend("constants") == {
+            "app_name": "SimpleLLMFunc",
+            "memory_key": "agent_main",
+        }
+        assert "constants.get" in repl.list_primitives()
+        assert "constants.lookup_via_context" in repl.list_primitives()
+
+        result = await repl.execute(
+            "print(runtime.constants.get('app_name'))\n"
+            "print(runtime.constants.lookup_via_context('memory_key'))\n"
+        )
+
+        assert result["success"] is True
+        assert result["stdout"].splitlines() == ["SimpleLLMFunc", "agent_main"]
+
+    @pytest.mark.asyncio
+    async def test_repl_primitive_decorator_registers_backend_aware_handler(self):
+        """PyRepl.primitive decorator should provide low-friction backend binding."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        repl.register_runtime_backend(
+            "constants",
+            {"project": "SimpleLLMFunc", "version": "dev"},
+            replace=True,
+        )
+
+        @repl.primitive(
+            "constants.get",
+            backend="constants",
+            description="Read one constant value.",
+            replace=True,
+        )
+        def constants_get(ctx, key: str):
+            """
+            Use: Read one constant value.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Keep calls narrow and avoid bulk reads.
+            """
+            backend = ctx.backend
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        @repl.primitive(
+            "constants.lookup_via_context",
+            backend="constants",
+            replace=True,
+        )
+        def constants_lookup_via_context(ctx, key: str):
+            """
+            Use: Read one constant value via ctx.get_backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Prefer ctx.backend when available.
+            """
+            backend = ctx.get_backend("constants")
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        contract = repl.get_primitive_contract("constants.get")
+        assert contract["name"] == "constants.get"
+        assert any(item["name"] == "key" for item in contract["parameters"])
+
+        result = await repl.execute(
+            "print(runtime.constants.get('project'))\n"
+            "print(runtime.constants.lookup_via_context('version'))\n"
+        )
+
+        assert result["success"] is True
+        assert result["stdout"].splitlines() == ["SimpleLLMFunc", "dev"]
 
     @pytest.mark.asyncio
     async def test_execute_can_mutate_memory_via_runtime_primitives(self):

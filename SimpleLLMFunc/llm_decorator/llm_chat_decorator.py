@@ -58,7 +58,7 @@ T = TypeVar("T")
 P = ParamSpec("P")
 
 # Constants
-DEFAULT_MAX_TOOL_CALLS: int = 5  # Default maximum number of tool calls
+DEFAULT_MAX_TOOL_CALLS: Optional[int] = None  # No default tool-call cap
 _RUNTIME_PRIMITIVE_PROMPT_BLOCK_START = "<runtime_primitive_contract>"
 _RUNTIME_PRIMITIVE_PROMPT_BLOCK_END = "</runtime_primitive_contract>"
 _LEGACY_SELF_REFERENCE_PROMPT_BLOCK_START = "[SelfReference Memory Contract]"
@@ -115,6 +115,11 @@ def _clone_toolkit_for_fork(
 
     cloned_toolkit: ToolkitList = []
     repl_clones: Dict[int, PyRepl] = {}
+    backend_overrides: Optional[Dict[str, Any]] = None
+    if self_reference_override is not None:
+        backend_overrides = {
+            PyRepl.DEFAULT_SELF_REFERENCE_BACKEND_NAME: self_reference_override,
+        }
 
     for item in base_toolkit:
         if isinstance(item, Tool):
@@ -122,35 +127,10 @@ def _clone_toolkit_for_fork(
             if isinstance(bound_instance, PyRepl):
                 original_repl_id = id(bound_instance)
                 if original_repl_id not in repl_clones:
-                    replacement_repl = PyRepl(
-                        execution_timeout_seconds=bound_instance.execution_timeout_seconds,
-                        input_idle_timeout_seconds=bound_instance.input_idle_timeout_seconds,
+                    replacement_repl = bound_instance._clone_for_fork(
+                        backend_overrides=backend_overrides,
                     )
                     setattr(replacement_repl, _FORK_CLONED_PYREPL_ATTR, True)
-
-                    runtime_backends = bound_instance.list_runtime_backends()
-                    for backend_name in runtime_backends:
-                        backend_value = bound_instance.get_runtime_backend(backend_name)
-                        if backend_value is None:
-                            continue
-                        if isinstance(backend_value, SelfReference):
-                            replacement_self_reference = (
-                                self_reference_override
-                                if self_reference_override is not None
-                                else backend_value
-                            )
-                            replacement_repl.install_primitive_pack(
-                                "selfref",
-                                backend=replacement_self_reference,
-                                backend_name=backend_name,
-                                replace=True,
-                            )
-                            continue
-                        replacement_repl.register_runtime_backend(
-                            backend_name,
-                            backend_value,
-                            replace=True,
-                        )
 
                     repl_clones[original_repl_id] = replacement_repl
 
@@ -425,7 +405,7 @@ def _react_end_event_has_fork_origin(event: ReactEndEvent, origin: Any) -> bool:
 def llm_chat(
     llm_interface: LLM_Interface,
     toolkit: Optional[ToolkitList] = None,
-    max_tool_calls: int = DEFAULT_MAX_TOOL_CALLS,
+    max_tool_calls: Optional[int] = DEFAULT_MAX_TOOL_CALLS,
     stream: bool = False,
     return_mode: Literal["text", "raw"] = "text",
     enable_event: bool = False,
@@ -485,7 +465,8 @@ def llm_chat(
     Args:
         llm_interface: LLM interface instance for communicating with the language model
         toolkit: Optional list of tools, can be Tool objects or functions decorated with @tool
-        max_tool_calls: Maximum number of tool calls to prevent infinite loops
+        max_tool_calls: Optional maximum number of tool-call iterations. ``None``
+            means no framework-imposed cap.
         stream: Whether to use streaming responses
         return_mode: Return mode, either "text" or "raw" (default: "text")
             - "text" mode: returns response as string, history as List[Dict[str, str]]

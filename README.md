@@ -353,6 +353,27 @@ async def main():
         print(response)
 ```
 
+#### Tool-Call Limit Default
+
+`llm_function` and `llm_chat` now default to `max_tool_calls=None`.
+
+- `None` means SimpleLLMFunc does not impose a framework-level tool-call iteration cap by default
+- This is better for long-horizon agents and deep tool-using workflows
+- If you want stricter protection against looping or runaway tool plans, pass an explicit integer such as `max_tool_calls=8`
+
+```python
+@llm_function(llm_interface=my_llm_interface, max_tool_calls=None)
+async def analyze(text: str) -> str:
+    """Analyze the text."""
+    pass
+
+
+@llm_chat(llm_interface=my_llm_interface, stream=True, max_tool_calls=12)
+async def cautious_agent(message: str, history=None):
+    """Chat agent with an explicit safety cap."""
+    pass
+```
+
 #### Multimodal Support
 
 SimpleLLMFunc supports multiple modalities of input and output, allowing LLMs to process text, images, and other content:

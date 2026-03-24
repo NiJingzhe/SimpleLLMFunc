@@ -285,38 +285,78 @@ async def agent(message: str, history=None):
 
 `PyRepl` 也支持通用 runtime 扩展点，不仅限于 `selfref` 包：
 
+若需要更完整的概念说明，见 [Primitive 原语](detailed_guide/primitive.md)。
+
+- `pack(name, backend=..., backend_name=None)`
+- `install_pack(pack, replace=False)`
+- `@repl.primitive(name, backend="...")`
 - `register_runtime_backend(name, backend, replace=False)`
-- `register_primitive(name, handler, description="", replace=False)`
+- `register_primitive(name, handler, description="", backend_name=None, replace=False)`
 - `register_primitive_pack_installer(pack_name, installer, replace=False)`
 - `install_primitive_pack(pack_name, **options)`
 - `list_runtime_backends()` and `list_primitives()`
+- `list_installed_packs()`
+- `get_primitive_contract(name)` / `list_primitive_contracts(...)`
 - `runtime.get_primitive_spec(name)`（在 REPL 内）查看单个原语契约
 - `runtime.list_primitive_specs(names=[...], contains="selfref.")`（在 REPL 内）按条件过滤查看：名称、描述、输入/输出、参数与最佳实践
 
 ```python
+class GitHubRepoAPI:
+    def list_open_issues(self, repo: str) -> list[dict[str, str]]:
+        # In production, call GitHub REST/GraphQL here.
+        return [{"id": "42", "title": "Bug: tool timeout", "repo": repo}]
+
+
 repl = PyRepl()
 
-repl.register_runtime_backend(
-    "constants",
-    {"project": "SimpleLLMFunc"},
-    replace=True,
+github_repo = repl.pack(
+    "github_repo",
+    backend=GitHubRepoAPI(),
 )
 
-def constants_get(_ctx, key: str):
-    backend = repl.get_runtime_backend("constants")
-    if not isinstance(backend, dict):
-        raise RuntimeError("runtime backend 'constants' must be a dict")
-    return backend.get(key)
-
-repl.register_primitive(
-    "constants.get",
-    constants_get,
-    description="Read one value from constants backend.",
-    replace=True,
+@github_repo.primitive(
+    "list_open_issues",
+    description="List open issues from a GitHub repository.",
 )
+def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
+    backend = ctx.backend
+    if not isinstance(backend, GitHubRepoAPI):
+        raise RuntimeError("backend must be a GitHubRepoAPI")
+    return backend.list_open_issues(repo)
 
-await repl.execute('print(runtime.constants.get("project"))')
+repl.install_pack(github_repo)
+
+await repl.execute('print(runtime.github_repo.list_open_issues("owner/repo"))')
 ```
+
+若只是补一个轻量级原语，也可以直接使用装饰器糖：
+
+```python
+repo_backend = GitHubRepoAPI()
+
+repl.register_runtime_backend("github_repo", repo_backend, replace=True)
+
+
+@repl.primitive("github_repo.list_open_issues", backend="github_repo", replace=True)
+def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
+    backend = ctx.get_backend("github_repo")
+    if not isinstance(backend, GitHubRepoAPI):
+        raise RuntimeError("backend must be a GitHubRepoAPI")
+    return backend.list_open_issues(repo)
+```
+
+建议：primitive handler 优先通过 `ctx.backend` / `ctx.get_backend(...)` 访问能力，
+这样框架才能在 fork/clone 时正确管理依赖。
+
+#### RuntimePrimitiveBackend 生命周期
+
+如果你的 backend 是一个带状态的服务对象，建议让它实现 `RuntimePrimitiveBackend`：
+
+- `clone_for_fork(context=...)`：fork child 时如何复制/共享 backend（默认共享，返回 self）
+- `on_install(repl)`：backend 安装到 PyRepl 时回调
+- `on_close(repl)`：PyRepl 关闭时回调，用于释放资源或清理状态
+
+这让 fork 时的 copy 策略和生命周期变得可控，也更容易保证子 agent 行为稳定。
 
 当 `@llm_chat(...)` 使用带 runtime 的工具（如 `PyRepl`）时，框架会在 prompt 顶部注入去重后的 `Tool Best Practices` 块；runtime 原语指引会包含在工具的最佳实践条目中。
 

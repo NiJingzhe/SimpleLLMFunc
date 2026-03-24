@@ -30,7 +30,7 @@ from SimpleLLMFunc import llm_function
 @llm_function(
     llm_interface=llm_interface,
     toolkit=None,
-    max_tool_calls=5,
+    max_tool_calls=None,
     system_prompt_template=None,
     user_prompt_template=None,
     **llm_kwargs
@@ -46,7 +46,7 @@ async def your_function(param1: Type1, param2: Type2) -> ReturnType:
 
 - **llm_interface** (必需): LLM 接口实例，用于与大语言模型通信
 - **toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
-- **max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5
+- **max_tool_calls** (可选): 最大工具调用次数；默认为 `None`，表示框架不主动施加工具调用上限。如需更严格保护，请显式传入较小整数。
 - **system_prompt_template** (可选): 自定义系统提示模板
 - **user_prompt_template** (可选): 自定义用户提示模板
 - **enable_event** (可选): 是否启用事件流，默认为 False
