@@ -339,6 +339,24 @@ class TestPyReplToolset:
             in descriptions["reset_repl"]
         )
 
+    def test_tool_best_practices_stay_tool_scoped(self) -> None:
+        """Tool best practices should stay generic and leave selfref guidance to selfref."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+        reset_tool = next(tool for tool in repl.toolset if tool.name == "reset_repl")
+
+        execute_text = " ".join(execute_tool.best_practices)
+        reset_text = " ".join(reset_tool.best_practices)
+
+        assert "contains='<namespace>.'" in execute_text
+        assert "selfref" not in execute_text
+        assert "fresh REPL variable namespace" in reset_text
+        assert "selfref" not in reset_text
+
 
 class TestPyReplToolsetOutput:
     """Toolset outputs should be natural language strings."""
