@@ -322,9 +322,7 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     assert "<runtime_primitive_contract>" in captured_system_prompt
     assert captured_system_prompt.count("runtime.list_primitives()") == 1
     assert (
-        captured_system_prompt.count(
-            "runtime.list_primitives(contains='selfref.fork.')"
-        )
+        captured_system_prompt.count("runtime.list_primitives(contains='<namespace>.')")
         == 1
     )
     assert captured_system_prompt.count("runtime.get_primitive_spec(name)") == 1

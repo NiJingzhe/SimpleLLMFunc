@@ -109,13 +109,13 @@ class PyRepl:
         "registered runtime primitive backends."
     )
     EXECUTE_TOOL_BEST_PRACTICES = [
-        "Primitive = host-registered callable; use runtime.namespace.name(...). Use contains='selfref.fork.' for namespace discovery.",
+        "Primitive = host-registered callable; use runtime.namespace.name(...). Use contains='<namespace>.' for namespace discovery.",
         "Spec lookups return XML by default; use format='dict' for direct field access in code.",
         "Inspect the contracts that support the current step and keep prompt context focused on the selected primitives.",
     ]
     RESET_TOOL_BEST_PRACTICES = [
         "Use reset_repl for REPL variable cleanup while continuing with the same runtime backend state.",
-        "Use runtime.selfref.history.delete/replace/clear for memory cleanup; clear preserves the current system prompt.",
+        "Continue the next execution step from a fresh REPL variable namespace after reset.",
     ]
 
     DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
@@ -382,16 +382,16 @@ class PyRepl:
         ) -> Union[List[Dict[str, Any]], str]:
             """
             Use: Read structured specs for runtime primitives (host-registered callables, no import needed).
-            Input: Keyword-only filters. `names` exact names. `contains` substring filter (prefer contains='selfref.fork.' over prefix='fork'). `format` defaults to `xml`.
+            Input: Keyword-only filters. `names` exact names. `contains` substring filter (for example `contains='<namespace>.'`). `format` defaults to `xml`.
             Output: XML when format='xml', or list[dict] when format='dict'.
             Parse: XML: parse <primitive_specs>/<primitive>. Dict: iterate the list.
             Parameters:
             - names: Exact primitive names.
             - prefix: Names starting with prefix.
-            - contains: Names containing substring (preferred for namespace: contains='selfref.fork.').
+            - contains: Names containing substring (for example `contains='<namespace>.'`).
             - format: xml (default) or dict.
             Best Practices:
-            - Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.
+            - Use contains='<namespace>.' for namespace filtering. Use names=[...] for exact set.
             - Specs return XML by default; use format='dict' for direct field access in code.
             """
             return self.list_primitive_specs(
@@ -414,15 +414,15 @@ class PyRepl:
             contains: Optional[str] = None,
         ) -> List[str]:
             """
-            Use: Discover runtime primitive names available as `runtime.namespace.name(...)`. Filter by namespace with contains='selfref.fork.'.
+            Use: Discover runtime primitive names available as `runtime.namespace.name(...)`. Filter by namespace with contains='<namespace>.'.
             Input: Keyword-only. `contains` substring filter (preferred). `prefix` names starting with.
             Output: list[str] of primitive names.
             Parse: Iterate list; call runtime.get_primitive_spec(name) for contracts.
             Parameters:
             - prefix: Names starting with prefix.
-            - contains: Names containing substring (prefer contains='selfref.fork.' over prefix='fork').
+            - contains: Names containing substring (for example `contains='<namespace>.'`).
             Best Practices:
-            - Filter by namespace with contains='selfref.fork.'.
+            - Filter by namespace with contains='<namespace>.'.
             - After discovery, call runtime.get_primitive_spec(name) or runtime.list_primitive_specs(contains='...').
             """
             return self._primitive_registry.list_names(prefix=prefix, contains=contains)
@@ -755,7 +755,7 @@ class PyRepl:
             "<runtime_primitive_contract>",
             "Runtime primitive = host-registered callable; call it as runtime.namespace.name(...).",
             "Use this block for orientation; use runtime APIs as the source of truth.",
-            "Discover names with runtime.list_primitives() and use runtime.list_primitives(contains='selfref.fork.') for namespace filtering.",
+            "Discover names with runtime.list_primitives() and use runtime.list_primitives(contains='<namespace>.') for namespace filtering.",
             "Inspect one primitive: runtime.get_primitive_spec(name). XML by default.",
             "Inspect multiple primitives: runtime.list_primitive_specs(names=[...]) or runtime.list_primitive_specs(contains='...').",
             "Inspect the contracts for the current step and keep prompt context focused on the selected primitives.",
