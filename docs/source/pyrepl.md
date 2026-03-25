@@ -269,8 +269,7 @@ from SimpleLLMFunc.builtin import PyRepl
 from SimpleLLMFunc.builtin import SelfReference
 
 self_reference = SelfReference()
-repl = PyRepl()
-repl.install_primitive_pack("selfref", backend=self_reference)
+repl = PyRepl(self_reference=self_reference)
 
 @llm_chat(
     llm_interface=llm,

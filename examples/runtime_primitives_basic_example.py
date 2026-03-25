@@ -5,7 +5,7 @@ Run:
 
 This example does not require any LLM provider. It demonstrates how to:
 1. Create and bind a SelfReference memory key.
-2. Install SelfReference primitive pack into PyRepl.
+2. Start PyRepl with a shared SelfReference backend.
 3. Declare a custom PrimitivePack with backend-aware handlers.
 4. Append durable memory into system prompt via runtime.selfref.history.append_system_prompt.
 5. Perform common memory CRUD operations through runtime.selfref.history.* primitives.
@@ -49,8 +49,7 @@ async def main() -> None:
         ],
     )
 
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
 
     constants = repl.pack(
         "constants",
