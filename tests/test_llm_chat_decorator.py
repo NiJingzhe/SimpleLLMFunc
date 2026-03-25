@@ -251,8 +251,8 @@ def test_llm_chat_strict_signature_rejects_non_canonical_shapes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
-    """Decorator stays decoupled and does not inject self_reference by itself."""
+async def test_llm_chat_auto_resolves_builtin_self_reference_from_pyrepl() -> None:
+    """Decorator should pick up the builtin selfref pack from a default PyRepl."""
 
     captured_system_prompt: str | None = None
 
@@ -285,6 +285,7 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     mock_llm.model_name = "test-model"
 
     repl = PyRepl()
+    self_reference = repl.get_runtime_backend("selfref")
     history = [{"role": "user", "content": "seed"}]
 
     with (
@@ -314,12 +315,17 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
         async for _content, _history in stream:
             pass
 
+    assert isinstance(self_reference, SelfReference)
+    assert self_reference.get_agent_instance() is agent
+    assert self_reference.list_history_keys() == ["agent"]
     assert repl.namespace.get("self_reference") is None
     assert captured_system_prompt is not None
     assert "[Runtime Primitive Contract]" not in captured_system_prompt
     assert "<tool_best_practices>" in captured_system_prompt
     assert "execute_code" in captured_system_prompt
     assert "<runtime_primitive_contract>" in captured_system_prompt
+    assert "Installed primitive packs:" in captured_system_prompt
+    assert "- selfref:" in captured_system_prompt
     assert captured_system_prompt.count("runtime.list_primitives()") == 1
     assert (
         captured_system_prompt.count("runtime.list_primitives(contains='<namespace>.')")
@@ -332,6 +338,7 @@ async def test_llm_chat_does_not_auto_attach_self_reference_to_pyrepl() -> None:
     )
     assert _MUST_PROMPT_BLOCK in captured_system_prompt
     assert _MUST_PROMPT_RULE in captured_system_prompt
+    assert "Active selfref key: agent" in captured_system_prompt
     assert (
         "Use assistant content for natural-language reasoning and final responses."
         in captured_system_prompt
@@ -394,8 +401,7 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     mock_llm.model_name = "test-model"
 
     self_reference = SelfReference()
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
 
     with (
         patch(
@@ -504,8 +510,7 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
     )
     self_reference.bind_history("other", [{"role": "user", "content": "seed-other"}])
 
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
 
     with (
         patch(
@@ -573,8 +578,7 @@ async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
     self_reference = SelfReference()
-    root_repl = PyRepl()
-    root_repl.install_primitive_pack("selfref", backend=self_reference)
+    root_repl = PyRepl(self_reference=self_reference)
 
     with (
         patch(
@@ -646,8 +650,7 @@ async def test_llm_chat_fork_clones_custom_pyrepl_pack_primitives() -> None:
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
     self_reference = SelfReference()
-    root_repl = PyRepl()
-    root_repl.install_primitive_pack("selfref", backend=self_reference)
+    root_repl = PyRepl(self_reference=self_reference)
 
     constants_pack = root_repl.pack(
         "constants",
@@ -727,8 +730,7 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
     )
 
     self_reference = SelfReference()
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
     tracker = _TrackingLangfuseClient()
 
     async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
@@ -1401,8 +1403,7 @@ async def test_llm_chat_deduplicates_runtime_primitive_contract_prompt() -> None
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
     self_reference = SelfReference()
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
     observed_system_prompts: list[str] = []
 
     async def fake_execute_react_loop_streaming(

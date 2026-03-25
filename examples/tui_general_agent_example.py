@@ -106,8 +106,7 @@ def load_llm():
 llm = load_llm()
 self_reference = SelfReference()
 SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
-repl = PyRepl(working_directory=SANDBOX_DIR)
-repl.install_primitive_pack("selfref", backend=self_reference)
+repl = PyRepl(working_directory=SANDBOX_DIR, self_reference=self_reference)
 file_tools = FileToolset(SANDBOX_DIR).toolset
 
 

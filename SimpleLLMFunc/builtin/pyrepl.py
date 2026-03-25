@@ -32,6 +32,7 @@ from SimpleLLMFunc.runtime import (
 )
 from SimpleLLMFunc.runtime.primitives import primitive
 from SimpleLLMFunc.runtime.builtin_self_reference import (
+    DEFAULT_SELF_REFERENCE_BACKEND_NAME as RUNTIME_DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     build_self_reference_pack,
 )
 from SimpleLLMFunc.tool import Tool
@@ -118,13 +119,15 @@ class PyRepl:
         "Continue the next execution step from a fresh REPL variable namespace after reset.",
     ]
 
-    DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
+    DEFAULT_SELF_REFERENCE_BACKEND_NAME = RUNTIME_DEFAULT_SELF_REFERENCE_BACKEND_NAME
 
     def __init__(
         self,
         execution_timeout_seconds: float = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         input_idle_timeout_seconds: float = DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS,
         working_directory: Optional[Union[str, Path]] = None,
+        self_reference: Optional[SelfReference] = None,
+        _install_builtin_packs: bool = True,
     ):
         execution_timeout = float(execution_timeout_seconds)
         if execution_timeout <= 0:
@@ -167,6 +170,8 @@ class PyRepl:
 
         self._primitive_registry = PrimitiveRegistry()
         self._register_builtin_primitives()
+        if _install_builtin_packs:
+            self._install_builtin_packs(self_reference=self_reference)
 
         self._instance_id = uuid.uuid4().hex
         self._audit_lock = threading.Lock()
@@ -268,23 +273,20 @@ class PyRepl:
                 )
             self._primitive_pack_installers[normalized] = installer
 
-    def _install_self_reference_pack(
+    def _install_builtin_packs(
         self,
         *,
-        backend: Any,
-        backend_name: str = DEFAULT_SELF_REFERENCE_BACKEND_NAME,
-        replace: bool = False,
+        self_reference: Optional[SelfReference] = None,
     ) -> None:
-        if not isinstance(backend, SelfReference):
-            raise ValueError("selfref primitive pack requires SelfReference backend")
-
-        normalized_backend_name = self._normalize_backend_name(backend_name)
-        pack = build_self_reference_pack(
-            backend,
-            backend_name=normalized_backend_name,
-            replace=replace,
+        selfref_backend = (
+            self_reference if self_reference is not None else SelfReference()
         )
-        self.install_pack(pack, replace=replace)
+        self.install_pack(
+            build_self_reference_pack(
+                selfref_backend,
+                backend_name=self.DEFAULT_SELF_REFERENCE_BACKEND_NAME,
+            )
+        )
 
     def install_primitive_pack(self, pack_name: str, **options: Any) -> None:
         """Install one registered primitive pack into this REPL."""
@@ -365,12 +367,6 @@ class PyRepl:
         )
 
     def _register_builtin_primitives(self) -> None:
-        self.register_primitive_pack_installer(
-            "selfref",
-            self._install_self_reference_pack,
-            replace=True,
-        )
-
         @primitive()
         def runtime_list_primitive_specs(
             _ctx: Any,
@@ -614,6 +610,7 @@ class PyRepl:
             execution_timeout_seconds=self.execution_timeout_seconds,
             input_idle_timeout_seconds=self.input_idle_timeout_seconds,
             working_directory=self._working_directory,
+            _install_builtin_packs=False,
         )
 
         normalized_overrides: Dict[str, Any] = {}

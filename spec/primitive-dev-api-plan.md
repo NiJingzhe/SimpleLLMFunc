@@ -364,7 +364,7 @@ Compatibility strategy:
 
 1. Legacy `register_primitive(...)` writes into an internal legacy pack.
 2. Legacy pack installers are adapted into installable `PrimitivePack` objects.
-3. Built-in selfref is migrated to the new pack model internally, but `install_primitive_pack("selfref", backend=...)` keeps working.
+3. Built-in selfref is migrated to the new pack model and installed through the same `PrimitivePack` path during `PyRepl` startup.
 
 ## Before And After {#before-and-after}
 
@@ -429,7 +429,7 @@ Bridge the old APIs onto the new model:
 
 - make `register_primitive(...)` write to an internal legacy pack
 - make `register_primitive_pack_installer(...)` use compatibility adapters
-- keep `install_primitive_pack("selfref", ...)` behavior unchanged externally
+- start `PyRepl` with builtin selfref already installed through `install_pack(...)`
 
 ### Phase 3
 
@@ -437,7 +437,7 @@ Fix fork cloning:
 
 - clone installed packs, not just raw backends
 - preserve custom primitives in selfref child REPLs
-- keep the current selfref special-case only as a compatibility bridge during migration
+- remove the current selfref special-case after the builtin pack path is in place
 
 ### Phase 4
 
