@@ -303,9 +303,9 @@ def _remove_injected_prompt_blocks(system_prompt: str) -> str:
 def _build_must_principles_prompt_block() -> str:
     lines = [
         _MUST_PRINCIPLES_PROMPT_BLOCK_START,
-        "<rule>Never use chat-style XML text in assistant messages to invoke tools.</rule>",
-        "<rule>When tools are needed, invoke them only through native structured tool_calls / function-calling fields.</rule>",
-        "<rule>Do not fake tool invocations in assistant content via &lt;tool_call&gt;, XML, or JSON text.</rule>",
+        "<rule>Invoke tools through native structured tool_calls / function-calling fields.</rule>",
+        "<rule>Use assistant content for natural-language reasoning and final responses.</rule>",
+        "<rule>Keep tool invocation payloads in the native tool channel.</rule>",
         _MUST_PRINCIPLES_PROMPT_BLOCK_END,
     ]
     return "\n".join(lines)

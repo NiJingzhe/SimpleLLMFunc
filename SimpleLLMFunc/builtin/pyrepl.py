@@ -99,34 +99,23 @@ class PyRepl:
 
     EXECUTE_TOOL_DESCRIPTION = (
         "Run Python code in a persistent REPL session (state persists across "
-        "calls). Write direct executable snippets, not standalone scripts. "
-        'Do not include `if __name__ == "__main__":` blocks. Interactive '
-        "`input()` is supported. "
-        "Runtime primitives = host-registered callables usable without import; "
-        "call as `runtime.namespace.name(...)` (e.g. runtime.selfref.history.keys()). "
-        "Discover names via `runtime.list_primitives()` or "
-        "`runtime.list_primitives(contains='selfref.fork.')` for namespace filtering; "
-        "avoid `prefix='fork'` (ambiguous). "
-        "Fetch contracts via `runtime.get_primitive_spec(name)` or "
-        "`runtime.list_primitive_specs(contains='...')`. Specs return XML by default. "
-        "Per-call timeout: `timeout_seconds` (default 600). "
-        "selfref = your agent state: (1) your memory via runtime.selfref.history.*, "
-        "(2) your clones via runtime.selfref.fork.*. "
-        "`reset_repl` clears REPL variables only; runtime memory is unchanged."
+        "calls). Write direct executable snippets for the active REPL session. "
+        "Use top-level executable code. Interactive "
+        "`input()` is supported. Use `timeout_seconds` to control per-call "
+        "timeout (default 600)."
     )
     RESET_TOOL_DESCRIPTION = (
-        "Reset REPL runtime variables in the current session. This clears "
-        "Python variables only and preserves registered runtime primitive backends."
+        "Reset REPL runtime variables in the current session while preserving "
+        "registered runtime primitive backends."
     )
     EXECUTE_TOOL_BEST_PRACTICES = [
-        "Primitive = callable without import; use runtime.namespace.name(...). Filter discovery with contains='selfref.fork.' not prefix='fork'.",
-        "Spec lookups return XML by default; use format='dict' only when code needs direct field access.",
-        "Inspect only required contracts; do not dump full primitive spec lists into chat/system prompt.",
-        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying.",
+        "Primitive = host-registered callable; use runtime.namespace.name(...). Use contains='selfref.fork.' for namespace discovery.",
+        "Spec lookups return XML by default; use format='dict' for direct field access in code.",
+        "Inspect the contracts that support the current step and keep prompt context focused on the selected primitives.",
     ]
     RESET_TOOL_BEST_PRACTICES = [
-        "Use reset_repl only for variable cleanup; runtime backend state remains unchanged.",
-        "Clear selfref memory with runtime.selfref.history.delete/replace/clear when needed (clear preserves current system prompt).",
+        "Use reset_repl for REPL variable cleanup while continuing with the same runtime backend state.",
+        "Use runtime.selfref.history.delete/replace/clear for memory cleanup; clear preserves the current system prompt.",
     ]
 
     DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
@@ -364,6 +353,7 @@ class PyRepl:
         *,
         backend: Any,
         backend_name: Optional[str] = None,
+        guidance: str = "",
     ) -> PrimitivePack:
         """Create a declarative PrimitivePack bound to this REPL host."""
 
@@ -371,6 +361,7 @@ class PyRepl:
             name,
             backend=backend,
             backend_name=backend_name,
+            guidance=guidance,
         )
 
     def _register_builtin_primitives(self) -> None:
@@ -401,7 +392,7 @@ class PyRepl:
             - format: xml (default) or dict.
             Best Practices:
             - Prefer contains='selfref.fork.' for namespace filtering. Use names=[...] for exact set.
-            - Specs return XML by default; format='dict' only when code needs direct field access.
+            - Specs return XML by default; use format='dict' for direct field access in code.
             """
             return self.list_primitive_specs(
                 names=names,
@@ -423,7 +414,7 @@ class PyRepl:
             contains: Optional[str] = None,
         ) -> List[str]:
             """
-            Use: Discover runtime primitive names (callables usable without import). Filter by namespace with contains='selfref.fork.'.
+            Use: Discover runtime primitive names available as `runtime.namespace.name(...)`. Filter by namespace with contains='selfref.fork.'.
             Input: Keyword-only. `contains` substring filter (preferred). `prefix` names starting with.
             Output: list[str] of primitive names.
             Parse: Iterate list; call runtime.get_primitive_spec(name) for contracts.
@@ -431,7 +422,7 @@ class PyRepl:
             - prefix: Names starting with prefix.
             - contains: Names containing substring (prefer contains='selfref.fork.' over prefix='fork').
             Best Practices:
-            - Filter by namespace with contains='selfref.fork.'; avoid prefix='fork' (ambiguous).
+            - Filter by namespace with contains='selfref.fork.'.
             - After discovery, call runtime.get_primitive_spec(name) or runtime.list_primitive_specs(contains='...').
             """
             return self._primitive_registry.list_names(prefix=prefix, contains=contains)
@@ -444,7 +435,7 @@ class PyRepl:
             format: str = "xml",
         ) -> Union[Dict[str, Any], str]:
             """
-            Use: Read one runtime primitive contract (input/output shape, parameters). Primitive = callable without import.
+            Use: Read one runtime primitive contract (input/output shape, parameters). Primitive = callable as `runtime.namespace.name(...)`.
             Input: name (full name e.g. selfref.fork.gather_all), format (xml default, dict for field access).
             Output: XML or dict with description, parameters, output_type, output_parsing.
             Parse: XML parse <primitive_spec>. Dict read description, parameters, output_type, output_parsing.
@@ -453,7 +444,7 @@ class PyRepl:
             - format: xml (default) or dict.
             Best Practices:
             - Default contract lookup for one primitive. Resolve names first via runtime.list_primitives(contains='...').
-            - Spec returns XML by default; format='dict' only for direct field access.
+            - Spec returns XML by default; use format='dict' for direct field access.
             """
             return self.get_primitive_spec(name, format=format)
 
@@ -751,6 +742,8 @@ class PyRepl:
         context: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
         primitive_names = self.list_primitives()
+        with self._lock:
+            installed_packs = list(self._installed_packs.values())
         has_history_primitives = any(
             name.startswith("selfref.history.") for name in primitive_names
         )
@@ -760,46 +753,37 @@ class PyRepl:
 
         lines: List[str] = [
             "<runtime_primitive_contract>",
-            "<title>Tool-provided runtime guidance</title>",
-            "<definition>",
-            "<primitive>Runtime primitive = host-registered callable; callable in REPL without import as runtime.namespace.name(...). No import needed.</primitive>",
-            "</definition>",
-            "<progressive_disclosure>",
-            "<step index=\"1\">Discover names: runtime.list_primitives() or runtime.list_primitives(contains='selfref.fork.') for namespace filtering. Avoid prefix='fork' (ambiguous).</step>",
-            '<step index="2">One primitive: runtime.get_primitive_spec(name). XML by default.</step>',
-            "<step index=\"3\">Batches: runtime.list_primitive_specs(names=[...]) or runtime.list_primitive_specs(contains='...').</step>",
-            '<step index="4">Inspect only required contracts; do not dump full spec lists into chat/system prompt.</step>',
-            "</progressive_disclosure>",
-            "<spec_rule>For each primitive: purpose, input shape, output shape, parsing rule, key parameters only.</spec_rule>",
-            "<spec_return_format>",
-            "<rule>Spec lookups return XML by default.</rule>",
-            "<rule>Use format='dict' only when code needs direct field access.</rule>",
-            "</spec_return_format>",
+            "Runtime primitive = host-registered callable; call it as runtime.namespace.name(...).",
+            "Use this block for orientation; use runtime APIs as the source of truth.",
+            "Discover names with runtime.list_primitives() and use runtime.list_primitives(contains='selfref.fork.') for namespace filtering.",
+            "Inspect one primitive: runtime.get_primitive_spec(name). XML by default.",
+            "Inspect multiple primitives: runtime.list_primitive_specs(names=[...]) or runtime.list_primitive_specs(contains='...').",
+            "Inspect the contracts for the current step and keep prompt context focused on the selected primitives.",
         ]
 
-        if has_history_primitives or has_fork_primitives:
-            lines.extend(
-                [
-                    "<self_reference_namespace>",
-                    "<definition>selfref = your agent state: (1) your memory (message history), (2) your clones (forked child agents).</definition>",
-                    "<history>runtime.selfref.history.* operates on your memory.</history>",
-                    "<fork>runtime.selfref.fork.* creates and gathers your clones.</fork>",
-                    "</self_reference_namespace>",
-                ]
-            )
+        pack_guidance_lines: List[str] = []
+        seen_pack_names: set[str] = set()
+        for pack in sorted(installed_packs, key=lambda item: item.name):
+            pack_name = str(pack.name).strip()
+            guidance = str(getattr(pack, "guidance", "")).strip()
+            if not pack_name or pack_name in seen_pack_names or not guidance:
+                continue
+            seen_pack_names.add(pack_name)
+            pack_guidance_lines.append(f"- {pack_name}: {guidance}")
+
+        if pack_guidance_lines:
+            lines.append("Installed primitive packs:")
+            lines.extend(pack_guidance_lines)
 
         if has_fork_primitives:
             lines.extend(
                 [
-                    "<fork_result_safety>",
-                    "<rule>selfref.fork.gather_all returns compact results by default.</rule>",
-                    "<rule>Read only required keys: status, response, memory_key, history_count.</rule>",
-                    "<rule>If status == 'error', inspect error_type and error_message before retrying.</rule>",
-                    "<rule>selfref.fork.gather_all returns dict[fork_id -> ForkResult]; iterate with result.items() or result.values().</rule>",
-                    "<rule>Do not treat gather_all result as a list (enumerating the dict yields fork_id strings).</rule>",
-                    "<rule>NEVER print raw fork result dicts.</rule>",
-                    "<rule>Use include_history=True only when full child history is truly required.</rule>",
-                    "</fork_result_safety>",
+                    "Fork result safety: selfref.fork.gather_all returns compact results by default.",
+                    "Read the fields that support the current step, such as status, response, memory_key, and history_count.",
+                    "If status == 'error', inspect error_type and error_message before retrying.",
+                    "Treat runtime.selfref.fork.gather_all results as dict[fork_id -> ForkResult] and iterate with .items() or .values().",
+                    "Summarize the selected result fields in chat responses.",
+                    "Use include_history=True when full child history is required.",
                 ]
             )
 
@@ -812,35 +796,26 @@ class PyRepl:
                     resolved_memory_key = normalized_key
 
         if resolved_memory_key is not None:
-            lines.append(
-                f"<active_selfref_key>{resolved_memory_key}</active_selfref_key>"
-            )
+            lines.append(f"Active selfref key: {resolved_memory_key}")
 
         if self._working_directory is not None:
             lines.extend(
                 [
-                    "<working_directory>",
-                    f"<path>{self._working_directory.as_posix()}</path>",
-                    "<rule>All relative paths resolve from this directory.</rule>",
-                    "</working_directory>",
+                    f"Working directory: {self._working_directory.as_posix()}",
+                    "All relative paths resolve from this directory.",
                 ]
             )
 
         lines.extend(
             [
-                "<reset_behavior>",
-                "<rule>reset_repl only clears REPL variables.</rule>",
-                "<rule>It does not clear runtime backend state.</rule>",
-                "</reset_behavior>",
+                "Use reset_repl to clear REPL variables while continuing with the current runtime backend state.",
             ]
         )
 
         if has_history_primitives:
             lines.extend(
                 [
-                    "<forgetting_memory>",
-                    "<rule>Use runtime.selfref.history.delete/replace/clear to forget memory (clear preserves current system prompt).</rule>",
-                    "</forgetting_memory>",
+                    "Use runtime.selfref.history.delete/replace/clear for memory cleanup; clear preserves the current system prompt.",
                 ]
             )
 
@@ -1264,25 +1239,26 @@ class PyRepl:
 
         Guidance for LLM tool usage:
         - Write executable snippets directly.
-        - Do not wrap code with ``if __name__ == "__main__":``.
+        - Use top-level executable code in the active REPL session.
         - Variables persist across multiple ``execute_code`` calls.
         - Runtime primitives are available via ``runtime.*``. Use
           ``runtime.list_primitives()`` for discovery (or
-          ``runtime.list_primitives(prefix='...')`` for name filtering), then
+          ``runtime.list_primitives(contains='...')`` for namespace filtering), then
           ``runtime.get_primitive_spec(name)`` (preferred) or
           ``runtime.list_primitive_specs(names=[...])`` for selected contracts
           (input/output types, parameter docs, and best practices). Spec
-          lookups return XML by default; use ``format='dict'`` only when code
+          lookups return XML by default; use ``format='dict'`` when code
           needs direct field access.
         - Self-reference primitives are grouped under
           ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
         - ``input()`` is supported. In event mode, callers can reply via
           ``PyRepl.submit_input(request_id, value)``.
-        - ``reset_repl`` clears REPL variables only. Forgetting runtime-backed
-          memory must be done via self-reference history methods (for example
+        - Use ``reset_repl`` for REPL variable cleanup. Use self-reference
+          history methods for runtime-backed memory management (for example
           ``runtime.selfref.history.delete`` /
           ``runtime.selfref.history.replace`` /
-          ``runtime.selfref.history.clear``; clear preserves current system prompt).
+          ``runtime.selfref.history.clear``; clear preserves the current
+          system prompt).
 
         Args:
             code: Python code to execute.

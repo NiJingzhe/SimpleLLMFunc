@@ -618,10 +618,12 @@ class PrimitivePack:
         *,
         backend: Any,
         backend_name: Optional[str] = None,
+        guidance: str = "",
     ) -> None:
         self.name = _normalize_pack_name(name)
         self.backend_name = _normalize_pack_name(backend_name or self.name)
         self.backend = backend
+        self.guidance = _normalize_text(guidance)
         self._entries: Dict[str, PrimitivePackEntry] = {}
 
     @property
@@ -721,6 +723,7 @@ class PrimitivePack:
             self.name,
             backend=resolved_backend,
             backend_name=backend_name or self.backend_name,
+            guidance=self.guidance,
         )
         cloned._entries = dict(self._entries)
         return cloned

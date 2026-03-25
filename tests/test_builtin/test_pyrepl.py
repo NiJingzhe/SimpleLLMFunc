@@ -195,7 +195,7 @@ class TestPyReplToolset:
         assert not hasattr(repl, "list_variables")
 
     def test_execute_tool_description_has_repl_guidance(self):
-        """execute_code description should guide LLM usage clearly."""
+        """execute_code description should stay focused on REPL execution itself."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -205,21 +205,19 @@ class TestPyReplToolset:
 
         description = execute_tool.description
         assert "persistent REPL session" in description
-        assert 'if __name__ == "__main__"' in description
+        assert "top-level executable code" in description
         assert "input()" in description
         assert "timeout_seconds" in description
-        assert "runtime.list_primitives()" in description
-        assert "runtime.list_primitives(contains='selfref.fork.')" in description
-        assert "runtime.list_primitive_specs(" in description
-        assert "runtime.get_primitive_spec(name)" in description
-        assert "runtime.list_primitive_specs(contains='...')" in description
-        assert "runtime memory is unchanged" in description
+        assert "runtime.list_primitives()" not in description
+        assert "runtime.get_primitive_spec(name)" not in description
+        assert "selfref = your agent state" not in description
+        assert "runtime memory is unchanged" not in description
 
     def test_execute_tool_prompt_includes_working_directory(
         self,
         tmp_path: Path,
     ) -> None:
-        """Prompt injection should include working_directory when configured."""
+        """Prompt injection should include working_directory guidance when configured."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl(working_directory=tmp_path)
@@ -230,11 +228,11 @@ class TestPyReplToolset:
         prompt = execute_tool.build_system_prompt_injection()
 
         assert isinstance(prompt, str)
-        assert "<working_directory>" in prompt
+        assert "Working directory:" in prompt
         assert tmp_path.resolve().as_posix() in prompt
 
     def test_execute_tool_prompt_omits_working_directory_when_unset(self) -> None:
-        """Prompt injection should skip working_directory when not configured."""
+        """Prompt injection should skip working_directory guidance when unset."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -245,7 +243,65 @@ class TestPyReplToolset:
         prompt = execute_tool.build_system_prompt_injection()
 
         assert isinstance(prompt, str)
-        assert "<working_directory>" not in prompt
+        assert "Working directory:" not in prompt
+
+    def test_execute_tool_prompt_includes_installed_pack_guidance(self) -> None:
+        """Prompt injection should include installed pack guidance as plain text."""
+        from SimpleLLMFunc.builtin import PyRepl
+        from SimpleLLMFunc.self_reference import SelfReference
+
+        repl = PyRepl()
+        repl.install_primitive_pack("selfref", backend=SelfReference())
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<runtime_primitive_contract>" in prompt
+        assert "Use this block for orientation" in prompt
+        assert "Installed primitive packs:" in prompt
+        assert "- selfref:" in prompt
+        assert "selfref = your agent state" in prompt
+        assert "parallel sub-agent decomposition" in prompt
+
+    def test_execute_tool_prompt_includes_custom_pack_guidance(self) -> None:
+        """Prompt injection should render generic pack guidance, not just selfref."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        pack = repl.pack(
+            "demo",
+            backend=object(),
+            guidance="demo = a scratch runtime namespace for small host-side helpers.",
+        )
+
+        @pack.primitive("ping")
+        def demo_ping(ctx):
+            """
+            Use: Health check for the demo backend.
+            Output: `str`.
+            Best Practices:
+            - Use for smoke tests only.
+            """
+
+            _ = ctx
+            return "pong"
+
+        repl.install_pack(pack)
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "Installed primitive packs:" in prompt
+        assert (
+            "- demo: demo = a scratch runtime namespace for small host-side helpers."
+            in prompt
+        )
 
     def test_execute_tool_schema_exposes_timeout_seconds(self):
         """execute_code tool schema should expose per-call timeout controls."""
@@ -279,7 +335,7 @@ class TestPyReplToolset:
 
         assert "Reset REPL runtime variables" in descriptions["reset_repl"]
         assert (
-            "preserves registered runtime primitive backends"
+            "preserving registered runtime primitive backends"
             in descriptions["reset_repl"]
         )
 
@@ -1234,12 +1290,22 @@ class TestPyReplRuntimePrimitives:
             "guide_spec = next(item for item in specs if item.get('name') == 'selfref.guide')\n"
             "print('best_practices' in guide)\n"
             "print(len(guide.get('best_practices', [])) >= 5)\n"
+            "guide_best_text = ' '.join(str(item) for item in guide.get('best_practices', []))\n"
+            "print('status/response/memory_key/history_count' in guide_best_text)\n"
+            "print('error_type/error_message before retrying' in guide_best_text)\n"
             "print(isinstance(guide_spec.get('parameters'), list))\n"
             "print(isinstance(guide_spec.get('best_practices'), list))\n"
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == ["True", "True", "True", "True"]
+        assert result["stdout"].splitlines() == [
+            "True",
+            "True",
+            "True",
+            "True",
+            "True",
+            "True",
+        ]
 
     @pytest.mark.asyncio
     async def test_execute_selfref_fork_spec_declares_result_contract_and_safe_read(
@@ -1267,8 +1333,8 @@ class TestPyReplRuntimePrimitives:
             "print('history_included' in gather_output)\n"
             "print('keyed by' in gather_output and 'fork_id' in gather_output)\n"
             "print('.items()' in gather_parse)\n"
-            "print('never print raw fork result dict' in best_text.lower())\n"
-            "print('print(result)' in best_text)\n"
+            "print('read the fields you need from fork results' in best_text.lower())\n"
+            "print('status/response/memory_key' in best_text)\n"
             "print('include_history=True' in best_text)\n"
         )
 
