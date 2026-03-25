@@ -51,33 +51,23 @@ class TestBuildChatSystemPrompt:
 
     def test_build_with_docstring(self) -> None:
         """Test building system prompt with docstring."""
-        result = build_chat_system_prompt("Test docstring", None)
+        result = build_chat_system_prompt("Test docstring")
         assert result == "Test docstring"
 
     def test_build_without_docstring(self) -> None:
         """Test building system prompt without docstring."""
-        result = build_chat_system_prompt("", None)
+        result = build_chat_system_prompt("")
         assert result is None
 
-    def test_build_with_tools(self) -> None:
-        """Test building system prompt with tools."""
-        tools = [
-            {
-                "function": {
-                    "name": "test_tool",
-                    "description": "A test tool",
-                }
-            }
-        ]
-        result = build_chat_system_prompt("Test docstring", tools)
-        assert result is not None
-        assert "test_tool" in result
+    def test_build_does_not_prepend_tool_list(self) -> None:
+        """System prompt should stay focused on docstring/history text."""
+        result = build_chat_system_prompt("Test docstring")
+        assert result == "Test docstring"
 
     def test_build_prefers_history_system_prompt(self) -> None:
         """History-derived system prompt should override docstring text."""
         result = build_chat_system_prompt(
             "Docstring prompt",
-            None,
             history_system_prompt="History prompt",
         )
         assert result == "History prompt"

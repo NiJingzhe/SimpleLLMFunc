@@ -41,8 +41,8 @@ and the user's request.
     {return_type_description}
 
 Execution Requirements:
-1. Return the result in plain text (no XML/JSON/Markdown wrappers)
-2. Keep formatting minimal unless explicitly requested
+1. Return the result in plain text
+2. Use minimal formatting and add extra structure when the request calls for it
 """
 
 # 复杂返回类型（Pydantic/List/Dict/Union）继续使用 XML 约束
@@ -61,7 +61,7 @@ and the user's request.
 
 Execution Requirements:
 1. Use available tools to assist in completing the task if needed
-2. Return the result as well-formed XML without any markdown formatting or code blocks
+2. Return the result as well-formed XML
 3. Ensure all XML tags are properly closed
 """
 
@@ -69,7 +69,7 @@ DEFAULT_USER_PROMPT_TEMPLATE = """
 The parameters provided are:
     {parameters}
 
-Return the result directly without any explanation or formatting.
+Return the result directly as the final output.
 """
 
 

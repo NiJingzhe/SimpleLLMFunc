@@ -15,6 +15,11 @@ from .primitives import (
 
 
 DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
+SELF_REFERENCE_PACK_GUIDANCE = (
+    "selfref = your agent state: your memory plus your forked child agents. "
+    "Use it for durable memory, context cleanup, and parallel sub-agent "
+    "decomposition."
+)
 
 
 def register_self_reference_primitives(
@@ -48,6 +53,7 @@ def build_self_reference_pack(
         "selfref",
         backend=backend,
         backend_name=backend_name,
+        guidance=SELF_REFERENCE_PACK_GUIDANCE,
     )
     handlers = _build_self_reference_handlers(backend_name)
     for name, handler in handlers:
@@ -350,7 +356,7 @@ def _build_self_reference_handlers(
         Use: Diagnostic helper for checking whether a self-reference agent callable is available for fork delegation.
         Input: No arguments.
         Output: `bool`.
-        Parse: `True` means `selfref.fork.*` can delegate. Use this only for diagnostics, not as a routine preflight step.
+        Parse: `True` means `selfref.fork.*` can delegate. Use this for diagnostics and setup checks.
         """
         return require_self_reference(ctx).instance.is_bound()
 
@@ -389,7 +395,7 @@ def _build_self_reference_handlers(
         Use: Diagnostic helper for checking whether recursive self-reference fork delegation is available.
         Input: No arguments.
         Output: `bool`.
-        Parse: `True` means a child agent can be spawned. Use this only when debugging setup issues.
+        Parse: `True` means a child agent can be spawned. Use this for setup diagnostics.
         """
         return fork_is_bound(ctx)
 
@@ -430,21 +436,20 @@ def _build_self_reference_handlers(
         return await fork_gather_all(ctx, fork_ids, include_history=include_history)
 
     selfref_best_practices = [
-        "Mental model: selfref = your agent state. (1) Your memory: message history via selfref.history.*. (2) Your clones: forked child agents via selfref.fork.*. Not philosophical self-reference, not Python self.",
+        "Mental model: selfref = your agent state. (1) Your memory: message history via selfref.history.*. (2) Your clones: forked child agents via selfref.fork.*.",
         "Use selfref.history.* to read/write your conversation memory (messages). Prefer appending durable preferences into the system prompt via selfref.history.append_system_prompt(...).",
         "When `key` is omitted, selfref resolves an active memory key for the current execution context. Use selfref.history.active_key() to see which key is currently in scope.",
-        "Safety: do not assume internal data structures; only interact via runtime primitives (runtime.selfref.history.* and runtime.selfref.fork.*). Do not invent fields in message dicts.",
+        "Use runtime.selfref.history.* and runtime.selfref.fork.* as the interface for self-reference operations. Build message dicts with standard fields such as role/content/tool metadata.",
         "Each layer focuses on planning for its own scope; delegate concrete execution to child forks.",
         "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then gather results (selfref.fork.gather_all).",
         "Before forking, review and trim memory; summarize irrelevant context or dump it to files.",
-        "runtime.selfref.history.clear clears non-system history only; the current system prompt is preserved.",
-        "Call selfref.fork.spawn directly; do not use selfref.fork.is_bound as routine preflight. If fork status is error, read error_type/error_message and fix call arguments.",
-        "Child args/kwargs must satisfy the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Do not invent unsupported kwargs such as goal=/scope= unless the agent actually accepts them.",
+        "Use runtime.selfref.history.clear to clear non-system history while preserving the current system prompt.",
+        "Call selfref.fork.spawn directly for fork creation. When fork status is error, inspect error_type/error_message and fix call arguments.",
+        "Pass child args/kwargs that match the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Use supported kwargs from the agent signature.",
         "In fork prompts, define completion boundaries and require explicit acceptance criteria; prefer file-based handoff plus parent-agent messaging over dumping everything in chat.",
-        "Fork results are compact by default (history omitted). Use include_history=True only when full child history is explicitly required; otherwise use memory_key + selfref.history.* to fetch details on demand.",
-        "Fork result contract reminder: consume only required keys (fork_id/status/response/history_count/memory_key). Full child history is omitted unless include_history=True.",
-        "If a fork result status is error, inspect error_type/error_message immediately; do not assume response/history_count explain the failure.",
-        "NEVER print raw fork result dict (forbidden: print(result)). Read only the fields you need (status/response/memory_key) and fetch history explicitly when needed.",
+        "Fork results are compact by default (history omitted). Use include_history=True when full child history is required; use memory_key + selfref.history.* for on-demand detail reads.",
+        "For fork results, read status/response/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying.",
+        "Read the fields you need from fork results (status/response/memory_key) and fetch history explicitly when needed.",
         "After each milestone, review and reorganize memory before moving forward.",
     ]
 
@@ -458,12 +463,7 @@ def _build_self_reference_handlers(
         """
         return {
             "namespace": "selfref",
-            "overview": (
-                "selfref = your agent state. (1) Your memory: message history via selfref.history.*. "
-                "(2) Your clones: child agents via selfref.fork.spawn/gather_all. "
-                "You operate on your own memory and create your own clones. "
-                "Not philosophical self-reference, not Python self."
-            ),
+            "overview": SELF_REFERENCE_PACK_GUIDANCE,
             "best_practices": list(selfref_best_practices),
         }
 
@@ -496,6 +496,7 @@ def _build_self_reference_handlers(
 
 __all__ = [
     "DEFAULT_SELF_REFERENCE_BACKEND_NAME",
+    "SELF_REFERENCE_PACK_GUIDANCE",
     "build_self_reference_pack",
     "register_self_reference_primitives",
 ]
