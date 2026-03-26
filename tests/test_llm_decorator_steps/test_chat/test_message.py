@@ -51,33 +51,23 @@ class TestBuildChatSystemPrompt:
 
     def test_build_with_docstring(self) -> None:
         """Test building system prompt with docstring."""
-        result = build_chat_system_prompt("Test docstring", None)
+        result = build_chat_system_prompt("Test docstring")
         assert result == "Test docstring"
 
     def test_build_without_docstring(self) -> None:
         """Test building system prompt without docstring."""
-        result = build_chat_system_prompt("", None)
+        result = build_chat_system_prompt("")
         assert result is None
 
-    def test_build_with_tools(self) -> None:
-        """Test building system prompt with tools."""
-        tools = [
-            {
-                "function": {
-                    "name": "test_tool",
-                    "description": "A test tool",
-                }
-            }
-        ]
-        result = build_chat_system_prompt("Test docstring", tools)
-        assert result is not None
-        assert "test_tool" in result
+    def test_build_does_not_prepend_tool_list(self) -> None:
+        """System prompt should stay focused on docstring/history text."""
+        result = build_chat_system_prompt("Test docstring")
+        assert result == "Test docstring"
 
     def test_build_prefers_history_system_prompt(self) -> None:
         """History-derived system prompt should override docstring text."""
         result = build_chat_system_prompt(
             "Docstring prompt",
-            None,
             history_system_prompt="History prompt",
         )
         assert result == "History prompt"
@@ -151,13 +141,9 @@ class TestFilterHistoryMessages:
 class TestBuildChatMessages:
     """Tests for build_chat_messages function."""
 
-    @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.process_tools")
     @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.has_multimodal_content")
-    def test_build_messages(
-        self, mock_has_multimodal: Any, mock_process_tools: Any
-    ) -> None:
+    def test_build_messages(self, mock_has_multimodal: Any) -> None:
         """Test building chat messages."""
-        mock_process_tools.return_value = (None, {})
         mock_has_multimodal.return_value = False
 
         from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
@@ -184,13 +170,11 @@ class TestBuildChatMessages:
         result = build_chat_messages(signature, None, ["history"])
         assert len(result) >= 1
 
-    @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.process_tools")
     @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.has_multimodal_content")
     def test_build_messages_uses_history_system_prompt(
-        self, mock_has_multimodal: Any, mock_process_tools: Any
+        self, mock_has_multimodal: Any
     ) -> None:
         """History system prompt should override docstring in built messages."""
-        mock_process_tools.return_value = (None, {})
         mock_has_multimodal.return_value = False
 
         from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature

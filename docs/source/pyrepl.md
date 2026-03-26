@@ -73,7 +73,7 @@ async def chat2(message: str, history=None):
 
 > 说明：`execute_code` 默认有 600 秒活动执行超时保护。等待 `input()` 期间不会计入超时；每次 `input()` 成功回填后会重置超时计时。同时，单次 `input()` 默认 300 秒空闲超时。任一超时触发时 `success=False`，并在 `error`/`stderr` 中返回超时信息。你也可以在工具调用时传入 `timeout_seconds` 为该次执行单独设置超时。
 
-> 工具说明（发送给模型）的指引：请直接编写可执行片段，不要加 `if __name__ == "__main__":`，支持 `input()`；用 `runtime.list_primitives(contains="selfref.")` 发现原语，再用 `runtime.get_primitive_spec(name)` 或 `runtime.list_primitive_specs(names=[...], contains="selfref.")` 查看契约（默认 XML，只有需要字段访问时才用 `format="dict"`）；`reset_repl` **不会**删除已挂载的记忆状态。
+> 工具说明（发送给模型）的指引：请直接编写当前 REPL 会话可执行的顶层代码，支持 `input()`；先用 `runtime.list_primitives()` 发现原语，再用 `runtime.list_primitives(contains="<namespace>.")` 做命名空间过滤；查看契约时优先使用 `runtime.get_primitive_spec(name)`，需要批量查看时再用 `runtime.list_primitive_specs(names=[...], contains="...")`；契约默认返回 XML，需要在代码里直接读字段时使用 `format="dict"`；使用 `reset_repl` 可以清理 REPL 变量并继续保留当前 runtime backend 状态。
 
 **参数：**
 
@@ -261,7 +261,9 @@ repl = PyRepl(working_directory="./sandbox")
 
 ## 使用 SelfReference 后端的 Runtime 原语
 
-通过显式绑定把 `SelfReference` 作为 host 侧记忆后端：
+`PyRepl()` 启动时会默认安装内置 `selfref` pack。
+
+当你希望把外部 `SelfReference` 与当前 REPL 共享成同一份记忆状态时，可以显式传入 `self_reference=`：
 
 ```python
 from SimpleLLMFunc import llm_chat
@@ -269,8 +271,7 @@ from SimpleLLMFunc.builtin import PyRepl
 from SimpleLLMFunc.builtin import SelfReference
 
 self_reference = SelfReference()
-repl = PyRepl()
-repl.install_primitive_pack("selfref", backend=self_reference)
+repl = PyRepl(self_reference=self_reference)
 
 @llm_chat(
     llm_interface=llm,
@@ -285,42 +286,88 @@ async def agent(message: str, history=None):
 
 `PyRepl` 也支持通用 runtime 扩展点，不仅限于 `selfref` 包：
 
+若需要更完整的概念说明，见 [Primitive 原语](detailed_guide/primitive.md)。
+
+其中 `pack(..., guidance="...")` 适合描述这一整包 runtime 能力的心智模型；具体 primitive 的细节仍然通过 `runtime.get_primitive_spec(name)` / `runtime.list_primitive_specs(...)` 查询。
+
+对大多数自定义 runtime primitive 场景，推荐直接采用 `pack -> @pack.primitive -> install_pack` 这条路径；它会把 namespace、共享 backend、pack guidance 和安装生命周期放在同一个抽象里。
+
+- `pack(name, backend=..., backend_name=None, guidance="")`
+- `install_pack(pack, replace=False)`
+- `@repl.primitive(name, backend="...")`
 - `register_runtime_backend(name, backend, replace=False)`
-- `register_primitive(name, handler, description="", replace=False)`
+- `register_primitive(name, handler, description="", backend_name=None, replace=False)`
 - `register_primitive_pack_installer(pack_name, installer, replace=False)`
 - `install_primitive_pack(pack_name, **options)`
 - `list_runtime_backends()` and `list_primitives()`
+- `list_installed_packs()`
+- `get_primitive_contract(name)` / `list_primitive_contracts(...)`
 - `runtime.get_primitive_spec(name)`（在 REPL 内）查看单个原语契约
-- `runtime.list_primitive_specs(names=[...], contains="selfref.")`（在 REPL 内）按条件过滤查看：名称、描述、输入/输出、参数与最佳实践
+- `runtime.list_primitives(contains="<namespace>.")`（在 REPL 内）按命名空间发现原语
+- `runtime.list_primitive_specs(names=[...], contains="...")`（在 REPL 内）按条件过滤查看：名称、描述、输入/输出、参数与最佳实践
 
 ```python
+class GitHubRepoAPI:
+    def list_open_issues(self, repo: str) -> list[dict[str, str]]:
+        # In production, call GitHub REST/GraphQL here.
+        return [{"id": "42", "title": "Bug: tool timeout", "repo": repo}]
+
+
 repl = PyRepl()
 
-repl.register_runtime_backend(
-    "constants",
-    {"project": "SimpleLLMFunc"},
-    replace=True,
+github_repo = repl.pack(
+    "github_repo",
+    backend=GitHubRepoAPI(),
+    guidance="github_repo = repository issue/query primitives backed by GitHubRepoAPI.",
 )
 
-def constants_get(_ctx, key: str):
-    backend = repl.get_runtime_backend("constants")
-    if not isinstance(backend, dict):
-        raise RuntimeError("runtime backend 'constants' must be a dict")
-    return backend.get(key)
-
-repl.register_primitive(
-    "constants.get",
-    constants_get,
-    description="Read one value from constants backend.",
-    replace=True,
+@github_repo.primitive(
+    "list_open_issues",
+    description="List open issues from a GitHub repository.",
 )
+def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
+    backend = ctx.backend
+    if not isinstance(backend, GitHubRepoAPI):
+        raise RuntimeError("backend must be a GitHubRepoAPI")
+    return backend.list_open_issues(repo)
 
-await repl.execute('print(runtime.constants.get("project"))')
+repl.install_pack(github_repo)
+
+await repl.execute('print(runtime.github_repo.list_open_issues("owner/repo"))')
 ```
 
-当 `@llm_chat(...)` 使用带 runtime 的工具（如 `PyRepl`）时，框架会在 prompt 顶部注入去重后的 `Tool Best Practices` 块；runtime 原语指引会包含在工具的最佳实践条目中。
+若只是补一个轻量级原语，也可以直接使用装饰器糖：
 
-当 `PyRepl` 挂载了 `SelfReference` 后端时，`llm_chat` 可从 toolkit 的 runtime backend 自动解析（无需强制传 `self_reference=`），同时仍支持显式传入 `self_reference=`。
+```python
+repo_backend = GitHubRepoAPI()
+
+repl.register_runtime_backend("github_repo", repo_backend, replace=True)
+
+
+@repl.primitive("github_repo.list_open_issues", backend="github_repo", replace=True)
+def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
+    backend = ctx.get_backend("github_repo")
+    if not isinstance(backend, GitHubRepoAPI):
+        raise RuntimeError("backend must be a GitHubRepoAPI")
+    return backend.list_open_issues(repo)
+```
+
+建议：primitive handler 优先通过 `ctx.backend` / `ctx.get_backend(...)` 访问能力，
+这样框架才能在 fork/clone 时正确管理依赖。
+
+#### RuntimePrimitiveBackend 生命周期
+
+如果你的 backend 是一个带状态的服务对象，建议让它实现 `RuntimePrimitiveBackend`：
+
+- `clone_for_fork(context=...)`：fork child 时如何复制/共享 backend（默认共享，返回 self）
+- `on_install(repl)`：backend 安装到 PyRepl 时回调
+- `on_close(repl)`：PyRepl 关闭时回调，用于释放资源或清理状态
+
+这让 fork 时的 copy 策略和生命周期变得可控，也更容易保证子 agent 行为稳定。
+
+当 `@llm_chat(...)` 使用带 runtime 的工具（如 `PyRepl`）时，框架会在 prompt 顶部注入去重后的 `Tool Best Practices` 块；runtime 原语指引会包含在工具自己的最佳实践条目中。
+
+由于 `PyRepl()` 默认已经安装 builtin `selfref` pack，`llm_chat` 可以直接从 toolkit 的 runtime backend 自动解析 `SelfReference`。如果你传入了 `PyRepl(self_reference=self_reference)`，则 `llm_chat` 会解析到这份外部共享 backend。
 
 首次回合安全：若 memory key 为空，会在执行工具前把当前 system prompt 写入 `self_reference`，确保 runtime 读取不为空且包含 system 消息。
 
@@ -398,7 +445,7 @@ Runtime SelfReference 原语参考：
 默认情况下 fork 结果为紧凑模式，仅返回 `fork_id`、`memory_key`、`response`、`history_count`、`history_included=False` 等元数据。
 只有确实需要子历史时才设置 `include_history=True`。
 
-Fork planning checklist (same guidance returned by `runtime.selfref.guide()`):
+Fork 规划清单（`runtime.selfref.guide()` 会返回同样的 guidance）：
 
 1. 每一层 agent 只做本层规划，执行下放给子 fork。
 2. 无依赖的任务尽量并行 `fork.spawn(...)`。
@@ -407,11 +454,11 @@ Fork planning checklist (same guidance returned by `runtime.selfref.guide()`):
 5. fork 结果默认是紧凑模式；需要子历史时再按需 `include_history=True`。
 6. 每个里程碑后回收并整理记忆，再进入下一阶段。
 
-忘记记忆的注意事项：
+清理记忆的注意事项：
 
-- 忘记记忆 **不是** `reset_repl`。
-- `reset_repl` 仅清理 REPL 命名空间中的 Python 变量。
-- 需要清除记忆时，请使用 `runtime.selfref.history.delete(...)` 或 `runtime.selfref.history.replace(...)`；`runtime.selfref.history.clear(...)` 会保留当前 system prompt。
+- 使用 `reset_repl` 清理 REPL 命名空间中的 Python 变量。
+- 需要清理记忆时，使用 `runtime.selfref.history.delete(...)` 或 `runtime.selfref.history.replace(...)`。
+- 需要保留当前 system prompt 时，使用 `runtime.selfref.history.clear(...)`。
 
 所有操作都会写入 `SelfReference` 的内部存储，而不是直接暴露原始列表。单次对话中的记忆变更会在回合结束时合并进返回的 `updated_history`（事件模式下为 `ReactEndEvent.final_messages`）。
 

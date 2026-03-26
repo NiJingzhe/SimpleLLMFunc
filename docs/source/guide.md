@@ -32,6 +32,7 @@ llm_chat 装饰器 <detailed_guide/llm_chat>
 :maxdepth: 1
 :caption: 工具与运行时
 
+Primitive 原语 <detailed_guide/primitive>
 工具系统 <detailed_guide/tool>
 PyRepl运行时 <pyrepl>
 ```
@@ -74,6 +75,9 @@ Langfuse集成 <langfuse_integration>
 ### 我想要整合工具/API
 👉 [工具系统](detailed_guide/tool.md) - 让 LLM 调用外部函数和 API
 
+### 我想要扩展 runtime 原语
+👉 [Primitive 原语](detailed_guide/primitive.md) - CodeAct 运行时 builtin tool
+
 ### 我想要理解接口设计
 👉 [LLM 接口层](detailed_guide/llm_interface.md) - 了解密钥管理和流量控制
 
@@ -107,6 +111,7 @@ Langfuse集成 <langfuse_integration>
 | 事件流 | [事件流系统](detailed_guide/event_stream.md) | 实时观察、工具调用监控、性能分析 |
 | 中断控制 | [中断与取消](detailed_guide/abort.md) | 终止流式输出、取消工具调用 |
 | 工具集成 | [工具系统](detailed_guide/tool.md) | 工具定义、调用、多模态返回 |
+| 原语系统 | [Primitive 原语](detailed_guide/primitive.md) | CodeAct 运行时内置能力 |
 | 系统设计 | [LLM 接口层](detailed_guide/llm_interface.md) | 接口抽象、密钥池、流量控制 |
 | 实战示例 | [示例代码](examples.md) | 各种场景的完整代码 |
 

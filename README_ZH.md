@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.2)
+### 更新说明 (0.7.3)
 
-🚀 **OpenAI SDK 2.x 基线**：SimpleLLMFunc 现在明确要求 `openai >=2.0.0,<3.0.0`，并同步更新了锁文件。
+🚀 **Runtime Primitive Pack 标准化**：统一了 `PrimitivePack` 的开发方式，补齐了 pack guidance、backend 生命周期钩子，并让 builtin `selfref` 在 `PyRepl` 启动时走同一条安装路径。
 
-🧩 **工具调用类型稳定性**：运行时代码与测试统一切换到新版 OpenAI SDK 使用的函数工具调用具体类型。
+🧠 **Prompt 与 Runtime 指引收敛**：简化了注入提示，把 pack 心智模型下沉到 pack 级 `guidance`，并统一了 `runtime.list_primitives(contains="<namespace>.")` 这一套发现方式。
 
-⚠️ **兼容性变更**：本版本不再支持 OpenAI Python SDK 1.x。
+🩺 **可观测性修复**：当当前上下文没有 active span 时，trace-context 查询不再反复刷 Langfuse 的 "No active span in current context" 警告，同时保留了嵌套 span 的父子关系。
 
-📘 **发布文档更新**：已同步更新包元数据、README 引用版本与 0.7.2 发布说明。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **文档与本地化更新**：补齐了 runtime primitive 开发/注册/spec 文档，重建了 `po`/`mo` 目录，清理了英文翻译残留，并恢复了中英文 Sphinx 文档构建。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -355,6 +355,27 @@ async def main():
 
     async for response, updated_history in async_chat("你好", []):
         print(response)
+```
+
+#### 工具调用上限默认值
+
+`llm_function` 和 `llm_chat` 现在默认都使用 `max_tool_calls=None`。
+
+- `None` 表示 SimpleLLMFunc 默认不主动施加框架级的工具调用轮数上限
+- 这更适合长链路 agent 和深度工具调用工作流
+- 如果你希望更保守地防止循环或失控规划，可以显式传入整数，例如 `max_tool_calls=8`
+
+```python
+@llm_function(llm_interface=my_llm_interface, max_tool_calls=None)
+async def analyze(text: str) -> str:
+    """分析文本。"""
+    pass
+
+
+@llm_chat(llm_interface=my_llm_interface, stream=True, max_tool_calls=12)
+async def cautious_agent(message: str, history=None):
+    """显式设置安全上限的对话 agent。"""
+    pass
 ```
 
 #### 多模态支持
@@ -921,7 +942,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.2},
+  version = {0.7.3},
   year = {2026}
 }
 ```

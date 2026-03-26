@@ -5,8 +5,8 @@ Run:
 
 This example does not require any LLM provider. It demonstrates how to:
 1. Create and bind a SelfReference memory key.
-2. Install SelfReference primitive pack into PyRepl.
-3. Register a custom runtime backend and primitive.
+2. Start PyRepl with a shared SelfReference backend.
+3. Declare a custom PrimitivePack with backend-aware handlers.
 4. Append durable memory into system prompt via runtime.selfref.history.append_system_prompt.
 5. Perform common memory CRUD operations through runtime.selfref.history.* primitives.
 
@@ -49,30 +49,34 @@ async def main() -> None:
         ],
     )
 
-    repl = PyRepl()
-    repl.install_primitive_pack("selfref", backend=self_reference)
+    repl = PyRepl(self_reference=self_reference)
 
-    repl.register_runtime_backend(
+    constants = repl.pack(
         "constants",
-        {
+        backend={
             "app_name": "SimpleLLMFunc",
             "memory_key": MEMORY_KEY,
         },
-        replace=True,
     )
 
-    def constants_get(_ctx, key: str):
-        constants = repl.get_runtime_backend("constants")
-        if not isinstance(constants, dict):
-            raise RuntimeError("runtime backend 'constants' must be a dict")
-        return constants.get(key)
-
-    repl.register_primitive(
-        "constants.get",
-        constants_get,
+    @constants.primitive(
+        "get",
         description="Read one value from constants runtime backend.",
-        replace=True,
     )
+    def constants_get(ctx, key: str):
+        """
+        Use: Read one value from constants backend.
+        Input: `key: str`.
+        Output: `str | None`.
+        Best Practices:
+        - Keep lookups to single keys.
+        """
+        backend = ctx.backend
+        if not isinstance(backend, dict):
+            raise RuntimeError("runtime backend 'constants' must be a dict")
+        return backend.get(key)
+
+    repl.install_pack(constants)
 
     print("Before execute_code:")
     print(self_reference.snapshot_history(MEMORY_KEY))
@@ -82,7 +86,10 @@ print("backends:", runtime.list_backends())
 print("has constants.get:", "constants.get" in runtime.list_primitives())
 print(
     "has constants description:",
-    any(item.get("name") == "constants.get" for item in runtime.list_primitive_specs()),
+    any(
+        item.get("name") == "constants.get"
+        for item in runtime.list_primitive_specs(format='dict')
+    ),
 )
 print("app_name:", runtime.constants.get("app_name"))
 """

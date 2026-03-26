@@ -137,8 +137,8 @@ poetry run python examples/tui_chat_example.py
 
 Shows how to use runtime primitives without any LLM provider:
 
-- Explicitly wire `SelfReference` with `PyRepl` as memory backend
-- Register one custom runtime backend + primitive (`constants.get`) as extension example
+- Start `PyRepl` with a shared `SelfReference` backend via `PyRepl(self_reference=...)`
+- Declare one custom `PrimitivePack` (`constants.get`) as extension example
 - Perform CRUD operations through `runtime.selfref.history.*`
 - Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`
 
@@ -156,7 +156,7 @@ Recommended single entry for a TUI-first agent workflow:
 
 - One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
 - `FileToolset` provides read/grep/sed/echo tools scoped to the workspace
-- `llm_chat` injects runtime primitive guidance through `Tool Best Practices` (when `PyRepl` is mounted)
+- `llm_chat` injects runtime primitive guidance through tool-owned best practices (when `PyRepl` is mounted)
 - Forked contexts inherit parent memory snapshot from the same selfref key
 - Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
 - Workspace is scoped to `./sandbox` under the project root
@@ -165,6 +165,23 @@ Run:
 
 ```bash
 poetry run python examples/tui_general_agent_example.py
+```
+
+### Agent as a tool (stacked decorators)
+
+**文件**: [examples/agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)
+
+展示如何把一个 LLM 驱动的 specialist 暴露成另一个 agent 的工具：
+
+- `@tool` 外层 + `@llm_function` 内层，将 child agent 暴露进 `toolkit`
+- parent `@llm_chat` 作为 supervisor，负责路由和最终答复
+- child agent 保持独立 prompt / 职责边界，适合 reviewer / planner / router 组合
+- 当前推荐子 agent 使用 `@llm_function(enable_event=False)`；若要复用 `@llm_chat`，通常需要先手写一层 wrapper tool
+
+Run:
+
+```bash
+poetry run python examples/agent_as_tool_example.py
 ```
 
 ### llm_function 事件流与 Token 用量监控
@@ -281,6 +298,7 @@ poetry run python examples/llm_function_token_usage.py
 ### 工具调用
 - **内置 REPL 工具调用**: 见 [pyrepl_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/pyrepl_example.py)
 - **多工具并行调用**: 见 [parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)
+- **Agent as a Tool**: 见 [agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)
 
 ### 对话与 Agent
 - **事件流聊天**: 见 [event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)

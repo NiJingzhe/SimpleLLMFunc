@@ -34,7 +34,7 @@ from SimpleLLMFunc import llm_chat
 @llm_chat(
     llm_interface=llm_interface,           # LLM interface instance (required)
     toolkit=None,                          # Tool list (optional)
-    max_tool_calls=5,                      # Max tool calls (optional)
+    max_tool_calls=None,                   # Max tool calls (optional)
     stream=True,                           # Stream mode (optional)
     self_reference=None,                   # Shared SelfReference object (optional)
     self_reference_key=None,               # SelfReference memory key (optional)
@@ -57,7 +57,7 @@ async def your_chat_function(
 
 - **llm_interface** (必需): LLM 接口实例，用于与大语言模型通信
 - **toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数
-- **max_tool_calls** (可选): 最大工具调用次数，防止无限循环，默认为 5
+- **max_tool_calls** (可选): 最大工具调用次数；默认为 `None`，表示框架不主动施加工具调用上限。如需更严格保护，请显式传入较小整数。
 - **stream** (可选): 是否启用流式模式，默认为 False
 - **return_mode** (可选): 返回模式，可选值为 "text"（默认）或 "raw"。
   - 仅在 `enable_event=False` 时生效
@@ -290,27 +290,28 @@ asyncio.run(demo())
 
 ### SelfReference + runtime primitives
 
-When runtime-enabled tools are mounted (for example via `PyRepl`), the framework injects a deduplicated tool best-practices block at the system-prompt head. Runtime primitive guidance is included inside those tool-owned best-practice entries.
+当挂载了带 runtime 的工具（例如 `PyRepl`）时，框架会在 system prompt 顶部注入一段去重后的工具最佳实践块；runtime primitive 的指引会包含在这些工具自己的 best practices 中。
 
-The guidance is rebuilt per turn and keeps durable system-prompt memory clean; durable prompt text can still be updated via `set_system_prompt(...)` / `append_system_prompt(...)`.
+这段 guidance 会在每个回合按当前 runtime 状态重新构建，因此不会把临时运行时说明写进持久化 system-prompt memory；需要持久修改提示词时，仍然使用 `set_system_prompt(...)` / `append_system_prompt(...)`。
 
-The guidance tells the agent:
+这段 guidance 会告诉 agent：
 
-- how to discover mounted runtime capabilities (`runtime.list_primitives()`)
-- how to inspect one exact contract (`runtime.get_primitive_spec(name)`) or a filtered subset (`runtime.list_primitive_specs(names=[...], contains="selfref.fork.")`)
-- how to read selfref namespace guidance (`runtime.selfref.guide()`)
-- reset semantics (`reset_repl` clears REPL variables, not runtime backend state)
-- (when SelfReference memory is bound) the memory key scope for this chat function
+- 如何发现当前挂载的 runtime 能力（`runtime.list_primitives()`）
+- 如何查看单个契约（`runtime.get_primitive_spec(name)`）或按条件筛选契约（`runtime.list_primitive_specs(names=[...], contains="...")`）
+- 如何查看 selfref 命名空间 guidance（`runtime.selfref.guide()`）
+- `reset_repl` 会清理 REPL 变量，并继续保留当前 runtime backend 状态
+- 当绑定了 `SelfReference` 记忆时，本 chat 函数对应的 memory key 作用域
 
-Example:
+`PyRepl()` 默认会安装 builtin `selfref` pack；当你传入 `PyRepl(self_reference=self_reference)` 时，`llm_chat` 会解析并复用这份外部共享 backend。
+
+示例：
 
 ```python
 from SimpleLLMFunc import llm_chat
 from SimpleLLMFunc.builtin import PyRepl, SelfReference
 
 self_reference = SelfReference()
-repl = PyRepl()
-repl.install_primitive_pack("selfref", backend=self_reference)
+repl = PyRepl(self_reference=self_reference)
 
 @llm_chat(
     llm_interface=llm,
@@ -333,7 +334,7 @@ await agent(
 )
 ```
 
-Inside `execute_code`, prefer runtime primitives for memory operations:
+在 `execute_code` 中，优先通过 runtime primitives 处理记忆：
 
 ```python
 runtime.selfref.history.append_system_prompt(
@@ -341,30 +342,30 @@ runtime.selfref.history.append_system_prompt(
 )
 ```
 
-Runtime self-reference primitive reference:
+Runtime self-reference 原语参考：
 
-- `runtime.selfref.guide()`: return namespace overview and fork/memory best-practice checklist.
-- `runtime.selfref.history.keys()`: list all bound memory keys.
-- `runtime.selfref.history.active_key()`: resolve active history key in current context.
-- `runtime.selfref.history.count(key=None)`: return number of messages in resolved key.
-- `runtime.selfref.history.all(key=None)`: return deep-copied full message list.
-- `runtime.selfref.history.get(index, key=None)`: read one message at index.
-- `runtime.selfref.history.append(message, key=None)`: append one message.
-- `runtime.selfref.history.insert(index, message, key=None)`: insert one message at index.
-- `runtime.selfref.history.update(index, message, key=None)`: replace one message at index.
-- `runtime.selfref.history.delete(index, key=None)`: delete one message at index.
-- `runtime.selfref.history.replace(messages, key=None)`: replace entire history with validated messages.
-- `runtime.selfref.history.clear(key=None)`: clear non-system messages and keep current system prompt.
-- `runtime.selfref.history.get_system_prompt(key=None)`: read latest system prompt.
-- `runtime.selfref.history.set_system_prompt(text, key=None)`: overwrite system prompt.
-- `runtime.selfref.history.append_system_prompt(text, key=None)`: append text to existing system prompt memory.
-- `runtime.selfref.fork.spawn(message, ...)`: spawn child self-fork asynchronously (chat-style).
-- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: gather fork results and return `dict[fork_id -> ForkResult]` (iterate with `.items()`/`.values()`).
+- `runtime.selfref.guide()`: 返回命名空间概览与 fork / 记忆最佳实践清单。
+- `runtime.selfref.history.keys()`: 列出所有已绑定的 memory key。
+- `runtime.selfref.history.active_key()`: 获取当前上下文解析出的 active key。
+- `runtime.selfref.history.count(key=None)`: 返回解析后 key 的消息数量。
+- `runtime.selfref.history.all(key=None)`: 返回完整消息列表的深拷贝。
+- `runtime.selfref.history.get(index, key=None)`: 读取指定索引的消息。
+- `runtime.selfref.history.append(message, key=None)`: 追加一条消息。
+- `runtime.selfref.history.insert(index, message, key=None)`: 在指定索引插入一条消息。
+- `runtime.selfref.history.update(index, message, key=None)`: 替换指定索引消息。
+- `runtime.selfref.history.delete(index, key=None)`: 删除指定索引消息。
+- `runtime.selfref.history.replace(messages, key=None)`: 用校验后的消息列表替换整段历史。
+- `runtime.selfref.history.clear(key=None)`: 清理非 system 消息并保留当前 system prompt。
+- `runtime.selfref.history.get_system_prompt(key=None)`: 读取最新 system prompt。
+- `runtime.selfref.history.set_system_prompt(text, key=None)`: 覆盖当前 system prompt。
+- `runtime.selfref.history.append_system_prompt(text, key=None)`: 向现有 system prompt memory 追加文本。
+- `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 self-fork（chat 形态）。
+- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()` / `.values()` 遍历）。
 
-Fork results are compact by default (`history_included=False`, with `history_count` metadata) to avoid main-context pollution.
-Use `include_history=True` only when full child history is explicitly required.
+默认情况下 fork 结果是紧凑模式（`history_included=False`，并提供 `history_count` 元数据），这样主上下文可以保持简洁。
+确实需要完整子历史时，再显式使用 `include_history=True`。
 
-When `enable_event=True`, you can route main/fork events by origin metadata:
+当 `enable_event=True` 时，你可以通过 origin 元数据区分主链路事件与 fork 事件：
 
 ```python
 from SimpleLLMFunc.hooks import is_event_yield
@@ -378,11 +379,11 @@ async for output in agent("analyze and split"):
         print(f"main type={output.event.event_type}")
 ```
 
-Forgetting memory:
+清理记忆：
 
-- Do not treat `reset_repl` as memory forgetting.
-- `reset_repl` only clears Python runtime variables.
-- Forget memory by deleting/replacing records through selfref history primitives (`runtime.selfref.history.delete`, `runtime.selfref.history.replace`); `runtime.selfref.history.clear` keeps only the current system prompt.
+- 使用 `reset_repl` 清理 Python runtime 变量。
+- 使用 selfref history primitives 清理记忆记录，例如 `runtime.selfref.history.delete`、`runtime.selfref.history.replace`。
+- 需要保留当前 system prompt 时，使用 `runtime.selfref.history.clear`。
 
 ### 返回模式
 

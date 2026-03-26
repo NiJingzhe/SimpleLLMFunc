@@ -6,7 +6,7 @@ This directory is for runnable user-facing examples.
 
 - `runtime_primitives_basic_example.py`
   - Run: `poetry run python examples/runtime_primitives_basic_example.py`
-  - Shows runtime backend/primitive registration and `runtime.selfref.history.*` usage.
+  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.history.*` usage.
 
 ## Interactive TUI Demos (Requires `examples/provider.json`)
 
@@ -23,6 +23,7 @@ This directory is for runnable user-facing examples.
 - `pyrepl_example.py`: standalone PyRepl patterns and event streaming.
 - `event_stream_chatbot.py`: full event-stream chatbot UI.
 - `custom_tool_event_example.py`: custom tool event emission.
+- `agent_as_tool_example.py`: expose a specialist `@llm_function` as a tool for a supervisor agent.
 - `parallel_toolcall_example.py`: parallel tool-calling behavior.
 - `multi_modality_toolcall.py`: multimodal tool call flow.
 - `dynamic_template_demo.py`: `_template_params` dynamic template usage.

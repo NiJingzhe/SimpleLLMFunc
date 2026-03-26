@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-14 21:05+0800\n"
+"POT-Creation-Date: 2026-03-27 01:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -73,6 +73,10 @@ msgid "Agent 主体逻辑"
 msgstr "Agent Main Logic"
 
 #: ../../source/index.md:38
+msgid "Primitive 原语"
+msgstr "Primitive Primitive"
+
+#: ../../source/index.md:38
 msgid "工具系统"
 msgstr "Tool System"
 
@@ -84,27 +88,27 @@ msgstr "PyRepl runtime"
 msgid "工具与运行时"
 msgstr "Tools and Runtime"
 
-#: ../../source/index.md:46
+#: ../../source/index.md:47
 msgid "终端TUI"
 msgstr "Terminal TUI"
 
-#: ../../source/index.md:46
+#: ../../source/index.md:47
 msgid "UI 与交互"
 msgstr "UI and Interaction"
 
-#: ../../source/index.md:53
+#: ../../source/index.md:54
 msgid "Langfuse集成"
 msgstr "Langfuse Integration"
 
-#: ../../source/index.md:53
+#: ../../source/index.md:54
 msgid "示例代码"
 msgstr "Sample Code"
 
-#: ../../source/index.md:53
+#: ../../source/index.md:54
 msgid "贡献指南"
 msgstr "Contribution Guide"
 
-#: ../../source/index.md:53
+#: ../../source/index.md:54
 msgid "集成与示例"
 msgstr "Integration and Examples"
 

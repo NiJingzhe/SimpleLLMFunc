@@ -10,12 +10,15 @@ import inspect
 import re
 import threading
 import textwrap
+from abc import ABC
 from xml.sax.saxutils import escape as _xml_escape
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence, cast
 
 
 PrimitiveHandler = Callable[..., Any]
+
+_UNSET = object()
 
 RUNTIME_RESULT_SENTINEL = "__simplellmfunc_runtime_result__"
 RUNTIME_RESULT_VALUE_KEY = "value"
@@ -95,6 +98,40 @@ def _parameter_kind_to_text(kind: Any) -> str:
     return mapping.get(kind, "positional_or_keyword")
 
 
+def _normalize_pack_name(name: str) -> str:
+    if not isinstance(name, str):
+        raise ValueError("primitive pack name must be a non-empty string")
+
+    normalized = name.strip()
+    if not normalized:
+        raise ValueError("primitive pack name must be a non-empty string")
+
+    if "." in normalized:
+        raise ValueError("primitive pack name must be a single segment")
+
+    if not re.match(r"^[a-zA-Z][a-zA-Z0-9_]*$", normalized):
+        raise ValueError(
+            "primitive pack name must start with a letter and contain only "
+            "letters, digits, or underscore"
+        )
+
+    return normalized
+
+
+def _normalize_backend_name(name: str) -> str:
+    if not isinstance(name, str):
+        raise ValueError("backend name must be a non-empty string")
+
+    normalized = name.strip()
+    if not normalized:
+        raise ValueError("backend name must be a non-empty string")
+
+    if "." in normalized:
+        raise ValueError("backend name must be a single segment")
+
+    return normalized
+
+
 @dataclass(frozen=True)
 class PrimitiveParameterSpec:
     """Structured parameter metadata for runtime primitive specs."""
@@ -131,6 +168,62 @@ class PrimitiveParameterSpec:
         description_text = _xml_escape_text(self.description)
         joined_attributes = " ".join(attributes)
         return f"<parameter {joined_attributes}>{description_text}</parameter>"
+
+
+@dataclass(frozen=True)
+class PrimitiveContract:
+    """Typed primitive metadata contract shared across registry and packs."""
+
+    description: str = ""
+    input_type: str = ""
+    output_type: str = ""
+    output_parsing: str = ""
+    parameters: tuple[PrimitiveParameterSpec, ...] = ()
+    best_practices: tuple[str, ...] = ()
+    next_steps: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PrimitivePackEntry:
+    """One primitive definition within a pack."""
+
+    name: str
+    handler: PrimitiveHandler
+    contract: PrimitiveContract = field(default_factory=PrimitiveContract)
+
+
+@dataclass(frozen=True)
+class ForkContext:
+    """Context passed to backend clone hooks during fork."""
+
+    parent_pack_name: str
+    backend_name: str
+    child_fork_id: Optional[str] = None
+    source_memory_key: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class RuntimePrimitiveBackend(ABC):
+    """Optional base class for backends that need fork lifecycle control."""
+
+    def clone_for_fork(self, *, context: ForkContext) -> "RuntimePrimitiveBackend":
+        """Return a backend instance for the child agent.
+
+        Default behavior shares the same backend instance.
+        """
+
+        _ = context
+        return self
+
+    def on_install(self, repl: Any) -> None:
+        """Called once when a backend is installed into a REPL."""
+
+        _ = repl
+
+    def on_close(self, repl: Any) -> None:
+        """Called when the hosting REPL is closed."""
+
+        _ = repl
 
 
 def _coerce_parameter_spec(raw: Any) -> Optional[PrimitiveParameterSpec]:
@@ -179,6 +272,26 @@ def _coerce_parameter_specs(
         if parameter is not None:
             normalized.append(parameter)
     return tuple(normalized)
+
+
+def _coerce_primitive_contract(raw: Optional[Any]) -> PrimitiveContract:
+    if raw is None:
+        return PrimitiveContract()
+
+    if isinstance(raw, PrimitiveContract):
+        return raw
+
+    if not isinstance(raw, dict):
+        raise ValueError("primitive contract must be a PrimitiveContract or dict")
+
+    return PrimitiveContract(
+        description=_normalize_text(raw.get("description")),
+        input_type=_normalize_text(raw.get("input_type")),
+        output_type=_normalize_text(raw.get("output_type")),
+        output_parsing=_normalize_text(raw.get("output_parsing")),
+        parameters=_coerce_parameter_specs(raw.get("parameters")),
+        next_steps=_coerce_next_steps(raw.get("next_steps")),
+    )
 
 
 def _infer_parameter_specs(
@@ -230,26 +343,6 @@ def _infer_output_type(handler: PrimitiveHandler) -> str:
     except (TypeError, ValueError):
         return "Any"
     return _annotation_to_text(signature.return_annotation)
-
-
-def _coerce_best_practices(
-    raw_best_practices: Optional[Sequence[Any]],
-) -> tuple[str, ...]:
-    if not raw_best_practices:
-        return ()
-
-    normalized: List[str] = []
-    seen: set[str] = set()
-    for item in raw_best_practices:
-        if not isinstance(item, str):
-            continue
-        text = item.strip()
-        if not text or text in seen:
-            continue
-        normalized.append(text)
-        seen.add(text)
-
-    return tuple(normalized)
 
 
 def _coerce_next_steps(raw_next_steps: Optional[Any]) -> tuple[str, ...]:
@@ -365,8 +458,11 @@ def _parse_primitive_docstring(docstring: Optional[str]) -> Dict[str, Any]:
 
 def primitive(
     *,
+    description: str = "",
+    input_type: str = "",
+    output_type: str = "",
+    output_parsing: str = "",
     parameters: Optional[Sequence[Any]] = None,
-    best_practices: Optional[Sequence[Any]] = None,
     next_steps: Optional[Any] = None,
 ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
     """Attach primitive spec metadata parsed from the handler docstring.
@@ -376,10 +472,16 @@ def primitive(
 
     def decorator(handler: PrimitiveHandler) -> PrimitiveHandler:
         metadata = _parse_primitive_docstring(getattr(handler, "__doc__", None))
+        if description.strip():
+            metadata["description"] = description.strip()
+        if input_type.strip():
+            metadata["input_type"] = input_type.strip()
+        if output_type.strip():
+            metadata["output_type"] = output_type.strip()
+        if output_parsing.strip():
+            metadata["output_parsing"] = output_parsing.strip()
         if parameters is not None:
             metadata["parameters"] = _coerce_parameter_specs(parameters)
-        if best_practices is not None:
-            metadata["best_practices"] = _coerce_best_practices(best_practices)
         if next_steps is not None:
             metadata["next_steps"] = _coerce_next_steps(next_steps)
         setattr(handler, "__simplellmfunc_primitive_spec__", metadata)
@@ -390,15 +492,21 @@ def primitive(
 
 def primitive_spec(
     *,
+    description: str = "",
+    input_type: str = "",
+    output_type: str = "",
+    output_parsing: str = "",
     parameters: Optional[Sequence[Any]] = None,
-    best_practices: Optional[Sequence[Any]] = None,
     next_steps: Optional[Any] = None,
 ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
     """Backward-compatible alias for :func:`primitive`."""
 
     return primitive(
+        description=description,
+        input_type=input_type,
+        output_type=output_type,
+        output_parsing=output_parsing,
         parameters=parameters,
-        best_practices=best_practices,
         next_steps=next_steps,
     )
 
@@ -407,7 +515,7 @@ def _extract_handler_primitive_spec(handler: PrimitiveHandler) -> Dict[str, Any]
     raw = getattr(handler, "__simplellmfunc_primitive_spec__", None)
     if isinstance(raw, dict):
         return dict(raw)
-    return {}
+    return _parse_primitive_docstring(getattr(handler, "__doc__", None))
 
 
 def _apply_parameter_descriptions(
@@ -436,6 +544,213 @@ def _apply_parameter_descriptions(
     return tuple(normalized)
 
 
+def _resolve_primitive_contract(
+    handler: PrimitiveHandler,
+    *,
+    contract: Optional[Any] = None,
+    description: str = "",
+    input_type: str = "",
+    output_type: str = "",
+    output_parsing: str = "",
+    parameters: Optional[Sequence[Any]] = None,
+    next_steps: Optional[Any] = None,
+) -> PrimitiveContract:
+    handler_spec = _extract_handler_primitive_spec(handler)
+    contract_value = _coerce_primitive_contract(contract)
+
+    parameter_specs = _coerce_parameter_specs(parameters)
+    if not parameter_specs and contract_value.parameters:
+        parameter_specs = contract_value.parameters
+    if not parameter_specs:
+        doc_parameters = handler_spec.get("parameters")
+        if isinstance(doc_parameters, tuple):
+            parameter_specs = doc_parameters
+    if not parameter_specs:
+        parameter_specs = _infer_parameter_specs(handler)
+    parameter_specs = _apply_parameter_descriptions(
+        parameter_specs,
+        handler_spec.get("parameter_descriptions", {}),
+    )
+
+    best_practices_value = cast(
+        tuple[str, ...],
+        handler_spec.get("best_practices", ()),
+    )
+    if not best_practices_value:
+        raise ValueError("primitive docstring must include a 'Best Practices' section")
+
+    next_steps_value = _coerce_next_steps(next_steps)
+    if not next_steps_value and contract_value.next_steps:
+        next_steps_value = contract_value.next_steps
+    if not next_steps_value:
+        next_steps_value = cast(tuple[str, ...], handler_spec.get("next_steps", ()))
+
+    resolved_description = _normalize_text(description)
+    if not resolved_description:
+        resolved_description = (
+            contract_value.description
+            or str(handler_spec.get("description", "")).strip()
+        )
+
+    resolved_input_type = _normalize_text(input_type)
+    if not resolved_input_type:
+        resolved_input_type = (
+            contract_value.input_type or str(handler_spec.get("input_type", "")).strip()
+        )
+
+    resolved_output_type = _normalize_text(output_type)
+    if not resolved_output_type:
+        resolved_output_type = (
+            contract_value.output_type
+            or str(handler_spec.get("output_type", "")).strip()
+        )
+
+    resolved_output_parsing = _normalize_text(output_parsing)
+    if not resolved_output_parsing:
+        resolved_output_parsing = (
+            contract_value.output_parsing
+            or str(handler_spec.get("output_parsing", "")).strip()
+        )
+
+    return PrimitiveContract(
+        description=resolved_description,
+        input_type=resolved_input_type,
+        output_type=resolved_output_type,
+        output_parsing=resolved_output_parsing,
+        parameters=parameter_specs,
+        best_practices=best_practices_value,
+        next_steps=next_steps_value,
+    )
+
+
+class PrimitivePack:
+    """Declarative runtime extension pack with backend and primitive entries."""
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        backend: Any,
+        backend_name: Optional[str] = None,
+        guidance: str = "",
+    ) -> None:
+        self.name = _normalize_pack_name(name)
+        self.backend_name = _normalize_backend_name(backend_name or self.name)
+        self.backend = backend
+        self.guidance = _normalize_text(guidance)
+        self._entries: Dict[str, PrimitivePackEntry] = {}
+
+    @property
+    def primitives(self) -> tuple[PrimitivePackEntry, ...]:
+        return tuple(self._entries[name] for name in sorted(self._entries))
+
+    def _compose_primitive_name(self, name: str) -> str:
+        normalized = _normalize_primitive_name(name)
+        if normalized.startswith(f"{self.name}."):
+            return normalized
+        return f"{self.name}.{normalized}"
+
+    def add_primitive(
+        self,
+        name: str,
+        handler: PrimitiveHandler,
+        *,
+        contract: Optional[Any] = None,
+        description: str = "",
+        input_type: str = "",
+        output_type: str = "",
+        output_parsing: str = "",
+        parameters: Optional[Sequence[Any]] = None,
+        next_steps: Optional[Any] = None,
+        replace: bool = False,
+    ) -> PrimitiveHandler:
+        full_name = self._compose_primitive_name(name)
+        resolved_contract = _resolve_primitive_contract(
+            handler,
+            contract=contract,
+            description=description,
+            input_type=input_type,
+            output_type=output_type,
+            output_parsing=output_parsing,
+            parameters=parameters,
+            next_steps=next_steps,
+        )
+
+        if full_name in self._entries and not replace:
+            raise ValueError(f"primitive '{full_name}' is already declared in pack")
+
+        self._entries[full_name] = PrimitivePackEntry(
+            name=full_name,
+            handler=handler,
+            contract=resolved_contract,
+        )
+        return handler
+
+    def primitive(
+        self,
+        name: str,
+        *,
+        contract: Optional[Any] = None,
+        description: str = "",
+        input_type: str = "",
+        output_type: str = "",
+        output_parsing: str = "",
+        parameters: Optional[Sequence[Any]] = None,
+        next_steps: Optional[Any] = None,
+        replace: bool = False,
+    ) -> Callable[[PrimitiveHandler], PrimitiveHandler]:
+        """Declare one primitive inside the pack."""
+
+        def decorator(handler: PrimitiveHandler) -> PrimitiveHandler:
+            return self.add_primitive(
+                name,
+                handler,
+                contract=contract,
+                description=description,
+                input_type=input_type,
+                output_type=output_type,
+                output_parsing=output_parsing,
+                parameters=parameters,
+                next_steps=next_steps,
+                replace=replace,
+            )
+
+        return decorator
+
+    def clone(
+        self,
+        *,
+        backend: Any = _UNSET,
+        backend_name: Optional[str] = None,
+        fork_context: Optional[ForkContext] = None,
+    ) -> "PrimitivePack":
+        """Clone the pack definition with an optional backend override."""
+
+        resolved_backend = self.backend if backend is _UNSET else backend
+        if (
+            backend is _UNSET
+            and fork_context is not None
+            and isinstance(resolved_backend, RuntimePrimitiveBackend)
+        ):
+            resolved_backend = resolved_backend.clone_for_fork(context=fork_context)
+        cloned = PrimitivePack(
+            self.name,
+            backend=resolved_backend,
+            backend_name=backend_name or self.backend_name,
+            guidance=self.guidance,
+        )
+        cloned._entries = dict(self._entries)
+        return cloned
+
+    def install(self, repl: Any, *, replace: bool = False) -> None:
+        """Install this pack into a compatible REPL host."""
+
+        install = getattr(repl, "install_pack", None)
+        if not callable(install):
+            raise ValueError("repl must provide install_pack(pack, replace=False)")
+        install(self, replace=replace)
+
+
 @dataclass
 class PrimitiveCallContext:
     """Execution context passed to every primitive handler."""
@@ -445,6 +760,10 @@ class PrimitiveCallContext:
     execution_id: str
     event_emitter: Any = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    repl: Any = None
+    registry: Optional["PrimitiveRegistry"] = None
+    backend_name: Optional[str] = None
+    backend: Any = None
 
     async def emit(self, event_name: str, data: Dict[str, Any]) -> None:
         """Emit a custom event through the bound emitter if available."""
@@ -461,6 +780,17 @@ class PrimitiveCallContext:
         if inspect.isawaitable(maybe_awaitable):
             await cast(Awaitable[Any], maybe_awaitable)
 
+    def get_backend(self, name: str) -> Any:
+        """Resolve one runtime backend by name through the bound REPL host."""
+
+        repl = self.repl
+        getter = getattr(repl, "get_runtime_backend", None)
+        if not callable(getter):
+            raise RuntimeError(
+                "primitive call context is not bound to a runtime host backend lookup"
+            )
+        return getter(name)
+
 
 @dataclass(frozen=True)
 class PrimitiveSpec:
@@ -475,6 +805,7 @@ class PrimitiveSpec:
     parameters: tuple[PrimitiveParameterSpec, ...] = ()
     best_practices: tuple[str, ...] = ()
     next_steps: tuple[str, ...] = ()
+    backend_name: Optional[str] = None
 
     def to_public_dict(self) -> Dict[str, Any]:
         resolved_parameters = self.parameters or _infer_parameter_specs(self.handler)
@@ -605,12 +936,14 @@ class PrimitiveRegistry:
         name: str,
         handler: PrimitiveHandler,
         *,
+        contract: Optional[Any] = None,
         description: str = "",
         input_type: str = "",
         output_type: str = "",
+        output_parsing: str = "",
         parameters: Optional[Sequence[Any]] = None,
-        best_practices: Optional[Sequence[Any]] = None,
         next_steps: Optional[Any] = None,
+        backend_name: Optional[str] = None,
         replace: bool = False,
     ) -> None:
         """Register one primitive handler.
@@ -626,38 +959,32 @@ class PrimitiveRegistry:
         if not callable(handler):
             raise ValueError("primitive handler must be callable")
 
-        handler_spec = _extract_handler_primitive_spec(handler)
-        parameter_specs = _coerce_parameter_specs(parameters)
-        if not parameter_specs:
-            doc_parameters = handler_spec.get("parameters")
-            if isinstance(doc_parameters, tuple):
-                parameter_specs = doc_parameters
-        if not parameter_specs:
-            parameter_specs = _infer_parameter_specs(handler)
-        parameter_specs = _apply_parameter_descriptions(
-            parameter_specs,
-            handler_spec.get("parameter_descriptions", {}),
+        normalized_backend_name: Optional[str] = None
+        if backend_name is not None:
+            normalized_backend_name = _normalize_backend_name(backend_name)
+
+        resolved_contract = _resolve_primitive_contract(
+            handler,
+            contract=contract,
+            description=description,
+            input_type=input_type,
+            output_type=output_type,
+            output_parsing=output_parsing,
+            parameters=parameters,
+            next_steps=next_steps,
         )
 
         spec = PrimitiveSpec(
             name=normalized,
             handler=handler,
-            description=description.strip()
-            or str(handler_spec.get("description", "")).strip(),
-            input_type=input_type.strip()
-            or str(handler_spec.get("input_type", "")).strip(),
-            output_type=output_type.strip()
-            or str(handler_spec.get("output_type", "")).strip(),
-            output_parsing=str(handler_spec.get("output_parsing", "")).strip(),
-            parameters=parameter_specs,
-            best_practices=(
-                _coerce_best_practices(best_practices)
-                or cast(tuple[str, ...], handler_spec.get("best_practices", ()))
-            ),
-            next_steps=(
-                _coerce_next_steps(next_steps)
-                or cast(tuple[str, ...], handler_spec.get("next_steps", ()))
-            ),
+            description=resolved_contract.description,
+            input_type=resolved_contract.input_type,
+            output_type=resolved_contract.output_type,
+            output_parsing=resolved_contract.output_parsing,
+            parameters=resolved_contract.parameters,
+            best_practices=resolved_contract.best_practices,
+            next_steps=resolved_contract.next_steps,
+            backend_name=normalized_backend_name,
         )
 
         with self._lock:
@@ -823,6 +1150,50 @@ class PrimitiveRegistry:
         payload_args = list(args) if isinstance(args, list) else []
         payload_kwargs = dict(kwargs) if isinstance(kwargs, dict) else {}
 
+        context.registry = self
+        context.primitive_name = spec.name
+        context.backend_name = spec.backend_name
+        context.metadata.setdefault("primitive_name", spec.name)
+        if spec.backend_name is not None:
+            context.metadata.setdefault("backend_name", spec.backend_name)
+            try:
+                resolved_backend = context.get_backend(spec.backend_name)
+            except Exception as exc:
+                context.backend = None
+                context.metadata.setdefault(
+                    "backend_resolution_error",
+                    {
+                        "backend_name": spec.backend_name,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
+                )
+                raise RuntimeError(
+                    f"Failed to resolve backend {spec.backend_name!r} for "
+                    f"primitive {spec.name!r}"
+                ) from exc
+
+            if resolved_backend is None:
+                context.backend = None
+                context.metadata.setdefault(
+                    "backend_resolution_error",
+                    {
+                        "backend_name": spec.backend_name,
+                        "error_type": "MissingBackend",
+                        "error_message": (
+                            f"runtime backend {spec.backend_name!r} is not registered"
+                        ),
+                    },
+                )
+                raise RuntimeError(
+                    f"Failed to resolve backend {spec.backend_name!r} for "
+                    f"primitive {spec.name!r}"
+                )
+
+            context.backend = resolved_backend
+        else:
+            context.backend = None
+
         await context.emit(
             "runtime_primitive_start",
             {
@@ -875,7 +1246,12 @@ __all__ = [
     "RUNTIME_RESULT_SENTINEL",
     "RUNTIME_RESULT_VALUE_KEY",
     "PrimitiveCallContext",
+    "PrimitiveContract",
+    "ForkContext",
     "PrimitiveHandler",
+    "PrimitivePack",
+    "PrimitivePackEntry",
+    "RuntimePrimitiveBackend",
     "primitive",
     "primitive_spec",
     "PrimitiveParameterSpec",

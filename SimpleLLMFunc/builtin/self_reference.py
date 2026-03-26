@@ -13,6 +13,8 @@ import inspect
 import threading
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
+from SimpleLLMFunc.runtime.primitives import RuntimePrimitiveBackend
+
 _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
 _TRANSIENT_MESSAGE_FIELDS = {"reasoning_details"}
 MemoryHistory = List[Dict[str, Any]]
@@ -617,7 +619,7 @@ class SelfReferenceInstanceHandle:
         )
 
 
-class SelfReference:
+class SelfReference(RuntimePrimitiveBackend):
     """Shared self-reference state object for agent memory operations."""
 
     def __init__(self):
@@ -631,6 +633,7 @@ class SelfReference:
         self._fork_id_counter = 0
         self._fork_tasks: Dict[str, asyncio.Task[Dict[str, Any]]] = {}
         self._fork_results: Dict[str, Dict[str, Any]] = {}
+        self._install_ref_count = 0
         self._active_memory_key_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar(
                 f"simplellmfunc_self_reference_active_key_{id(self)}",
@@ -655,6 +658,38 @@ class SelfReference:
                 default=None,
             )
         )
+
+    def clone_for_fork(self, *, context) -> "SelfReference":
+        _ = context
+        return self
+
+    def on_install(self, repl: Any) -> None:
+        _ = repl
+        with self._lock:
+            self._install_ref_count += 1
+
+    def on_close(self, repl: Any) -> None:
+        _ = repl
+        with self._lock:
+            if self._install_ref_count > 0:
+                self._install_ref_count -= 1
+            remaining = self._install_ref_count
+
+            if remaining > 0:
+                return
+
+            pending_tasks = list(self._fork_tasks.values())
+            self._fork_tasks.clear()
+            self._fork_results.clear()
+            self._history_store.clear()
+            self._agent_instance = None
+            self._agent_default_memory_key = None
+            self._fork_counter = 0
+            self._fork_id_counter = 0
+
+        for task in pending_tasks:
+            if not task.done():
+                task.cancel()
 
     @property
     def memory(self) -> SelfReferenceMemoryProxy:

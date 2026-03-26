@@ -254,8 +254,8 @@ msgstr ""
 #: ../../source/introduction.md:230
 msgid "**DocString 即 Prompt**: 直接在函数文档中定义 Prompt，提高代码可读性。"
 msgstr ""
-"**DocString即Prompt**: Directly define Prompt in the function documentation "
-"to improve code readability."
+"**DocString as Prompt**: Directly define Prompt in function documentation to"
+" improve code readability."
 
 #: ../../source/introduction.md:231
 msgid ""

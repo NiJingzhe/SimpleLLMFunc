@@ -195,7 +195,7 @@ class TestPyReplToolset:
         assert not hasattr(repl, "list_variables")
 
     def test_execute_tool_description_has_repl_guidance(self):
-        """execute_code description should guide LLM usage clearly."""
+        """execute_code description should stay focused on REPL execution itself."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -205,21 +205,19 @@ class TestPyReplToolset:
 
         description = execute_tool.description
         assert "persistent REPL session" in description
-        assert 'if __name__ == "__main__"' in description
+        assert "top-level executable code" in description
         assert "input()" in description
         assert "timeout_seconds" in description
-        assert "runtime.list_primitives()" in description
-        assert "runtime.list_primitives(contains='selfref.fork.')" in description
-        assert "runtime.list_primitive_specs(" in description
-        assert "runtime.get_primitive_spec(name)" in description
-        assert "runtime.list_primitive_specs(contains='...')" in description
-        assert "runtime memory is unchanged" in description
+        assert "runtime.list_primitives()" not in description
+        assert "runtime.get_primitive_spec(name)" not in description
+        assert "selfref = your agent state" not in description
+        assert "runtime memory is unchanged" not in description
 
     def test_execute_tool_prompt_includes_working_directory(
         self,
         tmp_path: Path,
     ) -> None:
-        """Prompt injection should include working_directory when configured."""
+        """Prompt injection should include working_directory guidance when configured."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl(working_directory=tmp_path)
@@ -230,11 +228,11 @@ class TestPyReplToolset:
         prompt = execute_tool.build_system_prompt_injection()
 
         assert isinstance(prompt, str)
-        assert "<working_directory>" in prompt
+        assert "Working directory:" in prompt
         assert tmp_path.resolve().as_posix() in prompt
 
     def test_execute_tool_prompt_omits_working_directory_when_unset(self) -> None:
-        """Prompt injection should skip working_directory when not configured."""
+        """Prompt injection should skip working_directory guidance when unset."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -245,7 +243,63 @@ class TestPyReplToolset:
         prompt = execute_tool.build_system_prompt_injection()
 
         assert isinstance(prompt, str)
-        assert "<working_directory>" not in prompt
+        assert "Working directory:" not in prompt
+
+    def test_execute_tool_prompt_includes_installed_pack_guidance(self) -> None:
+        """Prompt injection should include installed pack guidance as plain text."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "<runtime_primitive_contract>" in prompt
+        assert "Use this block for orientation" in prompt
+        assert "Installed primitive packs:" in prompt
+        assert "- selfref:" in prompt
+        assert "selfref = your agent state" in prompt
+        assert "parallel sub-agent decomposition" in prompt
+
+    def test_execute_tool_prompt_includes_custom_pack_guidance(self) -> None:
+        """Prompt injection should render generic pack guidance, not just selfref."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        pack = repl.pack(
+            "demo",
+            backend=object(),
+            guidance="demo = a scratch runtime namespace for small host-side helpers.",
+        )
+
+        @pack.primitive("ping")
+        def demo_ping(ctx):
+            """
+            Use: Health check for the demo backend.
+            Output: `str`.
+            Best Practices:
+            - Use for smoke tests only.
+            """
+
+            _ = ctx
+            return "pong"
+
+        repl.install_pack(pack)
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "Installed primitive packs:" in prompt
+        assert (
+            "- demo: demo = a scratch runtime namespace for small host-side helpers."
+            in prompt
+        )
 
     def test_execute_tool_schema_exposes_timeout_seconds(self):
         """execute_code tool schema should expose per-call timeout controls."""
@@ -279,9 +333,27 @@ class TestPyReplToolset:
 
         assert "Reset REPL runtime variables" in descriptions["reset_repl"]
         assert (
-            "preserves registered runtime primitive backends"
+            "preserving registered runtime primitive backends"
             in descriptions["reset_repl"]
         )
+
+    def test_tool_best_practices_stay_tool_scoped(self) -> None:
+        """Tool best practices should stay generic and leave selfref guidance to selfref."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+        reset_tool = next(tool for tool in repl.toolset if tool.name == "reset_repl")
+
+        execute_text = " ".join(execute_tool.best_practices)
+        reset_text = " ".join(reset_tool.best_practices)
+
+        assert "contains='<namespace>.'" in execute_text
+        assert "selfref" not in execute_text
+        assert "fresh REPL variable namespace" in reset_text
+        assert "selfref" not in reset_text
 
 
 class TestPyReplToolsetOutput:
@@ -515,20 +587,16 @@ class TestPyReplReset:
 class TestPyReplPrimitivePacks:
     """Test primitive-pack installation and runtime backend behavior."""
 
-    def test_install_selfref_pack_registers_backend_and_primitives(self):
+    def test_repl_auto_installs_selfref_pack_registers_backend_and_primitives(self):
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
         repl = PyRepl()
+        self_reference = repl.get_runtime_backend("selfref")
 
-        assert "memory.keys" not in repl.list_primitives()
-        assert repl.list_runtime_backends() == []
-
-        repl.install_primitive_pack("selfref", backend=self_reference)
-
-        assert repl.get_runtime_backend("selfref") is self_reference
+        assert isinstance(self_reference, SelfReference)
         assert repl.list_runtime_backends() == ["selfref"]
+        assert repl.list_installed_packs() == ["selfref"]
         assert "selfref.history.keys" in repl.list_primitives()
         assert "selfref.fork.spawn" in repl.list_primitives()
         assert "selfref.fork.gather_all" in repl.list_primitives()
@@ -556,18 +624,140 @@ class TestPyReplPrimitivePacks:
         with pytest.raises(KeyError, match="primitive pack"):
             repl.install_primitive_pack("self_reference", backend=SelfReference())
 
-    def test_install_selfref_pack_registers_under_selfref_backend(self):
+    def test_repl_accepts_explicit_self_reference_backend(self):
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.self_reference import SelfReference
 
         self_reference = SelfReference()
-        repl = PyRepl()
-
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         assert repl.get_runtime_backend("selfref") is self_reference
         assert "selfref.history.keys" in repl.list_primitives()
         assert "selfref.fork.spawn" in repl.list_primitives()
+
+    @pytest.mark.asyncio
+    async def test_install_pack_supports_backend_aware_custom_primitives(self):
+        """First-class PrimitivePack should install backend-aware custom primitives."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        constants = repl.pack(
+            "constants",
+            backend={
+                "app_name": "SimpleLLMFunc",
+                "memory_key": "agent_main",
+            },
+        )
+
+        @constants.primitive(
+            "get",
+            description="Read one value from constants backend.",
+        )
+        def constants_get(ctx, key: str):
+            """
+            Use: Read one value from constants backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Keep lookups to single keys.
+            """
+            backend = ctx.backend
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        @constants.primitive("lookup_via_context")
+        def constants_lookup_via_context(ctx, key: str):
+            """
+            Use: Read one value from constants backend via ctx.get_backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Prefer ctx.backend when available.
+            """
+            backend = ctx.get_backend("constants")
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        repl.install_pack(constants)
+
+        assert repl.list_installed_packs() == ["constants", "selfref"]
+        assert repl.get_runtime_backend("constants") == {
+            "app_name": "SimpleLLMFunc",
+            "memory_key": "agent_main",
+        }
+        assert "constants.get" in repl.list_primitives()
+        assert "constants.lookup_via_context" in repl.list_primitives()
+
+        result = await repl.execute(
+            "print(runtime.constants.get('app_name'))\n"
+            "print(runtime.constants.lookup_via_context('memory_key'))\n"
+        )
+
+        assert result["success"] is True
+        assert result["stdout"].splitlines() == ["SimpleLLMFunc", "agent_main"]
+
+    @pytest.mark.asyncio
+    async def test_repl_primitive_decorator_registers_backend_aware_handler(self):
+        """PyRepl.primitive decorator should provide low-friction backend binding."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        repl.register_runtime_backend(
+            "constants",
+            {"project": "SimpleLLMFunc", "version": "dev"},
+            replace=True,
+        )
+
+        @repl.primitive(
+            "constants.get",
+            backend="constants",
+            description="Read one constant value.",
+            replace=True,
+        )
+        def constants_get(ctx, key: str):
+            """
+            Use: Read one constant value.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Keep calls narrow and avoid bulk reads.
+            """
+            backend = ctx.backend
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        @repl.primitive(
+            "constants.lookup_via_context",
+            backend="constants",
+            replace=True,
+        )
+        def constants_lookup_via_context(ctx, key: str):
+            """
+            Use: Read one constant value via ctx.get_backend.
+            Input: `key: str`.
+            Output: `str | None`.
+            Best Practices:
+            - Prefer ctx.backend when available.
+            """
+            backend = ctx.get_backend("constants")
+            if not isinstance(backend, dict):
+                raise RuntimeError("constants backend must be a dict")
+            return backend.get(key)
+
+        contract = repl.get_primitive_contract("constants.get")
+        assert contract["name"] == "constants.get"
+        assert any(item["name"] == "key" for item in contract["parameters"])
+
+        result = await repl.execute(
+            "print(runtime.constants.get('project'))\n"
+            "print(runtime.constants.lookup_via_context('version'))\n"
+        )
+
+        assert result["success"] is True
+        assert result["stdout"].splitlines() == ["SimpleLLMFunc", "dev"]
 
     @pytest.mark.asyncio
     async def test_execute_can_mutate_memory_via_runtime_primitives(self):
@@ -578,8 +768,7 @@ class TestPyReplPrimitivePacks:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n_ = 1"
@@ -598,8 +787,7 @@ class TestPyReplPrimitivePacks:
         from SimpleLLMFunc.self_reference import SelfReference
 
         self_reference = SelfReference()
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         await repl.execute("x = 1")
         await repl.reset()
@@ -618,8 +806,7 @@ class TestPyReplPrimitivePacks:
             [{"role": "user", "content": "remember me"}],
         )
 
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
         await repl.execute("x = 1")
         await repl.reset()
 
@@ -654,8 +841,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('sub-task')\n"
@@ -704,8 +890,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
@@ -740,8 +925,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
@@ -778,8 +962,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handles = [\n"
@@ -819,8 +1002,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
         emitter = ToolEventEmitter()
 
         result = await repl.execute(
@@ -871,8 +1053,7 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
         emitter = ToolEventEmitter()
 
         result = await repl.execute(
@@ -916,7 +1097,6 @@ class TestPyReplRuntimePrimitives:
         }
 
         repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=SelfReference())
 
         for primitive_name in [
             "runtime.list_primitive_specs",
@@ -973,7 +1153,7 @@ class TestPyReplRuntimePrimitives:
         assert stdout_lines == [
             "True",
             "True",
-            "False",
+            "True",
             "True",
             "True",
             "True",
@@ -1099,22 +1279,30 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_exposes_selfref_guide_and_best_practices(self):
         """Selfref pack should expose namespace guide with fork/memory best practices."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
         repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=SelfReference())
         result = await repl.execute(
             "guide = runtime.selfref.guide()\n"
             "specs = runtime.list_primitive_specs(format='dict')\n"
             "guide_spec = next(item for item in specs if item.get('name') == 'selfref.guide')\n"
             "print('best_practices' in guide)\n"
             "print(len(guide.get('best_practices', [])) >= 5)\n"
+            "guide_best_text = ' '.join(str(item) for item in guide.get('best_practices', []))\n"
+            "print('status/response/memory_key/history_count' in guide_best_text)\n"
+            "print('error_type/error_message before retrying' in guide_best_text)\n"
             "print(isinstance(guide_spec.get('parameters'), list))\n"
             "print(isinstance(guide_spec.get('best_practices'), list))\n"
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == ["True", "True", "True", "True"]
+        assert result["stdout"].splitlines() == [
+            "True",
+            "True",
+            "True",
+            "True",
+            "True",
+            "True",
+        ]
 
     @pytest.mark.asyncio
     async def test_execute_selfref_fork_spec_declares_result_contract_and_safe_read(
@@ -1122,10 +1310,8 @@ class TestPyReplRuntimePrimitives:
     ):
         """selfref fork specs should define compact contract and no-raw-print guidance."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
         repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=SelfReference())
         result = await repl.execute(
             "specs = runtime.list_primitive_specs(format='dict')\n"
             "spawn_spec = next(item for item in specs if item.get('name') == 'selfref.fork.spawn')\n"
@@ -1142,8 +1328,8 @@ class TestPyReplRuntimePrimitives:
             "print('history_included' in gather_output)\n"
             "print('keyed by' in gather_output and 'fork_id' in gather_output)\n"
             "print('.items()' in gather_parse)\n"
-            "print('never print raw fork result dict' in best_text.lower())\n"
-            "print('print(result)' in best_text)\n"
+            "print('read the fields you need from fork results' in best_text.lower())\n"
+            "print('status/response/memory_key' in best_text)\n"
             "print('include_history=True' in best_text)\n"
         )
 
@@ -1171,8 +1357,7 @@ class TestPyReplRuntimePrimitives:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
             "print(runtime.selfref.history.count())\n"
@@ -1197,8 +1382,7 @@ class TestPyReplRuntimePrimitives:
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
         self_reference.memory["agent_main"].set_system_prompt("Rule A")
 
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
             "runtime.selfref.history.clear()\n"
@@ -1232,8 +1416,7 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('sub-task')\n"
@@ -1266,8 +1449,7 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('task-a')\n"
@@ -1295,8 +1477,7 @@ class TestPyReplRuntimePrimitives:
             return message, list(history or [])
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "runtime.selfref.fork.spawn('task-a', include_history=True)"
@@ -1324,8 +1505,7 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl()
-        repl.install_primitive_pack("selfref", backend=self_reference)
+        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handles = [runtime.selfref.fork.spawn('task-a'), runtime.selfref.fork.spawn('task-b')]\n"

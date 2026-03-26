@@ -1,0 +1,132 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-14 21:05+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/detailed_guide/abort.md:1
+msgid "中断与取消（AbortSignal）"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:3
+msgid "AbortSignal 是一个轻量级的中断机制，用于在运行中的 Agent 回合里停止流式输出、取消正在执行的工具调用，并尽快收敛到安全的终止状态。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:5
+msgid "适用场景包括："
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:7
+msgid "用户主动打断长回复"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:8
+msgid "UI/服务端超时控制"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:9
+msgid "上下文切换（先停掉旧回合，再启动新回合）"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:11
+msgid "核心概念"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:13
+msgid "`AbortSignal`：一个可在多个协程之间共享的中断信号。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:14
+msgid "`_abort_signal`：调用参数名（推荐用常量 `ABORT_SIGNAL_PARAM` 避免硬编码）。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:15
+msgid "`abort(reason)`：触发中断，并可附带原因说明。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:17
+msgid "提示：`_abort_signal` 只用于运行时控制，不会进入 prompt，也不会传给模型或工具。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:19
+msgid "基本用法"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:21
+msgid "llm_chat 示例"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:53
+msgid "llm_function 示例"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:83
+msgid "运行行为"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:85
+msgid "**流式输出**：中断后不再接收新的 chunk。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:86
+msgid ""
+"**工具调用**：正在执行的工具调用会被取消；在事件流中可能看到 `ToolCallErrorEvent`，其 `error_type` 为 "
+"`CancelledError`。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:87
+msgid "**事件流收尾**：当 `enable_event=True` 时，`ReactEndEvent.extra` 会包含："
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:88
+msgid "`aborted: true`"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:89
+msgid "`abort_reason: <reason>`（如果传入了 reason）"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:90
+msgid "**非事件流模式**：生成器会提前结束，不会额外产出 `ReactEndEvent`。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:92
+msgid "注意：AbortSignal 是协作式中断。如果工具本身不可取消或处于阻塞状态，实际停止时间可能滞后。"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:94
+msgid "TUI 的内置中断"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:96
+msgid "在 `@tui` 场景下，当 Agent 仍在回复时再次发送消息，会自动触发中断："
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:98
+msgid "当前回合被中止，新的用户消息进入队列"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:99
+msgid "新消息会自动加上中断提示语（`\"我要打断你的回复。\"`）以引导模型及时收束"
+msgstr ""
+
+#: ../../source/detailed_guide/abort.md:101
+msgid "如果你需要更细的控制（比如自定义中断提示语），可以绕过内置流程，手动创建并传入 `AbortSignal`。"
+msgstr ""
+

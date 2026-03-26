@@ -11,7 +11,6 @@ from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
-from SimpleLLMFunc.llm_decorator.utils import process_tools
 
 # Constants
 HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]
@@ -84,7 +83,6 @@ def build_chat_user_message_content(
 
 def build_chat_system_prompt(
     docstring: str,
-    tool_objects: Optional[List[Any]],
     history_system_prompt: Optional[str] = None,
 ) -> Optional[str]:
     """构建聊天系统提示"""
@@ -93,22 +91,7 @@ def build_chat_system_prompt(
     if not base_prompt:
         return None
 
-    system_content = base_prompt
-
-    # 如果提供工具，添加工具描述
-    if tool_objects:
-        tool_descriptions = "\n\t".join(
-            f"- {tool['function']['name']}: {tool['function']['description']}"
-            for tool in tool_objects
-        )
-        system_content = (
-            "\n\nYou can use the following tools flexibly according to the real case and tool description:\n\t"
-            + tool_descriptions
-            + "\n\n"
-            + system_content.strip()
-        )
-
-    return system_content
+    return base_prompt
 
 
 def extract_history_system_prompt(history: Optional[HistoryList]) -> Optional[str]:
@@ -156,9 +139,6 @@ def build_chat_messages(
     """构建聊天消息列表的完整流程"""
     messages: HistoryList = []
 
-    # 1. 准备工具
-    tool_param, tool_map = process_tools(toolkit, signature.func_name)
-
     # 2. 提取对话历史
     custom_history = extract_conversation_history(
         signature.bound_args.arguments,
@@ -168,7 +148,6 @@ def build_chat_messages(
     # 3. 构建系统提示（history 中的 system prompt 优先）
     system_content = build_chat_system_prompt(
         signature.docstring,
-        tool_param,
         history_system_prompt=extract_history_system_prompt(custom_history),
     )
     if system_content:
