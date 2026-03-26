@@ -757,6 +757,28 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
 
     history = [{"role": "user", "content": "seed"}]
 
+    class _FakeOtelSpanContext:
+        def __init__(self, trace_id: str, span_id: str) -> None:
+            self.trace_id = trace_id
+            self.span_id = span_id
+            self.is_valid = True
+
+    class _FakeOtelSpan:
+        def __init__(self, trace_id: str, span_id: str) -> None:
+            self._span_context = _FakeOtelSpanContext(trace_id, span_id)
+
+        def get_span_context(self):
+            return self._span_context
+
+    def _current_otel_span() -> Any:
+        current_trace_id = tracker.get_current_trace_id()
+        current_observation_id = tracker.get_current_observation_id()
+        if current_trace_id and current_observation_id:
+            return _FakeOtelSpan(current_trace_id, current_observation_id)
+        from SimpleLLMFunc.observability.langfuse_client import otel_trace_api
+
+        return otel_trace_api.INVALID_SPAN
+
     with (
         patch.object(
             shared_langfuse_client,
@@ -777,6 +799,10 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
             shared_langfuse_client,
             "create_trace_id",
             side_effect=tracker.create_trace_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=_current_otel_span,
         ),
     ):
         trace_token = set_langfuse_trace_context({"trace_id": "trace-root"})
