@@ -11,7 +11,6 @@ from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
-from SimpleLLMFunc.llm_decorator.utils import process_tools
 
 # Constants
 HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]
@@ -139,9 +138,6 @@ def build_chat_messages(
 ) -> HistoryList:
     """构建聊天消息列表的完整流程"""
     messages: HistoryList = []
-
-    # 1. 准备工具
-    _tool_param, _tool_map = process_tools(toolkit, signature.func_name)
 
     # 2. 提取对话历史
     custom_history = extract_conversation_history(

@@ -118,6 +118,20 @@ def _normalize_pack_name(name: str) -> str:
     return normalized
 
 
+def _normalize_backend_name(name: str) -> str:
+    if not isinstance(name, str):
+        raise ValueError("backend name must be a non-empty string")
+
+    normalized = name.strip()
+    if not normalized:
+        raise ValueError("backend name must be a non-empty string")
+
+    if "." in normalized:
+        raise ValueError("backend name must be a single segment")
+
+    return normalized
+
+
 @dataclass(frozen=True)
 class PrimitiveParameterSpec:
     """Structured parameter metadata for runtime primitive specs."""
@@ -621,7 +635,7 @@ class PrimitivePack:
         guidance: str = "",
     ) -> None:
         self.name = _normalize_pack_name(name)
-        self.backend_name = _normalize_pack_name(backend_name or self.name)
+        self.backend_name = _normalize_backend_name(backend_name or self.name)
         self.backend = backend
         self.guidance = _normalize_text(guidance)
         self._entries: Dict[str, PrimitivePackEntry] = {}
@@ -947,7 +961,7 @@ class PrimitiveRegistry:
 
         normalized_backend_name: Optional[str] = None
         if backend_name is not None:
-            normalized_backend_name = _normalize_pack_name(backend_name)
+            normalized_backend_name = _normalize_backend_name(backend_name)
 
         resolved_contract = _resolve_primitive_contract(
             handler,
@@ -1143,9 +1157,40 @@ class PrimitiveRegistry:
         if spec.backend_name is not None:
             context.metadata.setdefault("backend_name", spec.backend_name)
             try:
-                context.backend = context.get_backend(spec.backend_name)
-            except Exception:
+                resolved_backend = context.get_backend(spec.backend_name)
+            except Exception as exc:
                 context.backend = None
+                context.metadata.setdefault(
+                    "backend_resolution_error",
+                    {
+                        "backend_name": spec.backend_name,
+                        "error_type": type(exc).__name__,
+                        "error_message": str(exc),
+                    },
+                )
+                raise RuntimeError(
+                    f"Failed to resolve backend {spec.backend_name!r} for "
+                    f"primitive {spec.name!r}"
+                ) from exc
+
+            if resolved_backend is None:
+                context.backend = None
+                context.metadata.setdefault(
+                    "backend_resolution_error",
+                    {
+                        "backend_name": spec.backend_name,
+                        "error_type": "MissingBackend",
+                        "error_message": (
+                            f"runtime backend {spec.backend_name!r} is not registered"
+                        ),
+                    },
+                )
+                raise RuntimeError(
+                    f"Failed to resolve backend {spec.backend_name!r} for "
+                    f"primitive {spec.name!r}"
+                )
+
+            context.backend = resolved_backend
         else:
             context.backend = None
 

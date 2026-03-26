@@ -1,5 +1,7 @@
 """Runtime primitive system exports."""
 
+from typing import Any
+
 from .primitives import (
     ForkContext,
     PrimitiveCallContext,
@@ -13,7 +15,6 @@ from .primitives import (
     primitive,
     primitive_spec,
 )
-from typing import Any
 
 __all__ = [
     "PrimitiveCallContext",
@@ -45,4 +46,9 @@ def build_self_reference_pack(*args: Any, **kwargs: Any) -> Any:
     return _impl(*args, **kwargs)
 
 
-DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
+def __getattr__(name: str) -> Any:
+    if name == "DEFAULT_SELF_REFERENCE_BACKEND_NAME":
+        from .builtin_self_reference import DEFAULT_SELF_REFERENCE_BACKEND_NAME
+
+        return DEFAULT_SELF_REFERENCE_BACKEND_NAME
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

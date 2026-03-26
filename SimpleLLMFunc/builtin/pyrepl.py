@@ -320,12 +320,22 @@ class PyRepl:
         normalized_pack_name = self._normalize_backend_name(pack.name)
         normalized_backend_name = self._normalize_backend_name(pack.backend_name)
         snapshot = pack.clone(backend_name=normalized_backend_name)
+        previous_snapshot: Optional[PrimitivePack] = None
 
         with self._lock:
             if normalized_pack_name in self._installed_packs and not replace:
                 raise ValueError(
                     f"primitive pack '{normalized_pack_name}' is already installed"
                 )
+            previous_snapshot = self._installed_packs.get(normalized_pack_name)
+
+        previous_backend = previous_snapshot.backend if previous_snapshot else None
+        previous_primitive_names = (
+            {entry.name for entry in previous_snapshot.primitives}
+            if previous_snapshot is not None
+            else set()
+        )
+        new_primitive_names = {entry.name for entry in snapshot.primitives}
 
         self.register_runtime_backend(
             normalized_backend_name,
@@ -343,10 +353,23 @@ class PyRepl:
                 replace=replace,
             )
 
+        stale_primitive_names = previous_primitive_names - new_primitive_names
+        for primitive_name in stale_primitive_names:
+            self._primitive_registry.unregister(primitive_name)
+
         with self._lock:
             self._installed_packs[normalized_pack_name] = snapshot
 
-        if isinstance(snapshot.backend, RuntimePrimitiveBackend):
+        if (
+            isinstance(previous_backend, RuntimePrimitiveBackend)
+            and previous_backend is not snapshot.backend
+        ):
+            previous_backend.on_close(self)
+
+        if (
+            isinstance(snapshot.backend, RuntimePrimitiveBackend)
+            and previous_backend is not snapshot.backend
+        ):
             snapshot.backend.on_install(self)
 
     def pack(
