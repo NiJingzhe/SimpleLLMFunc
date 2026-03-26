@@ -126,7 +126,6 @@ class PyRepl:
         execution_timeout_seconds: float = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         input_idle_timeout_seconds: float = DEFAULT_INPUT_IDLE_TIMEOUT_SECONDS,
         working_directory: Optional[Union[str, Path]] = None,
-        self_reference: Optional[SelfReference] = None,
         _install_builtin_packs: bool = True,
     ):
         execution_timeout = float(execution_timeout_seconds)
@@ -171,7 +170,7 @@ class PyRepl:
         self._primitive_registry = PrimitiveRegistry()
         self._register_builtin_primitives()
         if _install_builtin_packs:
-            self._install_builtin_packs(self_reference=self_reference)
+            self._install_builtin_packs()
 
         self._instance_id = uuid.uuid4().hex
         self._audit_lock = threading.Lock()
@@ -273,17 +272,10 @@ class PyRepl:
                 )
             self._primitive_pack_installers[normalized] = installer
 
-    def _install_builtin_packs(
-        self,
-        *,
-        self_reference: Optional[SelfReference] = None,
-    ) -> None:
-        selfref_backend = (
-            self_reference if self_reference is not None else SelfReference()
-        )
+    def _install_builtin_packs(self) -> None:
         self.install_pack(
             build_self_reference_pack(
-                selfref_backend,
+                SelfReference(),
                 backend_name=self.DEFAULT_SELF_REFERENCE_BACKEND_NAME,
             )
         )

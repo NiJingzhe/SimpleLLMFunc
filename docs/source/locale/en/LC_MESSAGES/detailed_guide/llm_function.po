@@ -122,8 +122,8 @@ msgstr "Parameter Description"
 #: ../../source/detailed_guide/llm_function.md:47
 msgid "**llm_interface** (必需): LLM 接口实例，用于与大语言模型通信"
 msgstr ""
-"**llm_interface** (required): LLM interface instance, used for communicating with "
-"large language models"
+"**llm_interface** (required): LLM interface instance, used for communicating"
+" with large language models"
 
 #: ../../source/detailed_guide/llm_function.md:48
 msgid "**toolkit** (可选): 工具列表，可以是 Tool 对象或被 @tool 装饰的函数"

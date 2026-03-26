@@ -158,7 +158,8 @@ msgstr ""
 #: ../../source/tui.md:64
 msgid "新消息会自动加上中断提示语：`\"我要打断你的回复。\"`"
 msgstr ""
-"New messages will automatically add an interruption prompt: `\"I want to interrupt your reply.\"`"
+"New messages will automatically add an interruption prompt: `\"I want to "
+"interrupt your reply.\"`"
 
 #: ../../source/tui.md:66
 msgid ""

@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.3)
+### 更新说明 (0.7.4)
 
-🚀 **Runtime Primitive Pack 标准化**：统一了 `PrimitivePack` 的开发方式，补齐了 pack guidance、backend 生命周期钩子，并让 builtin `selfref` 在 `PyRepl` 启动时走同一条安装路径。
+🚀 **Builtin selfref 唯一路径**：`PyRepl` 现在只保留内置 `selfref` 安装路径，移除了临时加入的 `PyRepl(self_reference=...)` 覆盖能力。
 
-🧠 **Prompt 与 Runtime 指引收敛**：简化了注入提示，把 pack 心智模型下沉到 pack 级 `guidance`，并统一了 `runtime.list_primitives(contains="<namespace>.")` 这一套发现方式。
+🧠 **Runtime Primitive API 收敛**：runtime primitive 指引、pack 注册方式和 backend 生命周期重新对齐到 builtin selfref 模型。
 
-🩺 **可观测性修复**：当当前上下文没有 active span 时，trace-context 查询不再反复刷 Langfuse 的 "No active span in current context" 警告，同时保留了嵌套 span 的父子关系。
+🩺 **可观测性修复**：当当前上下文没有 active span 时，trace-context 查询仍然保持静默，不再反复刷 Langfuse 缺失 span 的警告。
 
-📘 **文档与本地化更新**：补齐了 runtime primitive 开发/注册/spec 文档，重建了 `po`/`mo` 目录，清理了英文翻译残留，并恢复了中英文 Sphinx 文档构建。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **发布收口**：示例、文档、locale 目录与发布元数据现已统一改为 builtin-only selfref 口径。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -942,7 +942,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.3},
+  version = {0.7.4},
   year = {2026}
 }
 ```
