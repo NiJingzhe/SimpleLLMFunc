@@ -137,7 +137,7 @@ poetry run python examples/tui_chat_example.py
 
 Shows how to use runtime primitives without any LLM provider:
 
-- Explicitly wire `SelfReference` with `PyRepl` as memory backend
+- Start `PyRepl` with a shared `SelfReference` backend via `PyRepl(self_reference=...)`
 - Declare one custom `PrimitivePack` (`constants.get`) as extension example
 - Perform CRUD operations through `runtime.selfref.history.*`
 - Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`
@@ -156,7 +156,7 @@ Recommended single entry for a TUI-first agent workflow:
 
 - One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
 - `FileToolset` provides read/grep/sed/echo tools scoped to the workspace
-- `llm_chat` injects runtime primitive guidance through `Tool Best Practices` (when `PyRepl` is mounted)
+- `llm_chat` injects runtime primitive guidance through tool-owned best practices (when `PyRepl` is mounted)
 - Forked contexts inherit parent memory snapshot from the same selfref key
 - Built-in lifecycle stream events (`selfref_fork_start/spawned/end/error`, `selfref_fork_stream_*`) are rendered in TUI
 - Workspace is scoped to `./sandbox` under the project root

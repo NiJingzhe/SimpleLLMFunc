@@ -178,9 +178,7 @@ msgstr "API Keys"
 
 #: ../../source/detailed_guide/config.md
 msgid "数组"
-msgstr ""
-"The input '数组' is not a valid text for translation. Please provide a valid "
-"text string."
+msgstr "array"
 
 #: ../../source/detailed_guide/config.md
 msgid "API 密钥列表（支持负载均衡）"

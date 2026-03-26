@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-15 22:35+0800\n"
+"POT-Creation-Date: 2026-03-27 01:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -150,7 +150,7 @@ msgstr "Advanced example"
 msgid "事件流观测示例"
 msgstr "Event stream observation example"
 
-#: ../../source/examples.md:42 ../../source/examples.md:220
+#: ../../source/examples.md:42 ../../source/examples.md:237
 msgid ""
 "**文件**: "
 "[examples/event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
@@ -164,7 +164,7 @@ msgstr ""
 "**⭐ New Feature!** Showcases how to use the event stream feature of "
 "SimpleLLMFunc v0.5.0+ to build a fully functional chatbot."
 
-#: ../../source/examples.md:46 ../../source/examples.md:176
+#: ../../source/examples.md:46 ../../source/examples.md:193
 msgid "**核心特性**："
 msgstr "**Core Features**:"
 
@@ -198,7 +198,7 @@ msgstr ""
 "🧭 **Origin Metadata Routing**: Distinguish the main chain from fork sub-"
 "chains via `output.origin`"
 
-#: ../../source/examples.md:53 ../../source/examples.md:182
+#: ../../source/examples.md:53 ../../source/examples.md:199
 msgid "**关键代码片段**："
 msgstr "**Key code snippet**"
 
@@ -206,7 +206,7 @@ msgstr "**Key code snippet**"
 msgid "**依赖安装**："
 msgstr "Dependency Installation"
 
-#: ../../source/examples.md:96 ../../source/examples.md:213
+#: ../../source/examples.md:96 ../../source/examples.md:230
 msgid "**运行示例**："
 msgstr "**Run Example**:"
 
@@ -264,7 +264,7 @@ msgid "核心写法："
 msgstr "Core pattern:"
 
 #: ../../source/examples.md:128 ../../source/examples.md:145
-#: ../../source/examples.md:164
+#: ../../source/examples.md:164 ../../source/examples.md:181
 msgid "Run:"
 msgstr "Run:"
 
@@ -285,16 +285,18 @@ msgid "Shows how to use runtime primitives without any LLM provider:"
 msgstr "Shows how to use runtime primitives without any LLM provider:"
 
 #: ../../source/examples.md:140
-msgid "Explicitly wire `SelfReference` with `PyRepl` as memory backend"
-msgstr "Explicitly wire `SelfReference` with `PyRepl` as memory backend"
+msgid ""
+"Start `PyRepl` with a shared `SelfReference` backend via "
+"`PyRepl(self_reference=...)`"
+msgstr ""
+"Start `PyRepl` with a shared `SelfReference` backend via "
+"`PyRepl(self_reference=...)`"
 
 #: ../../source/examples.md:141
 msgid ""
-"Register one custom runtime backend + primitive (`constants.get`) as "
-"extension example"
+"Declare one custom `PrimitivePack` (`constants.get`) as extension example"
 msgstr ""
-"Register one custom runtime backend + primitive (`constants.get`) as "
-"extension example"
+"Declare one custom `PrimitivePack` (`constants.get`) as extension example"
 
 #: ../../source/examples.md:142
 msgid "Perform CRUD operations through `runtime.selfref.history.*`"
@@ -337,11 +339,11 @@ msgstr "FileToolset provides read/grep/sed/echo tools scoped to the workspace"
 
 #: ../../source/examples.md:159
 msgid ""
-"`llm_chat` injects runtime primitive guidance through `Tool Best Practices` "
-"(when `PyRepl` is mounted)"
+"`llm_chat` injects runtime primitive guidance through tool-owned best "
+"practices (when `PyRepl` is mounted)"
 msgstr ""
-"`llm_chat` injects runtime primitive guidance through `Tool Best Practices` "
-"(when `PyRepl` is mounted)"
+"`llm_chat` injects runtime primitive guidance through tool-owned best "
+"practices (when `PyRepl` is mounted)"
 
 #: ../../source/examples.md:160
 msgid ""
@@ -362,10 +364,53 @@ msgid "Workspace is scoped to `./sandbox` under the project root"
 msgstr "Workspace is scoped to `./sandbox` under the project root"
 
 #: ../../source/examples.md:170
+msgid "Agent as a tool (stacked decorators)"
+msgstr "Agent as a tool (stacked decorators)"
+
+#: ../../source/examples.md:172
+msgid ""
+"**文件**: "
+"[examples/agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)"
+msgstr ""
+"**File**: "
+"[examples/agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)"
+
+#: ../../source/examples.md:174
+msgid "展示如何把一个 LLM 驱动的 specialist 暴露成另一个 agent 的工具："
+msgstr ""
+"Show how to expose an LLM-driven specialist as a tool for another agent:"
+
+#: ../../source/examples.md:176
+msgid "`@tool` 外层 + `@llm_function` 内层，将 child agent 暴露进 `toolkit`"
+msgstr ""
+"@tool outer layer + @llm_function inner layer, exposing child agent into "
+"`toolkit`"
+
+#: ../../source/examples.md:177
+msgid "parent `@llm_chat` 作为 supervisor，负责路由和最终答复"
+msgstr ""
+"parent `@llm_chat` as supervisor, responsible for routing and final response"
+
+#: ../../source/examples.md:178
+msgid "child agent 保持独立 prompt / 职责边界，适合 reviewer / planner / router 组合"
+msgstr ""
+"child agent independent prompt / responsibility boundaries, suitable for "
+"reviewer / planner / router combination"
+
+#: ../../source/examples.md:179
+msgid ""
+"当前推荐子 agent 使用 `@llm_function(enable_event=False)`；若要复用 "
+"`@llm_chat`，通常需要先手写一层 wrapper tool"
+msgstr ""
+"Currently recommended sub-agent uses `@llm_function(enable_event=False)`; if"
+" you want to reuse `@llm_chat`, you usually need to first handwrite a "
+"wrapper tool"
+
+#: ../../source/examples.md:187
 msgid "llm_function 事件流与 Token 用量监控"
 msgstr "llm_function event stream and token usage monitoring"
 
-#: ../../source/examples.md:172
+#: ../../source/examples.md:189
 msgid ""
 "**文件**: "
 "[examples/llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
@@ -373,57 +418,57 @@ msgstr ""
 "**File**: "
 "[examples/llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
 
-#: ../../source/examples.md:174
+#: ../../source/examples.md:191
 msgid "展示如何在 `@llm_function` 中使用事件流来实时监控 Token 使用情况。适用于需要精确计量 API 调用成本的场景。"
 msgstr ""
 "Demonstrates how to use event streams in `@llm_function` to monitor token "
 "usage in real-time. Suitable for scenarios that require precise metering of "
 "API call costs."
 
-#: ../../source/examples.md:177
+#: ../../source/examples.md:194
 msgid "🔍 **实时 Token 监控**：捕获每次 LLM 调用的 Token 用量"
 msgstr ""
 "🔍 **Real-time Token Monitoring**: Capture token usage for each LLM call"
 
-#: ../../source/examples.md:178
+#: ../../source/examples.md:195
 msgid "💰 **成本追踪**：记录 Prompt、Completion 和总 Token 数"
 msgstr "💰 **Cost Tracking**: Record Prompt, Completion, and total Token count"
 
-#: ../../source/examples.md:179
+#: ../../source/examples.md:196
 msgid "📊 **统计汇总**：自动累计总用量"
 msgstr "📊 **Statistical Summary**: Automatically accumulate total usage"
 
-#: ../../source/examples.md:180
+#: ../../source/examples.md:197
 msgid "⚡ **零工具调用**：简单的单次 LLM 调用示例"
 msgstr "⚡ **Zero Tool Call**: Example of a simple single LLM call"
 
-#: ../../source/examples.md:218
+#: ../../source/examples.md:235
 msgid "llm_chat 事件流聊天应用"
 msgstr "llm_chat Event-Stream Chat Application"
 
-#: ../../source/examples.md:222
+#: ../../source/examples.md:239
 msgid "展示如何使用 `@llm_chat` + 事件流构建完整对话应用："
 msgstr ""
 "Demonstrates how to use `@llm_chat` + event stream to build a complete "
 "conversational application:"
 
-#: ../../source/examples.md:223
+#: ../../source/examples.md:240
 msgid "多轮对话历史管理"
 msgstr "Multi-turn conversation history management"
 
-#: ../../source/examples.md:224
+#: ../../source/examples.md:241
 msgid "流式响应与事件并行消费"
 msgstr "Consume streaming responses and events in parallel"
 
-#: ../../source/examples.md:225
+#: ../../source/examples.md:242
 msgid "工具调用可视化与统计"
 msgstr "Tool-call visualization and statistics"
 
-#: ../../source/examples.md:227
+#: ../../source/examples.md:244
 msgid "自定义 Tool 事件"
 msgstr "Custom Tool Events"
 
-#: ../../source/examples.md:229
+#: ../../source/examples.md:246
 msgid ""
 "**文件**: "
 "[examples/custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)"
@@ -431,28 +476,28 @@ msgstr ""
 "**File**: "
 "[examples/custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)"
 
-#: ../../source/examples.md:231
+#: ../../source/examples.md:248
 msgid "演示在工具执行期间发射并消费自定义事件："
 msgstr ""
 "Demonstrates emitting and consuming custom events during tool execution:"
 
-#: ../../source/examples.md:232
+#: ../../source/examples.md:249
 msgid "`ToolEventEmitter` 进度事件上报"
 msgstr "`ToolEventEmitter` progress event reporting"
 
-#: ../../source/examples.md:233
+#: ../../source/examples.md:250
 msgid "`CustomEvent` 消费与渲染"
 msgstr "`CustomEvent` consumption and rendering"
 
-#: ../../source/examples.md:234
+#: ../../source/examples.md:251
 msgid "批处理任务过程可视化"
 msgstr "Batch task process visualization"
 
-#: ../../source/examples.md:236
+#: ../../source/examples.md:253
 msgid "并行工具调用"
 msgstr "Parallel tool calling"
 
-#: ../../source/examples.md:238
+#: ../../source/examples.md:255
 msgid ""
 "**文件**: "
 "[examples/parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)"
@@ -460,27 +505,27 @@ msgstr ""
 "**File**: "
 "[examples/parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)"
 
-#: ../../source/examples.md:240
+#: ../../source/examples.md:257
 msgid "演示高级的工具调用特性："
 msgstr "Demonstrate advanced tool call features:"
 
-#: ../../source/examples.md:241
+#: ../../source/examples.md:258
 msgid "多个工具的并行执行"
 msgstr "Parallel execution of multiple tools"
 
-#: ../../source/examples.md:242
+#: ../../source/examples.md:259
 msgid "工具调用的优化和性能"
 msgstr "Optimization and performance of tool calls"
 
-#: ../../source/examples.md:243
+#: ../../source/examples.md:260
 msgid "大规模工具集的管理"
 msgstr "Management of large-scale toolsets"
 
-#: ../../source/examples.md:245
+#: ../../source/examples.md:262
 msgid "多模态内容处理"
 msgstr "Multimodal content processing"
 
-#: ../../source/examples.md:247
+#: ../../source/examples.md:264
 msgid ""
 "**文件**: "
 "[examples/multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
@@ -488,31 +533,31 @@ msgstr ""
 "**File**: "
 "[examples/multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
 
-#: ../../source/examples.md:249
+#: ../../source/examples.md:266
 msgid "展示多模态功能的使用："
 msgstr "Showcasing the use of multimodal functionality:"
 
-#: ../../source/examples.md:250
+#: ../../source/examples.md:267
 msgid "图片 URL (`ImgUrl`) 的处理"
 msgstr "Processing of image URL (ImgUrl)"
 
-#: ../../source/examples.md:251
+#: ../../source/examples.md:268
 msgid "本地图片路径 (`ImgPath`) 的处理"
 msgstr "Processing of the local image path (`ImgPath`)"
 
-#: ../../source/examples.md:252
+#: ../../source/examples.md:269
 msgid "文本和图片的混合输入输出"
 msgstr "Mixed input and output of text and images"
 
-#: ../../source/examples.md:254
+#: ../../source/examples.md:271
 msgid "供应商配置示例"
 msgstr "Supplier configuration example"
 
-#: ../../source/examples.md:256
+#: ../../source/examples.md:273
 msgid "Provider 配置文件"
 msgstr "Provider configuration file"
 
-#: ../../source/examples.md:258
+#: ../../source/examples.md:275
 msgid ""
 "**文件**: "
 "[examples/provider.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider.json)"
@@ -520,29 +565,29 @@ msgstr ""
 "**File**: "
 "[examples/provider.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider.json)"
 
-#: ../../source/examples.md:260
+#: ../../source/examples.md:277
 msgid "示范 provider.json 的完整配置结构（提供商 -> 模型配置列表）："
 msgstr ""
 "Example of complete configuration structure for provider.json (provider -> "
 "model configuration list):"
 
-#: ../../source/examples.md:261
+#: ../../source/examples.md:278
 msgid "`model_name` 作为索引键"
 msgstr "`model_name` as index key"
 
-#: ../../source/examples.md:262
+#: ../../source/examples.md:279
 msgid "API 密钥、重试与限流参数"
 msgstr "API Key, Retry, and Rate Limiting Parameters"
 
-#: ../../source/examples.md:263
+#: ../../source/examples.md:280
 msgid "适配任意 OpenAI 兼容服务"
 msgstr "Adapt to any OpenAI-compatible service"
 
-#: ../../source/examples.md:265
+#: ../../source/examples.md:282
 msgid "Provider 模板"
 msgstr "Provider template"
 
-#: ../../source/examples.md:267
+#: ../../source/examples.md:284
 msgid ""
 "**文件**: "
 "[examples/provider_template.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider_template.json)"
@@ -550,31 +595,31 @@ msgstr ""
 "**File**: "
 "[examples/provider_template.json](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/provider_template.json)"
 
-#: ../../source/examples.md:269
+#: ../../source/examples.md:286
 msgid "提供可复用的配置模板："
 msgstr "Reusable configuration templates:"
 
-#: ../../source/examples.md:270
+#: ../../source/examples.md:287
 msgid "多供应商示例与参数说明"
 msgstr "Multi-vendor Examples and Parameter Description"
 
-#: ../../source/examples.md:271
+#: ../../source/examples.md:288
 msgid "多密钥负载均衡"
 msgstr "Multi-Key Load Balancing"
 
-#: ../../source/examples.md:272
+#: ../../source/examples.md:289
 msgid "限流与重试最佳实践"
 msgstr "Rate Limiting and Retry Best Practices"
 
-#: ../../source/examples.md:274
+#: ../../source/examples.md:291
 msgid "按功能分类的示例"
 msgstr "Examples categorized by function"
 
-#: ../../source/examples.md:276
+#: ../../source/examples.md:293
 msgid "文本处理"
 msgstr "Text processing"
 
-#: ../../source/examples.md:277
+#: ../../source/examples.md:294
 msgid ""
 "**结构化提取**: 见 "
 "[llm_function_pydantic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_pydantic_example.py)"
@@ -582,7 +627,7 @@ msgstr ""
 "**Structured Extraction**: See "
 "[llm_function_pydantic_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_pydantic_example.py)"
 
-#: ../../source/examples.md:278
+#: ../../source/examples.md:295
 msgid ""
 "**动态模板**: 见 "
 "[dynamic_template_demo.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/dynamic_template_demo.py)"
@@ -590,7 +635,7 @@ msgstr ""
 "**Dynamic Templates**: See "
 "[dynamic_template_demo.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/dynamic_template_demo.py)"
 
-#: ../../source/examples.md:279
+#: ../../source/examples.md:296
 msgid ""
 "**事件流监控**: 见 "
 "[llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
@@ -598,11 +643,11 @@ msgstr ""
 "**Event Stream Monitoring**: See "
 "[llm_function_token_usage.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/llm_function_token_usage.py)"
 
-#: ../../source/examples.md:281
+#: ../../source/examples.md:298
 msgid "工具调用"
 msgstr "Tool call"
 
-#: ../../source/examples.md:282
+#: ../../source/examples.md:299
 msgid ""
 "**内置 REPL 工具调用**: 见 "
 "[pyrepl_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/pyrepl_example.py)"
@@ -610,7 +655,7 @@ msgstr ""
 "**Built-in REPL Tool Calls**: See "
 "[pyrepl_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/pyrepl_example.py)"
 
-#: ../../source/examples.md:283
+#: ../../source/examples.md:300
 msgid ""
 "**多工具并行调用**: 见 "
 "[parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)"
@@ -618,11 +663,19 @@ msgstr ""
 "**Multi-tool parallel invocation**: See "
 "[parallel_toolcall_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/parallel_toolcall_example.py)"
 
-#: ../../source/examples.md:285
+#: ../../source/examples.md:301
+msgid ""
+"**Agent as a Tool**: 见 "
+"[agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)"
+msgstr ""
+"**Agent as a Tool**: See "
+"[agent_as_tool_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)"
+
+#: ../../source/examples.md:303
 msgid "对话与 Agent"
 msgstr "Dialog and Agent"
 
-#: ../../source/examples.md:286
+#: ../../source/examples.md:304
 msgid ""
 "**事件流聊天**: 见 "
 "[event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
@@ -630,7 +683,7 @@ msgstr ""
 "**Event-Stream Chat**: See "
 "[event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
 
-#: ../../source/examples.md:287
+#: ../../source/examples.md:305
 msgid ""
 "**自定义工具事件**: 见 "
 "[custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)"
@@ -638,7 +691,7 @@ msgstr ""
 "**Custom Tool Events**: See "
 "[custom_tool_event_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/custom_tool_event_example.py)"
 
-#: ../../source/examples.md:288
+#: ../../source/examples.md:306
 msgid ""
 "**终端 TUI 聊天**: 见 "
 "[tui_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_chat_example.py)"
@@ -646,7 +699,7 @@ msgstr ""
 "**Terminal TUI Chat**: See "
 "[tui_chat_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_chat_example.py)"
 
-#: ../../source/examples.md:289
+#: ../../source/examples.md:307
 msgid ""
 "**事件流观测**: 见 "
 "[event_stream_chatbot.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/event_stream_chatbot.py)"
@@ -657,11 +710,11 @@ msgstr ""
 " ⭐ Use `enable_event=True` to observe the ReAct loop execution process in "
 "real-time"
 
-#: ../../source/examples.md:291
+#: ../../source/examples.md:309
 msgid "多模态处理"
 msgstr "Multimodal processing"
 
-#: ../../source/examples.md:292
+#: ../../source/examples.md:310
 msgid ""
 "**图片分析**: 见 "
 "[multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
@@ -669,7 +722,7 @@ msgstr ""
 "**Image Analysis**: See "
 "[multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
 
-#: ../../source/examples.md:293
+#: ../../source/examples.md:311
 msgid ""
 "**混合输入输出**: 见 "
 "[multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
@@ -677,163 +730,163 @@ msgstr ""
 "**Mixed Input and Output**: See "
 "[multi_modality_toolcall.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/multi_modality_toolcall.py)"
 
-#: ../../source/examples.md:295
+#: ../../source/examples.md:313
 msgid "快速运行示例"
 msgstr "Run example quickly"
 
-#: ../../source/examples.md:297
+#: ../../source/examples.md:315
 msgid "前置要求"
 msgstr "Prerequisite requirements"
 
-#: ../../source/examples.md:298
+#: ../../source/examples.md:316
 msgid "安装 SimpleLLMFunc: `pip install SimpleLLMFunc`"
 msgstr "Install SimpleLLMFunc: `pip install SimpleLLMFunc`"
 
-#: ../../source/examples.md:299
+#: ../../source/examples.md:317
 msgid "配置 API 密钥（见 [快速开始](quickstart.md)）"
 msgstr "Configure API key (see [Quick Start](quickstart.md))"
 
-#: ../../source/examples.md:300
+#: ../../source/examples.md:318
 msgid "创建或编辑 `provider.json` 文件"
 msgstr "Create or edit the `provider.json` file"
 
-#: ../../source/examples.md:302
+#: ../../source/examples.md:320
 msgid "运行方式"
 msgstr "operating method"
 
-#: ../../source/examples.md:327
+#: ../../source/examples.md:345
 msgid "完整的 Examples 目录"
 msgstr "Complete Examples directory"
 
-#: ../../source/examples.md:329
+#: ../../source/examples.md:347
 msgid "所有示例代码都位于仓库的 `examples/` 目录中："
 msgstr ""
 "All example code is located in the `examples/` directory of the repository:"
 
-#: ../../source/examples.md:331
+#: ../../source/examples.md:349
 msgid ""
 "**仓库链接**: https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples"
 msgstr ""
 "**Repository Link**: "
 "https://github.com/NiJingzhe/SimpleLLMFunc/tree/master/examples"
 
-#: ../../source/examples.md:333
+#: ../../source/examples.md:351
 msgid "在该目录中你可以找到："
 msgstr "In this directory you can find:"
 
-#: ../../source/examples.md:334
+#: ../../source/examples.md:352
 msgid "各种装饰器的使用示例"
 msgstr "Examples of using various decorators"
 
-#: ../../source/examples.md:335
+#: ../../source/examples.md:353
 msgid "不同 LLM 供应商的配置示例"
 msgstr "Configuration examples for different LLM providers"
 
-#: ../../source/examples.md:336
+#: ../../source/examples.md:354
 msgid "最佳实践的参考实现"
 msgstr "Reference implementation of best practices"
 
-#: ../../source/examples.md:337
+#: ../../source/examples.md:355
 msgid "环境变量配置的示例"
 msgstr "Environment variable configuration example"
 
-#: ../../source/examples.md:339
+#: ../../source/examples.md:357
 msgid "学习路径建议"
 msgstr "Learning Path Recommendation"
 
-#: ../../source/examples.md:341
+#: ../../source/examples.md:359
 msgid "初级用户"
 msgstr "Beginner user"
 
-#: ../../source/examples.md:342
+#: ../../source/examples.md:360
 msgid "阅读 [快速开始](quickstart.md) 文档"
 msgstr "Read the [Quickstart](quickstart.md) documentation"
 
-#: ../../source/examples.md:343
+#: ../../source/examples.md:361
 msgid "运行 `llm_function_pydantic_example.py`"
 msgstr "Run `llm_function_pydantic_example.py`"
 
-#: ../../source/examples.md:344
+#: ../../source/examples.md:362
 msgid "修改示例代码，尝试自己的 Prompt"
 msgstr "Modify the example code and try your own prompt."
 
-#: ../../source/examples.md:346
+#: ../../source/examples.md:364
 msgid "中级用户"
 msgstr "Intermediate user"
 
-#: ../../source/examples.md:347
+#: ../../source/examples.md:365
 msgid "学习 [llm_chat 装饰器文档](detailed_guide/llm_chat.md)"
 msgstr "Learn [llm_chat decorator documentation](detailed_guide/llm_chat.md)"
 
-#: ../../source/examples.md:348
+#: ../../source/examples.md:366
 msgid "运行 `event_stream_chatbot.py`"
 msgstr "Run `event_stream_chatbot.py`"
 
-#: ../../source/examples.md:349
+#: ../../source/examples.md:367
 msgid "尝试 `parallel_toolcall_example.py`"
 msgstr "Try `parallel_toolcall_example.py`"
 
-#: ../../source/examples.md:351
+#: ../../source/examples.md:369
 msgid "高级用户"
 msgstr "Advanced user"
 
-#: ../../source/examples.md:352
+#: ../../source/examples.md:370
 msgid "阅读 [LLM 接口层文档](detailed_guide/llm_interface.md)"
 msgstr ""
 "Read the [LLM Interface Documentation](detailed_guide/llm_interface.md)"
 
-#: ../../source/examples.md:353
+#: ../../source/examples.md:371
 msgid "学习多模态处理：`multi_modality_toolcall.py`"
 msgstr "Learning multimodal processing: `multi_modality_toolcall.py`"
 
-#: ../../source/examples.md:354
+#: ../../source/examples.md:372
 msgid "学习事件流处理：`event_stream_chatbot.py` ⭐"
 msgstr "Learning event stream processing: `event_stream_chatbot.py` ⭐"
 
-#: ../../source/examples.md:355
+#: ../../source/examples.md:373
 msgid "自定义 LLM 接口和工具系统"
 msgstr "Custom LLM interface and tool system"
 
-#: ../../source/examples.md:357
+#: ../../source/examples.md:375
 msgid "常见问题"
 msgstr "FAQ"
 
-#: ../../source/examples.md:359
+#: ../../source/examples.md:377
 msgid "Q: 示例代码在哪里？"
 msgstr "A: Where is the sample code?"
 
-#: ../../source/examples.md:360
+#: ../../source/examples.md:378
 msgid "A: 所有示例代码都在 GitHub 仓库的 `examples/` 目录中。你可以直接查看或下载运行。"
 msgstr ""
 "A: All example code is in the `examples/` directory of the GitHub "
 "repository. You can view or download and run it directly."
 
-#: ../../source/examples.md:362
+#: ../../source/examples.md:380
 msgid "Q: 如何修改示例代码？"
 msgstr "Q: How to modify the example code?"
 
-#: ../../source/examples.md:363 ../../source/examples.md:372
+#: ../../source/examples.md:381 ../../source/examples.md:390
 msgid "A:"
 msgstr "A"
 
-#: ../../source/examples.md:364
+#: ../../source/examples.md:382
 msgid "克隆仓库：`git clone https://github.com/NiJingzhe/SimpleLLMFunc.git`"
 msgstr ""
 "Clone repository: `git clone https://github.com/NiJingzhe/SimpleLLMFunc.git`"
 
-#: ../../source/examples.md:365
+#: ../../source/examples.md:383
 msgid "编辑 `examples/` 目录中的文件"
 msgstr "Edit files in the `examples/` directory"
 
-#: ../../source/examples.md:366
+#: ../../source/examples.md:384
 msgid "运行修改后的代码"
 msgstr "Run the modified code"
 
-#: ../../source/examples.md:368
+#: ../../source/examples.md:386
 msgid "Q: 示例是否支持所有 LLM 供应商？"
 msgstr "Q: Do the examples support all LLM providers?"
 
-#: ../../source/examples.md:369
+#: ../../source/examples.md:387
 msgid ""
 "A: 示例代码使用 `provider.json` 配置，支持任何兼容 OpenAI API 的供应商。参考 "
 "`provider_template.json` 配置你的供应商。"
@@ -842,69 +895,69 @@ msgstr ""
 "provider compatible with the OpenAI API. Refer to `provider_template.json` "
 "for configuring your provider."
 
-#: ../../source/examples.md:371
+#: ../../source/examples.md:389
 msgid "Q: 我遇到了问题，该怎么办？"
 msgstr "A: I encountered a problem, what should I do?"
 
-#: ../../source/examples.md:373
+#: ../../source/examples.md:391
 msgid "检查 [快速开始](quickstart.md) 中的配置部分"
 msgstr "Check the configuration section in [Quick Start](quickstart.md)"
 
-#: ../../source/examples.md:374
+#: ../../source/examples.md:392
 msgid "查看详细的 [使用指南](guide.md)"
 msgstr "View detailed [Usage Guide](guide.md)"
 
-#: ../../source/examples.md:375
+#: ../../source/examples.md:393
 msgid "在 GitHub 提交 Issue：https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 msgstr ""
 "Submit an issue on GitHub: https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 
-#: ../../source/examples.md:377
+#: ../../source/examples.md:395
 msgid "贡献新示例"
 msgstr "Contribute new examples"
 
-#: ../../source/examples.md:379
+#: ../../source/examples.md:397
 msgid "如果你想为项目贡献新的示例代码："
 msgstr "If you want to contribute new example code for the project:"
 
-#: ../../source/examples.md:381
+#: ../../source/examples.md:399
 msgid "Fork 仓库"
 msgstr "Fork repository"
 
-#: ../../source/examples.md:382
+#: ../../source/examples.md:400
 msgid "在 `examples/` 目录中创建新文件"
 msgstr "Create a new file in the `examples/` directory"
 
-#: ../../source/examples.md:383
+#: ../../source/examples.md:401
 msgid "遵循现有示例的代码风格和注释"
 msgstr "Follow the code style and comments of existing examples"
 
-#: ../../source/examples.md:384
+#: ../../source/examples.md:402
 msgid "提交 Pull Request"
 msgstr "Submit Pull Request"
 
-#: ../../source/examples.md:386
+#: ../../source/examples.md:404
 msgid "详细信息见 [贡献指南](contributing.md)。"
 msgstr "See [Contribution Guide](contributing.md) for details."
 
-#: ../../source/examples.md:388
+#: ../../source/examples.md:406
 msgid "相关资源"
 msgstr "Related resources"
 
-#: ../../source/examples.md:390
+#: ../../source/examples.md:408
 msgid "**官方仓库**: https://github.com/NiJingzhe/SimpleLLMFunc"
 msgstr "**Official Repository**: https://github.com/NiJingzhe/SimpleLLMFunc"
 
-#: ../../source/examples.md:391
+#: ../../source/examples.md:409
 msgid "**完整文档**: https://simplellmfunc.readthedocs.io/"
 msgstr "**Full document**: https://simplellmfunc.readthedocs.io/"
 
-#: ../../source/examples.md:392
+#: ../../source/examples.md:410
 msgid "**发布日志**: https://github.com/NiJingzhe/SimpleLLMFunc/releases"
 msgstr ""
 "**Release Notes**: https://github.com/NiJingzhe/SimpleLLMFunc/releases"
 
-#: ../../source/examples.md:393
+#: ../../source/examples.md:411
 msgid "**问题反馈**: https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 msgstr "**Feedback**: https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 
@@ -1011,3 +1064,6 @@ msgstr "**Feedback**: https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 #~ msgstr ""
 #~ "**File**: "
 #~ "[examples/tui_runtime_selfref_example.py](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/tui_runtime_selfref_example.py)"
+
+#~ msgid "Explicitly wire `SelfReference` with `PyRepl` as memory backend"
+#~ msgstr "Explicitly wire `SelfReference` with `PyRepl` as memory backend"

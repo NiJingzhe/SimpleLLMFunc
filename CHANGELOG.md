@@ -1,5 +1,50 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.3 (2026-03-27) - Runtime Primitive Packs, Docs, and Observability Polish
+
+### ✨ New Features
+
+1. **Standardized Runtime Primitive Packs**:
+   - Added pack-level `guidance` so each `PrimitivePack` can describe its mental model and usage scope.
+   - Standardized builtin `selfref` installation so `PyRepl` mounts it through the same `PrimitivePack` path used by custom packs.
+   - Added `PyRepl(self_reference=...)` for sharing an external `SelfReference` backend while keeping the builtin installation model.
+
+### 🔧 Improvements
+
+1. **Prompt and Runtime Guidance Cleanup**:
+   - Simplified injected runtime/tool guidance and removed duplicated tool-description text.
+   - Generalized runtime primitive discovery examples to `runtime.list_primitives(contains="<namespace>.")`.
+   - Moved selfref namespace guidance to pack-level guidance and kept tool best practices tool-scoped.
+
+2. **Runtime Backend Lifecycle**:
+   - Standardized backend-name normalization across primitive registration and backend registration.
+   - `install_pack(..., replace=True)` now closes replaced backends, skips duplicate lifecycle transitions for the same backend object, and unregisters stale primitives.
+   - Backend-bound primitive calls now fail fast with clearer backend-resolution errors.
+
+3. **Tooling and Framework Defaults**:
+   - Made framework tool-call limits opt-in with `max_tool_calls=None` as the default.
+   - Removed redundant tool preprocessing during chat message construction.
+
+4. **Observability**:
+   - Trace-context lookup now avoids noisy Langfuse "No active span in current context" warnings when no span is active.
+   - Nested span parenting remains intact for `llm_chat`, `execute_code`, and selfref fork chains.
+
+### 📚 Documentation & Localization
+
+1. **Runtime Primitive Docs**:
+   - Expanded the primitive and PyRepl guides to document the new pack authoring path, spec/contract model, builtin selfref behavior, and runtime discovery flow.
+   - Updated examples and Chinese guides to match the current runtime primitive API.
+
+2. **Translation Pipeline**:
+   - Regenerated gettext catalogs, rebuilt `po`/`mo` files, and refreshed English translations with batch translation.
+   - Cleaned residual Chinese text from English locale outputs and restored successful bilingual Sphinx HTML builds.
+   - Added the missing roman numeral packages needed by the current Sphinx build stack.
+
+### 🧪 Testing
+
+- Verified runtime, prompt, and observability changes with targeted pytest suites.
+- Rebuilt both Chinese and English Sphinx HTML documentation successfully.
+
 ## 0.7.2 (2026-03-18) - OpenAI SDK 2.x Baseline
 
 ### ⚠️ Breaking Changes

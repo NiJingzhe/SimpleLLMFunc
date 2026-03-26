@@ -290,6 +290,8 @@ async def agent(message: str, history=None):
 
 其中 `pack(..., guidance="...")` 适合描述这一整包 runtime 能力的心智模型；具体 primitive 的细节仍然通过 `runtime.get_primitive_spec(name)` / `runtime.list_primitive_specs(...)` 查询。
 
+对大多数自定义 runtime primitive 场景，推荐直接采用 `pack -> @pack.primitive -> install_pack` 这条路径；它会把 namespace、共享 backend、pack guidance 和安装生命周期放在同一个抽象里。
+
 - `pack(name, backend=..., backend_name=None, guidance="")`
 - `install_pack(pack, replace=False)`
 - `@repl.primitive(name, backend="...")`

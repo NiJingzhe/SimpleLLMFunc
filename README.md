@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.2)
+### Update Notes (0.7.3)
 
-🚀 **OpenAI SDK 2.x Baseline**: SimpleLLMFunc now targets `openai >=2.0.0,<3.0.0` and ships with an updated lockfile.
+🚀 **Runtime Primitive Packs**: standardized `PrimitivePack` authoring around pack guidance, backend lifecycle hooks, and one install path for builtin `selfref` on `PyRepl` startup.
 
-🧩 **Tool Call Type Stability**: switched the runtime and tests to the concrete function tool-call types used by modern OpenAI SDK releases.
+🧠 **Prompt & Runtime Guidance Refresh**: simplified injected guidance, moved pack mental models into pack-level `guidance`, and aligned runtime primitive discovery around `runtime.list_primitives(contains="<namespace>.")`.
 
-⚠️ **Compatibility Change**: OpenAI Python SDK 1.x is no longer supported in this release.
+🩺 **Observability Fix**: trace-context lookup no longer emits repeated Langfuse "No active span in current context" warnings when no span is active, while nested span parenting remains intact.
 
-📘 **Release Docs**: updated package metadata, README references, and release notes for the 0.7.2 cut. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Docs & Localization**: refreshed the runtime primitive guides, rebuilt `po`/`mo` catalogs, cleaned English translation residue, and restored successful bilingual Sphinx builds. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -937,7 +937,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.2},
+  version = {0.7.3},
   year = {2026}
 }
 ```

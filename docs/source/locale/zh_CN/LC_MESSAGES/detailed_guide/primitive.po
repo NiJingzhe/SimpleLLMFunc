@@ -1,0 +1,463 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2025, Nijingzhe
+# This file is distributed under the same license as the SimpleLLMFunc
+# package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: SimpleLLMFunc \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-27 01:55+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.17.0\n"
+
+#: ../../source/detailed_guide/primitive.md:1
+msgid "Primitive 原语系统"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:3
+msgid ""
+"Primitive 是 SimpleLLMFunc 的“运行时内置能力”（CodeAct 范式下的 builtin tool）。 "
+"它不是直接暴露给模型的 `@tool`，而是通过 `PyRepl` 的 `execute_code` 间接调用："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:10
+msgid "定位与作用"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:12
+msgid ""
+"在 CodeAct 模式下，模型会使用 `execute_code` 来执行一段 Python 代码。 Primitive "
+"就是这段代码里可直接调用的“运行时 API”，例如："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:20
+msgid "因此 Primitive 的定位是："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:22
+msgid "**运行时能力入口**：不需要 import，直接从 `runtime` 命名空间访问"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:23
+msgid "**CodeAct 内置工具**：由 `PyRepl` 托管并运行"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:24
+msgid ""
+"**可被 LLM 发现和理解**：支持 `runtime.get_primitive_spec(...)` 与 "
+"`runtime.list_primitive_specs(...)`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:26
+msgid "关键概念"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:28
+msgid "PrimitivePack"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:30
+msgid "PrimitivePack 是一组 runtime 原语的命名空间："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:32
+msgid "pack 名称决定 runtime 前缀：`runtime.<pack_name>.<primitive_name>`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:33
+msgid "pack 同时绑定一个默认 backend（见下文）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:34
+msgid "pack 还可以带一个 `guidance` 字符串，用来描述这个 pack 的心智模型、典型用途与使用边界"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:35
+msgid ""
+"这个 `guidance` 会进入 `execute_code` 的 runtime primitive "
+"contract，帮助模型先理解“这包能力是做什么的”"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:36
+msgid ""
+"具体到某个 primitive 的输入输出、参数与解析规则，仍然以 `runtime.get_primitive_spec(name)` / "
+"`runtime.list_primitive_specs(...)` 为准"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:38
+msgid "Primitive"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:40
+msgid "Primitive 是 pack 下面的一个运行时函数入口："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:46
+msgid "Primitive 的实现就是一个普通 Python 函数，但它会接收一个注入的上下文 `PrimitiveCallContext`。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:48
+msgid "Backend"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:50
+msgid "Backend 是提供能力的 Python 对象（可选但推荐）："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:52
+msgid "可以是 dict / service / client / 自定义类实例"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:53
+msgid "用来承载状态或真实能力"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:54
+msgid "通过 `ctx.backend` 或 `ctx.get_backend(...)` 注入到 primitive handler"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:55
+msgid "有 fork / 安装 / 关闭生命周期需求时，建议实现 `RuntimePrimitiveBackend`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:57
+msgid "开发流程（推荐写法）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:59
+msgid "最推荐的 authoring / registration 路径是："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:61
+msgid "`repl.pack(name, backend=..., guidance=\"...\")`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:62
+msgid "`@pack.primitive(...)`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:63
+msgid "`repl.install_pack(pack)`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:65
+msgid "这条路径最适合需要命名空间、共享 backend、pack 级 guidance 和 fork 生命周期控制的 runtime 扩展。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:120
+msgid "如果只是轻量扩展，也可以使用 `@repl.primitive(...)`："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:136
+msgid ""
+"如果你在做更底层的宿主集成，也可以直接使用 `PrimitiveRegistry.register(...)`。 不过对大多数使用 "
+"`PyRepl` 的场景来说，优先推荐 `PrimitivePack` 路径，因为它天然把 namespace、backend、guidance "
+"和安装生命周期放在同一个抽象里。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:139
+msgid "在哪里被使用"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:141
+msgid "`PyRepl.execute_code`：运行时环境里提供 `runtime.*` 命名空间"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:142
+msgid "`llm_chat(toolkit=repl.toolset)`：模型调用 `execute_code` 后，才能访问 primitives"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:143
+msgid ""
+"内置 selfref pack：`runtime.selfref.history.*` / "
+"`runtime.selfref.fork.*`，同样通过包级 `guidance` 向模型提供命名空间心智模型"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:145
+msgid "Primitive 上下文注入"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:147
+msgid "每个 primitive handler 都会收到 `PrimitiveCallContext`，包含："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:149
+msgid "`primitive_name`：当前 primitive 的完整名称"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:150
+msgid "`call_id` / `execution_id`：执行链路标识"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:151
+msgid "`event_emitter`：可用于发送自定义事件"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:152
+msgid "`repl` / `registry`：运行时宿主与注册中心"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:153
+msgid "`backend_name`：当前 primitive 默认绑定的 backend 名"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:154
+msgid "`backend`：通过 backend_name 注入的 backend 对象"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:156
+msgid "上下文的注入流程："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:163
+msgid ""
+"因此建议：**primitive handler 优先通过 `ctx.backend` / `ctx.get_backend(...)` "
+"访问能力**。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:165
+msgid "Contract 与可发现性"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:167
+msgid "Primitive 支持结构化契约，用于模型发现："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:169
+msgid "`runtime.get_primitive_spec(name)`：单条契约"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:170
+msgid "`runtime.list_primitive_specs(...)`：批量契约"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:172
+msgid "默认格式为 XML，也可使用 `format='dict'` 返回结构化字段。 契约信息来自以下来源："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:175
+msgid "handler 的 docstring（Use/Input/Output/Parse/Parameters/Best Practices）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:176
+msgid "`PrimitiveContract` / `@primitive(...)` 装饰器显式参数"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:178
+msgid "PrimitiveContract vs PrimitiveSpec"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:180
+msgid ""
+"`PrimitiveContract`：author-side 的契约定义，描述 primitive 的输入输出、参数、解析方式与 next "
+"steps"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:181
+msgid ""
+"`PrimitiveSpec`：runtime/public 侧看到的最终 spec，已经带上注册名、backend 绑定与归一化后的 "
+"contract 字段"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:183
+msgid "可以把它们理解为："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:185
+msgid "`PrimitiveContract` = 你在“定义 primitive”时写进去的结构化声明"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:186
+msgid "`PrimitiveSpec` = 模型和运行时在“读取 primitive”时看到的最终公开说明"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:188
+msgid "字段解析顺序是："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:190
+msgid ""
+"`description` / `input_type` / `output_type` / `output_parsing`：显式参数 > "
+"`PrimitiveContract` > docstring"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:191
+msgid "`parameters`：显式参数 > `PrimitiveContract` > docstring > 签名推断"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:192
+msgid "`next_steps`：显式参数 > `PrimitiveContract` > docstring"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:193
+msgid "`best_practices`：来自 docstring，并且为必填项"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:195
+msgid "因此最稳妥的写法是："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:197
+msgid ""
+"在 docstring 中完整写出 `Use` / `Input` / `Output` / `Parse` / `Parameters` / "
+"`Best Practices`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:198
+msgid "在确实需要覆盖或程序化生成字段时，再使用 `PrimitiveContract` 或 `@primitive(...)` 的显式参数"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:200
+msgid "Best Practices 与 Docstring"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:202
+msgid "Primitive 的最佳实践 **只来自 docstring**，且为必填项。 缺失 `Best Practices` 会在注册时抛出错误。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:205
+msgid "Docstring 结构规范"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:207
+msgid "Docstring 采用“段落 + 冒号”的简洁格式，大小写不敏感："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:209
+msgid "`Use:` / `Input:` / `Output:` / `Parse:`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:210
+msgid "`Parameters:`（每行 `name: description` 或 `- name: description`）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:211
+msgid "`Best Practices:`（每行 `- rule`）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:213
+msgid "没有标题的首段会自动当作 `Use`（description）。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:215
+msgid "推荐的完整模板："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:234
+msgid "**提示**：Best Practices 依赖 docstring 解析，请把规则写在 docstring。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:236
+msgid "这些最佳实践会进入 primitive contract，可以通过："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:238
+msgid "`runtime.get_primitive_spec(\"github_repo.list_open_issues\")`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:239
+msgid "`runtime.list_primitive_specs(contains=\"github_repo.\")`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:241
+msgid "来读取。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:243
+msgid "如何注入到提示词里"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:245
+msgid "Primitive **本身不会直接注入 system prompt**。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:247
+msgid "系统会注入的是 **工具（Tool）的最佳实践**，例如 `execute_code` 工具："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:249
+msgid ""
+"`llm_chat` / `llm_function` 会把工具的 `best_practices` 去重后拼成 "
+"`<tool_best_practices>` 块"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:250
+msgid "这块内容被插入到 system prompt 顶部"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:252
+msgid "因此 Primitive 的最佳实践通常通过两种方式“进入模型上下文”："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:254
+msgid "**execute_code 工具最佳实践**：提示模型使用 `runtime.get_primitive_spec(...)`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:255
+msgid ""
+"**运行时主动查询**：模型在 `execute_code` 中调用 `runtime.get_primitive_spec` 或 "
+"`runtime.selfref.guide()`"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:257
+msgid "如果你希望把某个 primitive 的规则“强注入提示词”，建议把规则写到："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:259
+msgid "`execute_code` 工具的 best practices（或自定义 Tool）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:260
+msgid "或通过 tool 的 `prompt_injection_builder` 输出固定指导文本"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:262
+msgid "Backend 生命周期与 fork/clone"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:264
+msgid "如果 backend 有状态，建议实现 `RuntimePrimitiveBackend`："
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:266
+msgid "`clone_for_fork(context=...)`：fork child 时如何复制/共享 backend（默认共享）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:267
+msgid "`on_install(repl)`：安装时回调"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:268
+msgid "`on_close(repl)`：REPL 关闭时回调（可做资源释放）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:270
+msgid "这让 fork 子 agent 时的 backend 行为更可控，也能保证状态清理。"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:272
+msgid "Primitive vs Tool"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:274
+msgid "**Tool**：`@tool` 暴露给模型的函数调用（OpenAI tool calling）"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:275
+msgid "**Primitive**：CodeAct 运行时内置 API，通过 `execute_code` 间接调用"
+msgstr ""
+
+#: ../../source/detailed_guide/primitive.md:277
+msgid "你可以把 Primitive 理解为“内置在运行时的 builtin tool”。"
+msgstr ""
+

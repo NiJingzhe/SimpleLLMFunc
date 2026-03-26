@@ -56,6 +56,14 @@ Backend 是提供能力的 Python 对象（可选但推荐）：
 
 ## 开发流程（推荐写法）
 
+最推荐的 authoring / registration 路径是：
+
+1. `repl.pack(name, backend=..., guidance="...")`
+2. `@pack.primitive(...)`
+3. `repl.install_pack(pack)`
+
+这条路径最适合需要命名空间、共享 backend、pack 级 guidance 和 fork 生命周期控制的 runtime 扩展。
+
 ```python
 from SimpleLLMFunc.builtin import PyRepl
 
@@ -125,6 +133,9 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
     return backend.list_open_issues(repo)
 ```
 
+如果你在做更底层的宿主集成，也可以直接使用 `PrimitiveRegistry.register(...)`。
+不过对大多数使用 `PyRepl` 的场景来说，优先推荐 `PrimitivePack` 路径，因为它天然把 namespace、backend、guidance 和安装生命周期放在同一个抽象里。
+
 ## 在哪里被使用
 
 - `PyRepl.execute_code`：运行时环境里提供 `runtime.*` 命名空间
@@ -163,6 +174,28 @@ Primitive 支持结构化契约，用于模型发现：
 
 - handler 的 docstring（Use/Input/Output/Parse/Parameters/Best Practices）
 - `PrimitiveContract` / `@primitive(...)` 装饰器显式参数
+
+### PrimitiveContract vs PrimitiveSpec
+
+- `PrimitiveContract`：author-side 的契约定义，描述 primitive 的输入输出、参数、解析方式与 next steps
+- `PrimitiveSpec`：runtime/public 侧看到的最终 spec，已经带上注册名、backend 绑定与归一化后的 contract 字段
+
+可以把它们理解为：
+
+- `PrimitiveContract` = 你在“定义 primitive”时写进去的结构化声明
+- `PrimitiveSpec` = 模型和运行时在“读取 primitive”时看到的最终公开说明
+
+字段解析顺序是：
+
+- `description` / `input_type` / `output_type` / `output_parsing`：显式参数 > `PrimitiveContract` > docstring
+- `parameters`：显式参数 > `PrimitiveContract` > docstring > 签名推断
+- `next_steps`：显式参数 > `PrimitiveContract` > docstring
+- `best_practices`：来自 docstring，并且为必填项
+
+因此最稳妥的写法是：
+
+- 在 docstring 中完整写出 `Use` / `Input` / `Output` / `Parse` / `Parameters` / `Best Practices`
+- 在确实需要覆盖或程序化生成字段时，再使用 `PrimitiveContract` 或 `@primitive(...)` 的显式参数
 
 ## Best Practices 与 Docstring
 

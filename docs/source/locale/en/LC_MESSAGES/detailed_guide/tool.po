@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-15 22:18+0800\n"
+"POT-Creation-Date: 2026-03-27 01:55+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -139,7 +139,7 @@ msgstr "Basic return type"
 
 #: ../../source/detailed_guide/tool.md:30
 msgid "**字符串 (`str`)**: 直接作为文本内容返回给 LLM"
-msgstr "你好"
+msgstr "**String (`str`)**: Directly return as text content to LLM"
 
 #: ../../source/detailed_guide/tool.md:31
 msgid "**JSON 可序列化对象**: 包括 `dict`, `list`, `int`, `float`, `bool`, `None`"
@@ -523,66 +523,105 @@ msgid "工具使用示例"
 msgstr "Tool usage example"
 
 #: ../../source/detailed_guide/tool.md:620
+msgid "将 `@llm_function` 暴露为工具（Agent as a Tool）"
+msgstr "Expose `@llm_function` as a Tool (Agent as a Tool)"
+
+#: ../../source/detailed_guide/tool.md:622
+msgid ""
+"当你希望一个上层 agent 把下层 specialist 当成工具调用时，可以把 `@tool` 叠加在 `@llm_function` 外层："
+msgstr ""
+"When you want an upper-level agent to call a lower-level specialist as a "
+"tool, you can stack `@tool` on the outer layer of `@llm_function`:"
+
+#: ../../source/detailed_guide/tool.md:657
+msgid "要点："
+msgstr "Key Points:"
+
+#: ../../source/detailed_guide/tool.md:659
+msgid "推荐顺序写成 `@tool` 外层、`@llm_function` 内层。"
+msgstr ""
+"Recommend writing the order with `@tool` as the outer layer and "
+"`@llm_function` as the inner layer."
+
+#: ../../source/detailed_guide/tool.md:660
+msgid ""
+"子 agent 推荐使用 `@llm_function(enable_event=False)`，这样它表现为普通 `async` tool。"
+msgstr ""
+"Sub-agent recommends using `@llm_function(enable_event=False)`, so that it "
+"behaves as a regular `async` tool."
+
+#: ../../source/detailed_guide/tool.md:661
+msgid "`@llm_chat` 返回的是异步生成器；如果一定要把它当工具复用，通常需要先写一个手动 wrapper。"
+msgstr ""
+"`@llm_chat` returns an async generator; if you must reuse it as a tool, you "
+"usually need to write a manual wrapper first."
+
+#: ../../source/detailed_guide/tool.md:662
+msgid "可运行完整示例见 `examples/agent_as_tool_example.py`。"
+msgstr ""
+"For a runnable complete example, see `examples/agent_as_tool_example.py`."
+
+#: ../../source/detailed_guide/tool.md:664
 msgid "高级用法"
 msgstr "Advanced usage"
 
-#: ../../source/detailed_guide/tool.md:622
+#: ../../source/detailed_guide/tool.md:666
 msgid "工具序列化和检查"
 msgstr "Tool serialization and inspection"
 
-#: ../../source/detailed_guide/tool.md:639
+#: ../../source/detailed_guide/tool.md:683
 msgid "动态工具创建"
 msgstr "Dynamic tool creation"
 
-#: ../../source/detailed_guide/tool.md:662
+#: ../../source/detailed_guide/tool.md:706
 msgid "工具链组合"
 msgstr "toolchain combination"
 
-#: ../../source/detailed_guide/tool.md:695
+#: ../../source/detailed_guide/tool.md:739
 msgid "返回类型最佳实践"
 msgstr "Best practices for return types"
 
-#: ../../source/detailed_guide/tool.md:697
+#: ../../source/detailed_guide/tool.md:741
 msgid "选择合适的返回类型"
 msgstr "Choose the appropriate return type"
 
-#: ../../source/detailed_guide/tool.md:699
+#: ../../source/detailed_guide/tool.md:743
 msgid "**文本输出优先**: 如果工具主要产生文本结果，使用 `str` 或结构化的 `Dict`"
 msgstr ""
 "**Text Output Priority**: If the tool primarily produces text results, use "
 "`str` or a structured `Dict`."
 
-#: ../../source/detailed_guide/tool.md:700
+#: ../../source/detailed_guide/tool.md:744
 msgid "**结构化数据**: 复杂数据使用 `Dict` 或 `List`，便于 LLM 理解和处理"
 msgstr ""
 "**Structured Data**: Complex data uses `Dict` or `List` for easy "
 "understanding and processing by LLM"
 
-#: ../../source/detailed_guide/tool.md:701
+#: ../../source/detailed_guide/tool.md:745
 msgid "**多模态内容**: 需要展示图片时使用 `ImgPath`、`ImgUrl` 或组合类型"
 msgstr ""
 "**Multimodal Content**: Use `ImgPath`, `ImgUrl`, or a combination type when "
 "displaying images."
 
-#: ../../source/detailed_guide/tool.md:702
+#: ../../source/detailed_guide/tool.md:746
 msgid "**组合输出**: 需要同时提供说明和图片时使用 `Tuple[str, ImgPath/ImgUrl]`"
 msgstr ""
 "**Combined Output**: Use `Tuple[str, ImgPath/ImgUrl]` when both description "
 "and image need to be provided"
 
-#: ../../source/detailed_guide/tool.md:704
+#: ../../source/detailed_guide/tool.md:748
 msgid "性能优化建议"
 msgstr "Performance optimization suggestions"
 
-#: ../../source/detailed_guide/tool.md:734
+#: ../../source/detailed_guide/tool.md:778
 msgid "错误处理模式"
 msgstr "Error handling mode"
 
-#: ../../source/detailed_guide/tool.md:774
+#: ../../source/detailed_guide/tool.md:818
 msgid "多模态类型详细说明"
 msgstr "Multimodal type detailed description"
 
-#: ../../source/detailed_guide/tool.md:805
+#: ../../source/detailed_guide/tool.md:849
 msgid ""
 "工具系统提供了强大而灵活的扩展机制，让 LLM 能够调用各种外部功能。通过装饰器方式，开发者可以轻松地将现有函数转换为 LLM "
 "可用的工具，而继承方式则提供了更多的自定义控制。系统自动处理类型转换和参数验证，确保工具调用的安全性和准确性。"
@@ -594,31 +633,31 @@ msgstr ""
 "system automatically handles type conversion and parameter validation, "
 "ensuring the safety and accuracy of tool calls."
 
-#: ../../source/detailed_guide/tool.md:807
+#: ../../source/detailed_guide/tool.md:851
 msgid "**关键要点总结**："
 msgstr "Key takeaways"
 
-#: ../../source/detailed_guide/tool.md:808
+#: ../../source/detailed_guide/tool.md:852
 msgid "支持多种返回类型：基本类型、JSON对象、多模态内容"
 msgstr ""
 "Supports multiple return types: basic types, JSON objects, multimodal "
 "content"
 
-#: ../../source/detailed_guide/tool.md:809
+#: ../../source/detailed_guide/tool.md:853
 msgid "多模态支持：单独图片或文本+图片组合"
 msgstr "Multimodal support: standalone images or text+image combinations"
 
-#: ../../source/detailed_guide/tool.md:810
+#: ../../source/detailed_guide/tool.md:854
 msgid "自动类型转换：本地图片转base64，网络图片直接使用URL"
 msgstr ""
 "Automatic type conversion: local images are converted to base64, and network"
 " images use URLs directly."
 
-#: ../../source/detailed_guide/tool.md:811
+#: ../../source/detailed_guide/tool.md:855
 msgid "错误处理：推荐返回结构化的错误信息"
 msgstr "Error handling: recommended to return structured error information"
 
-#: ../../source/detailed_guide/tool.md:812
+#: ../../source/detailed_guide/tool.md:856
 msgid "性能考虑：避免返回过大数据，网络图片使用低细节级别"
 msgstr ""
 "Performance considerations: Avoid returning excessively large data, use low-"
