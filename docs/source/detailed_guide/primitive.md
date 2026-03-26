@@ -31,6 +31,9 @@ PrimitivePack 是一组 runtime 原语的命名空间：
 
 - pack 名称决定 runtime 前缀：`runtime.<pack_name>.<primitive_name>`
 - pack 同时绑定一个默认 backend（见下文）
+- pack 还可以带一个 `guidance` 字符串，用来描述这个 pack 的心智模型、典型用途与使用边界
+- 这个 `guidance` 会进入 `execute_code` 的 runtime primitive contract，帮助模型先理解“这包能力是做什么的”
+- 具体到某个 primitive 的输入输出、参数与解析规则，仍然以 `runtime.get_primitive_spec(name)` / `runtime.list_primitive_specs(...)` 为准
 
 ### Primitive
 
@@ -49,6 +52,7 @@ Backend 是提供能力的 Python 对象（可选但推荐）：
 - 可以是 dict / service / client / 自定义类实例
 - 用来承载状态或真实能力
 - 通过 `ctx.backend` 或 `ctx.get_backend(...)` 注入到 primitive handler
+- 有 fork / 安装 / 关闭生命周期需求时，建议实现 `RuntimePrimitiveBackend`
 
 ## 开发流程（推荐写法）
 
@@ -72,6 +76,7 @@ repl = PyRepl()
 github_repo = repl.pack(
     "github_repo",
     backend=GitHubRepoAPI(),
+    guidance="github_repo = repository issue/query primitives backed by GitHubRepoAPI.",
 )
 
 
@@ -124,7 +129,7 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
 
 - `PyRepl.execute_code`：运行时环境里提供 `runtime.*` 命名空间
 - `llm_chat(toolkit=repl.toolset)`：模型调用 `execute_code` 后，才能访问 primitives
-- 内置 selfref pack：`runtime.selfref.history.*` / `runtime.selfref.fork.*`
+- 内置 selfref pack：`runtime.selfref.history.*` / `runtime.selfref.fork.*`，同样通过包级 `guidance` 向模型提供命名空间心智模型
 
 ## Primitive 上下文注入
 
