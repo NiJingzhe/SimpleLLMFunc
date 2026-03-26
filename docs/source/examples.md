@@ -137,7 +137,7 @@ poetry run python examples/tui_chat_example.py
 
 Shows how to use runtime primitives without any LLM provider:
 
-- Start `PyRepl` with a shared `SelfReference` backend via `PyRepl(self_reference=...)`
+- Start `PyRepl` with its builtin `selfref` backend and access it through `repl.get_runtime_backend("selfref")`
 - Declare one custom `PrimitivePack` (`constants.get`) as extension example
 - Perform CRUD operations through `runtime.selfref.history.*`
 - Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`

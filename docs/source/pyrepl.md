@@ -263,15 +263,16 @@ repl = PyRepl(working_directory="./sandbox")
 
 `PyRepl()` 启动时会默认安装内置 `selfref` pack。
 
-当你希望把外部 `SelfReference` 与当前 REPL 共享成同一份记忆状态时，可以显式传入 `self_reference=`：
+如果你需要在宿主侧预先写入或读取同一份记忆状态，可以直接获取这份默认 backend：
 
 ```python
 from SimpleLLMFunc import llm_chat
 from SimpleLLMFunc.builtin import PyRepl
 from SimpleLLMFunc.builtin import SelfReference
 
-self_reference = SelfReference()
-repl = PyRepl(self_reference=self_reference)
+repl = PyRepl()
+self_reference = repl.get_runtime_backend("selfref")
+assert isinstance(self_reference, SelfReference)
 
 @llm_chat(
     llm_interface=llm,
@@ -367,7 +368,7 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
 
 当 `@llm_chat(...)` 使用带 runtime 的工具（如 `PyRepl`）时，框架会在 prompt 顶部注入去重后的 `Tool Best Practices` 块；runtime 原语指引会包含在工具自己的最佳实践条目中。
 
-由于 `PyRepl()` 默认已经安装 builtin `selfref` pack，`llm_chat` 可以直接从 toolkit 的 runtime backend 自动解析 `SelfReference`。如果你传入了 `PyRepl(self_reference=self_reference)`，则 `llm_chat` 会解析到这份外部共享 backend。
+由于 `PyRepl()` 默认已经安装 builtin `selfref` pack，`llm_chat` 可以直接从 toolkit 的 runtime backend 自动解析 `SelfReference`。
 
 首次回合安全：若 memory key 为空，会在执行工具前把当前 system prompt 写入 `self_reference`，确保 runtime 读取不为空且包含 system 消息。
 

@@ -54,6 +54,14 @@ async def _wait_for_input_request(
     raise AssertionError("Timed out waiting for kernel_input_request event")
 
 
+def _builtin_self_reference(repl: Any):
+    from SimpleLLMFunc.self_reference import SelfReference
+
+    self_reference = repl.get_runtime_backend("selfref")
+    assert isinstance(self_reference, SelfReference)
+    return self_reference
+
+
 class TestPyReplCreation:
     """Test PyRepl class creation."""
 
@@ -624,17 +632,6 @@ class TestPyReplPrimitivePacks:
         with pytest.raises(KeyError, match="primitive pack"):
             repl.install_primitive_pack("self_reference", backend=SelfReference())
 
-    def test_repl_accepts_explicit_self_reference_backend(self):
-        from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
-
-        self_reference = SelfReference()
-        repl = PyRepl(self_reference=self_reference)
-
-        assert repl.get_runtime_backend("selfref") is self_reference
-        assert "selfref.history.keys" in repl.list_primitives()
-        assert "selfref.fork.spawn" in repl.list_primitives()
-
     @pytest.mark.asyncio
     async def test_install_pack_supports_backend_aware_custom_primitives(self):
         """First-class PrimitivePack should install backend-aware custom primitives."""
@@ -763,12 +760,10 @@ class TestPyReplPrimitivePacks:
     async def test_execute_can_mutate_memory_via_runtime_primitives(self):
         """execute_code should mutate memory through runtime primitives."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
-
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n_ = 1"
@@ -784,10 +779,9 @@ class TestPyReplPrimitivePacks:
     async def test_reset_keeps_registered_self_reference_backend(self):
         """reset_repl should preserve installed runtime backend registration."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
-        repl = PyRepl(self_reference=self_reference)
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
 
         await repl.execute("x = 1")
         await repl.reset()
@@ -798,15 +792,13 @@ class TestPyReplPrimitivePacks:
     async def test_reset_does_not_delete_self_reference_memory(self):
         """reset_repl should not clear SelfReference history store."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history(
             "agent_main",
             [{"role": "user", "content": "remember me"}],
         )
-
-        repl = PyRepl(self_reference=self_reference)
         await repl.execute("x = 1")
         await repl.reset()
 
@@ -818,9 +810,9 @@ class TestPyReplPrimitivePacks:
     async def test_execute_can_fork_bound_agent_instance_with_memory_snapshot(self):
         """REPL runtime.selfref.fork.spawn should inherit memory as child context."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         observed_calls: list[dict[str, object]] = []
@@ -841,7 +833,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('sub-task')\n"
@@ -875,9 +866,9 @@ class TestPyReplPrimitivePacks:
     async def test_execute_can_spawn_and_gather_fork_from_code_act(self):
         """Code-act fork should be runtime-hooked and support spawn/gather APIs."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -890,7 +881,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
@@ -910,9 +900,9 @@ class TestPyReplPrimitivePacks:
     async def test_execute_gather_all_can_include_history_on_demand(self):
         """runtime.selfref.fork.gather_all should keep compact default and support include_history."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -925,7 +915,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "spawned = runtime.selfref.fork.spawn('task-a')\n"
@@ -947,9 +936,9 @@ class TestPyReplPrimitivePacks:
     async def test_execute_can_gather_all_spawned_forks(self):
         """Code-act runtime.selfref.fork.gather_all should collect spawned forks."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -962,7 +951,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handles = [\n"
@@ -987,9 +975,9 @@ class TestPyReplPrimitivePacks:
         """Code-act fork should emit structured lifecycle custom events."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -1002,7 +990,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
         emitter = ToolEventEmitter()
 
         result = await repl.execute(
@@ -1029,9 +1016,9 @@ class TestPyReplPrimitivePacks:
         """Fork spawn/gather should not emit fork stream events (use lifecycle only)."""
         from SimpleLLMFunc.builtin import PyRepl
         from SimpleLLMFunc.hooks.event_emitter import ToolEventEmitter
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -1053,7 +1040,6 @@ class TestPyReplPrimitivePacks:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
         emitter = ToolEventEmitter()
 
         result = await repl.execute(
@@ -1352,12 +1338,10 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_can_mutate_memory_via_runtime_primitive_calls(self):
         """runtime.selfref.history.* should proxy host self-reference operations."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
-
-        repl = PyRepl(self_reference=self_reference)
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
             "print(runtime.selfref.history.count())\n"
@@ -1376,13 +1360,11 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_runtime_history_clear_preserves_system_prompt(self):
         """runtime.selfref.history.clear should keep current system prompt."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
         self_reference.memory["agent_main"].set_system_prompt("Rule A")
-
-        repl = PyRepl(self_reference=self_reference)
         result = await repl.execute(
             "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
             "runtime.selfref.history.clear()\n"
@@ -1401,9 +1383,9 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_can_run_fork_via_runtime_primitive_calls(self):
         """runtime.selfref.fork.spawn should fork bound agent instance."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -1416,7 +1398,6 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('sub-task')\n"
@@ -1434,9 +1415,9 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_gather_all_include_history_on_demand(self):
         """runtime.selfref.fork.gather_all should honor include_history per spec."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -1449,7 +1430,6 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handle = runtime.selfref.fork.spawn('task-a')\n"
@@ -1468,16 +1448,15 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_spawn_rejects_include_history_argument(self):
         """runtime.selfref.fork.spawn should reject unsupported include_history."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
             return message, list(history or [])
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "runtime.selfref.fork.spawn('task-a', include_history=True)"
@@ -1490,9 +1469,9 @@ class TestPyReplRuntimePrimitives:
     async def test_execute_gather_all_can_include_history_on_demand(self):
         """runtime.selfref.fork.gather_all should hydrate histories when requested."""
         from SimpleLLMFunc.builtin import PyRepl
-        from SimpleLLMFunc.self_reference import SelfReference
 
-        self_reference = SelfReference()
+        repl = PyRepl()
+        self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
         async def fake_agent(message: str, history=None):
@@ -1505,7 +1484,6 @@ class TestPyReplRuntimePrimitives:
             )
 
         self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
-        repl = PyRepl(self_reference=self_reference)
 
         result = await repl.execute(
             "handles = [runtime.selfref.fork.spawn('task-a'), runtime.selfref.fork.spawn('task-b')]\n"

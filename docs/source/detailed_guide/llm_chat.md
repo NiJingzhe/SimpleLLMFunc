@@ -302,7 +302,7 @@ asyncio.run(demo())
 - `reset_repl` 会清理 REPL 变量，并继续保留当前 runtime backend 状态
 - 当绑定了 `SelfReference` 记忆时，本 chat 函数对应的 memory key 作用域
 
-`PyRepl()` 默认会安装 builtin `selfref` pack；当你传入 `PyRepl(self_reference=self_reference)` 时，`llm_chat` 会解析并复用这份外部共享 backend。
+`PyRepl()` 默认会安装 builtin `selfref` pack；`llm_chat` 会直接从 toolkit 的 runtime backend 解析并复用这份默认 backend。
 
 示例：
 
@@ -310,8 +310,9 @@ asyncio.run(demo())
 from SimpleLLMFunc import llm_chat
 from SimpleLLMFunc.builtin import PyRepl, SelfReference
 
-self_reference = SelfReference()
-repl = PyRepl(self_reference=self_reference)
+repl = PyRepl()
+self_reference = repl.get_runtime_backend("selfref")
+assert isinstance(self_reference, SelfReference)
 
 @llm_chat(
     llm_interface=llm,

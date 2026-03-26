@@ -1,5 +1,29 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.4 (2026-03-27) - Builtin selfref Only and Release Correction
+
+### 🔧 Improvements
+
+1. **Builtin selfref only**:
+   - Removed the temporary `PyRepl(self_reference=...)` override path.
+   - `PyRepl` now always installs and uses its builtin `selfref` backend.
+   - Host-side access to selfref state now goes through `repl.get_runtime_backend("selfref")`.
+
+2. **Runtime API alignment**:
+   - Updated tests, examples, and guides to follow the builtin-only selfref model.
+   - Kept runtime primitive pack guidance, backend lifecycle handling, and selfref discovery aligned with the default implementation.
+
+### 📚 Documentation & Localization
+
+1. **Release correction**:
+   - Updated source docs and examples to remove the external selfref injection path.
+   - Regenerated locale catalogs, refreshed translations, and rebuilt bilingual Sphinx HTML docs for the corrected release.
+
+### 🧪 Testing
+
+- Verified targeted PyRepl, runtime backend, llm_chat, and observability test suites.
+- Rebuilt Chinese and English Sphinx HTML documentation successfully.
+
 ## 0.7.3 (2026-03-27) - Runtime Primitive Packs, Docs, and Observability Polish
 
 ### ✨ New Features
@@ -7,7 +31,6 @@
 1. **Standardized Runtime Primitive Packs**:
    - Added pack-level `guidance` so each `PrimitivePack` can describe its mental model and usage scope.
    - Standardized builtin `selfref` installation so `PyRepl` mounts it through the same `PrimitivePack` path used by custom packs.
-   - Added `PyRepl(self_reference=...)` for sharing an external `SelfReference` backend while keeping the builtin installation model.
 
 ### 🔧 Improvements
 

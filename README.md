@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.3)
+### Update Notes (0.7.4)
 
-🚀 **Runtime Primitive Packs**: standardized `PrimitivePack` authoring around pack guidance, backend lifecycle hooks, and one install path for builtin `selfref` on `PyRepl` startup.
+🚀 **Builtin selfref Only**: `PyRepl` now keeps `selfref` on the builtin path only; the temporary `PyRepl(self_reference=...)` override path has been removed.
 
-🧠 **Prompt & Runtime Guidance Refresh**: simplified injected guidance, moved pack mental models into pack-level `guidance`, and aligned runtime primitive discovery around `runtime.list_primitives(contains="<namespace>.")`.
+🧠 **Runtime Primitive API Cleanup**: runtime primitive guidance, pack registration, and backend lifecycle handling stay aligned with the builtin selfref model.
 
-🩺 **Observability Fix**: trace-context lookup no longer emits repeated Langfuse "No active span in current context" warnings when no span is active, while nested span parenting remains intact.
+🩺 **Observability Fix**: trace-context lookup still stays quiet when no span is active, so Langfuse no longer floods logs with repeated missing-span warnings.
 
-📘 **Docs & Localization**: refreshed the runtime primitive guides, rebuilt `po`/`mo` catalogs, cleaned English translation residue, and restored successful bilingual Sphinx builds. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Release Refresh**: examples, docs, locale catalogs, and release metadata now reflect the builtin-only selfref path. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -937,7 +937,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.3},
+  version = {0.7.4},
   year = {2026}
 }
 ```

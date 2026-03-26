@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from SimpleLLMFunc import OpenAICompatible, llm_chat
-from SimpleLLMFunc.builtin import FileToolset, PyRepl, SelfReference
+from SimpleLLMFunc.builtin import FileToolset, PyRepl
 from SimpleLLMFunc.hooks.events import CustomEvent
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.utils.tui import ToolRenderSnapshot
@@ -104,9 +104,8 @@ def load_llm():
 
 
 llm = load_llm()
-self_reference = SelfReference()
 SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
-repl = PyRepl(working_directory=SANDBOX_DIR, self_reference=self_reference)
+repl = PyRepl(working_directory=SANDBOX_DIR)
 file_tools = FileToolset(SANDBOX_DIR).toolset
 
 

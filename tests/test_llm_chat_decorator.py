@@ -40,6 +40,12 @@ _MUST_PROMPT_RULE = (
 )
 
 
+def _builtin_self_reference(repl: PyRepl) -> SelfReference:
+    self_reference = repl.get_runtime_backend("selfref")
+    assert isinstance(self_reference, SelfReference)
+    return self_reference
+
+
 class _DummyObservation:
     """Simple context manager used to stub Langfuse observations."""
 
@@ -400,8 +406,8 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
 
-    self_reference = SelfReference()
-    repl = PyRepl(self_reference=self_reference)
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
 
     with (
         patch(
@@ -504,13 +510,12 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
 
-    self_reference = SelfReference()
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
     self_reference.bind_history(
         "agent_main", [{"role": "user", "content": "seed-main"}]
     )
     self_reference.bind_history("other", [{"role": "user", "content": "seed-other"}])
-
-    repl = PyRepl(self_reference=self_reference)
 
     with (
         patch(
@@ -577,8 +582,8 @@ async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
 
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
-    self_reference = SelfReference()
-    root_repl = PyRepl(self_reference=self_reference)
+    root_repl = PyRepl()
+    self_reference = _builtin_self_reference(root_repl)
 
     with (
         patch(
@@ -649,8 +654,8 @@ async def test_llm_chat_fork_clones_custom_pyrepl_pack_primitives() -> None:
 
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
-    self_reference = SelfReference()
-    root_repl = PyRepl(self_reference=self_reference)
+    root_repl = PyRepl()
+    self_reference = _builtin_self_reference(root_repl)
 
     constants_pack = root_repl.pack(
         "constants",
@@ -729,8 +734,8 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
         "print(results[handle['fork_id']]['response'])"
     )
 
-    self_reference = SelfReference()
-    repl = PyRepl(self_reference=self_reference)
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
     tracker = _TrackingLangfuseClient()
 
     async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
@@ -1428,8 +1433,8 @@ async def test_llm_chat_deduplicates_runtime_primitive_contract_prompt() -> None
     """Runtime guidance should stay deduplicated in Tool Best Practices."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
-    self_reference = SelfReference()
-    repl = PyRepl(self_reference=self_reference)
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
     observed_system_prompts: list[str] = []
 
     async def fake_execute_react_loop_streaming(

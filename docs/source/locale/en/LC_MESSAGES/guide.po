@@ -187,7 +187,8 @@ msgstr "I want to extend runtime primitives"
 msgid ""
 "👉 [Primitive 原语](detailed_guide/primitive.md) - CodeAct 运行时 builtin tool"
 msgstr ""
-"👉 [Primitive System](detailed_guide/primitive.md) - CodeAct runtime builtin tool"
+"👉 [Primitive System](detailed_guide/primitive.md) - CodeAct runtime builtin "
+"tool"
 
 #: ../../source/guide.md:81
 msgid "我想要理解接口设计"

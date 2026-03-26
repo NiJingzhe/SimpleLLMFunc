@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-27 01:55+0800\n"
+"POT-Creation-Date: 2026-03-27 03:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -18,7 +18,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/examples.md:1
 msgid "示例代码"
@@ -256,8 +256,8 @@ msgstr ""
 
 #: ../../source/examples.md:140
 msgid ""
-"Start `PyRepl` with a shared `SelfReference` backend via "
-"`PyRepl(self_reference=...)`"
+"Start `PyRepl` with its builtin `selfref` backend and access it through "
+"`repl.get_runtime_backend(\"selfref\")`"
 msgstr ""
 
 #: ../../source/examples.md:141
@@ -1057,5 +1057,11 @@ msgstr "**问题反馈**: https://github.com/NiJingzhe/SimpleLLMFunc/issues"
 #~ "`llm_chat` injects runtime primitive guidance"
 #~ " through `Tool Best Practices` (when "
 #~ "`PyRepl` is mounted)"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Start `PyRepl` with a shared "
+#~ "`SelfReference` backend via "
+#~ "`PyRepl(self_reference=...)`"
 #~ msgstr ""
 

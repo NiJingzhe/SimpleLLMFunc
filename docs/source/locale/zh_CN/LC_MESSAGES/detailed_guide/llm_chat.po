@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-27 01:55+0800\n"
+"POT-Creation-Date: 2026-03-27 03:21+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -18,7 +18,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Generated-By: Babel 2.17.0\n"
+"Generated-By: Babel 2.18.0\n"
 
 #: ../../source/detailed_guide/llm_chat.md:1
 msgid "llm_chat 装饰器"
@@ -311,225 +311,224 @@ msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:305
 msgid ""
-"`PyRepl()` 默认会安装 builtin `selfref` pack；当你传入 "
-"`PyRepl(self_reference=self_reference)` 时，`llm_chat` 会解析并复用这份外部共享 "
-"backend。"
+"`PyRepl()` 默认会安装 builtin `selfref` pack；`llm_chat` 会直接从 toolkit 的 runtime"
+" backend 解析并复用这份默认 backend。"
 msgstr ""
 
 #: ../../source/detailed_guide/llm_chat.md:307
 msgid "示例："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:325
+#: ../../source/detailed_guide/llm_chat.md:326
 msgid "单次调用的高级覆盖（可选）："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:337
+#: ../../source/detailed_guide/llm_chat.md:338
 msgid "在 `execute_code` 中，优先通过 runtime primitives 处理记忆："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:345
+#: ../../source/detailed_guide/llm_chat.md:346
 msgid "Runtime self-reference 原语参考："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:347
+#: ../../source/detailed_guide/llm_chat.md:348
 msgid "`runtime.selfref.guide()`: 返回命名空间概览与 fork / 记忆最佳实践清单。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:348
+#: ../../source/detailed_guide/llm_chat.md:349
 msgid "`runtime.selfref.history.keys()`: 列出所有已绑定的 memory key。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:349
+#: ../../source/detailed_guide/llm_chat.md:350
 msgid "`runtime.selfref.history.active_key()`: 获取当前上下文解析出的 active key。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:350
+#: ../../source/detailed_guide/llm_chat.md:351
 msgid "`runtime.selfref.history.count(key=None)`: 返回解析后 key 的消息数量。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:351
+#: ../../source/detailed_guide/llm_chat.md:352
 msgid "`runtime.selfref.history.all(key=None)`: 返回完整消息列表的深拷贝。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:352
+#: ../../source/detailed_guide/llm_chat.md:353
 msgid "`runtime.selfref.history.get(index, key=None)`: 读取指定索引的消息。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:353
+#: ../../source/detailed_guide/llm_chat.md:354
 msgid "`runtime.selfref.history.append(message, key=None)`: 追加一条消息。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:354
+#: ../../source/detailed_guide/llm_chat.md:355
 msgid "`runtime.selfref.history.insert(index, message, key=None)`: 在指定索引插入一条消息。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:355
+#: ../../source/detailed_guide/llm_chat.md:356
 msgid "`runtime.selfref.history.update(index, message, key=None)`: 替换指定索引消息。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:356
+#: ../../source/detailed_guide/llm_chat.md:357
 msgid "`runtime.selfref.history.delete(index, key=None)`: 删除指定索引消息。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:357
+#: ../../source/detailed_guide/llm_chat.md:358
 msgid "`runtime.selfref.history.replace(messages, key=None)`: 用校验后的消息列表替换整段历史。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:358
+#: ../../source/detailed_guide/llm_chat.md:359
 msgid ""
 "`runtime.selfref.history.clear(key=None)`: 清理非 system 消息并保留当前 system "
 "prompt。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:359
+#: ../../source/detailed_guide/llm_chat.md:360
 msgid "`runtime.selfref.history.get_system_prompt(key=None)`: 读取最新 system prompt。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:360
+#: ../../source/detailed_guide/llm_chat.md:361
 msgid ""
 "`runtime.selfref.history.set_system_prompt(text, key=None)`: 覆盖当前 system "
 "prompt。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:361
+#: ../../source/detailed_guide/llm_chat.md:362
 msgid ""
 "`runtime.selfref.history.append_system_prompt(text, key=None)`: 向现有 "
 "system prompt memory 追加文本。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:362
+#: ../../source/detailed_guide/llm_chat.md:363
 msgid "`runtime.selfref.fork.spawn(message, ...)`: 异步创建子 self-fork（chat 形态）。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:363
+#: ../../source/detailed_guide/llm_chat.md:364
 msgid ""
 "`runtime.selfref.fork.gather_all(fork_id_or_list=None, "
 "include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 "
 "`.items()` / `.values()` 遍历）。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:365
+#: ../../source/detailed_guide/llm_chat.md:366
 msgid ""
 "默认情况下 fork 结果是紧凑模式（`history_included=False`，并提供 `history_count` "
 "元数据），这样主上下文可以保持简洁。 确实需要完整子历史时，再显式使用 `include_history=True`。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:368
+#: ../../source/detailed_guide/llm_chat.md:369
 msgid "当 `enable_event=True` 时，你可以通过 origin 元数据区分主链路事件与 fork 事件："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:382
+#: ../../source/detailed_guide/llm_chat.md:383
 msgid "清理记忆："
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:384
+#: ../../source/detailed_guide/llm_chat.md:385
 msgid "使用 `reset_repl` 清理 Python runtime 变量。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:385
+#: ../../source/detailed_guide/llm_chat.md:386
 msgid ""
 "使用 selfref history primitives 清理记忆记录，例如 "
 "`runtime.selfref.history.delete`、`runtime.selfref.history.replace`。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:386
+#: ../../source/detailed_guide/llm_chat.md:387
 msgid "需要保留当前 system prompt 时，使用 `runtime.selfref.history.clear`。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:388
+#: ../../source/detailed_guide/llm_chat.md:389
 msgid "返回模式"
 msgstr "返回模式"
 
-#: ../../source/detailed_guide/llm_chat.md:390
+#: ../../source/detailed_guide/llm_chat.md:391
 msgid "`return_mode` 参数控制返回的数据类型："
 msgstr "`return_mode` 参数控制返回的数据类型："
 
-#: ../../source/detailed_guide/llm_chat.md:392
+#: ../../source/detailed_guide/llm_chat.md:393
 msgid "提示：`return_mode` 仅在 `enable_event=False` 时生效；事件流模式始终返回原始响应对象或流式 chunk。"
 msgstr ""
 
-#: ../../source/detailed_guide/llm_chat.md:408
+#: ../../source/detailed_guide/llm_chat.md:409
 msgid "并发聊天会话"
 msgstr "并发聊天会话"
 
-#: ../../source/detailed_guide/llm_chat.md:410
+#: ../../source/detailed_guide/llm_chat.md:411
 msgid "使用 `asyncio.gather` 处理多个并发的聊天会话："
 msgstr "使用 `asyncio.gather` 处理多个并发的聊天会话："
 
-#: ../../source/detailed_guide/llm_chat.md:451
+#: ../../source/detailed_guide/llm_chat.md:452
 msgid "最佳实践"
 msgstr "最佳实践"
 
-#: ../../source/detailed_guide/llm_chat.md:453
+#: ../../source/detailed_guide/llm_chat.md:454
 msgid "1. 错误处理"
 msgstr "1. 错误处理"
 
-#: ../../source/detailed_guide/llm_chat.md:467
+#: ../../source/detailed_guide/llm_chat.md:468
 msgid "2. 超时控制"
 msgstr "2. 超时控制"
 
-#: ../../source/detailed_guide/llm_chat.md:482
+#: ../../source/detailed_guide/llm_chat.md:483
 msgid "3. 历史记录限制"
 msgstr "3. 历史记录限制"
 
-#: ../../source/detailed_guide/llm_chat.md:484
+#: ../../source/detailed_guide/llm_chat.md:485
 msgid "为避免上下文过长，限制历史记录长度："
 msgstr "为避免上下文过长，限制历史记录长度："
 
-#: ../../source/detailed_guide/llm_chat.md:513
+#: ../../source/detailed_guide/llm_chat.md:514
 msgid "4. 日志与调试"
 msgstr "4. 日志与调试"
 
-#: ../../source/detailed_guide/llm_chat.md:526
+#: ../../source/detailed_guide/llm_chat.md:527
 msgid "5. 事件流（Event Stream）"
 msgstr "5. 事件流（Event Stream）"
 
-#: ../../source/detailed_guide/llm_chat.md:528
+#: ../../source/detailed_guide/llm_chat.md:529
 msgid "事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。"
 msgstr "事件流是 SimpleLLMFunc v0.5.0+ 引入的高级特性，允许你实时观察 ReAct 循环的完整执行过程。"
 
-#: ../../source/detailed_guide/llm_chat.md:530
+#: ../../source/detailed_guide/llm_chat.md:531
 msgid "通过设置 `enable_event=True`，你可以："
 msgstr "通过设置 `enable_event=True`，你可以："
 
-#: ../../source/detailed_guide/llm_chat.md:532
+#: ../../source/detailed_guide/llm_chat.md:533
 msgid "**实时监控**：观察 LLM 调用、工具调用的实时状态"
 msgstr "**实时监控**：观察 LLM 调用、工具调用的实时状态"
 
-#: ../../source/detailed_guide/llm_chat.md:533
+#: ../../source/detailed_guide/llm_chat.md:534
 msgid "**性能分析**：获取详细的执行统计和性能指标"
 msgstr "**性能分析**：获取详细的执行统计和性能指标"
 
-#: ../../source/detailed_guide/llm_chat.md:534
+#: ../../source/detailed_guide/llm_chat.md:535
 msgid "**自定义 UI**：基于事件构建丰富的用户界面"
 msgstr "**自定义 UI**：基于事件构建丰富的用户界面"
 
-#: ../../source/detailed_guide/llm_chat.md:535
+#: ../../source/detailed_guide/llm_chat.md:536
 msgid "**调试支持**：深入了解 ReAct 循环的执行细节"
 msgstr "**调试支持**：深入了解 ReAct 循环的执行细节"
 
-#: ../../source/detailed_guide/llm_chat.md:537
+#: ../../source/detailed_guide/llm_chat.md:538
 msgid "**基本用法**："
 msgstr "**基本用法**："
 
-#: ../../source/detailed_guide/llm_chat.md:557
+#: ../../source/detailed_guide/llm_chat.md:558
 msgid "**详细文档**：请参考 [事件流文档](event_stream.md) 了解完整的事件类型、使用示例和最佳实践。"
 msgstr "**详细文档**：请参考 [事件流文档](event_stream.md) 了解完整的事件类型、使用示例和最佳实践。"
 
-#: ../../source/detailed_guide/llm_chat.md:559
+#: ../../source/detailed_guide/llm_chat.md:560
 msgid "常见问题"
 msgstr "常见问题"
 
-#: ../../source/detailed_guide/llm_chat.md:561
+#: ../../source/detailed_guide/llm_chat.md:562
 msgid "Q: 如何保存和恢复对话历史？"
 msgstr "Q: 如何保存和恢复对话历史？"
 
-#: ../../source/detailed_guide/llm_chat.md:585
+#: ../../source/detailed_guide/llm_chat.md:586
 msgid "Q: 如何处理 LLM 拒绝或无效响应？"
 msgstr "Q: 如何处理 LLM 拒绝或无效响应？"
 
-#: ../../source/detailed_guide/llm_chat.md:613
+#: ../../source/detailed_guide/llm_chat.md:614
 msgid "通过这些示例和最佳实践，你可以构建功能强大的对话应用。`llm_chat` 装饰器提供了简洁而强大的方式来实现复杂的对话逻辑。"
 msgstr "通过这些示例和最佳实践，你可以构建功能强大的对话应用。`llm_chat` 装饰器提供了简洁而强大的方式来实现复杂的对话逻辑。"
 
@@ -724,5 +723,11 @@ msgstr "通过这些示例和最佳实践，你可以构建功能强大的对话
 #~ "`runtime.selfref.history.replace`); "
 #~ "`runtime.selfref.history.clear` keeps only the "
 #~ "current system prompt."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "`PyRepl()` 默认会安装 builtin `selfref` pack；当你传入"
+#~ " `PyRepl(self_reference=self_reference)` 时，`llm_chat` "
+#~ "会解析并复用这份外部共享 backend。"
 #~ msgstr ""
 
