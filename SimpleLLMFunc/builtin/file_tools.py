@@ -269,6 +269,12 @@ class FileToolset:
                 "path_pattern is required; please provide a regex to scope the search"
             )
 
+        if pattern == ".*" or path_pattern == ".*":
+            return (
+                "Both pattern and path_pattern cannot be .* This may return too many match results."
+                "Use a less universal pattern constrain instead."
+            )
+
         try:
             content_regex = re.compile(pattern)
         except re.error as exc:
@@ -309,6 +315,8 @@ class FileToolset:
         recommendation = (
             "You are recommended to use read_file to check more detailed context "
             "by reading about 10 lines around these positions."
+        ) if matches else (
+            "Nothing matched provided pattern."
         )
 
         if matches:

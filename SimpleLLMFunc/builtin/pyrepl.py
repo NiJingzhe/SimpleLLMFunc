@@ -104,6 +104,9 @@ class PyRepl:
         "Use top-level executable code. Interactive "
         "`input()` is supported. Use `timeout_seconds` to control per-call "
         "timeout (default 600)."
+        "By the way, if a code snippets produce output more than 4000 token, "
+        "we would truncate and show no more than 4000 token in tool result "
+        "while store the whole result into a tempfile and telling you its path."
     )
     RESET_TOOL_DESCRIPTION = (
         "Reset REPL runtime variables in the current session while preserving "
@@ -941,6 +944,7 @@ class PyRepl:
             func=self._execute_tool,
             best_practices=self.EXECUTE_TOOL_BEST_PRACTICES,
             prompt_injection_builder=self._build_execute_tool_prompt_injection,
+            too_long_to_file=True
         )
         tools.append(execute_tool)
 
