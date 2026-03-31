@@ -21,6 +21,16 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
+### Update Notes (0.7.5)
+
+✂️ **Long Output Truncation**: Added `too_long_to_file` option to `@tool` decorator. When enabled, tool outputs exceeding 4000 tokens are automatically saved to a temp file and truncated, with a `<system-reminder>` hint appended.
+
+🔧 **PyRepl Auto-Truncation**: `execute_code` now has `too_long_to_file=True` enabled by default, preventing context overflow from large code outputs.
+
+🔍 **File Tools Guard**: `grep`/`sed` now reject overly broad `.*` patterns to avoid returning too many matches.
+
+📘 **Release Refresh**: documentation, locale catalogs, and release metadata updated. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+
 ### Update Notes (0.7.4)
 
 🚀 **Builtin selfref Only**: `PyRepl` now keeps `selfref` on the builtin path only; the temporary `PyRepl(self_reference=...)` override path has been removed.
@@ -937,7 +947,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.4},
+  version = {0.7.5},
   year = {2026}
 }
 ```

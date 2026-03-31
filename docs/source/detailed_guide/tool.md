@@ -11,6 +11,7 @@ SimpleLLMFunc 的工具系统为大语言模型提供了调用外部函数和 AP
 - **类型安全**: 支持基本类型、容器类型、Pydantic 模型等多种类型
 - **灵活创建**: 支持装饰器和继承两种创建方式
 - **批量序列化**: 支持将多个工具一次性序列化为 API 格式
+- **长文本截断**: 可选开启，自动将超长返回结果（>4000 tokens）保存到临时文件并截断
 
 ### 支持的数据类型（参数类型）
 - **基本类型**: `str`, `int`, `float`, `bool`
@@ -116,6 +117,45 @@ async def analyze_image(image_path: str) -> Tuple[str, ImgPath]:
 - 组合类型的元组必须是 `(str, ImgPath)` 或 `(str, ImgUrl)` 格式, 不能交换`str`和`ImgPath`/`ImgUrl`的顺序
 - 避免返回过大的数据结构，以免影响 LLM 处理效率
 
+### 长文本截断功能
+
+当工具可能返回非常长的文本结果时（例如代码执行输出、大量搜索结果等），可以启用 `too_long_to_file` 功能来自动处理：
+
+**工作原理：**
+
+1. 当工具返回 `str` 类型结果时，框架会估算其 token 数量
+2. 如果超过 **4000 tokens**，框架会：
+   - 将完整结果保存到系统临时文件（路径格式：`/tmp/tool_result_{tool_name}_{random}.txt`）
+   - 截断返回内容到前 4000 tokens
+   - 在末尾附加 `<system-reminder>` 提示，告知完整结果的文件路径
+
+**启用方式：**
+
+```python
+@tool(name="execute_code", description="执行代码", too_long_to_file=True)
+async def execute_code(code: str) -> str:
+    """执行 Python 代码并返回输出"""
+    # 当输出超过 4000 tokens 时，会自动截断
+    result = run_python(code)
+    return result
+```
+
+**截断后的返回示例：**
+
+```
+[前 4000 tokens 的内容...]
+
+<system-reminder> 
+tool return was too long. This is truncated result. Full result could be found in /tmp/tool_result_execute_code_a1b2c3d4.txt, you can use file operation toolkits or run code through pyrepl to progressivly reading necessary part of the result file. If you have no way to read file, you should warn the user and let they help you.
+</system-reminder>
+```
+
+**使用建议：**
+
+- 仅在工具可能返回大量文本时启用（如 REPL 执行输出、文件搜索结果等）
+- 启用此功能要求 agent 具备文件读取能力（如 `FileToolset` 或 `PyRepl`）
+- 对于返回结构化数据（dict/list）的工具，此功能不会生效
+
 **⚠️ 注意：`@tool` 装饰器要求被装饰的函数本身定义为 `async def`，以便在异步执行链路中无缝协作。**
 
 ## 内置工具集
@@ -199,6 +239,7 @@ class YourTool(Tool):
 - **description** (必需): 工具的简短描述，说明工具的主要功能
 - **best_practices** (可选): 工具最佳实践提示，`llm_chat` / `llm_function` 会自动注入 system prompt
 - **prompt_injection_builder** (可选): 动态注入器，接收上下文并返回一段工具专属的 system prompt 引导
+- **too_long_to_file** (可选): 是否启用长文本截断功能，默认 `False`。启用后，当工具返回的字符串超过 4000 tokens 时，会自动将完整结果保存到临时文件，并截断返回内容。**注意：启用此功能要求 agent 配备文件读写能力。**
 
 #### 函数要求
 - **类型标注**: 建议为所有参数添加类型标注，以便自动生成准确的 JSON Schema
@@ -235,10 +276,11 @@ class Parameter:
 ```python
 class Tool(ABC):
     """抽象工具基类"""
-    def __init__(self, name, description, func=None):
+    def __init__(self, name, description, func=None, too_long_to_file=False):
         self.name = name
         self.description = description
         self.func = func                   # 关联的函数
+        self.too_long_to_file = too_long_to_file  # 是否启用长文本截断
         self.parameters = self._extract_parameters()  # 参数列表
     
     def run(self, *args, **kwargs):

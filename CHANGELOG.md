@@ -1,5 +1,42 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.5 (2026-04-01) - Long Output Truncation and Tool Improvements
+
+### ✨ New Features
+
+1. **Long Output Truncation (`too_long_to_file`)**:
+   - Added `too_long_to_file` parameter to `@tool` decorator and `Tool` class.
+   - When enabled, tool outputs exceeding 4000 tokens are automatically saved to a temp file.
+   - The returned content is truncated to the first 4000 tokens with a `<system-reminder>` hint appended.
+   - Includes a fast heuristic tokenizer for token estimation (Chinese chars ≈ 2 tokens, English words ≈ 1.3 tokens).
+
+2. **PyRepl Auto-Truncation**:
+   - `execute_code` tool now has `too_long_to_file=True` enabled by default.
+   - Prevents context overflow from large code execution outputs.
+
+### 🔧 Improvements
+
+1. **File Tools Guard**:
+   - `grep`/`sed` now reject overly broad `.*` patterns for both `pattern` and `path_pattern`.
+   - Returns a helpful message guiding users to use more specific patterns.
+
+2. **File Tools Feedback**:
+   - Improved `grep` output when no matches are found, providing clearer feedback.
+
+### 📚 Documentation & Localization
+
+1. **Tool System Docs**:
+   - Added documentation for `too_long_to_file` feature in `tool.md`.
+   - Updated `@tool` decorator parameter list and `Tool` class signature.
+   - Added "Long Output Truncation" section with usage examples and best practices.
+
+2. **PyRepl Docs**:
+   - Updated `pyrepl.md` to document the auto-truncation feature for `execute_code`.
+
+3. **Translation Pipeline**:
+   - Regenerated gettext catalogs, rebuilt `po`/`mo` files, and refreshed English translations.
+   - Updated README.md and README_ZH.md with version 0.7.5 release notes.
+
 ## 0.7.4 (2026-03-27) - Builtin selfref Only and Release Correction
 
 ### 🔧 Improvements

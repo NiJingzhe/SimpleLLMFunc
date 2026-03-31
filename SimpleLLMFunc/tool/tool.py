@@ -17,10 +17,87 @@ from typing import (
 )
 import re
 import inspect
+import tempfile
+import os
 from pydantic import BaseModel
 
 from SimpleLLMFunc.logger.logger import push_error
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
+
+
+def _estimate_token_count(text: str) -> int:
+    """快速估算文本的 token 数量。
+
+    使用简单的启发式方法估算 token 数量：
+    - 中文字符：每个字符约 2 tokens
+    - 英文单词：每个单词约 1.3 tokens
+    - 其他字符：每个字符约 1 token
+
+    Args:
+        text: 要估算的文本
+
+    Returns:
+        估算的 token 数量
+    """
+    if not text:
+        return 0
+
+    # 统计中文字符数量
+    chinese_char_count = sum(1 for char in text if "\u4e00" <= char <= "\u9fff")
+
+    # 统计英文单词数量（简单按空格分词）
+    english_words = [word for word in text.split() if word.isascii() and word.isalpha()]
+    english_word_count = len(english_words)
+
+    # 统计其他字符数量
+    other_char_count = (
+        len(text) - chinese_char_count - sum(len(word) for word in english_words)
+    )
+
+    # 估算 token 数量
+    estimated_tokens = int(
+        chinese_char_count * 2 + english_word_count * 1.3 + other_char_count
+    )
+
+    return max(estimated_tokens, len(text) // 4)  # 确保至少有字符数/4 的 token 数
+
+
+def _truncate_text_to_tokens(text: str, max_tokens: int) -> tuple[str, int]:
+    """将文本截断到指定的 token 数量。
+
+    Args:
+        text: 要截断的文本
+        max_tokens: 最大 token 数量
+
+    Returns:
+        截断后的文本和实际 token 数量的元组
+    """
+    if not text:
+        return "", 0
+
+    # 如果文本本身就少于 max_tokens，直接返回
+    current_tokens = _estimate_token_count(text)
+    if current_tokens <= max_tokens:
+        return text, current_tokens
+
+    # 二分查找找到合适的截断位置
+    left, right = 0, len(text)
+    result_text = ""
+    result_tokens = 0
+
+    while left <= right:
+        mid = (left + right) // 2
+        truncated = text[:mid]
+        tokens = _estimate_token_count(truncated)
+
+        if tokens <= max_tokens:
+            result_text = truncated
+            result_tokens = tokens
+            left = mid + 1
+        else:
+            right = mid - 1
+
+    return result_text, result_tokens
 
 
 class Parameter:
@@ -61,11 +138,13 @@ class Tool(ABC):
         prompt_injection_builder: Optional[
             Callable[[Dict[str, Any]], Optional[str]]
         ] = None,
+        too_long_to_file: bool = False,
     ):
         self.name = name
         self.description = description
         self.best_practices = self._normalize_best_practices(best_practices)
         self._prompt_injection_builder = prompt_injection_builder
+        self.too_long_to_file = too_long_to_file
         if func is not None and not inspect.iscoroutinefunction(func):
             func_name = getattr(func, "__name__", repr(func))
             raise TypeError(
@@ -207,7 +286,43 @@ class Tool(ABC):
         运行工具。所有工具实现必须为异步函数。
         """
         if self.func is not None:
-            return await self.func(*args, **kwargs)
+            result = await self.func(*args, **kwargs)
+
+            # 如果启用了 too_long_to_file 功能，检查结果是否需要截断
+            if self.too_long_to_file and isinstance(result, str):
+                MAX_TOKENS = 4000
+                token_count = _estimate_token_count(result)
+
+                if token_count > MAX_TOKENS:
+                    # 将完整结果保存到临时文件
+                    temp_dir = tempfile.gettempdir()
+                    temp_file = os.path.join(
+                        temp_dir, f"tool_result_{self.name}_{os.urandom(8).hex()}.txt"
+                    )
+
+                    try:
+                        with open(temp_file, "w", encoding="utf-8") as f:
+                            f.write(result)
+                    except Exception as e:
+                        push_error(f"保存工具结果到临时文件失败: {e}")
+                        # 如果保存失败，直接返回原始结果
+                        return result
+
+                    # 截断文本到指定 token 数量
+                    truncated_text, _ = _truncate_text_to_tokens(result, MAX_TOKENS)
+
+                    # 添加提示信息
+                    reminder = (
+                        f"\n\n<system-reminder> \ntool return was too long. " 
+                        f"This is truncated result. Full result could be found in {temp_file}, "
+                        "you can use file operation toolkits or run code through pyrepl to progressivly "
+                        "reading necessary part of the result file. "
+                        "If you have no way to read file, you should warn the user and let they help you.\n</system-reminder>"
+                    )
+
+                    return truncated_text + reminder
+
+            return result
 
         raise NotImplementedError(
             "Subclasses must implement an async run method or provide an async function."
@@ -392,6 +507,7 @@ def tool(
     prompt_injection_builder: Optional[
         Callable[[Dict[str, Any]], Optional[str]]
     ] = None,
+    too_long_to_file: bool = False,
 ) -> Callable[[Callable[..., Awaitable[T]]], Callable[..., Awaitable[T]]]:
     """
     工具装饰器，用于将函数转换为Tool对象。
@@ -434,6 +550,10 @@ def tool(
             自动注入到 system prompt。
         prompt_injection_builder: 可选注入器，接收上下文字典并返回
             一段要拼接进 system prompt 的工具专属引导文本。
+        too_long_to_file: 可选参数，当工具返回的字符串内容超过 4000 tokens 时，
+            将完整结果保存到临时文件，并截断返回内容到前 4000 tokens。
+            默认为 False（不启用此功能）。
+            注意：启用此功能要求 agent 必须配备了文件读写能力。
 
     Returns:
         装饰器函数，保持原函数功能的同时添加_tool属性
@@ -499,6 +619,7 @@ def tool(
             func=func,
             best_practices=best_practices,
             prompt_injection_builder=prompt_injection_builder,
+            too_long_to_file=too_long_to_file,
         )
 
         # 保留原始函数的功能，同时附加工具对象
