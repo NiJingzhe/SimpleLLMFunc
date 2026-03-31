@@ -21,6 +21,16 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
+### 更新说明 (0.7.5)
+
+✂️ **长输出自动截断**：为 `@tool` 装饰器新增 `too_long_to_file` 选项。启用后，超过 4000 tokens 的工具输出会自动保存到临时文件并截断，末尾附加 `<system-reminder>` 提示。
+
+🔧 **PyRepl 自动截断**：`execute_code` 工具现已默认启用 `too_long_to_file=True`，防止代码大输出导致上下文溢出。
+
+🔍 **文件工具保护**：`grep`/`sed` 现在会拒绝过于宽泛的 `.*` 模式，避免返回过多匹配结果。
+
+📘 **发布收口**：文档、locale 目录与发布元数据现已更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+
 ### 更新说明 (0.7.4)
 
 🚀 **Builtin selfref 唯一路径**：`PyRepl` 现在只保留内置 `selfref` 安装路径，移除了临时加入的 `PyRepl(self_reference=...)` 覆盖能力。
@@ -942,7 +952,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.4},
+  version = {0.7.5},
   year = {2026}
 }
 ```
