@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.12+ repo with async execution and OpenAI-compatible providers configured through provider.json."
 metadata:
   project: SimpleLLMFunc
-  version: "0.7.5"
+  version: "0.7.6"
 ---
 
 # SimpleLLMFunc Usage

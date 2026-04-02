@@ -21,25 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.5)
+### Update Notes (0.7.6)
 
-✂️ **Long Output Truncation**: Added `too_long_to_file` option to `@tool` decorator. When enabled, tool outputs exceeding 20000 tokens are automatically saved to a temp file and truncated, with a `<system-reminder>` hint appended.
+🧰 **Packaged Agent Skills**: bundled `simplellmfunc` and `simplellmfunc-developer` skills now ship with the Python package, plus the `simplellmfunc-skill` CLI to export them into tool directories such as `~/.config/opencode/skills`.
 
-🔧 **PyRepl Auto-Truncation**: `execute_code` now has `too_long_to_file=True` enabled by default, preventing context overflow from large code outputs.
+✂️ **Higher Long Output Limit**: `too_long_to_file` now truncates after 20000 tokens, keeps the full result in a temp file, and preserves PyRepl auto-truncation for large code output.
 
-🔍 **File Tools Guard**: `grep`/`sed` now reject overly broad `.*` patterns to avoid returning too many matches.
+🔍 **Safer File Search Guard**: `grep` now rejects full-wildcard regexes like `.`, `.*`, `.+`, and simple anchored equivalents so workspace searches stay scoped.
 
-📘 **Release Refresh**: documentation, locale catalogs, and release metadata updated. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
-
-### Update Notes (0.7.4)
-
-🚀 **Builtin selfref Only**: `PyRepl` now keeps `selfref` on the builtin path only; the temporary `PyRepl(self_reference=...)` override path has been removed.
-
-🧠 **Runtime Primitive API Cleanup**: runtime primitive guidance, pack registration, and backend lifecycle handling stay aligned with the builtin selfref model.
-
-🩺 **Observability Fix**: trace-context lookup still stays quiet when no span is active, so Langfuse no longer floods logs with repeated missing-span warnings.
-
-📘 **Release Refresh**: examples, docs, locale catalogs, and release metadata now reflect the builtin-only selfref path. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Release Refresh**: prompt-construction guidance, provider/env docs, examples, locale catalogs, and release metadata updated. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -963,7 +953,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.5},
+  version = {0.7.6},
   year = {2026}
 }
 ```
