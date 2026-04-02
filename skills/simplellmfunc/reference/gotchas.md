@@ -1,0 +1,18 @@
+# Gotchas
+
+- Use `async def` for every decorated function. Even where docs are mixed, async-first is the stable repo convention.
+- `@tool` enforces async implementation directly.
+- Direct `OpenAICompatible` construction currently requires `APIKeyPool`, `model_name`, and `base_url`; do not rely on a simplified `api_key=` shortcut.
+- `APIKeyPool` is keyed by `provider_id` and reused within a process, so changing keys while reusing the same `provider_id` may silently keep the old pool.
+- `llm_function` does not send the raw docstring directly; it wraps it inside a system template together with parameter and return-type descriptions.
+- `llm_chat` only recognizes history parameters named `history` or `chat_history`.
+- In `llm_chat`, the latest history `system` message overrides the docstring as the base system prompt.
+- The newest `system` message in chat history overrides the docstring system prompt; older `system` messages are filtered out.
+- Complex structured outputs are XML-backed internally. Let the return type drive parsing instead of hand-rolling JSON instructions.
+- `max_tool_calls=None` is intentionally unbounded. If you want a cap, set one yourself.
+- `llm_chat(enable_event=True)` does not yield `(chunk, history)` pairs. It yields `ReactOutput` items.
+- `llm_function(enable_event=True)` yields parsed final values in `ResponseYield.response`.
+- `FileToolset` rejects hidden files, out-of-workspace paths, stale writes, and overly broad grep patterns.
+- `PyRepl.reset()` does not wipe self-reference memory.
+- When a tool may emit huge text, prefer `too_long_to_file=True`; the framework keeps roughly the first 20000 tokens in chat and expects you to read the full temp file when needed.
+- Some mirrored docs or README snippets may still show older convenience constructors; trust `reference/docs-source/detailed_guide/llm_interface.md` and source code first.
