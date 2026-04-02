@@ -15,9 +15,10 @@
     }
   },
   "navigation": {
-    "tabs": [
+    "languages": [
       {
-        "tab": "文档",
+        "language": "zh",
+        "default": true,
         "groups": [
           {
             "group": "概览",
@@ -74,6 +75,68 @@
               "langfuse_integration",
               "examples",
               "contributing"
+            ]
+          }
+        ]
+      },
+      {
+        "language": "en",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "en/index"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
+              "en/introduction",
+              "en/quickstart",
+              "en/guide"
+            ]
+          },
+          {
+            "group": "Infrastructure",
+            "pages": [
+              "en/detailed_guide/config",
+              "en/detailed_guide/llm_interface"
+            ]
+          },
+          {
+            "group": "Developer Experience",
+            "pages": [
+              "en/detailed_guide/llm_function",
+              "en/detailed_guide/llm_chat"
+            ]
+          },
+          {
+            "group": "Agent Execution",
+            "pages": [
+              "en/detailed_guide/event_stream",
+              "en/detailed_guide/abort"
+            ]
+          },
+          {
+            "group": "Tools and Runtime",
+            "pages": [
+              "en/detailed_guide/primitive",
+              "en/detailed_guide/tool",
+              "en/pyrepl"
+            ]
+          },
+          {
+            "group": "UI and Interaction",
+            "pages": [
+              "en/tui"
+            ]
+          },
+          {
+            "group": "Integrations and Examples",
+            "pages": [
+              "en/langfuse_integration",
+              "en/examples",
+              "en/contributing"
             ]
           }
         ]
