@@ -124,6 +124,9 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Local agent sandboxes
+/sandbox/
+
 # mypy
 .mypy_cache/
 .dmypy.json
