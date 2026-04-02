@@ -23,7 +23,7 @@
 
 ### Update Notes (0.7.5)
 
-✂️ **Long Output Truncation**: Added `too_long_to_file` option to `@tool` decorator. When enabled, tool outputs exceeding 4000 tokens are automatically saved to a temp file and truncated, with a `<system-reminder>` hint appended.
+✂️ **Long Output Truncation**: Added `too_long_to_file` option to `@tool` decorator. When enabled, tool outputs exceeding 20000 tokens are automatically saved to a temp file and truncated, with a `<system-reminder>` hint appended.
 
 🔧 **PyRepl Auto-Truncation**: `execute_code` now has `too_long_to_file=True` enabled by default, preventing context overflow from large code outputs.
 
@@ -115,6 +115,22 @@ cp env_template .env
 2. Configure API keys and other parameters in `.env`. It's recommended to configure `LOG_DIR` and `LANGFUSE_BASE_URL`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY` for logging and Langfuse tracking.
 
 3. Check `examples/provider_template.json` to understand how to configure multiple LLM providers
+
+### Export Packaged Agent Skills
+
+If you want to install the bundled Agent Skills into tools such as OpenCode, export them with:
+
+```bash
+simplellmfunc-skill usage ~/.config/opencode/skills
+simplellmfunc-skill developer ~/.config/opencode/skills
+```
+
+This creates:
+
+- `~/.config/opencode/skills/simplellmfunc`
+- `~/.config/opencode/skills/simplellmfunc-developer`
+
+Use `--force` if you want to overwrite an existing exported skill folder.
 
 ### A Simple Example
 

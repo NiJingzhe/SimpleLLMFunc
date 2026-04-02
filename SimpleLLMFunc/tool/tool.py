@@ -25,6 +25,9 @@ from SimpleLLMFunc.logger.logger import push_error
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
 
 
+TOO_LONG_TO_FILE_MAX_TOKENS = 20_000
+
+
 def _estimate_token_count(text: str) -> int:
     """快速估算文本的 token 数量。
 
@@ -290,10 +293,9 @@ class Tool(ABC):
 
             # 如果启用了 too_long_to_file 功能，检查结果是否需要截断
             if self.too_long_to_file and isinstance(result, str):
-                MAX_TOKENS = 4000
                 token_count = _estimate_token_count(result)
 
-                if token_count > MAX_TOKENS:
+                if token_count > TOO_LONG_TO_FILE_MAX_TOKENS:
                     # 将完整结果保存到临时文件
                     temp_dir = tempfile.gettempdir()
                     temp_file = os.path.join(
@@ -309,15 +311,19 @@ class Tool(ABC):
                         return result
 
                     # 截断文本到指定 token 数量
-                    truncated_text, _ = _truncate_text_to_tokens(result, MAX_TOKENS)
+                    truncated_text, _ = _truncate_text_to_tokens(
+                        result,
+                        TOO_LONG_TO_FILE_MAX_TOKENS,
+                    )
 
                     # 添加提示信息
                     reminder = (
-                        f"\n\n<system-reminder> \ntool return was too long. " 
-                        f"This is truncated result. Full result could be found in {temp_file}, "
-                        "you can use file operation toolkits or run code through pyrepl to progressivly "
-                        "reading necessary part of the result file. "
-                        "If you have no way to read file, you should warn the user and let they help you.\n</system-reminder>"
+                        "\n\n<system-reminder>\n"
+                        "Tool output was too long, so this result has been truncated. "
+                        f"The full result was saved to {temp_file}. "
+                        "Use file-operation tools or PyRepl to read only the parts you need. "
+                        "If you do not have a way to read files, warn the user and ask for help.\n"
+                        "</system-reminder>"
                     )
 
                     return truncated_text + reminder
@@ -550,8 +556,8 @@ def tool(
             自动注入到 system prompt。
         prompt_injection_builder: 可选注入器，接收上下文字典并返回
             一段要拼接进 system prompt 的工具专属引导文本。
-        too_long_to_file: 可选参数，当工具返回的字符串内容超过 4000 tokens 时，
-            将完整结果保存到临时文件，并截断返回内容到前 4000 tokens。
+        too_long_to_file: 可选参数，当工具返回的字符串内容超过 20000 tokens 时，
+            将完整结果保存到临时文件，并截断返回内容到前 20000 tokens。
             默认为 False（不启用此功能）。
             注意：启用此功能要求 agent 必须配备了文件读写能力。
 

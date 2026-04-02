@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-01 06:39+0800\n"
+"POT-Creation-Date: 2026-04-02 02:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_CN\n"
@@ -74,9 +74,11 @@ msgstr ""
 
 #: ../../source/pyrepl.md:14
 msgid ""
-"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file`，当输出超过 4000 tokens "
+"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file`，当输出超过 20000 tokens "
 "时自动保存到临时文件并截断返回"
 msgstr ""
+"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file`，当输出超过 20000 tokens "
+"时自动保存到临时文件并截断返回"
 
 #: ../../source/pyrepl.md:15
 msgid ""
@@ -127,10 +129,13 @@ msgstr ""
 
 #: ../../source/pyrepl.md:77
 msgid ""
-"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file` 功能。当代码输出超过 4000 tokens "
-"时，完整结果会自动保存到临时文件（路径会在 `<system-reminder>` 中告知），返回内容会被截断到前 4000 "
+"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file` 功能。当代码输出超过 20000 tokens"
+" 时，完整结果会自动保存到临时文件（路径会在 `<system-reminder>` 中告知），返回内容会被截断到前 20000 "
 "tokens。这避免了超长输出导致的上下文溢出问题。"
 msgstr ""
+"**长输出自动截断**：`execute_code` 已启用 `too_long_to_file` 功能。当代码输出超过 20000 tokens"
+" 时，完整结果会自动保存到临时文件（路径会在 `<system-reminder>` 中告知），返回内容会被截断到前 20000 "
+"tokens。这避免了超长输出导致的上下文溢出问题。"
 
 #: ../../source/pyrepl.md:79
 msgid ""
@@ -1051,3 +1056,14 @@ msgstr ""
 #~ "会解析到这份外部共享 backend。"
 #~ msgstr ""
 
+#~ msgid ""
+#~ "**长输出自动截断**：`execute_code` 已启用 `too_long_to_file`，当输出超过"
+#~ " 4000 tokens 时自动保存到临时文件并截断返回"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "**长输出自动截断**：`execute_code` 已启用 `too_long_to_file` "
+#~ "功能。当代码输出超过 4000 tokens 时，完整结果会自动保存到临时文件（路径会在 "
+#~ "`<system-reminder>` 中告知），返回内容会被截断到前 4000 "
+#~ "tokens。这避免了超长输出导致的上下文溢出问题。"
+#~ msgstr ""

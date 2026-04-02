@@ -23,7 +23,7 @@
 
 ### 更新说明 (0.7.5)
 
-✂️ **长输出自动截断**：为 `@tool` 装饰器新增 `too_long_to_file` 选项。启用后，超过 4000 tokens 的工具输出会自动保存到临时文件并截断，末尾附加 `<system-reminder>` 提示。
+✂️ **长输出自动截断**：为 `@tool` 装饰器新增 `too_long_to_file` 选项。启用后，超过 20000 tokens 的工具输出会自动保存到临时文件并截断，末尾附加 `<system-reminder>` 提示。
 
 🔧 **PyRepl 自动截断**：`execute_code` 工具现已默认启用 `too_long_to_file=True`，防止代码大输出导致上下文溢出。
 
@@ -118,6 +118,22 @@ cp env_template .env
 2. 在 `.env` 中配置 API 密钥和其他参数，推荐配置 `LOG_DIR` 和 `LANGFUSE_BASE_URL`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_PUBLIC_KEY`，用于配置日志和Langfuse的追踪。
 
 3. 查看 `examples/provider_template.json` 了解如何配置多个 LLM 供应商
+
+### 导出打包好的 Agent Skills
+
+如果你想把随包分发的 Agent Skills 安装到 OpenCode 之类的工具目录中，可以执行：
+
+```bash
+simplellmfunc-skill usage ~/.config/opencode/skills
+simplellmfunc-skill developer ~/.config/opencode/skills
+```
+
+这会创建：
+
+- `~/.config/opencode/skills/simplellmfunc`
+- `~/.config/opencode/skills/simplellmfunc-developer`
+
+如果目标目录里已经存在同名 skill 文件夹，可加 `--force` 覆盖。
 
 ### 一个简单例子
 

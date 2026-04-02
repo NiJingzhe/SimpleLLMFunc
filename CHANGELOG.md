@@ -6,8 +6,8 @@
 
 1. **Long Output Truncation (`too_long_to_file`)**:
    - Added `too_long_to_file` parameter to `@tool` decorator and `Tool` class.
-   - When enabled, tool outputs exceeding 4000 tokens are automatically saved to a temp file.
-   - The returned content is truncated to the first 4000 tokens with a `<system-reminder>` hint appended.
+   - When enabled, tool outputs exceeding 20000 tokens are automatically saved to a temp file.
+   - The returned content is truncated to the first 20000 tokens with a `<system-reminder>` hint appended.
    - Includes a fast heuristic tokenizer for token estimation (Chinese chars ≈ 2 tokens, English words ≈ 1.3 tokens).
 
 2. **PyRepl Auto-Truncation**:
