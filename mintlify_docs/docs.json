@@ -1,0 +1,83 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "luma",
+  "name": "SimpleLLMFunc",
+  "favicon": "/img/repocover_new.png",
+  "colors": {
+    "primary": "#1CE8F2",
+    "light": "#8FF8FF",
+    "dark": "#12CFE0"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/NiJingzhe/SimpleLLMFunc"
+    }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "文档",
+        "groups": [
+          {
+            "group": "概览",
+            "pages": [
+              "index"
+            ]
+          },
+          {
+            "group": "入门",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "guide"
+            ]
+          },
+          {
+            "group": "基础设施",
+            "pages": [
+              "detailed_guide/config",
+              "detailed_guide/llm_interface"
+            ]
+          },
+          {
+            "group": "开发体验",
+            "pages": [
+              "detailed_guide/llm_function",
+              "detailed_guide/llm_chat"
+            ]
+          },
+          {
+            "group": "Agent 主体逻辑",
+            "pages": [
+              "detailed_guide/event_stream",
+              "detailed_guide/abort"
+            ]
+          },
+          {
+            "group": "工具与运行时",
+            "pages": [
+              "detailed_guide/primitive",
+              "detailed_guide/tool",
+              "pyrepl"
+            ]
+          },
+          {
+            "group": "UI 与交互",
+            "pages": [
+              "tui"
+            ]
+          },
+          {
+            "group": "集成与示例",
+            "pages": [
+              "langfuse_integration",
+              "examples",
+              "contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
