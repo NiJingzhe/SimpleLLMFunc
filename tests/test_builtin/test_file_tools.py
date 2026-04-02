@@ -137,12 +137,42 @@ async def test_grep_validates_inputs(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_grep_rejects_full_wildcard_regexes(tmp_path: Path) -> None:
+    toolset = FileToolset(tmp_path)
+
+    assert "pattern cannot be a full wildcard regex" in await toolset.grep(
+        ".",
+        path_pattern=r".*\.py$",
+    )
+    assert "pattern cannot be a full wildcard regex" in await toolset.grep(
+        ".*",
+        path_pattern=r".*\.py$",
+    )
+    assert "pattern cannot be a full wildcard regex" in await toolset.grep(
+        ".+",
+        path_pattern=r".*\.py$",
+    )
+    assert "path_pattern cannot be a full wildcard regex" in await toolset.grep(
+        "needle",
+        path_pattern=".",
+    )
+    assert "path_pattern cannot be a full wildcard regex" in await toolset.grep(
+        "needle",
+        path_pattern=r"^.*$",
+    )
+    assert "path_pattern cannot be a full wildcard regex" in await toolset.grep(
+        "needle",
+        path_pattern=r"(?s).*",
+    )
+
+
+@pytest.mark.asyncio
 async def test_grep_returns_recommendation_when_no_matches(tmp_path: Path) -> None:
     _write(tmp_path / "alpha.txt", "nothing here\n")
     toolset = FileToolset(tmp_path)
 
     output = await toolset.grep("needle", path_pattern=r".*\.txt$")
-    assert output.startswith("You are recommended to use read_file")
+    assert output == "Nothing matched provided pattern."
 
 
 @pytest.mark.asyncio

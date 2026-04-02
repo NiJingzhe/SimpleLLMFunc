@@ -1,13 +1,48 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.6 (2026-04-02) - Packaged Skills and Safer File Tools
+
+### ✨ New Features
+
+1. **Bundled Agent Skills**:
+   - Added packaged `simplellmfunc` and `simplellmfunc-developer` Agent Skills with framework philosophy, prompt-construction guidance, provider/env setup, mirrored docs, and real examples.
+
+2. **Skill Export CLI**:
+   - Packaged the repository `skills/` directory into wheel/sdist builds.
+   - Added `simplellmfunc-skill` so installed users can export usage or developer skills into tool directories such as `~/.config/opencode/skills`.
+
+### 🔧 Improvements
+
+1. **Long Output Handling**:
+   - Raised `too_long_to_file` truncation from 4000 to 20000 tokens.
+   - Synced PyRepl/tool guidance and improved the long-output reminder text shown to agents.
+
+2. **File Tools Guardrails**:
+   - `grep` now rejects full wildcard regexes such as `.`, `.*`, `.+`, and simple anchored equivalents for both `pattern` and `path_pattern`.
+   - Prevents accidental workspace-wide scans while keeping scoped regex search intact.
+
+3. **Configuration and Example Cleanup**:
+   - Added explicit `provider.json` and `.env` guidance to the bundled skills, including the recommended `LOG_LEVEL=WARNING` default.
+   - Updated provider templates to use unique model names and aligned multimodal example docstrings with their actual signatures and return values.
+
+### 📚 Documentation & Localization
+
+1. **Release Refresh**:
+   - Updated README.md and README_ZH.md to show only the latest release notes at the top.
+   - Refreshed release metadata and synchronized the bundled skills with the 0.7.6 release.
+
+### 🧪 Testing
+
+- Verified skill export, truncation, PyRepl, and file tool guard changes with targeted pytest suites.
+
 ## 0.7.5 (2026-04-01) - Long Output Truncation and Tool Improvements
 
 ### ✨ New Features
 
 1. **Long Output Truncation (`too_long_to_file`)**:
    - Added `too_long_to_file` parameter to `@tool` decorator and `Tool` class.
-   - When enabled, tool outputs exceeding 4000 tokens are automatically saved to a temp file.
-   - The returned content is truncated to the first 4000 tokens with a `<system-reminder>` hint appended.
+   - When enabled, tool outputs exceeding 20000 tokens are automatically saved to a temp file.
+   - The returned content is truncated to the first 20000 tokens with a `<system-reminder>` hint appended.
    - Includes a fast heuristic tokenizer for token estimation (Chinese chars ≈ 2 tokens, English words ≈ 1.3 tokens).
 
 2. **PyRepl Auto-Truncation**:

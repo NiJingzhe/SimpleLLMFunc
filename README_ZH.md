@@ -21,25 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.5)
+### 更新说明 (0.7.6)
 
-✂️ **长输出自动截断**：为 `@tool` 装饰器新增 `too_long_to_file` 选项。启用后，超过 4000 tokens 的工具输出会自动保存到临时文件并截断，末尾附加 `<system-reminder>` 提示。
+🧰 **打包分发 Agent Skills**：`simplellmfunc` 和 `simplellmfunc-developer` 两套 skills 现已随 Python 包一起分发，并提供 `simplellmfunc-skill` CLI，可直接导出到 `~/.config/opencode/skills` 这类工具目录。
 
-🔧 **PyRepl 自动截断**：`execute_code` 工具现已默认启用 `too_long_to_file=True`，防止代码大输出导致上下文溢出。
+✂️ **更高的长输出上限**：`too_long_to_file` 现在会在 20000 tokens 后截断，并把完整结果写入临时文件；PyRepl 对大段代码输出也继续默认启用自动截断。
 
-🔍 **文件工具保护**：`grep`/`sed` 现在会拒绝过于宽泛的 `.*` 模式，避免返回过多匹配结果。
+🔍 **更安全的文件搜索保护**：`grep` 现在会拒绝 `.`, `.*`, `.+` 以及简单锚定后的等价全通配 regex，避免不小心扫完整个工作区。
 
-📘 **发布收口**：文档、locale 目录与发布元数据现已更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
-
-### 更新说明 (0.7.4)
-
-🚀 **Builtin selfref 唯一路径**：`PyRepl` 现在只保留内置 `selfref` 安装路径，移除了临时加入的 `PyRepl(self_reference=...)` 覆盖能力。
-
-🧠 **Runtime Primitive API 收敛**：runtime primitive 指引、pack 注册方式和 backend 生命周期重新对齐到 builtin selfref 模型。
-
-🩺 **可观测性修复**：当当前上下文没有 active span 时，trace-context 查询仍然保持静默，不再反复刷 Langfuse 缺失 span 的警告。
-
-📘 **发布收口**：示例、文档、locale 目录与发布元数据现已统一改为 builtin-only selfref 口径。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **发布收口**：系统提示词说明、provider/env 配置文档、示例、locale 目录与发布元数据现已更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -118,6 +108,22 @@ cp env_template .env
 2. 在 `.env` 中配置 API 密钥和其他参数，推荐配置 `LOG_DIR` 和 `LANGFUSE_BASE_URL`、`LANGFUSE_SECRET_KEY`、`LANGFUSE_PUBLIC_KEY`，用于配置日志和Langfuse的追踪。
 
 3. 查看 `examples/provider_template.json` 了解如何配置多个 LLM 供应商
+
+### 导出打包好的 Agent Skills
+
+如果你想把随包分发的 Agent Skills 安装到 OpenCode 之类的工具目录中，可以执行：
+
+```bash
+simplellmfunc-skill usage ~/.config/opencode/skills
+simplellmfunc-skill developer ~/.config/opencode/skills
+```
+
+这会创建：
+
+- `~/.config/opencode/skills/simplellmfunc`
+- `~/.config/opencode/skills/simplellmfunc-developer`
+
+如果目标目录里已经存在同名 skill 文件夹，可加 `--force` 覆盖。
 
 ### 一个简单例子
 
@@ -952,7 +958,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.5},
+  version = {0.7.6},
   year = {2026}
 }
 ```

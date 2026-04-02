@@ -35,7 +35,7 @@ from SimpleLLMFunc.runtime.builtin_self_reference import (
     DEFAULT_SELF_REFERENCE_BACKEND_NAME as RUNTIME_DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     build_self_reference_pack,
 )
-from SimpleLLMFunc.tool import Tool
+from SimpleLLMFunc.tool import TOO_LONG_TO_FILE_MAX_TOKENS, Tool
 
 from .primitive import SelfReference
 
@@ -104,9 +104,9 @@ class PyRepl:
         "Use top-level executable code. Interactive "
         "`input()` is supported. Use `timeout_seconds` to control per-call "
         "timeout (default 600)."
-        "By the way, if a code snippets produce output more than 4000 token, "
-        "we would truncate and show no more than 4000 token in tool result "
-        "while store the whole result into a tempfile and telling you its path."
+        f"By the way, if a code snippet produces output more than {TOO_LONG_TO_FILE_MAX_TOKENS} tokens, "
+        f"we truncate the tool result to no more than {TOO_LONG_TO_FILE_MAX_TOKENS} tokens, "
+        "store the full result in a temporary file, and tell you its path."
     )
     RESET_TOOL_DESCRIPTION = (
         "Reset REPL runtime variables in the current session while preserving "
@@ -944,7 +944,7 @@ class PyRepl:
             func=self._execute_tool,
             best_practices=self.EXECUTE_TOOL_BEST_PRACTICES,
             prompt_injection_builder=self._build_execute_tool_prompt_injection,
-            too_long_to_file=True
+            too_long_to_file=True,
         )
         tools.append(execute_tool)
 

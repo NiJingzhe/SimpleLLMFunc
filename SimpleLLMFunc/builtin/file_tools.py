@@ -191,6 +191,17 @@ class FileToolset:
             return f"{name} must be >= 1"
         return None
 
+    @staticmethod
+    def _is_full_wildcard_regex(pattern: str) -> bool:
+        normalized = pattern.strip()
+        if normalized.startswith("(?s)"):
+            normalized = normalized[4:]
+        while normalized.startswith("^"):
+            normalized = normalized[1:]
+        while normalized.endswith("$"):
+            normalized = normalized[:-1]
+        return normalized in {".", ".*", ".+"}
+
     async def read_file(
         self,
         path: str,
@@ -269,12 +280,6 @@ class FileToolset:
                 "path_pattern is required; please provide a regex to scope the search"
             )
 
-        if pattern == ".*" or path_pattern == ".*":
-            return (
-                "Both pattern and path_pattern cannot be .* This may return too many match results."
-                "Use a less universal pattern constrain instead."
-            )
-
         try:
             content_regex = re.compile(pattern)
         except re.error as exc:
@@ -284,6 +289,17 @@ class FileToolset:
             path_regex = re.compile(path_pattern)
         except re.error as exc:
             return f"invalid path_pattern regex: {exc}"
+
+        if self._is_full_wildcard_regex(pattern):
+            return (
+                "pattern cannot be a full wildcard regex such as '.', '.*', or '.+'; "
+                "use a more specific content pattern instead."
+            )
+        if self._is_full_wildcard_regex(path_pattern):
+            return (
+                "path_pattern cannot be a full wildcard regex such as '.', '.*', or '.+'; "
+                "use a scoped path regex such as '.*\\.py$'."
+            )
 
         matches: List[str] = []
 
@@ -313,10 +329,12 @@ class FileToolset:
                     matches.append(f"{relative}:{line_number} | {line}")
 
         recommendation = (
-            "You are recommended to use read_file to check more detailed context "
-            "by reading about 10 lines around these positions."
-        ) if matches else (
-            "Nothing matched provided pattern."
+            (
+                "You are recommended to use read_file to check more detailed context "
+                "by reading about 10 lines around these positions."
+            )
+            if matches
+            else ("Nothing matched provided pattern.")
         )
 
         if matches:
