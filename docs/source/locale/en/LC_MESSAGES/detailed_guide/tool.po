@@ -9,7 +9,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: SimpleLLMFunc\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-01 06:39+0800\n"
+"POT-Creation-Date: 2026-04-02 02:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: en <LL@li.org>\n"
@@ -80,10 +80,10 @@ msgstr ""
 " at once"
 
 #: ../../source/detailed_guide/tool.md:14
-msgid "**长文本截断**: 可选开启，自动将超长返回结果（>4000 tokens）保存到临时文件并截断"
+msgid "**长文本截断**: 可选开启，自动将超长返回结果（>20000 tokens）保存到临时文件并截断"
 msgstr ""
-"**Long Text Truncation**: Optional to enable, automatically saves overly "
-"long return results (>4000 tokens) to a temporary file and truncates"
+"**Long Text Truncation**: Optional enable, automatically saves overly long "
+"return results (>20000 tokens) to temporary file and truncates"
 
 #: ../../source/detailed_guide/tool.md:16
 msgid "支持的数据类型（参数类型）"
@@ -291,8 +291,8 @@ msgstr ""
 " count"
 
 #: ../../source/detailed_guide/tool.md:127
-msgid "如果超过 **4000 tokens**，框架会："
-msgstr "If it exceeds **4000 tokens**, the framework will:"
+msgid "如果超过 **20000 tokens**，框架会："
+msgstr "If exceeds **20000 tokens**, the framework will:"
 
 #: ../../source/detailed_guide/tool.md:128
 #, python-brace-format
@@ -302,8 +302,8 @@ msgstr ""
 "`/tmp/tool_result_{tool_name}_{random}.txt`)"
 
 #: ../../source/detailed_guide/tool.md:129
-msgid "截断返回内容到前 4000 tokens"
-msgstr "Truncate the returned content to the first 4000 tokens"
+msgid "截断返回内容到前 20000 tokens"
+msgstr "Truncate returned content to first 20000 tokens"
 
 #: ../../source/detailed_guide/tool.md:130
 msgid "在末尾附加 `<system-reminder>` 提示，告知完整结果的文件路径"
@@ -462,14 +462,15 @@ msgstr ""
 
 #: ../../source/detailed_guide/tool.md:242
 msgid ""
-"**too_long_to_file** (可选): 是否启用长文本截断功能，默认 `False`。启用后，当工具返回的字符串超过 4000 "
+"**too_long_to_file** (可选): 是否启用长文本截断功能，默认 `False`。启用后，当工具返回的字符串超过 20000 "
 "tokens 时，会自动将完整结果保存到临时文件，并截断返回内容。**注意：启用此功能要求 agent 配备文件读写能力。**"
 msgstr ""
 "**too_long_to_file** (optional): Whether to enable the long text truncation "
 "feature, defaults to `False`. When enabled, when the string returned by the "
-"tool exceeds 4000 tokens, it will automatically save the complete result to "
-"a temporary file and truncate the returned content. **Note: Enabling this "
-"feature requires the agent to have file read/write capabilities.**"
+"tool exceeds 20000 tokens, the complete result will automatically be saved "
+"to a temporary file and the returned content will be truncated. **Note: "
+"Enabling this feature requires the agent to have file read/write "
+"capabilities.**"
 
 #: ../../source/detailed_guide/tool.md:244
 msgid "函数要求"

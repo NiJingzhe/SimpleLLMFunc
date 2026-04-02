@@ -5,6 +5,13 @@ description = "A lightweight yet complete LLM/Agent application development fram
 authors = ["Ni Jingzhe <nijingzhe@zju.edu.cn>"]
 readme = "README.md"
 packages = [{ include = "SimpleLLMFunc", from = "." }]
+include = [
+    { path = "skills", format = "sdist" },
+    { path = "skills", format = "wheel" },
+]
+
+[tool.poetry.scripts]
+simplellmfunc-skill = "SimpleLLMFunc.skills_cli:main"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
