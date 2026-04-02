@@ -49,10 +49,26 @@ def test_export_developer_skill_uses_expected_name(
     assert (destination / "SKILL.md").read_text(encoding="utf-8") == "developer skill"
 
 
-def test_export_supports_useage_alias(fake_skills_root: Path, tmp_path: Path) -> None:
+def test_export_supports_legacy_useage_alias(
+    fake_skills_root: Path,
+    tmp_path: Path,
+) -> None:
     destination = export_skill("useage", tmp_path)
 
     assert destination == tmp_path / "simplellmfunc"
+
+
+def test_main_error_message_prefers_correct_public_names(
+    fake_skills_root: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    exit_code = main(["unknown", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "usage, developer, dev" in captured.err
+    assert "useage" not in captured.err
 
 
 def test_export_requires_force_when_destination_exists(

@@ -31,7 +31,7 @@ def _resolve_packaged_skills_root() -> Path:
 def normalize_skill_kind(kind: str) -> str:
     normalized = kind.strip().lower()
     if normalized not in SKILL_KIND_TO_FOLDER:
-        supported = ", ".join(sorted(SKILL_KIND_TO_FOLDER))
+        supported = "usage, developer, dev"
         raise ValueError(
             f"Unsupported skill kind '{kind}'. Expected one of: {supported}"
         )
@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "kind",
-        help="Skill kind to export: usage/useage or developer/dev",
+        help="Skill kind to export: usage or developer/dev",
     )
     parser.add_argument(
         "target_path",

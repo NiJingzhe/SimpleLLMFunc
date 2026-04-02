@@ -50,7 +50,7 @@ async def test_too_long_to_file_uses_20000_token_limit(
 
     assert seen_max_tokens == [TOO_LONG_TO_FILE_MAX_TOKENS]
     assert result.startswith("TRUNCATED")
-    assert "tool return was too long" in result
+    assert "Tool output was too long" in result
 
     temp_files = list(tmp_path.iterdir())
     assert len(temp_files) == 1

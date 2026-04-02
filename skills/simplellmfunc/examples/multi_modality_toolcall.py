@@ -21,11 +21,9 @@ async def get_image(image_path: str) -> tuple[str, ImgPath]:
 
     Args:
         image_path: The path to the image file.
-        detail: The detail level for the image retrieval.
-            Can be 'low', 'high', or 'auto'.
 
     Returns:
-        ImgPath: An object representing the image file with its path and detail level.
+        A tuple containing the analysis instruction text and the image payload.
     """
 
     return "仔细分析这张图的几何结构", ImgPath(image_path, detail="low")

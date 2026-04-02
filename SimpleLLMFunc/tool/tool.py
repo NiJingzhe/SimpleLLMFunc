@@ -318,11 +318,12 @@ class Tool(ABC):
 
                     # 添加提示信息
                     reminder = (
-                        f"\n\n<system-reminder> \ntool return was too long. "
-                        f"This is truncated result. Full result could be found in {temp_file}, "
-                        "you can use file operation toolkits or run code through pyrepl to progressivly "
-                        "reading necessary part of the result file. "
-                        "If you have no way to read file, you should warn the user and let they help you.\n</system-reminder>"
+                        "\n\n<system-reminder>\n"
+                        "Tool output was too long, so this result has been truncated. "
+                        f"The full result was saved to {temp_file}. "
+                        "Use file-operation tools or PyRepl to read only the parts you need. "
+                        "If you do not have a way to read files, warn the user and ask for help.\n"
+                        "</system-reminder>"
                     )
 
                     return truncated_text + reminder
