@@ -33,7 +33,7 @@
 
 ### 📚 完整文档
 
-阅读 Mintlify 文档站：中文位于 `/`，英文位于 `/en`
+阅读 Mintlify 文档站：[中文文档](https://simplellmfunc.cn/) | [English Docs](https://simplellmfunc.cn/en)
 
 > 💡 **多语言支持**: 本项目同时提供中文和英文文档，点击上方链接切换语言版本
 
@@ -932,7 +932,7 @@ python examples/tui_general_agent_example.py
 
 ## 📖 更多资源
 
-- 📚 Mintlify 文档站（中文 `/`，英文 `/en`）
+- 📚 [中文文档](https://simplellmfunc.cn/) | [English Docs](https://simplellmfunc.cn/en)
 - 🔄 [更新日志](CHANGELOG.md)
 - 🔗 [GitHub 仓库](https://github.com/NiJingzhe/SimpleLLMFunc)
 - 🤖 [SimpleManus (Agent 框架)](https://github.com/NiJingzhe/SimpleManus)
