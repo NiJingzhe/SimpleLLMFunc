@@ -33,7 +33,7 @@
 
 ### 📚 Complete Documentation
 
-> Read detailed documentation in Mintlify: Chinese docs at `/` and English docs at `/en` on the project documentation site.
+> Read detailed documentation: [Chinese Docs](https://simplellmfunc.cn/) | [English Docs](https://simplellmfunc.cn/en)
 -----
 
 ## 💡 Project Introduction
@@ -928,7 +928,7 @@ Welcome to submit Issues and Pull Requests!
 
 ## 📖 More Resources
 
-- 📚 Mintlify documentation site (Chinese `/`, English `/en`)
+- 📚 [Chinese Docs](https://simplellmfunc.cn/) | [English Docs](https://simplellmfunc.cn/en)
 - 🔄 [Changelog](CHANGELOG.md)
 - 🔗 [GitHub Repository](https://github.com/NiJingzhe/SimpleLLMFunc)
 - 🤖 [SimpleManus (Agent Framework)](https://github.com/NiJingzhe/SimpleManus)
