@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.6)
+### Update Notes (0.7.7)
 
-🧰 **Packaged Agent Skills**: bundled `simplellmfunc` and `simplellmfunc-developer` skills now ship with the Python package, plus the `simplellmfunc-skill` CLI to export them into tool directories such as `~/.config/opencode/skills`.
+📚 **Mintlify Documentation Migration**: the docs site is now fully migrated to Mintlify with Chinese as the default language and English pages under `/en`.
 
-✂️ **Higher Long Output Limit**: `too_long_to_file` now truncates after 20000 tokens, keeps the full result in a temp file, and preserves PyRepl auto-truncation for large code output.
+🧰 **Skills + Quickstart Workflow**: quickstart now surfaces packaged Agent Skills immediately after installation, and the bundled skills now include stronger guidance on provider organization, strong typing, Pydantic, and Harness Engineering.
 
-🔍 **Safer File Search Guard**: `grep` now rejects full-wildcard regexes like `.`, `.*`, `.+`, and simple anchored equivalents so workspace searches stay scoped.
+🧹 **Legacy Docs Cleanup**: the old Read the Docs / Sphinx documentation tree, translation scripts, and related release baggage have been removed.
 
-📘 **Release Refresh**: prompt-construction guidance, provider/env docs, examples, locale catalogs, and release metadata updated. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Release Refresh**: README, Mintlify docs, skills, specs, and release metadata have been aligned around the Mintlify workflow. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -953,7 +953,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.6},
+  version = {0.7.7},
   year = {2026}
 }
 ```
