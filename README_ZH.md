@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.6)
+### 更新说明 (0.7.7)
 
-🧰 **打包分发 Agent Skills**：`simplellmfunc` 和 `simplellmfunc-developer` 两套 skills 现已随 Python 包一起分发，并提供 `simplellmfunc-skill` CLI，可直接导出到 `~/.config/opencode/skills` 这类工具目录。
+📚 **Mintlify 文档迁移完成**：文档站现已全部迁移到 Mintlify，中文为默认语言，英文页面位于 `/en`。
 
-✂️ **更高的长输出上限**：`too_long_to_file` 现在会在 20000 tokens 后截断，并把完整结果写入临时文件；PyRepl 对大段代码输出也继续默认启用自动截断。
+🧰 **Skills 与 Quickstart 收口**：快速开始现在会在安装后第一时间提示导出 Agent Skill；内置 skills 也强化了 `provider.json` 组织、强类型 + Pydantic 以及 Harness Engineering 的指导。
 
-🔍 **更安全的文件搜索保护**：`grep` 现在会拒绝 `.`, `.*`, `.+` 以及简单锚定后的等价全通配 regex，避免不小心扫完整个工作区。
+🧹 **移除旧文档链路**：Read the Docs / Sphinx 旧文档树、旧翻译脚本和相关发布残留已删除。
 
-📘 **发布收口**：系统提示词说明、provider/env 配置文档、示例、locale 目录与发布元数据现已更新。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **发布收口**：README、Mintlify 文档、skills、spec 与发布元数据已围绕新文档流程统一。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -958,7 +958,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.6},
+  version = {0.7.7},
   year = {2026}
 }
 ```

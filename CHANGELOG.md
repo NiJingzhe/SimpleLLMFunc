@@ -1,5 +1,43 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.7 (2026-04-03) - Mintlify Docs, i18n, and Skills Workflow
+
+### ✨ New Features
+
+1. **Mintlify bilingual docs**:
+   - Added a Mintlify-based English docs tree under `mintlify_docs/en`.
+   - Switched Mintlify navigation to `navigation.languages` with Chinese as default and English under `/en`.
+
+2. **Harness and provider guidance in packaged skills**:
+   - Expanded the bundled usage skill with guidance on organizing `provider.json`.
+   - Added stronger recommendations for typed contracts and Pydantic-first structured outputs.
+   - Added Harness Engineering guidance centered on context planning and closed-loop environment design.
+
+### 🔧 Improvements
+
+1. **Quickstart improvements**:
+   - Added packaged skill export guidance directly to Chinese and English quickstart pages.
+   - Surfaced the `skills_cli` workflow earlier so coding-agent users see it immediately after installation.
+
+2. **Mintlify i18n workflow**:
+   - Added a Mintlify-specific i18n sync script and override-memory mechanism.
+   - Added tests for MDX segmentation, translation placeholder handling, and locale route rewriting.
+
+3. **Skill and contributor docs alignment**:
+   - Updated developer-facing skills and reference docs to point at Mintlify docs instead of the old Sphinx tree.
+   - Added explicit AGENTS.md feedback-loop guidance in the developer skill.
+
+### 🧹 Cleanup
+
+1. **Removed legacy Read the Docs / Sphinx pipeline**:
+   - Deleted the old `docs/` source tree and `.readthedocs.yaml`.
+   - Removed obsolete translation scripts tied to the old Read the Docs workflow.
+   - Removed unused Sphinx-specific dev dependencies from `pyproject.toml`.
+
+2. **Repository documentation cleanup**:
+   - Updated README and README_ZH to stop pointing at Read the Docs.
+   - Aligned docs/spec/skills references with the Mintlify documentation workflow.
+
 ## 0.7.6 (2026-04-02) - Packaged Skills and Safer File Tools
 
 ### ✨ New Features
