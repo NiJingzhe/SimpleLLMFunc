@@ -66,14 +66,14 @@ poetry install
 
 ## 文档 i18n 工作流
 
-Mintlify 版本的文档国际化不再直接依赖 Read the Docs 的页面构建流程，而是通过脚本同步 locale 页面结构。
+Mintlify 文档国际化通过脚本同步 locale 页面结构。
 
 <AccordionGroup>
   <Accordion title="核心思路">
     - 中文根目录页面仍然作为默认源文档
     - 目标语言页面生成到 `mintlify_docs/<lang>/...`
-    - 旧的 `docs/source/locale/<lang>/LC_MESSAGES/**/*.po` 继续作为 translation memory 使用
-    - 对 translation memory 未覆盖的片段，可选择再通过脚本调用模型补齐
+    - 可通过脚本批量同步 locale 页面和导航配置
+    - 对尚未覆盖的片段，可以继续迭代补充翻译内容或翻译记忆
   </Accordion>
   <Accordion title="审计当前 locale 覆盖情况">
     ```bash
@@ -115,7 +115,7 @@ bash scripts/batch_translate_mintlify.sh
 ```
 
 <Callout type="info">
-建议先跑一次不带 `--translate` 的 audit 或 `--sync-pages`，确认 translation memory 覆盖率后，再决定是否启用模型补齐。
+建议先跑一次不带 `--translate` 的 audit 或 `--sync-pages`，先确认页面结构、导航和 locale 输出都符合预期，再继续补全文案。
 </Callout>
 
 ## 代码规范

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit and sync Mintlify locale pages using translation memory + SimpleLLMFunc.
+"""Audit and sync Mintlify locale pages using override memory + SimpleLLMFunc.
 
 This script is designed for the Mintlify docs tree under ``mintlify_docs``.
 It intentionally does not require direct manual translation work.
@@ -7,7 +7,7 @@ It intentionally does not require direct manual translation work.
 Capabilities:
 1) Audit source pages referenced by ``docs.json`` and compare them with a target locale.
 2) Sync locale pages under ``mintlify_docs/<lang>/...`` while preserving MDX structure.
-3) Reuse old Sphinx ``.po`` catalogs as translation memory.
+3) Reuse existing locale pages and local override dictionaries as translation memory.
 4) Optionally fall back to SimpleLLMFunc for untranslated segments.
 5) Optionally rewrite ``docs.json`` to Mintlify ``navigation.languages`` format.
 """
@@ -21,8 +21,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Sequence, Tuple
-
-import polib
 
 
 IDENTIFIER_ONLY_RE = re.compile(r"^[`{}\w\-./:+|()\[\]<>]+$")
@@ -169,39 +167,6 @@ def route_to_mdx_path(docs_root: Path, route: str) -> Path:
     return docs_root / f"{route}.mdx"
 
 
-def route_to_po_path(locale_root: Path, target_lang: str, route: str) -> Path:
-    return locale_root / target_lang / "LC_MESSAGES" / f"{route}.po"
-
-
-def discover_po_memory(locale_root: Path, target_lang: str) -> Dict[str, str]:
-    base = locale_root / target_lang / "LC_MESSAGES"
-    if not base.exists():
-        return {}
-
-    memory: Dict[str, str] = {}
-    for po_path in sorted(base.rglob("*.po")):
-        po = polib.pofile(str(po_path))
-        for entry in po:
-            if entry.obsolete or not entry.msgid or not entry.msgstr.strip():
-                continue
-            memory[entry.msgid.strip()] = entry.msgstr.strip()
-    return memory
-
-
-def load_page_memory(locale_root: Path, target_lang: str, route: str) -> Dict[str, str]:
-    po_path = route_to_po_path(locale_root, target_lang, route)
-    if not po_path.exists():
-        return {}
-
-    po = polib.pofile(str(po_path))
-    memory: Dict[str, str] = {}
-    for entry in po:
-        if entry.obsolete or not entry.msgid or not entry.msgstr.strip():
-            continue
-        memory[entry.msgid.strip()] = entry.msgstr.strip()
-    return memory
-
-
 def load_override_memory(override_path: Path, target_lang: str) -> Dict[str, str]:
     if not override_path.exists():
         return {}
@@ -292,7 +257,6 @@ def build_translator(llm_interface) -> Callable[..., asyncio.Future]:
 
 def make_page_specs(
     docs_root: Path,
-    locale_root: Path,
     target_lang: str,
     source_routes: Sequence[str],
 ) -> List[PageSpec]:
@@ -302,7 +266,7 @@ def make_page_specs(
         if not source_path.exists():
             raise FileNotFoundError(f"Source page not found: {source_path}")
         target_path = docs_root / target_lang / f"{route}.mdx"
-        page_memory = load_page_memory(locale_root, target_lang, route)
+        page_memory: Dict[str, str] = {}
         if target_path.exists():
             page_memory.update(
                 build_existing_page_memory(
@@ -775,11 +739,6 @@ def parse_args() -> argparse.Namespace:
         "--docs-root", default="mintlify_docs", help="Mintlify docs root"
     )
     parser.add_argument(
-        "--locale-root",
-        default="docs/source/locale",
-        help="Old Sphinx locale root for translation memory",
-    )
-    parser.add_argument(
         "--target-lang", default="en", help="Target Mintlify locale code"
     )
     parser.add_argument(
@@ -844,7 +803,6 @@ async def main() -> None:
 
     docs_root = Path(args.docs_root).resolve()
     docs_json_path = docs_root / "docs.json"
-    locale_root = Path(args.locale_root).resolve()
     provider_json = Path(args.provider_json).resolve()
     override_memory_path = Path(args.override_memory).resolve()
 
@@ -864,7 +822,7 @@ async def main() -> None:
         print("Audit complete (no write actions requested).")
         return
 
-    global_memory = discover_po_memory(locale_root, args.target_lang)
+    global_memory: Dict[str, str] = {}
     override_memory = load_override_memory(override_memory_path, args.target_lang)
     print(f"Translation memory entries: {len(global_memory)}")
     print(f"Override memory entries: {len(override_memory)}")
@@ -882,7 +840,6 @@ async def main() -> None:
 
     page_specs = make_page_specs(
         docs_root=docs_root,
-        locale_root=locale_root,
         target_lang=args.target_lang,
         source_routes=source_routes,
     )

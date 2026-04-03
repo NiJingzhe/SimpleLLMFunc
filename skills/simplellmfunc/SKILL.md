@@ -100,6 +100,25 @@ SimpleLLMFunc expects `provider.json` to be:
 - Lookup shape after loading = `providers[provider_id][model_name]`.
 - Start from `examples/provider_template.json` when possible.
 
+### How to organize `provider.json`
+
+Treat `provider.json` as the canonical project-level model routing table, not as a random dump of keys.
+
+Recommended organization rules:
+
+- Group by provider first, then keep a short list of model configs under that provider.
+- Keep `model_name` values stable and unique within one provider.
+- Put multiple keys under the same hot model in `api_keys` instead of duplicating the model entry.
+- Tune `max_retries`, `retry_delay`, `rate_limit_capacity`, and `rate_limit_refill_rate` per model, not once globally.
+- Keep the file focused on runtime model access concerns only: provider, model, keys, endpoint, retry, and rate limits.
+- Use `OpenAICompatible.load_from_json_file(...)` once near application setup, then pass resolved model handles into decorators.
+
+Recommended mental model:
+
+- `provider.json` decides **what model surface is available**.
+- typed decorators and tools decide **how tasks are expressed**.
+- your harness decides **what context reaches the model for one task**.
+
 ### `.env` and environment variables
 
 The framework mainly reads `.env` / environment variables for logging and optional Langfuse observability.
@@ -132,6 +151,88 @@ LANGFUSE_ENABLED=true
 5. Build the model either from `provider.json` or directly with `APIKeyPool` + `OpenAICompatible`.
 6. Add `toolkit=[...]` only when the task truly needs tools.
 7. Validate with a focused example or event consumer.
+
+## Strong typing and Pydantic (Recommended default)
+
+Prefer explicit, typed function contracts over loose string-in/string-out prompting.
+
+Recommended rules:
+
+- Use narrow, explicit parameter types.
+- Use typed return values whenever the output shape matters.
+- Prefer Pydantic models for structured outputs that must be stable, inspectable, or reusable.
+- Let the framework derive structured parsing from the Python return type instead of asking the model to hand-roll JSON.
+- Keep the docstring focused on task intent, quality bar, constraints, and edge cases, not schema duplication.
+
+Good pattern:
+
+```python
+from pydantic import BaseModel, Field
+
+from SimpleLLMFunc import llm_function
+
+
+class SearchSummary(BaseModel):
+    answer: str = Field(description="Direct answer to the user's question")
+    evidence: list[str] = Field(description="Supporting evidence bullets")
+    confidence: float = Field(description="0.0 to 1.0 confidence score")
+
+
+@llm_function(llm_interface=llm)
+async def summarize_search_results(query: str, snippets: list[str]) -> SearchSummary:
+    """
+    Answer the query using the provided snippets.
+
+    Prefer concise claims backed by evidence.
+    If the snippets are insufficient, lower confidence and say so explicitly.
+    """
+    pass
+```
+
+Prefer this over:
+
+- returning a free-form string and parsing it manually later
+- asking the model to invent ad hoc JSON output shapes in the docstring
+- mixing many unrelated fields into one loose `dict[str, Any]` unless the shape is genuinely variable
+
+Use plain `str` returns only when free-form text is truly the product.
+
+## Harness Engineering: context planning comes first
+
+When building on SimpleLLMFunc, think in terms of harness engineering.
+
+Core philosophy:
+
+- the main job is context planning
+- an agent is not a person; it is a method for constructing the right context for each reasoning step
+- at every step, the model should see the shortest clean context that is still complete for the current task
+- the system should be designed so this context can be maintained in a durable closed loop
+
+What this means:
+
+- when an agent fails, first ask what was missing from the environment or context
+- encode the fix into the environment itself: tools, checks, constraints, docs, files, or workflow structure
+- do not rely on the operator remembering the lesson in their head
+
+Core beliefs:
+
+- model capability is usually not the bottleneck; context quality is
+- broad context stuffing is usually worse than precise context planning
+- agent failures are predictable and should map to concrete harness changes
+- cross-session memory must be rebuilt from external state, not assumed
+
+Practical implications:
+
+- choose `@llm_function` when one typed transformation gives the cleanest context
+- choose `@llm_chat` only when multi-turn state genuinely improves the context for the task
+- decide between keeping history, forking, or using a sub-agent based only on which option yields the most accurate and compact context for the current reasoning step
+- persist state, progress, and important decisions outside the model so a fresh session can reconstruct context deterministically
+- prefer tools and checks that let the system verify itself instead of asking the model to self-certify completion
+- treat noisy, stale, or weakly relevant context as a design bug
+
+If you remember only one rule, remember this:
+
+- always construct the cleanest, most task-relevant, shortest complete context the system can maintain in a closed loop
 
 ## Best-practice patterns
 
@@ -303,6 +404,7 @@ asyncio.run(main())
 
 ## Load more context only when needed
 - Philosophy and core concepts: `reference/philosophy-and-concepts.md`
+- Harness engineering guidance: `reference/harness-engineering.md`
 - System prompt construction and prompt-writing rules: `reference/system-prompt-construction.md`
 - Instant shell-first setup and constructor usage: `reference/instant-use.md`
 - Provider and environment setup: `reference/configuration.md`

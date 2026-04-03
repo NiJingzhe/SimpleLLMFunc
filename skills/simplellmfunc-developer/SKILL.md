@@ -2,7 +2,7 @@
 name: simplellmfunc-developer
 description: "Develop and maintain the SimpleLLMFunc framework itself. Use when changing framework internals, tests, docs, specs, runtime primitives, decorator behavior, tool plumbing, event streams, PyRepl integration, or contributor-facing project structure and conventions."
 license: MIT
-compatibility: "Python 3.12+ repo with pytest, Poetry, Sphinx/MyST docs, and SimpleLLMFunc source tree available."
+compatibility: "Python 3.12+ repo with pytest, Poetry, Mintlify docs, and SimpleLLMFunc source tree available."
 metadata:
   project: SimpleLLMFunc
   version: "0.7.6"
@@ -46,7 +46,7 @@ metadata:
 - `SimpleLLMFunc/logger/` and `SimpleLLMFunc/observability/`: logs, trace context, Langfuse.
 - `SimpleLLMFunc/utils/`: TUI and stdio helpers.
 - `tests/`: mirror of behavior and architecture; often the fastest place to infer conventions.
-- `docs/source/`: user docs, mostly Chinese source markdown with localized builds.
+- `mintlify_docs/`: Mintlify documentation source, including locale pages such as `en/...`.
 - `spec/`: higher-level project map and repo conventions.
 
 ## Naming and style rules
@@ -67,12 +67,13 @@ metadata:
 - Treat tests as executable API documentation for subtle cases like self-reference, event mode, and provider compatibility.
 
 ## Documentation and spec rules
-- Update `docs/source/` when user-facing behavior changes.
+- Update `mintlify_docs/` when user-facing behavior changes.
 - Update `spec/` when module responsibilities, architecture map, or repo-wide guidance changes.
 - Keep examples runnable and aligned with current behavior.
 - Use progressive disclosure in skills and docs: concise guidance in the main file, details in reference docs.
 - Keep `provider.json` format docs and `.env` / environment-variable docs aligned with actual loader and observability behavior.
 - Keep the packaged `skills/` directory and the `simplellmfunc-skill` export CLI aligned so installed users can export the current skill contents correctly.
+- Treat `AGENTS.md` as a feedback-loop artifact: when recurring agent mistakes reveal missing environmental guidance, update the file so the fix lives in the system instead of only in maintainer memory.
 
 ## Read these reference docs as needed
 - Architecture and contributor map: `reference/project-map.md`

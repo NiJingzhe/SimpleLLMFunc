@@ -33,9 +33,8 @@ When editing `spec/` documents:
 
 ## Documentation stack
 
-- Sphinx
-- MyST Markdown
-- localized source/build setup
-- Read the Docs configuration
+- Mintlify
+- MDX / Markdown
+- locale pages under `mintlify_docs/<lang>/`
 
-When behavior changes for users, update `docs/source/` first; then align higher-level summaries like `README.md` if needed.
+When behavior changes for users, update `mintlify_docs/` first; then align higher-level summaries like `README.md` if needed.

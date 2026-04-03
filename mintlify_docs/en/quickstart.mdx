@@ -54,6 +54,41 @@ pip install -e .
 
 </Step>
 
+<Step title="Install the Agent skill pack (recommended)">
+
+If you plan to use SimpleLLMFunc together with a coding agent, install the packaged skill right after installing the library. The skill tells the agent how to use the framework correctly, where to look for references, and how to follow common workflows.
+
+### Export the usage skill
+
+```bash
+python -m SimpleLLMFunc.skills_cli usage /path/to/your/agent/skills
+```
+
+This creates:
+
+```text
+/path/to/your/agent/skills/simplellmfunc/
+```
+
+The exported folder contains:
+
+- `SKILL.md`
+- helper reference files under `reference/`
+
+### Optional: export the developer skill
+
+If your agent also needs to work on the framework itself, update low-level code, or add tests, export the developer-oriented skill pack as well:
+
+```bash
+python -m SimpleLLMFunc.skills_cli developer /path/to/your/agent/skills
+```
+
+<Callout type="info">
+Supported skill kinds are `usage`, `developer`, and `dev`. If the destination already exists, add `--force` to overwrite it.
+</Callout>
+
+</Step>
+
 <Step title="Configure your model provider">
 
 ### Create `.env`

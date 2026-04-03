@@ -50,7 +50,7 @@ This document summarizes the current runtime primitive authoring and registratio
 - This document: `spec/primitive-dev-api-plan.md`
 - Related spec: `spec/meta.md`
 - Related code: `SimpleLLMFunc/runtime/primitives.py`, `SimpleLLMFunc/builtin/pyrepl.py`, `SimpleLLMFunc/runtime/builtin_self_reference.py`, `SimpleLLMFunc/llm_decorator/llm_chat_decorator.py`
-- Related docs: `docs/source/pyrepl.md`, `docs/source/detailed_guide/llm_chat.md`
+- Related docs: `mintlify_docs/pyrepl.mdx`, `mintlify_docs/detailed_guide/llm_chat.mdx`
 <!-- DOC_META_END -->
 
 ## Current Surface {#current-surface}

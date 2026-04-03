@@ -332,9 +332,9 @@ SimpleLLMFunc/
 
 ### docs 目录
 
-**路径**: `SimpleLLMFunc/docs/`
+**路径**: `SimpleLLMFunc/mintlify_docs/`
 
-**作用**: 项目文档（使用 Sphinx）
+**作用**: 项目文档（使用 Mintlify）
 
 ### spec 目录
 
