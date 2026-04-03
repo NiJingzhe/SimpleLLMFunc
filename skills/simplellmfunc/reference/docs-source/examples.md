@@ -406,6 +406,6 @@ A:
 ## 相关资源
 
 - **官方仓库**: https://github.com/NiJingzhe/SimpleLLMFunc
-- **完整文档**: https://simplellmfunc.readthedocs.io/
+- **完整文档**: Mintlify documentation site
 - **发布日志**: https://github.com/NiJingzhe/SimpleLLMFunc/releases
 - **问题反馈**: https://github.com/NiJingzhe/SimpleLLMFunc/issues

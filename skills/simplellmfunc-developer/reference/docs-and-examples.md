@@ -14,7 +14,7 @@ Update docs when you change:
 
 ## Where to update
 
-- `docs/source/`: user documentation
+- `mintlify_docs/`: user documentation
 - `README.md`: high-level user-facing introduction and quick-start narrative
 - `examples/`: runnable examples for visible features
 - `spec/`: project map and repo-wide development guidance

@@ -7,7 +7,7 @@ SimpleLLMFunc/
 ├── SimpleLLMFunc/   # framework package
 ├── tests/           # pytest suite
 ├── examples/        # runnable examples
-├── docs/            # Sphinx + MyST docs
+├── mintlify_docs/   # Mintlify documentation source
 ├── spec/            # repo-specific maps and conventions
 └── skills/          # agent skills
 ```
@@ -95,4 +95,4 @@ Support layers such as:
 - Runtime primitive issue: start in `runtime/primitives.py`, then inspect `builtin/pyrepl.py` or the relevant builtin backend.
 - Event-stream issue: start in `hooks/`, then inspect decorator step modules.
 - Provider transport issue: start in `interface/openai_compatible.py` plus related tests.
-- User-facing docs mismatch: source code and tests win; then patch `docs/source/` and maybe `README.md`.
+- User-facing docs mismatch: source code and tests win; then patch `mintlify_docs/` and maybe `README.md`.

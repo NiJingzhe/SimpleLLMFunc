@@ -55,6 +55,41 @@ pip install -e .
 
 </Step>
 
+<Step title="安装 Agent Skill 包（推荐）">
+
+如果你会配合编码 Agent 一起使用 SimpleLLMFunc，建议在安装完成后立刻导出内置 skill 包。这个 skill 会告诉 Agent 如何正确使用本框架、如何查文档、以及如何组织常见工作流。
+
+### 导出使用型 skill
+
+```bash
+python -m SimpleLLMFunc.skills_cli usage /path/to/your/agent/skills
+```
+
+命令执行后，会在目标目录下生成：
+
+```text
+/path/to/your/agent/skills/simplellmfunc/
+```
+
+其中包含：
+
+- `SKILL.md`
+- `reference/` 下的辅助参考文档
+
+### 可选：导出开发型 skill
+
+如果你的 Agent 需要参与框架开发、修改底层实现或补充测试，也可以导出开发型 skill：
+
+```bash
+python -m SimpleLLMFunc.skills_cli developer /path/to/your/agent/skills
+```
+
+<Callout type="info">
+支持的 skill 类型有 `usage`、`developer` 和 `dev`。如果目标目录已存在，可加 `--force` 覆盖。
+</Callout>
+
+</Step>
+
 <Step title="配置 API 密钥">
 
 ### 2.1 创建配置文件

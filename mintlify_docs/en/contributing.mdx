@@ -66,14 +66,14 @@ poetry install
 
 ## Documentation i18n Workflow
 
-Mintlify documentation internationalization no longer depends on the old Read the Docs build flow. Instead, locale page structure is synchronized by script.
+Mintlify documentation internationalization is handled by script-driven locale page synchronization.
 
 <AccordionGroup>
   <Accordion title="Core idea">
     - Chinese root pages remain the default source docs
     - Target language pages are generated under `mintlify_docs/<lang>/...`
-    - Existing `docs/source/locale/<lang>/LC_MESSAGES/**/*.po` files continue to serve as translation memory
-    - For segments that translation memory does not cover, the script can optionally call a model to fill the gaps
+    - Scripts can synchronize locale pages and navigation structure in batch
+    - Missing content can be filled iteratively as translation content improves
   </Accordion>
   <Accordion title="Audit current locale coverage">
     ```bash
@@ -115,7 +115,7 @@ bash scripts/batch_translate_mintlify.sh
 ```
 
 <Callout type="info">
-It is usually best to run an audit or a `--sync-pages` pass without `--translate` first, so you can inspect translation memory coverage before invoking a model.
+It is usually best to run an audit or a `--sync-pages` pass first so you can verify page structure, locale output, and navigation before refining translated wording.
 </Callout>
 
 ## Code Standards
