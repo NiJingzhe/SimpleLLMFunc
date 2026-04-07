@@ -6,15 +6,25 @@ from SimpleLLMFunc.logger import get_current_trace_id
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion import ChatCompletion
 
-class LLM_Interface(ABC):
 
+DEFAULT_CONTEXT_WINDOW = 200_000
+
+
+class LLM_Interface(ABC):
     @abstractmethod
     def __init__(
-        self, api_key_pool: APIKeyPool, model_name: str, base_url: Optional[str] = None
+        self,
+        api_key_pool: APIKeyPool,
+        model_name: str,
+        base_url: Optional[str] = None,
+        context_window: Optional[int] = DEFAULT_CONTEXT_WINDOW,
     ):
         self.input_token_count = 0
         self.output_token_count = 0
         self.model_name = model_name
+        self.context_window = (
+            DEFAULT_CONTEXT_WINDOW if context_window is None else context_window
+        )
 
     @abstractmethod
     async def chat(
@@ -29,7 +39,6 @@ class LLM_Interface(ABC):
 
         pass
 
-
     @abstractmethod
     async def chat_stream(
         self,
@@ -40,6 +49,8 @@ class LLM_Interface(ABC):
         *args,
         **kwargs,
     ) -> AsyncGenerator[ChatCompletionChunk, None]:
-    
+
         if False:
-            yield ChatCompletionChunk(id="", created=0, model="", object="chat.completion.chunk", choices=[])
+            yield ChatCompletionChunk(
+                id="", created=0, model="", object="chat.completion.chunk", choices=[]
+            )

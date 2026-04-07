@@ -7,7 +7,7 @@ from typing_extensions import override
 from openai import AsyncOpenAI
 from openai.types.chat.chat_completion_chunk import ChatCompletionChunk
 from openai.types.chat.chat_completion import ChatCompletion
-from SimpleLLMFunc.interface.llm_interface import LLM_Interface
+from SimpleLLMFunc.interface.llm_interface import DEFAULT_CONTEXT_WINDOW, LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.interface.token_bucket import rate_limit_manager
 from SimpleLLMFunc.logger import (
@@ -187,6 +187,9 @@ class OpenAICompatible(LLM_Interface):
                     model_name = model_info["model_name"]
                     api_keys = model_info["api_keys"]
                     base_url = model_info["base_url"]
+                    context_window = model_info.get(
+                        "context_window", DEFAULT_CONTEXT_WINDOW
+                    )
                     max_retries = model_info.get("max_retries", 5)
                     retry_delay = model_info.get("retry_delay", 1.0)
                     rate_limit_capacity = model_info.get("rate_limit_capacity", 10)
@@ -202,6 +205,7 @@ class OpenAICompatible(LLM_Interface):
                         api_key_pool=key_pool,
                         model_name=model_name,
                         base_url=base_url,
+                        context_window=context_window,
                         max_retries=max_retries,
                         retry_delay=retry_delay,
                         rate_limit_capacity=rate_limit_capacity,
@@ -261,6 +265,7 @@ class OpenAICompatible(LLM_Interface):
         retry_delay: float = 1.0,
         rate_limit_capacity: int = 10,
         rate_limit_refill_rate: float = 1.0,
+        context_window: Optional[int] = DEFAULT_CONTEXT_WINDOW,
     ):
         """初始化OpenAI兼容的LLM接口
 
@@ -272,8 +277,14 @@ class OpenAICompatible(LLM_Interface):
             retry_delay: 重试间隔时间（秒）
             rate_limit_capacity: 令牌桶容量（最大令牌数）
             rate_limit_refill_rate: 令牌补充速率（令牌数/秒）
+            context_window: 模型上下文窗口大小；未指定时默认使用 200000 占位
         """
-        super().__init__(api_key_pool, model_name)
+        super().__init__(
+            api_key_pool,
+            model_name,
+            base_url=base_url,
+            context_window=context_window,
+        )
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.base_url = base_url
