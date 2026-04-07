@@ -9,7 +9,12 @@ from typing import Any, AsyncGenerator, Callable, Literal, Optional, Sequence
 from rich.markdown import Markdown
 from rich.text import Text
 from textual.app import App, ComposeResult
-from textual.containers import HorizontalScroll, VerticalGroup, VerticalScroll
+from textual.containers import (
+    Horizontal,
+    HorizontalScroll,
+    VerticalGroup,
+    VerticalScroll,
+)
 from textual.widgets import Input, Static
 
 from SimpleLLMFunc.hooks.input_stream import AgentInputRouter, UserInputEvent
@@ -19,6 +24,9 @@ from SimpleLLMFunc.type.message import MessageList
 from SimpleLLMFunc.utils.tui.core import consume_react_stream
 from SimpleLLMFunc.utils.tui.formatters import format_tool_arguments_markdown
 from SimpleLLMFunc.utils.tui.hooks import ToolCustomEventHook
+from SimpleLLMFunc.utils.tui.tool_cards.base import ToolCallCard
+from SimpleLLMFunc.utils.tui.tool_cards.factory import build_tool_call_card
+from SimpleLLMFunc.utils.tui.widgets import DotPulse
 
 
 @dataclass
@@ -26,6 +34,9 @@ class _ModelWidgets:
     model_call_id: str
     agent_key: str
     root: VerticalGroup
+    loading_row: Horizontal
+    loading_widget: DotPulse
+    loading_label_widget: Static
     reasoning_widget: Static
     content_widget: Static
     tool_list_widget: VerticalGroup
@@ -38,35 +49,6 @@ class _ModelWidgets:
     finished: bool = False
     content_dirty: bool = False
     reasoning_dirty: bool = False
-    render_pending: bool = False
-
-
-@dataclass
-class _ToolWidgets:
-    tool_call_id: str
-    root: VerticalGroup
-    model_call_id: str
-    tool_name: str
-    arguments_widget: Static
-    status_widget: Static
-    output_widget: Static
-    result_widget: Static
-    stats_widget: Static
-    arguments: dict[str, Any] = field(default_factory=dict)
-    arguments_markdown: str = ""
-    argument_markdown_cache: dict[str, str] = field(default_factory=dict)
-    argument_order: list[str] = field(default_factory=list)
-    last_argument_changed: Optional[str] = None
-    arguments_tool_name: str = ""
-    output: str = ""
-    status: str = "running"
-    result_markdown: str = ""
-    stats_line: str = ""
-    arguments_dirty: bool = False
-    output_dirty: bool = False
-    status_dirty: bool = False
-    result_dirty: bool = False
-    stats_dirty: bool = False
     render_pending: bool = False
 
 
@@ -191,6 +173,31 @@ class AgentTUIApp(App[None]):
         margin: 0 0 1 0;
     }
 
+    .assistant-loading {
+        width: 3;
+        min-width: 1;
+        max-width: 3;
+        height: 1;
+        min-height: 1;
+        max-height: 1;
+        margin: 0;
+        color: #7f8798;
+    }
+
+    .assistant-loading-row {
+        layout: horizontal;
+        height: 1;
+        width: auto;
+        margin: 1 0 0 0;
+        align-horizontal: left;
+    }
+
+    .assistant-loading-label {
+        width: auto;
+        margin: 0 1 0 0;
+        color: #7f8798;
+    }
+
     .stats {
         color: #7f8798;
         margin: 1 0 0 0;
@@ -252,7 +259,7 @@ class AgentTUIApp(App[None]):
             self._input_router = AgentInputRouter(submit_tool_input=PyRepl.submit_input)
 
         self._models: dict[str, _ModelWidgets] = {}
-        self._tools: dict[str, _ToolWidgets] = {}
+        self._tools: dict[str, ToolCallCard] = {}
         self._agent_board: Optional[HorizontalScroll] = None
         self._agent_columns: dict[str, _AgentColumnWidgets] = {}
         self._model_agent_key: dict[str, str] = {}
@@ -269,7 +276,9 @@ class AgentTUIApp(App[None]):
         self._virtual_keep_live_blocks = self.VIRTUAL_KEEP_LIVE_BLOCKS
         self._virtualize_near_bottom_margin = self.VIRTUALIZE_NEAR_BOTTOM_MARGIN
         self._scroll_after_refresh_pending = False
+        self._chat_scroll_expected_y: Optional[float] = None
         self._agent_scroll_pending: set[str] = set()
+        self._agent_scroll_expected_y: dict[str, float] = {}
         self._agent_layout_pending = False
 
     def compose(self) -> ComposeResult:
@@ -290,6 +299,8 @@ class AgentTUIApp(App[None]):
 
     def _auto_scroll_chat_log(self) -> None:
         self._scroll_chat_log_to_end()
+        chat_log = self.query_one("#chat-log", VerticalScroll)
+        self._chat_scroll_expected_y = chat_log.scroll_y
 
         if self._scroll_after_refresh_pending:
             return
@@ -298,7 +309,14 @@ class AgentTUIApp(App[None]):
 
         def _after_refresh_scroll() -> None:
             self._scroll_after_refresh_pending = False
-            self._scroll_chat_log_to_end()
+            expected_y = self._chat_scroll_expected_y
+            self._chat_scroll_expected_y = None
+            chat_log_widget = self.query_one("#chat-log", VerticalScroll)
+            if expected_y is not None and chat_log_widget.scroll_y >= max(
+                expected_y - 1,
+                0,
+            ):
+                self._scroll_chat_log_to_end()
 
         self.call_after_refresh(_after_refresh_scroll)
 
@@ -310,6 +328,9 @@ class AgentTUIApp(App[None]):
 
     def _auto_scroll_agent_column(self, agent_key: str) -> None:
         self._scroll_agent_column_to_end(agent_key)
+        column = self._agent_columns.get(agent_key)
+        if column is not None:
+            self._agent_scroll_expected_y[agent_key] = column.root.scroll_y
 
         if agent_key in self._agent_scroll_pending:
             return
@@ -318,7 +339,15 @@ class AgentTUIApp(App[None]):
 
         def _after_refresh_scroll() -> None:
             self._agent_scroll_pending.discard(agent_key)
-            self._scroll_agent_column_to_end(agent_key)
+            expected_y = self._agent_scroll_expected_y.pop(agent_key, None)
+            column_widget = self._agent_columns.get(agent_key)
+            if column_widget is None:
+                return
+            if expected_y is not None and column_widget.root.scroll_y >= max(
+                expected_y - 1,
+                0,
+            ):
+                self._scroll_agent_column_to_end(agent_key)
 
         self.call_after_refresh(_after_refresh_scroll)
 
@@ -409,66 +438,6 @@ class AgentTUIApp(App[None]):
             return False
 
         return (not model.finished) or bool(model.running_tool_call_ids)
-
-    def _refresh_tool_arguments_markdown(self, tool: _ToolWidgets) -> None:
-        if not tool.arguments:
-            tool.argument_order = []
-            tool.argument_markdown_cache = {}
-            tool.arguments_markdown = "_No arguments_"
-            tool.last_argument_changed = None
-            tool.arguments_tool_name = tool.tool_name
-            return
-
-        tool_name_changed = tool.arguments_tool_name != tool.tool_name
-        if tool_name_changed:
-            tool.argument_markdown_cache = {}
-            tool.argument_order = []
-        tool.arguments_tool_name = tool.tool_name
-
-        changed_key = tool.last_argument_changed
-        if (
-            changed_key is None
-            or tool_name_changed
-            or changed_key not in tool.arguments
-        ):
-            tool.argument_order = list(tool.arguments.keys())
-            tool.argument_markdown_cache = {
-                key: format_tool_arguments_markdown(
-                    {key: tool.arguments[key]},
-                    tool_name=tool.tool_name,
-                )
-                for key in tool.argument_order
-            }
-        else:
-            if changed_key not in tool.argument_order:
-                tool.argument_order.append(changed_key)
-            tool.argument_markdown_cache[changed_key] = format_tool_arguments_markdown(
-                {changed_key: tool.arguments[changed_key]},
-                tool_name=tool.tool_name,
-            )
-            missing_keys = [
-                key
-                for key in tool.argument_order
-                if key not in tool.argument_markdown_cache
-            ]
-            if missing_keys:
-                tool.argument_order = list(tool.arguments.keys())
-                tool.argument_markdown_cache = {
-                    key: format_tool_arguments_markdown(
-                        {key: tool.arguments[key]},
-                        tool_name=tool.tool_name,
-                    )
-                    for key in tool.argument_order
-                }
-
-        tool.arguments_markdown = "\n".join(
-            tool.argument_markdown_cache[key]
-            for key in tool.argument_order
-            if key in tool.argument_markdown_cache
-        )
-        if not tool.arguments_markdown.strip():
-            tool.arguments_markdown = "_No arguments_"
-        tool.last_argument_changed = None
 
     def _compose_tool_plain_text(self, tool: _ToolWidgets) -> str:
         lines: list[str] = [f"Tool: {tool.tool_name}", f"Status: {tool.status}"]
@@ -836,6 +805,21 @@ class AgentTUIApp(App[None]):
             return "Main Agent"
         return f"Fork {agent_key}"
 
+    def _build_loading_label(self, model_call_id: str) -> str:
+        if self._is_fork_model_call_id(model_call_id):
+            return "running fork"
+        return "typing"
+
+    @staticmethod
+    def _sync_model_loading_label(model: _ModelWidgets) -> None:
+        if model.content.strip():
+            model.loading_label_widget.update("")
+            model.loading_label_widget.display = False
+            return
+
+        if not model.loading_label_widget.display:
+            model.loading_label_widget.display = True
+
     async def _ensure_agent_board(self) -> HorizontalScroll:
         if self._agent_board is not None:
             return self._agent_board
@@ -893,6 +877,7 @@ class AgentTUIApp(App[None]):
             return
 
         self._agent_scroll_pending.discard(agent_key)
+        self._agent_scroll_expected_y.pop(agent_key, None)
 
         column = self._agent_columns.pop(agent_key, None)
         if column is None:
@@ -969,6 +954,7 @@ class AgentTUIApp(App[None]):
             model.content_dirty = False
             try:
                 model.content_widget.update(Markdown(model.content or " "))
+                self._sync_model_loading_label(model)
                 updated = True
             except Exception:
                 pass
@@ -1005,51 +991,10 @@ class AgentTUIApp(App[None]):
             return
 
         tool.render_pending = False
-        updated = False
-
-        if tool.arguments_dirty:
-            tool.arguments_dirty = False
-            try:
-                self._refresh_tool_arguments_markdown(tool)
-                tool.arguments_widget.update(Markdown(tool.arguments_markdown))
-                updated = True
-            except Exception:
-                pass
-
-        if tool.output_dirty:
-            tool.output_dirty = False
-            try:
-                if tool.output:
-                    tool.output_widget.update(Markdown(f"```text\n{tool.output}\n```"))
-                else:
-                    tool.output_widget.update("")
-                updated = True
-            except Exception:
-                pass
-
-        if tool.status_dirty:
-            tool.status_dirty = False
-            try:
-                tool.status_widget.update(tool.status)
-                updated = True
-            except Exception:
-                pass
-
-        if tool.result_dirty:
-            tool.result_dirty = False
-            try:
-                tool.result_widget.update(Markdown(tool.result_markdown or ""))
-                updated = True
-            except Exception:
-                pass
-
-        if tool.stats_dirty:
-            tool.stats_dirty = False
-            try:
-                tool.stats_widget.update(tool.stats_line)
-                updated = True
-            except Exception:
-                pass
+        try:
+            updated = tool.flush_render()
+        except Exception:
+            updated = False
 
         if updated:
             self._render_flush_count += 1
@@ -1068,6 +1013,12 @@ class AgentTUIApp(App[None]):
 
         root = VerticalGroup(classes="bubble model-bubble")
         role = Static("Assistant", classes="role")
+        loading_row = Horizontal(classes="assistant-loading-row")
+        loading_label_widget = Static(
+            self._build_loading_label(model_call_id),
+            classes="assistant-loading-label",
+        )
+        loading_widget = DotPulse(classes="assistant-loading")
         reasoning_widget = Static("", classes="reasoning")
         content_widget = Static("", classes="body")
         tool_list_widget = VerticalGroup(classes="tool-list")
@@ -1078,6 +1029,9 @@ class AgentTUIApp(App[None]):
         await root.mount(reasoning_widget)
         await root.mount(content_widget)
         await root.mount(tool_list_widget)
+        await root.mount(loading_row)
+        await loading_row.mount(loading_label_widget)
+        await loading_row.mount(loading_widget)
         await root.mount(stats_widget)
 
         agent_key = self._model_agent_key.get(model_call_id, self.MAIN_AGENT_KEY)
@@ -1086,12 +1040,16 @@ class AgentTUIApp(App[None]):
             model_call_id=model_call_id,
             agent_key=agent_key,
             root=root,
+            loading_row=loading_row,
+            loading_widget=loading_widget,
+            loading_label_widget=loading_label_widget,
             reasoning_widget=reasoning_widget,
             content_widget=content_widget,
             tool_list_widget=tool_list_widget,
             stats_widget=stats_widget,
         )
         self._models[model_call_id] = model_widgets
+        self._sync_model_loading_label(model_widgets)
         self._active_models += 1
 
         self._register_render_block(
@@ -1116,6 +1074,7 @@ class AgentTUIApp(App[None]):
 
         model.content += content_delta
         model.content_dirty = True
+        self._sync_model_loading_label(model)
         self._schedule_model_render(model_call_id)
 
     async def append_model_reasoning(
@@ -1142,6 +1101,10 @@ class AgentTUIApp(App[None]):
             self._active_models = max(0, self._active_models - 1)
         else:
             model.finished = True
+
+        if model.loading_row.parent is not None:
+            await model.loading_row.remove()
+
         model.stats_widget.update(stats_line)
         self._update_render_stats_widget()
 
@@ -1168,12 +1131,9 @@ class AgentTUIApp(App[None]):
         existing_tool = self._tools.get(tool_call_id)
         if existing_tool is not None:
             previous_status = existing_tool.status
-            existing_tool.tool_name = tool_name
-            existing_tool.arguments = dict(arguments)
-            existing_tool.status = "running"
-            existing_tool.arguments_dirty = True
-            existing_tool.status_dirty = True
-            existing_tool.last_argument_changed = None
+            existing_tool.set_tool_name(tool_name)
+            existing_tool.set_arguments(dict(arguments))
+            existing_tool.set_status("running")
             if previous_status != "running":
                 self._active_tools += 1
             self._schedule_tool_render(tool_call_id)
@@ -1192,39 +1152,17 @@ class AgentTUIApp(App[None]):
         if model is None:
             return
 
-        root = VerticalGroup(classes="tool-call")
-        title = Static(f"Tool: {tool_name}", classes="role")
-        args_widget = Static()
-        status_widget = Static("running", classes="tool-status")
-        output_widget = Static()
-        result_widget = Static()
-        stats_widget = Static("", classes="stats")
-
-        tool_widgets = _ToolWidgets(
+        tool_card = build_tool_call_card(
             tool_call_id=tool_call_id,
-            root=root,
             model_call_id=model_call_id,
             tool_name=tool_name,
-            arguments_widget=args_widget,
-            status_widget=status_widget,
-            output_widget=output_widget,
-            result_widget=result_widget,
-            stats_widget=stats_widget,
             arguments=dict(arguments),
-            status="running",
+            argument_formatter=format_tool_arguments_markdown,
         )
-        self._tools[tool_call_id] = tool_widgets
+        self._tools[tool_call_id] = tool_card
         self._active_tools += 1
-        self._refresh_tool_arguments_markdown(tool_widgets)
-        args_widget.update(Markdown(tool_widgets.arguments_markdown))
 
-        await model.tool_list_widget.mount(root)
-        await root.mount(title)
-        await root.mount(args_widget)
-        await root.mount(status_widget)
-        await root.mount(output_widget)
-        await root.mount(result_widget)
-        await root.mount(stats_widget)
+        await model.tool_list_widget.mount(tool_card)
 
         model.tool_call_ids.append(tool_call_id)
         model.running_tool_call_ids.add(tool_call_id)
@@ -1241,12 +1179,7 @@ class AgentTUIApp(App[None]):
         if tool is None:
             return
 
-        previous = tool.arguments.get(argname, "")
-        if not isinstance(previous, str):
-            previous = str(previous)
-        tool.arguments[argname] = previous + argcontent_delta
-        tool.arguments_dirty = True
-        tool.last_argument_changed = argname
+        tool.append_argument(argname, argcontent_delta)
         self._schedule_tool_render(tool_call_id)
 
     async def append_tool_output(self, tool_call_id: str, output_delta: str) -> None:
@@ -1254,8 +1187,7 @@ class AgentTUIApp(App[None]):
         if tool is None:
             return
 
-        tool.output += output_delta
-        tool.output_dirty = True
+        tool.append_output(output_delta)
         self._schedule_tool_render(tool_call_id)
 
     async def set_tool_status(self, tool_call_id: str, status: str) -> None:
@@ -1264,12 +1196,11 @@ class AgentTUIApp(App[None]):
             return
 
         previous_status = tool.status
-        tool.status = status
+        tool.set_status(status)
         if previous_status == "running" and status != "running":
             self._active_tools = max(0, self._active_tools - 1)
         elif previous_status != "running" and status == "running":
             self._active_tools += 1
-        tool.status_dirty = True
         self._schedule_tool_render(tool_call_id)
         self._update_render_stats_widget()
 
@@ -1302,14 +1233,11 @@ class AgentTUIApp(App[None]):
             return
 
         previous_status = tool.status
-        tool.status = "success" if success else "error"
+        tool.set_status("success" if success else "error")
         if previous_status == "running":
             self._active_tools = max(0, self._active_tools - 1)
-        tool.result_markdown = result_markdown or ""
-        tool.stats_line = stats_line
-        tool.status_dirty = True
-        tool.result_dirty = True
-        tool.stats_dirty = True
+        tool.set_result_markdown(result_markdown)
+        tool.set_stats(stats_line)
         self._schedule_tool_render(tool_call_id)
 
         model = self._models.get(tool.model_call_id)
