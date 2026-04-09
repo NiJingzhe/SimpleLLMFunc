@@ -2,6 +2,7 @@
 
 Run:
     poetry run python examples/tui_general_agent_example.py
+    poetry run python examples/tui_general_agent_example.py --workspace /path/to/workspace
 
 What this example demonstrates:
 1. ``SelfReference`` mounted as a ``PyRepl`` runtime backend via ``selfref`` pack.
@@ -11,7 +12,8 @@ What this example demonstrates:
 5. Forked context inherits memory snapshot from current selfref key.
 
 Workspace:
-- File tools are scoped to ``./sandbox`` under the project root.
+- File tools and the persistent REPL are scoped to the configured workspace.
+- Default workspace is ``./sandbox`` under the project root.
 
 Try prompts:
 - "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.gather_all')"
@@ -23,6 +25,7 @@ Try prompts:
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import os
@@ -33,6 +36,9 @@ from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from SimpleLLMFunc import OpenAICompatible, llm_chat
+from SimpleLLMFunc.runtime.selfref import (
+    SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
+)
 from SimpleLLMFunc.builtin import FileToolset, PyRepl
 from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.hooks.events import CustomEvent
@@ -45,8 +51,16 @@ from SimpleLLMFunc.utils.tui import tui
 MEMORY_KEY = "agent_main"
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
-SANDBOX_DIR = PROJECT_ROOT / "sandbox"
+DEFAULT_WORKSPACE_DIR = PROJECT_ROOT / "sandbox"
 DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "tui_general_agent_debug.log"
+CONTEXT_WINDOW_COMPACTION_THRESHOLD = 0.2
+CONTEXT_WINDOW_COMPACTION_INSTRUCTION = (
+    "After you finish the current task, use the selfref primitive to compact "
+    "your context. Reflect on what you did, then summarize everything under "
+    "the sections Goal, Instruction, Discoveries, Completed, Current Status, "
+    "Likely next work, and Relevant files/directories. Delete the chat "
+    "history afterward and print this summary to stdout."
+)
 
 
 def _build_local_debug_logger() -> logging.Logger:
@@ -105,7 +119,17 @@ def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
     models = OpenAICompatible.load_from_json_file(provider_json_path)
-    return models["openrouter"]["gpt-5.4"]
+    return models["openrouter"]["minimax/minimax-m2.7"]
+
+
+def _resolve_workspace_dir(workspace: str | None = None) -> Path:
+    if workspace is None:
+        workspace_dir = DEFAULT_WORKSPACE_DIR
+    else:
+        workspace_dir = Path(workspace).expanduser().resolve()
+
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    return workspace_dir
 
 
 def _run_command(command: list[str], cwd: Path) -> str | None:
@@ -142,13 +166,13 @@ def _get_os_version() -> str:
     return platform.platform()
 
 
-def _build_environment_block() -> str:
+def _build_environment_block(workspace_dir: Path) -> str:
     git_worktree = (
-        _run_command(["git", "rev-parse", "--is-inside-work-tree"], SANDBOX_DIR)
+        _run_command(["git", "rev-parse", "--is-inside-work-tree"], workspace_dir)
         == "true"
     )
     git_repository = (
-        _run_command(["git", "rev-parse", "--show-toplevel"], SANDBOX_DIR) is not None
+        _run_command(["git", "rev-parse", "--show-toplevel"], workspace_dir) is not None
     )
 
     shell_path = os.environ.get("SHELL", "")
@@ -158,7 +182,7 @@ def _build_environment_block() -> str:
         [
             "# Environment",
             "    You have been invoked in the following environment:",
-            f"    - Primary working directory: {SANDBOX_DIR}",
+            f"    - Primary working directory: {workspace_dir}",
             "    - This is a git worktree: "
             f"{_to_bool_text(git_worktree)} (if true: do not cd out)",
             f"    - Is a git repository: {_to_bool_text(git_repository)}",
@@ -169,19 +193,69 @@ def _build_environment_block() -> str:
     )
 
 
-def _build_prompt_template_params() -> dict[str, str]:
-    return {"environment_block": _build_environment_block()}
+def _build_prompt_template_params(workspace_dir: Path) -> dict[str, str]:
+    return {"environment_block": _build_environment_block(workspace_dir)}
 
 
 def _prepare_tui_history(history: HistoryList | None) -> HistoryList:
     return list(history or [])
 
 
+def _get_total_token_usage() -> int:
+    return int(getattr(llm, "input_token_count", 0) or 0) + int(
+        getattr(llm, "output_token_count", 0) or 0
+    )
+
+
+def _should_request_context_compaction() -> bool:
+    context_window = int(getattr(llm, "context_window", 0) or 0)
+    if context_window <= 0:
+        return False
+
+    return (
+        _get_total_token_usage() > context_window * CONTEXT_WINDOW_COMPACTION_THRESHOLD
+    )
+
+
+def _prepare_user_message(message: str) -> str:
+    if not _should_request_context_compaction():
+        return message
+
+    if CONTEXT_WINDOW_COMPACTION_INSTRUCTION in message:
+        return message
+
+    separator = "\n\n" if message.strip() else ""
+    return f"{message}{separator}{CONTEXT_WINDOW_COMPACTION_INSTRUCTION}"
+
+
 llm = load_llm()
-SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
-repl = PyRepl(working_directory=SANDBOX_DIR)
-file_tools = FileToolset(SANDBOX_DIR).toolset
-PROMPT_TEMPLATE_PARAMS = _build_prompt_template_params()
+ACTIVE_WORKSPACE_DIR = _resolve_workspace_dir()
+repl = PyRepl(working_directory=ACTIVE_WORKSPACE_DIR)
+file_tools = FileToolset(ACTIVE_WORKSPACE_DIR).toolset
+PROMPT_TEMPLATE_PARAMS = _build_prompt_template_params(ACTIVE_WORKSPACE_DIR)
+
+
+def _configure_workspace(workspace: str | None) -> Path:
+    global ACTIVE_WORKSPACE_DIR, repl, file_tools, PROMPT_TEMPLATE_PARAMS
+
+    ACTIVE_WORKSPACE_DIR = _resolve_workspace_dir(workspace)
+    repl = PyRepl(working_directory=ACTIVE_WORKSPACE_DIR)
+    file_tools = FileToolset(ACTIVE_WORKSPACE_DIR).toolset
+    PROMPT_TEMPLATE_PARAMS = _build_prompt_template_params(ACTIVE_WORKSPACE_DIR)
+    return ACTIVE_WORKSPACE_DIR
+
+
+def _build_runtime_toolkit() -> list[Any]:
+    return [*repl.toolset, *file_tools]
+
+
+def _parse_cli_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Launch the general TUI agent demo.")
+    parser.add_argument(
+        "--workspace",
+        help="Workspace path for the persistent REPL and file tools.",
+    )
+    return parser.parse_args()
 
 
 @llm_chat(
@@ -209,31 +283,31 @@ async def core_agent(message: str, history: HistoryList):
     ## Planning Then Executing Policy:
     - Start with a short plan: objective, assumptions, milestones, and deliverables.
     - Separate tasks into dependency levels before coding.
-    - Execute dependent steps sequentially; parallelize only isolated, verifiable subtasks.
+    - Execute dependent steps sequentially; use parallel execution by using `fork` related runtime primitives for isolated, verifiable subtasks.
+    - When work is parallelizable, default to fork/sub-agent parallelism unless there is a concrete reason not to. If work can be split cleanly, prefer forks/sub-agents over doing everything serially in one thread.
+    - Distinguish fork/sub-agent parallelism from parallel tool calls. Parallel tool calls are for a few isolated tool operations inside one agent thread; fork/sub-agent parallelism is for delegating independent lines of work that can proceed concurrently with their own reasoning.
+    - Before spawning a fork, inspect the relevant selfref fork primitive spec so you use the exact contract and return shape.
+    - Treat ``fork.spawn`` as async sub-agent submission: after spawning a fork, you can continue your own work, spawn more forks/sub-agents, or prepare later steps before gathering results.
+    - Do not gather immediately by default. It is valid to spawn forks/sub-agents first, keep working, and call ``fork.gather_all`` only when you actually need the results.
+    - When delegating to a fork/sub-agent, include goal, scope, inputs, required outputs, acceptance checks, and a clear stop boundary.
+    - Ask forks/sub-agents to return concise summaries plus file paths, not long transcripts.
+    - ``fork.gather_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()`` or ``.values()``.
     - Re-plan after each milestone using the latest evidence from files and tool output.
 
-    ## Memory Compaction After Each Milestone
-    - Call the `selfref` primitive to update memory: remove implementation details, retain only the user's original intent, progress so far, and next steps.
-    - Before compacting, dump the full current state to disk for future reference.
-    - Append any new insights on collaboration to the system prompt.
 
     ## Action safety:
     - Prefer local, reversible actions by default.
     - Ask before destructive, externally visible, or hard-to-reverse actions.
     - Do not use destructive shortcuts when a safer fix is available.
 
-    ## Fork policy:
-    - Fork only when a subtask is concrete, isolated, and verifiable.
-    - Do not fork tiny trivial work that is faster inline.
-    - Use ``fork.spawn`` for independent subtasks, then ``fork.gather_all`` to collect.
-    - ``fork.gather_all`` returns ``dict[fork_id -> ForkResult]``; iterate with ``.items()`` or ``.values()``.
-
-    ## Sub-agent task contract:
-    - Always include goal, scope, inputs, required outputs, acceptance checks, and a clear stop boundary.
-    - Ask sub-agents to return concise summaries plus file paths, not long transcripts.
+    ## Memory Compaction
+    - When a milestone is complete, or when the user asks for context compaction, finish the active task first and then use the `selfref` primitive.
+    - Compact aggressively: remove stale chat history, transient reasoning, verbose execution logs, and implementation details that are no longer needed.
+    - Keep only durable state that will help the next turn. Structure the retained summary under Goal, Instruction, Discoveries, Completed, Current Status, Likely next work, and Relevant files/directories.
+    - After compacting, print the retained summary to stdout so the operator can inspect what remains in memory.
 
     ## Workspace and file workflow:
-    - You have one persistent Python REPL and workspace-scoped file tools rooted at the sandbox.
+    - You have one persistent Python REPL and workspace-scoped file tools rooted at the configured workspace.
     - Use the REPL for inspection, targeted extraction, small transformations, and verification when that is more efficient than manual reading.
     - Prefer search first, then read focused slices instead of dumping large files by default.
     - Store intermediate findings in files when the content is long or reusable.
@@ -263,17 +337,25 @@ async def agent(
     history: HistoryList | None = None,
     _abort_signal: AbortSignal | None = None,
 ) -> AsyncGenerator[ReactOutput, None]:
+    prepared_message = _prepare_user_message(message)
     prepared_history = _prepare_tui_history(history)
+    template_params = {
+        **PROMPT_TEMPLATE_PARAMS,
+        SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM: _build_runtime_toolkit(),
+    }
 
     async for output in core_agent(
-        message=message,
+        message=prepared_message,
         history=prepared_history,
-        _template_params=PROMPT_TEMPLATE_PARAMS,
+        _template_params=template_params,
         _abort_signal=_abort_signal,
     ):
         yield output
 
 
 if __name__ == "__main__":
+    args = _parse_cli_args()
+    workspace_dir = _configure_workspace(args.workspace)
     print(f"[selfref-debug] local event log: {DEBUG_LOG_PATH}")
+    print(f"[workspace] {workspace_dir}")
     agent()
