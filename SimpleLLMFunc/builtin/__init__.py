@@ -1,4 +1,4 @@
-from .self_reference import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 from .pyrepl import PyRepl
 from .file_tools import FileToolset
 
