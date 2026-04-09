@@ -698,3 +698,100 @@ class TestExecuteLLM:
         for output in tool_events:
             assert output.origin.tool_name == "test_tool"
             assert output.origin.tool_call_id == "call_123"
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_before_llm_call_hook_can_mutate_active_messages(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+    ) -> None:
+        mock_get_context.return_value = "test_func"
+        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion)
+
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        class _Hooks:
+            async def before_llm_call(self, state: Any) -> None:
+                state.messages = [
+                    *state.messages,
+                    {"role": "user", "content": "[hook] extra context"},
+                ]
+
+        async for _response, _messages in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=False,
+            hooks=_Hooks(),
+        ):
+            pass
+
+        all_called_messages = [
+            call.kwargs["messages"] for call in mock_llm_interface.chat.await_args_list
+        ]
+        assert any(
+            {"role": "user", "content": "[hook] extra context"} in message_list
+            for message_list in all_called_messages
+        )
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_before_finalize_hook_can_override_final_messages_and_response(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+    ) -> None:
+        mock_get_context.return_value = "test_func"
+        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion)
+
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_observation.update = MagicMock()
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        class _Hooks:
+            async def before_finalize(self, state: Any) -> None:
+                state.messages = [
+                    {"role": "system", "content": "compacted"},
+                    {"role": "assistant", "content": "summary"},
+                ]
+                state.final_response = "compacted-response"
+
+        react_end = None
+        async for output in execute_llm(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            tool_map={},
+            max_tool_calls=5,
+            stream=False,
+            enable_event=True,
+            hooks=_Hooks(),
+        ):
+            if isinstance(output, EventYield) and isinstance(
+                output.event, ReactEndEvent
+            ):
+                react_end = output.event
+
+        assert react_end is not None
+        assert react_end.final_response == "compacted-response"
+        assert react_end.final_messages == [
+            {"role": "system", "content": "compacted"},
+            {"role": "assistant", "content": "summary"},
+        ]

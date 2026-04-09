@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import asyncio
+import copy
 import inspect
 import json
 import time
@@ -82,6 +83,7 @@ from SimpleLLMFunc.base.tool_call import (
     extract_tool_calls_from_stream_response,
     process_tool_calls,
 )
+from SimpleLLMFunc.base.react_hooks import ReActState, run_react_hook
 
 from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
@@ -95,6 +97,10 @@ def _as_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _clone_message_list(messages: MessageList) -> MessageList:
+    return [copy.deepcopy(message) for message in messages]
 
 
 def _read_context_token_counters() -> tuple[int, int]:
@@ -680,6 +686,7 @@ async def execute_llm(
     trace_id: str = "",
     user_task_prompt: str = "",
     abort_signal: Optional[AbortSignal] = None,
+    hooks: Any = None,
     **llm_kwargs,
 ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
     """Execute LLM calls and orchestrate iterative tool usage.
@@ -778,6 +785,15 @@ async def execute_llm(
     def _abort_requested() -> bool:
         return abort_signal is not None and abort_signal.is_aborted
 
+    state = ReActState(
+        trace_id=current_trace_id,
+        func_name=func_name,
+        user_task_prompt=user_task_prompt,
+        messages=current_messages,
+        llm_kwargs=dict(llm_kwargs),
+        stream=stream,
+    )
+
     def _abort_reason() -> str:
         return abort_signal.reason if abort_signal is not None else ""
 
@@ -821,10 +837,64 @@ async def execute_llm(
         if abort_reason:
             event_extra["abort_reason"] = abort_reason
 
+    async def _apply_before_finalize(
+        final_messages: MessageList,
+        final_response: str,
+        *,
+        current_iteration: int,
+    ) -> tuple[MessageList, str]:
+        state.iteration = current_iteration
+        state.messages = final_messages
+        state.final_response = final_response
+        await run_react_hook(hooks, "before_finalize", state)
+        return state.messages, state.final_response or ""
+
+    def _reconcile_tool_batch_messages(
+        base_messages_before_tools: MessageList,
+        returned_messages_after_tools: MessageList,
+    ) -> MessageList:
+        active_messages = state.messages
+        memory_key = getattr(hooks, "memory_key", None)
+        self_reference = getattr(hooks, "self_reference", None)
+        if isinstance(memory_key, str) and self_reference is not None:
+            try:
+                if self_reference.consume_destructive_history_mutation(memory_key):
+                    base_len = len(base_messages_before_tools)
+                    if len(returned_messages_after_tools) <= base_len:
+                        return active_messages
+
+                    tail_messages = cast(
+                        MessageList,
+                        returned_messages_after_tools[base_len:],
+                    )
+                    reconciled = _clone_message_list(active_messages)
+                    reconciled.extend(_clone_message_list(tail_messages))
+                    return reconciled
+            except Exception:
+                pass
+
+        if active_messages is returned_messages_after_tools:
+            return returned_messages_after_tools
+
+        if active_messages == base_messages_before_tools:
+            return returned_messages_after_tools
+
+        base_len = len(base_messages_before_tools)
+        if len(returned_messages_after_tools) < base_len:
+            return active_messages
+
+        tail_messages = cast(MessageList, returned_messages_after_tools[base_len:])
+        reconciled = _clone_message_list(active_messages)
+        reconciled.extend(_clone_message_list(tail_messages))
+        return reconciled
+
     push_debug(
         f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
         location=get_location(),
     )
+
+    await run_react_hook(hooks, "on_run_start", state)
+    current_messages = state.messages
 
     # 发射 ReAct 开始事件
     if enable_event:
@@ -878,6 +948,7 @@ async def execute_llm(
             pass
 
     total_llm_calls += 1
+    state.total_llm_calls = total_llm_calls
 
     # 如果没有tools，移除tool_choice参数（如果存在）
     llm_kwargs_filtered = llm_kwargs.copy()
@@ -888,6 +959,10 @@ async def execute_llm(
     llm_input_tokens_before, llm_output_tokens_before = _read_context_token_counters()
 
     aborted = False
+    state.iteration = iteration
+    state.messages = current_messages
+    await run_react_hook(hooks, "before_llm_call", state)
+    current_messages = state.messages
 
     trace_context = get_langfuse_trace_context()
 
@@ -1017,16 +1092,30 @@ async def execute_llm(
             elif not aborted and initial_response is not None:
                 yield initial_response, cast(MessageList, current_messages.copy())
 
+        state.messages = current_messages
+        state.last_response = last_response
+        state.content = content
+        state.tool_calls = list(tool_calls)
+        state.reasoning_details = list(reasoning_details)
+
         # 发射 LLM 调用结束事件
         llm_call_execution_time = time.time() - llm_call_start_time
+        usage_info = extract_usage_from_response(last_response)
+        if usage_info is None:
+            usage_info = _usage_from_context_delta(
+                llm_input_tokens_before,
+                llm_output_tokens_before,
+            )
+        state.usage = usage_info
+        await run_react_hook(hooks, "after_llm_call", state)
+        current_messages = state.messages
+        last_response = state.last_response
+        content = state.content
+        tool_calls = list(state.tool_calls)
+        reasoning_details = list(state.reasoning_details)
+        usage_info = state.usage
         if enable_event:
             try:
-                usage_info = extract_usage_from_response(last_response)
-                if usage_info is None:
-                    usage_info = _usage_from_context_delta(
-                        llm_input_tokens_before,
-                        llm_output_tokens_before,
-                    )
                 tool_calls_typed_initial: List[ToolCall] = (
                     [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
                 )
@@ -1076,6 +1165,11 @@ async def execute_llm(
                             if last_response
                             else content
                         )
+                    current_messages, final_content = await _apply_before_finalize(
+                        current_messages,
+                        final_content,
+                        current_iteration=0,
+                    )
                     react_end = ReactEndEvent(
                         event_type=ReActEventType.REACT_END,
                         timestamp=datetime.now(timezone.utc),
@@ -1124,6 +1218,7 @@ async def execute_llm(
                 tool_calls, reasoning_details if reasoning_details else None
             )
             current_messages.append(cast(Any, assistant_tool_call_message))
+            state.messages = current_messages
         else:
             # No tool calls, return final result
             # 发射 ReAct 结束事件（无工具调用的情况）
@@ -1144,6 +1239,11 @@ async def execute_llm(
                             if last_response
                             else content
                         )
+                    current_messages, final_content = await _apply_before_finalize(
+                        current_messages,
+                        final_content,
+                        current_iteration=0,
+                    )
                     yield await _emit_event(
                         ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
@@ -1169,12 +1269,6 @@ async def execute_llm(
             )
 
             # 更新观测数据
-            usage_info = extract_usage_from_response(last_response)
-            if usage_info is None:
-                usage_info = _usage_from_context_delta(
-                    llm_input_tokens_before,
-                    llm_output_tokens_before,
-                )
             usage_dict_no_tools: Optional[Dict[str, int]] = None
             if usage_info:
                 usage_dict_no_tools = {
@@ -1217,8 +1311,13 @@ async def execute_llm(
     call_count += 1
     iteration = 1
     total_tool_calls += len(tool_calls)
+    state.total_tool_calls = total_tool_calls
+    tool_batch_base_messages = _clone_message_list(current_messages)
 
     # 使用支持事件的工具调用处理函数
+    state.messages = current_messages
+    await run_react_hook(hooks, "before_tool_batch", state)
+    current_messages = state.messages
     if enable_event:
         # 使用异步生成器实时发射事件
         async for item in _process_tool_calls_with_events_gen(
@@ -1269,6 +1368,15 @@ async def execute_llm(
                 result_messages_iteration = tool_task.result()
                 current_messages = cast(MessageList, result_messages_iteration)
 
+    current_messages = _reconcile_tool_batch_messages(
+        tool_batch_base_messages,
+        current_messages,
+    )
+
+    state.messages = current_messages
+    await run_react_hook(hooks, "after_tool_batch", state)
+    current_messages = state.messages
+
     if _abort_requested():
         total_execution_time = time.time() - start_time
         if enable_event:
@@ -1280,6 +1388,11 @@ async def execute_llm(
                         llm_output_tokens_before,
                     )
                 final_content = content
+                current_messages, final_content = await _apply_before_finalize(
+                    current_messages,
+                    final_content,
+                    current_iteration=iteration,
+                )
                 react_end = ReactEndEvent(
                     event_type=ReActEventType.REACT_END,
                     timestamp=datetime.now(timezone.utc),
@@ -1352,11 +1465,16 @@ async def execute_llm(
                 pass
 
         total_llm_calls += 1
+        state.total_llm_calls = total_llm_calls
 
         (
             iteration_input_tokens_before,
             iteration_output_tokens_before,
         ) = _read_context_token_counters()
+        state.iteration = iteration
+        state.messages = current_messages
+        await run_react_hook(hooks, "before_llm_call", state)
+        current_messages = state.messages
 
         # 为迭代调用创建新的观测
         with langfuse_client.start_as_current_observation(
@@ -1492,16 +1610,30 @@ async def execute_llm(
                 elif not aborted and response is not None:
                     yield response, cast(MessageList, current_messages.copy())
 
+            state.messages = current_messages
+            state.last_response = last_response
+            state.content = content
+            state.tool_calls = list(tool_calls)
+            state.reasoning_details = list(reasoning_details)
+
             # 发射迭代中的 LLM 调用结束事件
             iteration_llm_execution_time = time.time() - iteration_llm_start_time
+            usage_info = extract_usage_from_response(last_response)
+            if usage_info is None:
+                usage_info = _usage_from_context_delta(
+                    iteration_input_tokens_before,
+                    iteration_output_tokens_before,
+                )
+            state.usage = usage_info
+            await run_react_hook(hooks, "after_llm_call", state)
+            current_messages = state.messages
+            last_response = state.last_response
+            content = state.content
+            tool_calls = list(state.tool_calls)
+            reasoning_details = list(state.reasoning_details)
+            usage_info = state.usage
             if enable_event:
                 try:
-                    usage_info = extract_usage_from_response(last_response)
-                    if usage_info is None:
-                        usage_info = _usage_from_context_delta(
-                            iteration_input_tokens_before,
-                            iteration_output_tokens_before,
-                        )
                     tool_calls_typed_iteration: List[ToolCall] = (
                         [dict_to_tool_call(tc) for tc in tool_calls]
                         if tool_calls
@@ -1525,12 +1657,6 @@ async def execute_llm(
                     pass
 
             # 更新迭代生成观测数据
-            usage_info = extract_usage_from_response(last_response)
-            if usage_info is None:
-                usage_info = _usage_from_context_delta(
-                    iteration_input_tokens_before,
-                    iteration_output_tokens_before,
-                )
             usage_dict_iteration: Optional[Dict[str, int]] = None
             if usage_info:
                 usage_dict_iteration = {
@@ -1567,6 +1693,11 @@ async def execute_llm(
                             else content
                         )
                     )
+                    current_messages, final_content = await _apply_before_finalize(
+                        current_messages,
+                        final_content,
+                        current_iteration=iteration,
+                    )
                     react_end = ReactEndEvent(
                         event_type=ReActEventType.REACT_END,
                         timestamp=datetime.now(timezone.utc),
@@ -1592,6 +1723,7 @@ async def execute_llm(
                 tool_calls, reasoning_details if reasoning_details else None
             )
             current_messages.append(cast(Any, assistant_tool_call_message))
+            state.messages = current_messages
 
         if len(tool_calls) == 0:
             # No more tool calls, exit loop
@@ -1637,6 +1769,11 @@ async def execute_llm(
                             if last_response
                             else ""
                         )
+                    current_messages, final_content = await _apply_before_finalize(
+                        current_messages,
+                        final_content,
+                        current_iteration=iteration,
+                    )
                     yield await _emit_event(
                         ReactEndEvent(
                             event_type=ReActEventType.REACT_END,
@@ -1670,8 +1807,13 @@ async def execute_llm(
         )
 
         total_tool_calls += len(tool_calls)
+        state.total_tool_calls = total_tool_calls
+        tool_batch_base_messages = _clone_message_list(current_messages)
 
         # 使用支持事件的工具调用处理函数
+        state.messages = current_messages
+        await run_react_hook(hooks, "before_tool_batch", state)
+        current_messages = state.messages
         if enable_event:
             # 使用异步生成器实时发射事件
             async for item in _process_tool_calls_with_events_gen(
@@ -1721,6 +1863,15 @@ async def execute_llm(
                     abort_task.cancel()
                     result_messages = tool_task.result()
                     current_messages = cast(MessageList, result_messages)
+
+        current_messages = _reconcile_tool_batch_messages(
+            tool_batch_base_messages,
+            current_messages,
+        )
+
+        state.messages = current_messages
+        await run_react_hook(hooks, "after_tool_batch", state)
+        current_messages = state.messages
 
         if _abort_requested():
             total_execution_time = time.time() - start_time
@@ -1793,6 +1944,11 @@ async def execute_llm(
                         llm_input_tokens_before,
                         llm_output_tokens_before,
                     )
+                current_messages, content = await _apply_before_finalize(
+                    current_messages,
+                    content,
+                    current_iteration=call_count,
+                )
                 react_end = ReactEndEvent(
                     event_type=ReActEventType.REACT_END,
                     timestamp=datetime.now(timezone.utc),
@@ -1834,10 +1990,15 @@ async def execute_llm(
             pass
 
     total_llm_calls += 1
+    state.total_llm_calls = total_llm_calls
 
     final_input_tokens_before, final_output_tokens_before = (
         _read_context_token_counters()
     )
+    state.iteration = call_count + 1
+    state.messages = current_messages
+    await run_react_hook(hooks, "before_llm_call", state)
+    current_messages = state.messages
 
     # 为最终调用创建观测
     with langfuse_client.start_as_current_observation(
@@ -1875,6 +2036,18 @@ async def execute_llm(
                 final_input_tokens_before,
                 final_output_tokens_before,
             )
+        state.iteration = call_count + 1
+        state.messages = current_messages
+        state.last_response = final_response
+        state.content = final_content
+        state.tool_calls = []
+        state.reasoning_details = []
+        state.usage = usage_info
+        await run_react_hook(hooks, "after_llm_call", state)
+        current_messages = state.messages
+        final_response = state.last_response
+        final_content = state.content
+        usage_info = state.usage
 
         # 发射最终 LLM 调用结束事件
         final_llm_execution_time = time.time() - final_llm_start_time
@@ -1925,6 +2098,11 @@ async def execute_llm(
 
         # 发射 ReAct 结束事件
         total_execution_time = time.time() - start_time
+        current_messages, final_content = await _apply_before_finalize(
+            current_messages,
+            final_content,
+            current_iteration=call_count + 1,
+        )
         if enable_event:
             try:
                 yield await _emit_event(

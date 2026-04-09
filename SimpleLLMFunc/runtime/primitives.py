@@ -918,6 +918,43 @@ def _is_argument_error(exc: Exception) -> bool:
     return any(token in text for token in tokens)
 
 
+def _normalize_primitive_call_arguments(
+    spec: PrimitiveSpec,
+    args: List[Any],
+    kwargs: Dict[str, Any],
+) -> tuple[List[Any], Dict[str, Any]]:
+    """Normalize worker-provided primitive call arguments conservatively.
+
+    Models often call primitives using keyword arguments even when the first
+    declared primitive parameter is positional-or-keyword. Accept the natural
+    shape only in the narrow case where we can do so unambiguously.
+    """
+
+    if args:
+        return args, kwargs
+
+    parameters = spec.parameters or _infer_parameter_specs(spec.handler)
+    positional_required: List[PrimitiveParameterSpec] = []
+    for parameter in parameters:
+        if parameter.kind in {"keyword_only", "var_positional", "var_keyword"}:
+            continue
+        if parameter.required:
+            positional_required.append(parameter)
+
+    if len(positional_required) != 1:
+        return args, kwargs
+
+    candidate = positional_required[0]
+    lookup_name = _normalize_parameter_lookup_name(candidate.name)
+    if lookup_name not in kwargs:
+        return args, kwargs
+
+    normalized_args = [kwargs[lookup_name]]
+    normalized_kwargs = dict(kwargs)
+    normalized_kwargs.pop(lookup_name, None)
+    return normalized_args, normalized_kwargs
+
+
 class PrimitiveRegistry:
     """Host-side primitive registry.
 
@@ -1149,6 +1186,11 @@ class PrimitiveRegistry:
             raise KeyError(_append_hint_message(base_message, hint)) from exc
         payload_args = list(args) if isinstance(args, list) else []
         payload_kwargs = dict(kwargs) if isinstance(kwargs, dict) else {}
+        payload_args, payload_kwargs = _normalize_primitive_call_arguments(
+            spec,
+            payload_args,
+            payload_kwargs,
+        )
 
         context.registry = self
         context.primitive_name = spec.name
@@ -1211,7 +1253,7 @@ class PrimitiveRegistry:
                 result = maybe_result
         except Exception as exc:
             enhanced_exc = exc
-            if _is_argument_error(exc) or isinstance(exc, ValueError):
+            if _is_argument_error(exc):
                 hint = _format_parameter_hints(spec)
                 enhanced_message = _append_hint_message(str(exc), hint)
                 enhanced_exc = type(exc)(enhanced_message)
