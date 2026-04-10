@@ -33,10 +33,12 @@ from SimpleLLMFunc.llm_decorator.utils import (
     remove_tool_best_practices_prompt_block,
 )
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
-from SimpleLLMFunc.builtin.self_reference import (
+from SimpleLLMFunc.runtime.selfref.state import (
+    SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM,
     SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
     SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
     SelfReference,
+    _append_fork_tool_result_message,
 )
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
@@ -609,6 +611,7 @@ def llm_chat(
 
             toolkit_context_token = None
             active_memory_key_token = None
+            active_template_params_token = None
             previous_runtime_toolkit: Any = None
             previous_memory_key: Optional[str] = None
             if effective_self_reference is not None:
@@ -618,6 +621,11 @@ def llm_chat(
                 toolkit_context_token = (
                     effective_self_reference._set_active_runtime_toolkit(
                         runtime_toolkit
+                    )
+                )
+                active_template_params_token = (
+                    effective_self_reference._set_active_template_params(
+                        template_params
                     )
                 )
 
@@ -712,6 +720,23 @@ def llm_chat(
                                         resolved_self_reference_key
                                     )
                                 )
+                                if template_params is not None:
+                                    fork_task_message = template_params.get(
+                                        SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM
+                                    )
+                                    if (
+                                        isinstance(fork_task_message, str)
+                                        and fork_task_message
+                                    ):
+                                        history_snapshot, _ = (
+                                            _append_fork_tool_result_message(
+                                                cast(
+                                                    List[Dict[str, Any]],
+                                                    history_snapshot,
+                                                ),
+                                                task_message=fork_task_message,
+                                            )
+                                        )
                                 _set_history_argument(
                                     function_signature.bound_args.arguments,
                                     history_snapshot,
@@ -733,6 +758,7 @@ def llm_chat(
                                 signature=function_signature,
                                 toolkit=runtime_toolkit,
                                 exclude_params=HISTORY_PARAM_NAMES,
+                                template_params=template_params,
                             )
 
                             tool_prompt_specs = collect_tool_prompt_specs(
@@ -757,6 +783,50 @@ def llm_chat(
                                     messages,
                                 )
 
+                            react_hooks = None
+                            if (
+                                effective_self_reference is not None
+                                and resolved_self_reference_key is not None
+                            ):
+
+                                class _SelfReferenceReActHooks:
+                                    def __init__(self) -> None:
+                                        self._state_token = None
+                                        self.self_reference = effective_self_reference
+                                        self.memory_key = resolved_self_reference_key
+
+                                    async def on_run_start(self, state: Any) -> None:
+                                        self._state_token = effective_self_reference._set_active_react_state(
+                                            state
+                                        )
+
+                                    async def before_finalize(self, state: Any) -> None:
+                                        effective_self_reference.replace_history(
+                                            key=resolved_self_reference_key,
+                                            messages=cast(
+                                                List[Dict[str, Any]], state.messages
+                                            ),
+                                            strict=False,
+                                        )
+
+                                    async def before_tool_batch(
+                                        self, state: Any
+                                    ) -> None:
+                                        effective_self_reference.bind_history(
+                                            resolved_self_reference_key,
+                                            cast(List[Dict[str, Any]], state.messages),
+                                        )
+
+                                    def close(self) -> None:
+                                        if self._state_token is None:
+                                            return
+                                        effective_self_reference._reset_active_react_state(
+                                            self._state_token
+                                        )
+                                        self._state_token = None
+
+                                react_hooks = _SelfReferenceReActHooks()
+
                             # Step 4: 执行 ReAct 循环（流式）
                             response_stream = execute_react_loop_streaming(
                                 llm_interface=llm_interface,
@@ -770,6 +840,7 @@ def llm_chat(
                                 trace_id=function_signature.trace_id,
                                 user_task_prompt=user_task_prompt,
                                 abort_signal=abort_signal,
+                                hooks=react_hooks,
                             )
 
                             collected_responses = []
@@ -792,18 +863,26 @@ def llm_chat(
                                             output.origin,
                                         )
                                     ):
-                                        merged_history = effective_self_reference.merge_turn_history(
-                                            key=resolved_self_reference_key,
-                                            baseline_history_count=baseline_history_count,
-                                            updated_history=cast(
-                                                List[Dict[str, Any]],
-                                                output.event.final_messages,
-                                            ),
-                                            commit=True,
-                                        )
-                                        output.event.final_messages = merged_history
+                                        if (
+                                            effective_self_reference._get_active_react_state()
+                                            is not None
+                                        ):
+                                            active_history = effective_self_reference.snapshot_history(
+                                                resolved_self_reference_key
+                                            )
+                                        else:
+                                            active_history = effective_self_reference.merge_turn_history(
+                                                key=resolved_self_reference_key,
+                                                baseline_history_count=baseline_history_count,
+                                                updated_history=cast(
+                                                    List[Dict[str, Any]],
+                                                    output.event.final_messages,
+                                                ),
+                                                commit=True,
+                                            )
+                                        output.event.final_messages = active_history
                                         if raw_history_reference is not None:
-                                            raw_history_reference[:] = merged_history
+                                            raw_history_reference[:] = active_history
 
                                     yield output
                             else:
@@ -829,17 +908,25 @@ def llm_chat(
                                         effective_self_reference is not None
                                         and resolved_self_reference_key is not None
                                     ):
-                                        merged_history = effective_self_reference.merge_turn_history(
-                                            key=resolved_self_reference_key,
-                                            baseline_history_count=baseline_history_count,
-                                            updated_history=cast(
-                                                List[Dict[str, Any]],
-                                                history,
-                                            ),
-                                            commit=False,
-                                        )
-                                        history_to_yield = merged_history
-                                        latest_merged_history = merged_history
+                                        if (
+                                            effective_self_reference._get_active_react_state()
+                                            is not None
+                                        ):
+                                            active_history = effective_self_reference.snapshot_history(
+                                                resolved_self_reference_key
+                                            )
+                                        else:
+                                            active_history = effective_self_reference.merge_turn_history(
+                                                key=resolved_self_reference_key,
+                                                baseline_history_count=baseline_history_count,
+                                                updated_history=cast(
+                                                    List[Dict[str, Any]],
+                                                    history,
+                                                ),
+                                                commit=False,
+                                            )
+                                        history_to_yield = active_history
+                                        latest_merged_history = active_history
 
                                     collected_responses.append(content)
                                     final_history = history_to_yield
@@ -877,6 +964,8 @@ def llm_chat(
                             )
                             raise
             finally:
+                if react_hooks is not None:
+                    react_hooks.close()
                 _close_fork_cloned_pyrepls(runtime_toolkit)
                 if (
                     effective_self_reference is not None
@@ -893,6 +982,16 @@ def llm_chat(
                             effective_self_reference._active_memory_key_var.set(
                                 previous_memory_key
                             )
+                if (
+                    effective_self_reference is not None
+                    and active_template_params_token is not None
+                ):
+                    try:
+                        effective_self_reference._reset_active_template_params(
+                            active_template_params_token
+                        )
+                    except ValueError:
+                        effective_self_reference._active_template_params_var.set(None)
                 if (
                     effective_self_reference is not None
                     and toolkit_context_token is not None

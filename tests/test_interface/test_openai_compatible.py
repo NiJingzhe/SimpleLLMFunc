@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,6 +16,7 @@ from openai.types.chat.chat_completion_chunk import (
 from openai.types.completion_usage import CompletionUsage
 
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
+from SimpleLLMFunc.interface.llm_interface import DEFAULT_CONTEXT_WINDOW
 from SimpleLLMFunc.interface.openai_compatible import OpenAICompatible
 from SimpleLLMFunc.logger.context_manager import (
     get_current_context_attribute,
@@ -326,3 +328,67 @@ async def test_chat_stream_usage_chunks_should_not_double_count_tokens() -> None
 
     assert after_input - before_input == 8
     assert after_output - before_output == 3
+
+
+def test_openai_compatible_exposes_context_window_attribute() -> None:
+    """OpenAICompatible should keep configured context window metadata."""
+
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-openai-compatible-context-window",
+    )
+    llm = OpenAICompatible(
+        api_key_pool=key_pool,
+        model_name="test-model",
+        base_url="https://example.com/v1",
+        context_window=128000,
+    )
+
+    assert llm.context_window == 128000
+
+
+def test_openai_compatible_uses_placeholder_context_window_by_default() -> None:
+    """OpenAICompatible should expose a 200K placeholder when unspecified."""
+
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-openai-compatible-context-window-default",
+    )
+    llm = OpenAICompatible(
+        api_key_pool=key_pool,
+        model_name="test-model",
+        base_url="https://example.com/v1",
+    )
+
+    assert llm.context_window == DEFAULT_CONTEXT_WINDOW
+
+
+def test_load_from_json_file_reads_context_window(tmp_path) -> None:
+    """Provider JSON metadata should populate context_window on instances."""
+
+    provider_json = tmp_path / "provider.json"
+    provider_json.write_text(
+        json.dumps(
+            {
+                "openai": [
+                    {
+                        "model_name": "gpt-4o-mini",
+                        "api_keys": ["test-key"],
+                        "base_url": "https://api.openai.com/v1",
+                        "context_window": 128000,
+                    },
+                    {
+                        "model_name": "gpt-4.1",
+                        "api_keys": ["test-key"],
+                        "base_url": "https://api.openai.com/v1",
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    providers = OpenAICompatible.load_from_json_file(str(provider_json))
+
+    assert providers["openai"]["gpt-4o-mini"].context_window == 128000
+    assert providers["openai"]["gpt-4.1"].context_window == DEFAULT_CONTEXT_WINDOW

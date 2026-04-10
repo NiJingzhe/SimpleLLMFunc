@@ -45,6 +45,7 @@ async def execute_llm_call(
     trace_id: str = "",
     user_task_prompt: str = "",
     abort_signal: Optional[AbortSignal] = None,
+    hooks: Any = None,
     **llm_kwargs: Any,
 ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
     """执行 LLM 调用，返回响应和更新后的消息（或 ReactOutput）"""
@@ -62,6 +63,7 @@ async def execute_llm_call(
         trace_id=current_trace_id,
         user_task_prompt=user_task_prompt,
         abort_signal=abort_signal,
+        hooks=hooks,
         **llm_kwargs,
     ):
         if enable_event:
@@ -86,6 +88,7 @@ async def execute_react_loop_streaming(
     trace_id: str = "",
     user_task_prompt: str = "",
     abort_signal: Optional[AbortSignal] = None,
+    hooks: Any = None,
 ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
     """执行 ReAct 循环的流式版本（无重试），返回响应和更新后的消息（或 ReactOutput）"""
     # 1. 准备工具
@@ -103,6 +106,7 @@ async def execute_react_loop_streaming(
         trace_id=trace_id,
         user_task_prompt=user_task_prompt,
         abort_signal=abort_signal,
+        hooks=hooks,
         **llm_kwargs,
     )
 

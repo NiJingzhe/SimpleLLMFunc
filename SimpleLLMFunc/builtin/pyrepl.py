@@ -31,13 +31,13 @@ from SimpleLLMFunc.runtime import (
     RuntimePrimitiveBackend,
 )
 from SimpleLLMFunc.runtime.primitives import primitive
-from SimpleLLMFunc.runtime.builtin_self_reference import (
+from SimpleLLMFunc.runtime.selfref.primitives import (
     DEFAULT_SELF_REFERENCE_BACKEND_NAME as RUNTIME_DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     build_self_reference_pack,
 )
 from SimpleLLMFunc.tool import TOO_LONG_TO_FILE_MAX_TOKENS, Tool
 
-from .primitive import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 
 from .pyrepl_worker import (
     COMMAND_EXECUTE,
@@ -1149,6 +1149,13 @@ class PyRepl:
             if process.is_alive():
                 process.terminate()
                 process.join(timeout=1.0)
+
+            close_process = getattr(process, "close", None)
+            if callable(close_process):
+                try:
+                    close_process()
+                except Exception:
+                    pass
 
         self._process = None
         self._command_queue = None

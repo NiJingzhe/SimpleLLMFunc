@@ -1,12 +1,12 @@
-"""Builtin runtime primitive pack backed by ``SelfReference``."""
+"""Selfref runtime primitive pack backed by ``SelfReference``."""
 
 from __future__ import annotations
 
 from typing import Any, Optional, Sequence
 
-from SimpleLLMFunc.builtin.self_reference import SelfReference
+from .state import SelfReference
 
-from .primitives import (
+from ..primitives import (
     PrimitiveCallContext,
     PrimitivePack,
     PrimitiveRegistry,
@@ -73,7 +73,7 @@ def _append_best_practices_to_docstring(
         return handler
 
     docstring = handler.__doc__ or ""
-    from .primitives import _parse_primitive_docstring
+    from ..primitives import _parse_primitive_docstring
 
     parsed_existing = _parse_primitive_docstring(docstring)
     if isinstance(parsed_existing.get("best_practices"), tuple):

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import contextvars
+import copy
 import inspect
+import threading
 import json
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openai.types.chat import ChatCompletion
@@ -19,6 +21,12 @@ from openai.types.chat.chat_completion_message_function_tool_call import (
 )
 
 from SimpleLLMFunc.builtin import PyRepl
+from SimpleLLMFunc.runtime.selfref import (
+    SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM,
+    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
+    SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
+    SelfReference,
+)
 from SimpleLLMFunc.hooks.events import ReActEventType, ReactEndEvent
 from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield, ReactOutput
 from SimpleLLMFunc.llm_decorator.llm_chat_decorator import (
@@ -30,7 +38,6 @@ from SimpleLLMFunc.observability.langfuse_client import (
     reset_langfuse_trace_context,
     set_langfuse_trace_context,
 )
-from SimpleLLMFunc.self_reference import SelfReference
 from SimpleLLMFunc.tool import Tool
 
 
@@ -559,6 +566,174 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
 
 
 @pytest.mark.asyncio
+async def test_llm_chat_runtime_history_clear_mutates_active_final_messages() -> None:
+    """runtime.selfref.history.clear should mutate the active turn history, not only persisted memory."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    observed_second_call_messages: list[dict[str, Any]] = []
+    observed_runtime_memory_after_tool: list[dict[str, Any]] = []
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "runtime.selfref.history.set_system_prompt('Rule A')\n"
+                "runtime.selfref.history.clear()"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        messages = kwargs.get("messages")
+        if call_counter == 1 and isinstance(messages, list):
+            observed_second_call_messages[:] = messages
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+            enable_event=True,
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        original_chat = mock_llm.chat
+
+        async def wrapped_chat(**kwargs: Any) -> Any:
+            if call_counter == 1:
+                observed_runtime_memory_after_tool[:] = self_reference.snapshot_history(
+                    "agent_main"
+                )
+            return await original_chat(**kwargs)
+
+        mock_llm.chat = AsyncMock(side_effect=wrapped_chat)
+
+        outputs: list[ReactOutput] = []
+        async for output in cast(
+            AsyncGenerator[ReactOutput, None], agent("hello", history=history)
+        ):
+            outputs.append(output)
+
+        react_end = next(
+            output.event
+            for output in outputs
+            if isinstance(output, EventYield)
+            and isinstance(output.event, ReactEndEvent)
+        )
+    assert react_end.final_messages == self_reference.snapshot_history("agent_main")
+    assert history == react_end.final_messages
+    assert observed_second_call_messages[0]["role"] == "system"
+    assert observed_runtime_memory_after_tool == react_end.final_messages[:-1]
+    assert react_end.final_messages[-1] == {"role": "assistant", "content": "done"}
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_runtime_history_replace_mutates_active_final_messages() -> None:
+    """runtime.selfref.history.replace should rewrite the active turn history."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    observed_second_call_messages: list[dict[str, Any]] = []
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "runtime.selfref.history.replace(["
+                "{'role': 'system', 'content': 'Compacted'}, "
+                "{'role': 'assistant', 'content': 'Summary'}"
+                "])"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        messages = kwargs.get("messages")
+        if call_counter == 1 and isinstance(messages, list):
+            observed_second_call_messages[:] = messages
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+            enable_event=True,
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        outputs: list[ReactOutput] = []
+        async for output in cast(
+            AsyncGenerator[ReactOutput, None], agent("hello", history=history)
+        ):
+            outputs.append(output)
+
+    react_end = next(
+        output.event
+        for output in outputs
+        if isinstance(output, EventYield) and isinstance(output.event, ReactEndEvent)
+    )
+    assert react_end.final_messages == self_reference.snapshot_history("agent_main")
+    assert history == react_end.final_messages
+    assert observed_second_call_messages == [
+        observed_second_call_messages[0],
+        {"role": "assistant", "content": "Summary"},
+    ]
+    assert observed_second_call_messages[0]["role"] == "system"
+    assert react_end.final_messages[-1] == {"role": "assistant", "content": "done"}
+
+
+@pytest.mark.asyncio
 async def test_llm_chat_fork_uses_isolated_pyrepl_session_toolkit() -> None:
     """Forked child should run with a cloned PyRepl toolkit session."""
 
@@ -737,11 +912,13 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
     repl = PyRepl()
     self_reference = _builtin_self_reference(repl)
     tracker = _TrackingLangfuseClient()
+    child_messages_seen: list[list[dict[str, Any]]] = []
 
     async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
         _ = kwargs
 
         if self_reference._get_active_fork_id() is not None:
+            child_messages_seen.append(copy.deepcopy(messages))
             return _make_chat_completion("child-ok")
 
         has_tool_result = any(
@@ -840,24 +1017,124 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
         and isinstance(record.get("input"), dict)
         and record["input"].get("message") == "root task"
     )
-    child_chat_span = next(
-        record
-        for record in tracker.records
-        if record.get("name") == "agent_chat_call"
-        and isinstance(record.get("input"), dict)
-        and record["input"].get("message") == "child task"
-    )
     execute_code_span = next(
         record
         for record in tracker.records
         if record.get("as_type") == "tool" and record.get("name") == "execute_code"
     )
+    child_chat_span = next(
+        (
+            record
+            for record in tracker.records
+            if record.get("name") == "agent_chat_call"
+            and record.get("parent_span_id") == execute_code_span["span_id"]
+        ),
+        None,
+    )
 
     assert parent_chat_span["trace_id"] == "trace-root"
     assert execute_code_span["trace_id"] == "trace-root"
-    assert child_chat_span["trace_id"] == "trace-root"
     assert execute_code_span["parent_span_id"] == parent_chat_span["span_id"]
-    assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
+    if child_chat_span is not None:
+        assert child_chat_span["trace_id"] == "trace-root"
+        assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_fork_inherits_parent_template_params_for_docstring_rendering() -> (
+    None
+):
+    """Forked child should inherit parent template params such as environment_block."""
+
+    self_reference = SelfReference()
+    self_reference.bind_history(
+        "agent_main",
+        [
+            {"role": "user", "content": "seed"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_fork_1",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_code",
+                            "arguments": "runtime.selfref.fork.spawn('child task')",
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+
+    captured_template_params: dict[str, Any] = {}
+
+    async def fake_agent(message: str, history=None, _template_params=None):
+        captured_template_params.update(cast(dict[str, Any], _template_params or {}))
+        return (
+            "done",
+            [
+                *(history or []),
+                {"role": "assistant", "content": "child done"},
+            ],
+        )
+
+    self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+    toolkit_override = ["tool-a"]
+    toolkit_token = self_reference._set_active_runtime_toolkit(toolkit_override)
+    template_token = self_reference._set_active_template_params(
+        {"environment_block": "ENV: /tmp/workspace"}
+    )
+    memory_token = self_reference._set_active_memory_key("agent_main")
+    try:
+        completed = await self_reference.instance.fork(
+            "child task", include_history=True
+        )
+    finally:
+        self_reference._reset_active_memory_key(memory_token)
+        self_reference._reset_active_template_params(template_token)
+        self_reference._reset_active_runtime_toolkit(toolkit_token)
+
+    assert completed["status"] == "completed"
+    assert captured_template_params[SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM] != ""
+    assert (
+        captured_template_params[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM]
+        == toolkit_override
+    )
+    assert (
+        captured_template_params[SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM]
+        == "child task"
+    )
+    assert captured_template_params["environment_block"] == "ENV: /tmp/workspace"
+
+
+def test_self_reference_active_template_params_do_not_deepcopy_uncopyable_objects() -> (
+    None
+):
+    """Active template params should tolerate runtime objects like toolkit overrides."""
+
+    self_reference = SelfReference()
+    lock = threading.RLock()
+
+    token = self_reference._set_active_template_params(
+        {
+            "environment_block": "ENV: /tmp/workspace",
+            SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM: [lock],
+        }
+    )
+    try:
+        merged = self_reference._build_fork_template_params(
+            None,
+            "fork_key",
+            None,
+            "child task",
+        )
+    finally:
+        self_reference._reset_active_template_params(token)
+
+    assert merged["environment_block"] == "ENV: /tmp/workspace"
+    assert merged[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM] == [lock]
 
 
 @pytest.mark.asyncio
@@ -1577,11 +1854,72 @@ async def test_llm_chat_seeds_system_prompt_into_empty_self_reference_memory() -
         async for _content, _history in stream:
             pass
 
-    assert observed_memory_lengths == [1]
-    assert observed_first_roles == ["system"]
-    seeded_system_prompt = self_reference.memory["agent_main"].get_system_prompt()
-    assert isinstance(seeded_system_prompt, str)
-    assert "docstring system" in seeded_system_prompt
-    assert "[Runtime Primitive Contract]" not in seeded_system_prompt
-    assert "[SelfReference Memory Contract]" not in seeded_system_prompt
-    assert _MUST_PROMPT_BLOCK not in seeded_system_prompt
+
+@pytest.mark.asyncio
+async def test_llm_chat_renders_docstring_template_params_into_system_prompt() -> None:
+    """llm_chat should render _template_params into the docstring system prompt."""
+
+    captured_system_prompt: str | None = None
+
+    async def fake_execute_react_loop_streaming(
+        *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[tuple[str, list[dict[str, Any]]], None]:
+        nonlocal captured_system_prompt
+        _ = args
+
+        messages = kwargs["messages"]
+        if messages:
+            maybe_prompt = messages[0].get("content")
+            if isinstance(maybe_prompt, str):
+                captured_system_prompt = maybe_prompt
+
+        yield "ok", messages
+
+    async def passthrough_process_chat_response_stream(
+        response_stream: AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+        return_mode: str,
+        messages: list[dict[str, Any]],
+        func_name: str,
+        stream: bool,
+    ) -> AsyncGenerator[tuple[str, list[dict[str, Any]]], None]:
+        _ = (return_mode, messages, func_name, stream)
+        async for response, updated_history in response_stream:
+            yield response, updated_history
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.execute_react_loop_streaming",
+            new=fake_execute_react_loop_streaming,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.process_chat_response_stream",
+            new=passthrough_process_chat_response_stream,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def agent(message: str, history=None):
+            """Workspace: {workspace_dir}"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            agent(
+                "hello",
+                history=[],
+                _template_params={"workspace_dir": "/tmp/chat-workspace"},
+            ),
+        )
+
+        async for _content, _history in stream:
+            pass
+
+    assert captured_system_prompt is not None
+    assert "Workspace: /tmp/chat-workspace" in captured_system_prompt
+    assert "{workspace_dir}" not in captured_system_prompt

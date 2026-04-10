@@ -11,7 +11,7 @@ import pytest
 
 from SimpleLLMFunc.hooks.events import CustomEvent, ReActEventType
 from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield
-from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 
 
 class _CollectingEmitter:
@@ -340,6 +340,66 @@ class TestSelfReferenceInstanceProxy:
             "role": "assistant",
             "content": "child:task-a",
         }
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_from_tool_call_context_appends_tool_result_instruction(
+        self,
+    ) -> None:
+        self_reference = SelfReference()
+        parent_history = [
+            {"role": "user", "content": "seed"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_fork_1",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_code",
+                            "arguments": "runtime.selfref.fork.spawn('task-a')",
+                        },
+                    }
+                ],
+            },
+        ]
+        self_reference.bind_history("agent_main", parent_history)
+
+        observed_calls: list[dict[str, Any]] = []
+
+        async def fake_agent(message: str, history=None):
+            observed_calls.append(
+                {
+                    "message": message,
+                    "history": list(history or []),
+                }
+            )
+            return (
+                "done",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "child done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        completed = await self_reference.instance.fork("task-a", include_history=True)
+
+        assert completed["status"] == "completed"
+        assert observed_calls[0]["message"] == ""
+        child_history = observed_calls[0]["history"]
+        assert child_history[-2] == {
+            "role": "tool",
+            "tool_call_id": "call_fork_1",
+            "content": "You are now a clone of parent agent, and Your task is: task-a",
+        }
+        assert child_history[-1] == {
+            "role": "user",
+            "content": "You are now a clone of parent agent, and Your task is: task-a",
+        }
+        assert completed["history"][2] == child_history[-2]
+        assert completed["history"][3] == child_history[-1]
 
     @pytest.mark.asyncio
     async def test_instance_fork_include_history_can_be_enabled(self) -> None:
