@@ -456,7 +456,7 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     )
     assert "Installed primitive packs:" in captured_system_prompt
     assert "- selfref:" in captured_system_prompt
-    assert captured_system_prompt.count("selfref = your agent state") == 1
+    assert captured_system_prompt.count("selfref = your agent context") == 1
     assert (
         "Summarize the selected result fields in chat responses."
         in captured_system_prompt
@@ -480,8 +480,8 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> None:
-    """Runtime selfref history calls without key should use decorator memory key."""
+async def test_llm_chat_injects_active_selfref_key_for_runtime_context_ops() -> None:
+    """Runtime selfref context calls without key should use decorator memory key."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
 
@@ -497,7 +497,7 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
             if isinstance(tool, Tool) and tool.name == "execute_code"
         )
         execute_result = await execute_tool.run(
-            "runtime.selfref.history.append({'role': 'assistant', 'content': 'from-selfref'})"
+            "runtime.selfref.context.remember('from-selfref')"
         )
         assert "Execution succeeded" in execute_result
 
@@ -558,31 +558,35 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
 
     main_history = self_reference.snapshot_history("agent_main")
     other_history = self_reference.snapshot_history("other")
-    assert any(
-        item.get("role") == "assistant" and item.get("content") == "from-selfref"
-        for item in main_history
-    )
+    assert main_history[0]["role"] == "system"
+    assert "from-selfref" in str(main_history[0]["content"])
     assert other_history == [{"role": "user", "content": "seed-other"}]
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_runtime_history_clear_mutates_active_final_messages() -> None:
-    """runtime.selfref.history.clear should mutate the active turn history, not only persisted memory."""
+async def test_llm_chat_runtime_context_compact_rewrites_final_messages() -> None:
+    """runtime.selfref.context.compact should replace final context with system + assistant summary."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
 
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
-    observed_second_call_messages: list[dict[str, Any]] = []
-    observed_runtime_memory_after_tool: list[dict[str, Any]] = []
     call_counter = 0
 
     first_response = _make_tool_call_completion(
         "execute_code",
         {
             "code": (
-                "runtime.selfref.history.set_system_prompt('Rule A')\n"
-                "runtime.selfref.history.clear()"
+                "payload = runtime.selfref.context.compact(\n"
+                "    goal='Goal A',\n"
+                "    instruction='Instruction A',\n"
+                "    discoveries=['Discovery A'],\n"
+                "    completed=['Completed A'],\n"
+                "    current_status='Ready for the next milestone.',\n"
+                "    likely_next_work=['Next A'],\n"
+                "    relevant_files_directories=['src/a.py'],\n"
+                ")\n"
+                "print(payload['assistant_message'])"
             )
         },
     )
@@ -590,9 +594,6 @@ async def test_llm_chat_runtime_history_clear_mutates_active_final_messages() ->
 
     async def chat_side_effect(**kwargs: Any) -> Any:
         nonlocal call_counter
-        messages = kwargs.get("messages")
-        if call_counter == 1 and isinstance(messages, list):
-            observed_second_call_messages[:] = messages
         response = [first_response, second_response][call_counter]
         call_counter += 1
         return response
@@ -623,17 +624,6 @@ async def test_llm_chat_runtime_history_clear_mutates_active_final_messages() ->
         async def agent(message: str, history=None):
             """test agent"""
 
-        original_chat = mock_llm.chat
-
-        async def wrapped_chat(**kwargs: Any) -> Any:
-            if call_counter == 1:
-                observed_runtime_memory_after_tool[:] = self_reference.snapshot_history(
-                    "agent_main"
-                )
-            return await original_chat(**kwargs)
-
-        mock_llm.chat = AsyncMock(side_effect=wrapped_chat)
-
         outputs: list[ReactOutput] = []
         async for output in cast(
             AsyncGenerator[ReactOutput, None], agent("hello", history=history)
@@ -648,30 +638,38 @@ async def test_llm_chat_runtime_history_clear_mutates_active_final_messages() ->
         )
     assert react_end.final_messages == self_reference.snapshot_history("agent_main")
     assert history == react_end.final_messages
-    assert observed_second_call_messages[0]["role"] == "system"
-    assert observed_runtime_memory_after_tool == react_end.final_messages[:-1]
-    assert react_end.final_messages[-1] == {"role": "assistant", "content": "done"}
+    assert react_end.final_messages[0] == {"role": "system", "content": "test agent"}
+    assert react_end.final_messages[1]["role"] == "assistant"
+    assert "<context_compaction_summary>" in react_end.final_messages[1]["content"]
+    assert "## Goal" in react_end.final_messages[1]["content"]
+    assert "Goal A" in react_end.final_messages[1]["content"]
+    assert len(react_end.final_messages) == 2
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_runtime_history_replace_mutates_active_final_messages() -> None:
-    """runtime.selfref.history.replace should rewrite the active turn history."""
+async def test_llm_chat_runtime_context_compact_can_remember_experience() -> None:
+    """runtime.selfref.context.compact should also persist remembered experiences into system prompt."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
 
     mock_llm = MagicMock()
     mock_llm.model_name = "test-model"
-    observed_second_call_messages: list[dict[str, Any]] = []
     call_counter = 0
 
     first_response = _make_tool_call_completion(
         "execute_code",
         {
             "code": (
-                "runtime.selfref.history.replace(["
-                "{'role': 'system', 'content': 'Compacted'}, "
-                "{'role': 'assistant', 'content': 'Summary'}"
-                "])"
+                "runtime.selfref.context.compact(\n"
+                "    goal='Goal B',\n"
+                "    instruction='Instruction B',\n"
+                "    discoveries=['Discovery B'],\n"
+                "    completed=['Completed B'],\n"
+                "    current_status='Status B',\n"
+                "    likely_next_work=['Next B'],\n"
+                "    relevant_files_directories=['src/b.py'],\n"
+                "    remember=['Preference B'],\n"
+                ")"
             )
         },
     )
@@ -679,9 +677,6 @@ async def test_llm_chat_runtime_history_replace_mutates_active_final_messages() 
 
     async def chat_side_effect(**kwargs: Any) -> Any:
         nonlocal call_counter
-        messages = kwargs.get("messages")
-        if call_counter == 1 and isinstance(messages, list):
-            observed_second_call_messages[:] = messages
         response = [first_response, second_response][call_counter]
         call_counter += 1
         return response
@@ -725,12 +720,12 @@ async def test_llm_chat_runtime_history_replace_mutates_active_final_messages() 
     )
     assert react_end.final_messages == self_reference.snapshot_history("agent_main")
     assert history == react_end.final_messages
-    assert observed_second_call_messages == [
-        observed_second_call_messages[0],
-        {"role": "assistant", "content": "Summary"},
-    ]
-    assert observed_second_call_messages[0]["role"] == "system"
-    assert react_end.final_messages[-1] == {"role": "assistant", "content": "done"}
+    assert react_end.final_messages[0]["role"] == "system"
+    assert "Preference B" in str(react_end.final_messages[0]["content"])
+    assert "<experience>" in str(react_end.final_messages[0]["content"])
+    assert react_end.final_messages[1]["role"] == "assistant"
+    assert "Goal B" in str(react_end.final_messages[1]["content"])
+    assert len(react_end.final_messages) == 2
 
 
 @pytest.mark.asyncio

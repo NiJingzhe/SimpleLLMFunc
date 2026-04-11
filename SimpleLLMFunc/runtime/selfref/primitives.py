@@ -16,8 +16,8 @@ from ..primitives import (
 
 DEFAULT_SELF_REFERENCE_BACKEND_NAME = "selfref"
 SELF_REFERENCE_PACK_GUIDANCE = (
-    "selfref = your agent state: your memory plus your forked child agents. "
-    "Use it for durable memory, context cleanup, and parallel sub-agent "
+    "selfref = your agent context plus your forked child agents. Use it for "
+    "context compaction, durable experience cleanup, and parallel sub-agent "
     "decomposition."
 )
 
@@ -28,7 +28,7 @@ def register_self_reference_primitives(
     backend_name: str = DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     replace: bool = False,
 ) -> None:
-    """Register selfref history/fork primitives backed by ``SelfReference``."""
+    """Register selfref context/fork primitives backed by ``SelfReference``."""
 
     handlers = _build_self_reference_handlers(backend_name)
 
@@ -113,242 +113,125 @@ def _build_self_reference_handlers(
     ) -> str:
         return require_self_reference(ctx).resolve_history_key(key)
 
-    def get_history_handle(ctx: PrimitiveCallContext, key: Optional[str] = None):
-        self_reference = require_self_reference(ctx)
-        resolved_key = self_reference.resolve_history_key(key)
-        return self_reference.memory[resolved_key]
-
     @primitive()
-    def selfref_history_keys(ctx: PrimitiveCallContext) -> list[str]:
-        """
-        Use: List all bound self-reference history keys.
-        Input: No arguments.
-        Output: `list[str]`. Each item is one history key.
-        Parse: Iterate the string list directly. Use one returned key in other `selfref.history.*` calls.
-        """
-        return require_self_reference(ctx).memory.keys()
-
-    @primitive()
-    def selfref_history_active_key(ctx: PrimitiveCallContext) -> str:
-        """
-        Use: Resolve the active history key for the current self-reference context.
-        Input: No arguments.
-        Output: `str`. The resolved history key.
-        Parse: Treat the result as the default key that other history and fork primitives will use when `key` is omitted.
-        """
-        return resolve_history_key(ctx, None)
-
-    @primitive()
-    def selfref_history_count(
+    def selfref_context_inspect(
         ctx: PrimitiveCallContext,
-        *,
-        key: Optional[str] = None,
-    ) -> int:
-        """
-        Use: Count non-system messages in one self-reference history.
-        Input: Keyword-only `key: str | None`. Omit it to use the active history key.
-        Output: `int`. The non-system message count.
-        Parse: Read the integer directly.
-        Parameters:
-        - key: Optional history key.
-        """
-        return get_history_handle(ctx, key).count()
-
-    @primitive()
-    def selfref_history_all(
-        ctx: PrimitiveCallContext,
-        *,
-        key: Optional[str] = None,
-    ) -> list[dict[str, Any]]:
-        """
-        Use: Read the full message history for one self-reference memory.
-        Input: Keyword-only `key: str | None`. Omit it to use the active history key.
-        Output: `list[dict[str, primitive]]`. Each item is one message dict with primitive fields such as `role:str`, `content:str | None`, and optional tool-related keys.
-        Parse: Iterate the list in order. Each dict is one message.
-        Parameters:
-        - key: Optional history key.
-        """
-        return get_history_handle(ctx, key).all()
-
-    @primitive()
-    def selfref_history_get(
-        ctx: PrimitiveCallContext,
-        index: int,
         *,
         key: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Use: Read one message from a self-reference history by zero-based index.
-        Input: `index: int` plus keyword-only `key: str | None`.
-        Output: `dict[str, primitive]`. One message dict.
-        Parse: Read fields from the returned message dict, for example `message['role']` and `message['content']`.
+        Use: Inspect the current self-reference context as a read-only snapshot.
+        Input: Keyword-only `key: str | None`. Omit it to use the active context key.
+        Output: `dict[str, primitive]` with keys `active_key:str`, `experiences:list[dict[str, primitive]]`, `summary:dict[str, primitive] | None`, `messages:list[dict[str, primitive]]`, and `has_pending_compaction:bool`.
+        Parse: Read `summary` and `experiences` first, then inspect `messages` when you need exact original message content or want to dump selected messages to disk.
         Parameters:
-        - index: Zero-based message index.
-        - key: Optional history key.
+        - key: Optional context key.
         """
-        return get_history_handle(ctx, key).get(index)
+        self_reference = require_self_reference(ctx)
+        resolved_key = self_reference.resolve_history_key(key)
+        context_state = self_reference.parse_context_state(resolved_key)
+        return {
+            "active_key": resolved_key,
+            "experiences": context_state.get("experiences", []),
+            "summary": context_state.get("summary"),
+            "messages": self_reference.snapshot_context_messages(resolved_key),
+            "has_pending_compaction": self_reference.has_pending_compaction(
+                resolved_key
+            ),
+        }
 
     @primitive()
-    def selfref_history_append(
-        ctx: PrimitiveCallContext,
-        message: dict[str, Any],
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Append one message to a self-reference history.
-        Input: `message: dict[str, primitive]` plus keyword-only `key: str | None`. Message dicts should use primitive fields such as `role:str`, `content:str | None`, and optional tool metadata when needed.
-        Output: `None`.
-        Parse: No return value. Read history again if you need to verify the append.
-        Parameters:
-        - message: Message dict to append.
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).append(message)
-
-    @primitive()
-    def selfref_history_insert(
-        ctx: PrimitiveCallContext,
-        index: int,
-        message: dict[str, Any],
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Insert one message into a self-reference history at a zero-based index.
-        Input: `index: int`, `message: dict[str, primitive]`, and keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Read history again if you need the updated order.
-        Parameters:
-        - index: Insert position.
-        - message: Message dict to insert.
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).insert(index, message)
-
-    @primitive()
-    def selfref_history_update(
-        ctx: PrimitiveCallContext,
-        index: int,
-        message: dict[str, Any],
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Replace one message in a self-reference history.
-        Input: `index: int`, `message: dict[str, primitive]`, and keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Read history again if you need the updated message.
-        Parameters:
-        - index: Target message index.
-        - message: Replacement message dict.
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).update(index, message)
-
-    @primitive()
-    def selfref_history_delete(
-        ctx: PrimitiveCallContext,
-        index: int,
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Delete one message from a self-reference history.
-        Input: `index: int` plus keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Read history again if you need the remaining messages.
-        Parameters:
-        - index: Zero-based message index to delete.
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).delete(index)
-
-    @primitive()
-    def selfref_history_replace(
-        ctx: PrimitiveCallContext,
-        messages: list[dict[str, Any]],
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Replace an entire self-reference history with a new message list.
-        Input: `messages: list[dict[str, primitive]]` plus keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Read history again if you need the replacement snapshot.
-        Parameters:
-        - messages: Full replacement message list.
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).replace(messages)
-
-    @primitive()
-    def selfref_history_clear(
-        ctx: PrimitiveCallContext,
-        *,
-        key: Optional[str] = None,
-    ) -> None:
-        """
-        Use: Clear non-system messages from a self-reference history while preserving the current system prompt.
-        Input: Keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Read history again if you need to confirm what remains.
-        Parameters:
-        - key: Optional history key.
-        """
-        get_history_handle(ctx, key).clear()
-
-    @primitive()
-    def selfref_history_get_system_prompt(
-        ctx: PrimitiveCallContext,
-        *,
-        key: Optional[str] = None,
-    ) -> Optional[str]:
-        """
-        Use: Read the latest system prompt text from one self-reference history.
-        Input: Keyword-only `key: str | None`.
-        Output: `str | None`. Returns prompt text when present, otherwise `None`.
-        Parse: Check for `None` before using the string.
-        Parameters:
-        - key: Optional history key.
-        """
-        return get_history_handle(ctx, key).get_system_prompt()
-
-    @primitive()
-    def selfref_history_set_system_prompt(
+    def selfref_context_remember(
         ctx: PrimitiveCallContext,
         text: str,
         *,
         key: Optional[str] = None,
-    ) -> None:
+    ) -> dict[str, str]:
         """
-        Use: Replace the current system prompt text for one self-reference history.
+        Use: Persist one durable experience into the system-context experience block.
         Input: `text: str` plus keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Call `selfref.history.get_system_prompt` to verify the new text.
+        Output: `dict[str, str]` with keys `id` and `text`.
+        Parse: Save the returned `id` if you may want to forget this experience later.
         Parameters:
-        - text: Full replacement system prompt text.
-        - key: Optional history key.
+        - text: Short durable experience or rule that should survive future turns.
+        - key: Optional context key.
         """
-        get_history_handle(ctx, key).set_system_prompt(text)
+        self_reference = require_self_reference(ctx)
+        resolved_key = self_reference.resolve_history_key(key)
+        return self_reference.remember_experience(resolved_key, text)
 
     @primitive()
-    def selfref_history_append_system_prompt(
+    def selfref_context_forget(
         ctx: PrimitiveCallContext,
-        text: str,
+        experience_id: str,
         *,
         key: Optional[str] = None,
-    ) -> None:
+    ) -> bool:
         """
-        Use: Append text to the current system prompt for one self-reference history.
-        Input: `text: str` plus keyword-only `key: str | None`.
-        Output: `None`.
-        Parse: No return value. Call `selfref.history.get_system_prompt` to read the combined prompt.
+        Use: Forget one durable experience by id.
+        Input: `experience_id: str` plus keyword-only `key: str | None`.
+        Output: `bool`. `True` when one experience was removed, otherwise `False`.
+        Parse: If `False`, inspect the context first and use an exact experience id.
         Parameters:
-        - text: Prompt suffix to append.
-        - key: Optional history key.
+        - experience_id: Experience id returned from `selfref.context.inspect()` or `selfref.context.remember()`.
+        - key: Optional context key.
         """
-        get_history_handle(ctx, key).append_system_prompt(text)
+        self_reference = require_self_reference(ctx)
+        resolved_key = self_reference.resolve_history_key(key)
+        return self_reference.forget_experience(resolved_key, experience_id)
+
+    @primitive()
+    def selfref_context_compact(
+        ctx: PrimitiveCallContext,
+        goal: str,
+        instruction: str,
+        discoveries: list[str],
+        completed: list[str],
+        current_status: str,
+        likely_next_work: list[str],
+        relevant_files_directories: list[str],
+        *,
+        remember: Optional[list[str]] = None,
+        key: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """
+        Use: Queue a milestone compaction checkpoint. The framework will replace the current working transcript with the structured assistant summary at the end of this turn.
+        Input: Structured summary fields plus optional keyword-only `remember: list[str] | None` and `key: str | None`.
+        Output: `dict[str, primitive]` with keys `status:'queued'`, `active_key:str`, `summary:dict[str, primitive]`, `assistant_message:str`, and `remember:list[str]`.
+        Parse: Print `assistant_message` if an operator should inspect the retained context. The actual context reset happens after the current turn finalizes.
+        Parameters:
+        - goal: Summary Goal section.
+        - instruction: Summary Instruction section.
+        - discoveries: Summary Discoveries bullets.
+        - completed: Summary Completed bullets.
+        - current_status: Summary Current Status section.
+        - likely_next_work: Summary Likely next work bullets.
+        - relevant_files_directories: Summary Relevant files/directories bullets.
+        - remember: Optional durable experiences to append into the system experience block when compaction commits.
+        - key: Optional context key.
+        """
+        self_reference = require_self_reference(ctx)
+        resolved_key = self_reference.resolve_history_key(key)
+        payload = self_reference.queue_context_compaction(
+            resolved_key,
+            {
+                "goal": goal,
+                "instruction": instruction,
+                "discoveries": discoveries,
+                "completed": completed,
+                "current_status": current_status,
+                "likely_next_work": likely_next_work,
+                "relevant_files_directories": relevant_files_directories,
+            },
+            remember=remember,
+        )
+        return {
+            "status": "queued",
+            "active_key": resolved_key,
+            "summary": payload["summary"],
+            "assistant_message": payload["rendered_summary"],
+            "remember": payload["remember"],
+        }
 
     @primitive()
     def fork_is_bound(ctx: PrimitiveCallContext) -> bool:
@@ -436,21 +319,21 @@ def _build_self_reference_handlers(
         return await fork_gather_all(ctx, fork_ids, include_history=include_history)
 
     selfref_best_practices = [
-        "Mental model: selfref = your agent state. (1) Your memory: message history via selfref.history.*. (2) Your clones: forked child agents via selfref.fork.*.",
-        "Use selfref.history.* to read/write your conversation memory (messages). Prefer appending durable preferences into the system prompt via selfref.history.append_system_prompt(...).",
-        "When `key` is omitted, selfref resolves an active memory key for the current execution context. Use selfref.history.active_key() to see which key is currently in scope.",
-        "Use runtime.selfref.history.* and runtime.selfref.fork.* as the interface for self-reference operations. Build message dicts with standard fields such as role/content/tool metadata.",
+        "Mental model: selfref = your agent context plus your forked child agents. Use selfref.context.* to inspect context, remember durable experience, forget stale experience, and queue milestone compaction.",
+        "Use selfref.context.inspect() before context surgery. It returns a read-only full message snapshot plus parsed experiences and structured summary fields.",
+        "Use selfref.context.remember(...) for durable lessons that belong in system context. Use selfref.context.forget(...) to remove wrong or obsolete experience entries by id.",
+        "Use selfref.context.compact(...) only after you finish a milestone. Provide the required structured sections exactly and keep the retained summary concise but sufficient for the next turn.",
+        "Compaction is queued during the current turn and committed at turn finalize. After commit, working transcript messages are cleared and only the assistant compaction summary remains outside the system prompt.",
         "Each layer focuses on planning for its own scope; delegate concrete execution to child forks.",
         "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then gather results (selfref.fork.gather_all).",
-        "Before forking, review and trim memory; summarize irrelevant context or dump it to files.",
-        "Use runtime.selfref.history.clear to clear non-system history while preserving the current system prompt.",
+        "Before forking, review and trim context; summarize irrelevant context or dump selected original messages to files using selfref.context.inspect() plus file tools.",
         "Call selfref.fork.spawn directly for fork creation. When fork status is error, inspect error_type/error_message and fix call arguments.",
         "Pass child args/kwargs that match the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Use supported kwargs from the agent signature.",
         "In fork prompts, define completion boundaries and require explicit acceptance criteria; prefer file-based handoff plus parent-agent messaging over dumping everything in chat.",
-        "Fork results are compact by default (history omitted). Use include_history=True when full child history is required; use memory_key + selfref.history.* for on-demand detail reads.",
+        "Fork results are compact by default (history omitted). Use include_history=True when full child history is required; use the returned memory_key + selfref.context.inspect(key=...) for on-demand detail reads.",
         "For fork results, read status/response/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying.",
-        "Read the fields you need from fork results (status/response/memory_key) and fetch history explicitly when needed.",
-        "After each milestone, review and reorganize memory before moving forward.",
+        "Read the fields you need from fork results (status/response/memory_key) and inspect child context explicitly when needed.",
+        "After each milestone, compact aggressively: keep durable experience in system context, keep one structured assistant summary, and drop stale working transcript messages.",
     ]
 
     @primitive()
@@ -459,7 +342,7 @@ def _build_self_reference_handlers(
         Use: Read the overview of the self-reference namespace.
         Input: No arguments.
         Output: `dict[str, primitive]` with keys `namespace:str`, `overview:str`, and `best_practices:list[str]`.
-        Parse: Read `overview` first, then scan `best_practices` for fork and history rules.
+        Parse: Read `overview` first, then scan `best_practices` for context compaction and fork rules.
         """
         return {
             "namespace": "selfref",
@@ -469,20 +352,10 @@ def _build_self_reference_handlers(
 
     handlers = [
         ("selfref.guide", selfref_guide),
-        ("selfref.history.keys", selfref_history_keys),
-        ("selfref.history.active_key", selfref_history_active_key),
-        ("selfref.history.count", selfref_history_count),
-        ("selfref.history.all", selfref_history_all),
-        ("selfref.history.get", selfref_history_get),
-        ("selfref.history.append", selfref_history_append),
-        ("selfref.history.insert", selfref_history_insert),
-        ("selfref.history.update", selfref_history_update),
-        ("selfref.history.delete", selfref_history_delete),
-        ("selfref.history.replace", selfref_history_replace),
-        ("selfref.history.clear", selfref_history_clear),
-        ("selfref.history.get_system_prompt", selfref_history_get_system_prompt),
-        ("selfref.history.set_system_prompt", selfref_history_set_system_prompt),
-        ("selfref.history.append_system_prompt", selfref_history_append_system_prompt),
+        ("selfref.context.inspect", selfref_context_inspect),
+        ("selfref.context.remember", selfref_context_remember),
+        ("selfref.context.forget", selfref_context_forget),
+        ("selfref.context.compact", selfref_context_compact),
         ("selfref.fork.is_bound", selfref_fork_is_bound),
         ("selfref.fork.spawn", selfref_fork_spawn),
         ("selfref.fork.gather_all", selfref_fork_gather_all),

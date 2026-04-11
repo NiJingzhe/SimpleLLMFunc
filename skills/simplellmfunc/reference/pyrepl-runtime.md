@@ -6,7 +6,7 @@ Use `PyRepl` when the model needs:
 
 - persistent Python execution across turns
 - runtime primitive discovery through `runtime.*`
-- durable self-reference memory
+- durable self-reference context
 - a forkable execution environment for sub-agents or parallel work
 
 `PyRepl` is not just a one-shot shell command wrapper. It keeps state in a dedicated Python subprocess.
@@ -18,7 +18,7 @@ Use this sequence whenever the model needs runtime help:
 1. Discover capabilities with `runtime.list_primitives()`.
 2. Inspect one contract with `runtime.get_primitive_spec(name)`.
 3. Execute small, focused code snippets with `execute_code`.
-4. Persist memory through `runtime.selfref.history.*` only when you truly need durable context.
+4. Manage durable context through `runtime.selfref.context.*` only when you truly need context cleanup or durable experience.
 
 ## Self-reference basics
 
@@ -26,18 +26,16 @@ Use this sequence whenever the model needs runtime help:
 
 Useful calls:
 
-- `runtime.selfref.history.keys()`
-- `runtime.selfref.history.active_key()`
-- `runtime.selfref.history.all()`
-- `runtime.selfref.history.append(message)`
-- `runtime.selfref.history.set_system_prompt(text)`
-- `runtime.selfref.history.append_system_prompt(text)`
+- `runtime.selfref.context.inspect()`
+- `runtime.selfref.context.remember(text)`
+- `runtime.selfref.context.forget(experience_id)`
+- `runtime.selfref.context.compact(...)`
 
 Good pattern:
 
 - Keep a stable memory key such as `agent_main`.
-- Append durable preferences only when they should survive future turns.
-- Keep normal per-turn reasoning out of durable memory.
+- Append durable experiences only when they should survive future turns.
+- Keep normal per-turn reasoning out of durable context; compact it into one structured assistant summary when a milestone ends.
 
 ## Forking
 
@@ -60,4 +58,4 @@ Use forks only for concrete, isolated, verifiable subtasks. Do not fork tiny inl
 
 ## Important reset behavior
 
-`reset_repl` clears REPL variables, but it does not wipe installed runtime backends or self-reference memory. If you need to forget durable memory, use the `runtime.selfref.history.*` APIs directly.
+`reset_repl` clears REPL variables, but it does not wipe installed runtime backends or self-reference context. If you need to forget durable experience or compact stale working transcript, use the `runtime.selfref.context.*` APIs directly.

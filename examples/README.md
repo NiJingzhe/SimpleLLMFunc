@@ -6,7 +6,7 @@ This directory is for runnable user-facing examples.
 
 - `runtime_primitives_basic_example.py`
   - Run: `poetry run python examples/runtime_primitives_basic_example.py`
-  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.history.*` usage.
+  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.context.*` usage.
 
 ## Interactive TUI Demos (Requires `examples/provider.json`)
 

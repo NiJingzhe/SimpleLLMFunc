@@ -275,7 +275,7 @@ class TestPyReplToolset:
         assert "Use this block for orientation" in prompt
         assert "Installed primitive packs:" in prompt
         assert "- selfref:" in prompt
-        assert "selfref = your agent state" in prompt
+        assert "selfref = your agent context" in prompt
         assert "parallel sub-agent decomposition" in prompt
 
     def test_execute_tool_prompt_includes_custom_pack_guidance(self) -> None:
@@ -611,7 +611,7 @@ class TestPyReplPrimitivePacks:
         assert isinstance(self_reference, SelfReference)
         assert repl.list_runtime_backends() == ["selfref"]
         assert repl.list_installed_packs() == ["selfref"]
-        assert "selfref.history.keys" in repl.list_primitives()
+        assert "selfref.context.inspect" in repl.list_primitives()
         assert "selfref.fork.spawn" in repl.list_primitives()
         assert "selfref.fork.gather_all" in repl.list_primitives()
         assert "memory.keys" not in repl.list_primitives()
@@ -764,22 +764,20 @@ class TestPyReplPrimitivePacks:
 
     @pytest.mark.asyncio
     async def test_execute_can_mutate_memory_via_runtime_primitives(self):
-        """execute_code should mutate memory through runtime primitives."""
+        """execute_code should mutate context through runtime primitives."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
         self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
-        result = await repl.execute(
-            "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n_ = 1"
-        )
+        result = await repl.execute("runtime.selfref.context.remember('ok')\n_ = 1")
 
         assert result["success"] is True
-        assert self_reference.snapshot_history("agent_main") == [
-            {"role": "user", "content": "seed"},
-            {"role": "assistant", "content": "ok"},
-        ]
+        persisted = self_reference.snapshot_history("agent_main")
+        assert persisted[0]["role"] == "system"
+        assert "ok" in str(persisted[0]["content"])
+        assert persisted[1:] == [{"role": "user", "content": "seed"}]
 
     @pytest.mark.asyncio
     async def test_reset_keeps_registered_self_reference_backend(self):
@@ -1164,10 +1162,10 @@ class TestPyReplRuntimePrimitives:
 
         for primitive_name in [
             "runtime.list_primitive_specs",
-            "selfref.history.count",
-            "selfref.history.get",
-            "selfref.history.append",
-            "selfref.history.clear",
+            "selfref.context.inspect",
+            "selfref.context.remember",
+            "selfref.context.forget",
+            "selfref.context.compact",
             "runtime.list_primitives",
             "selfref.fork.spawn",
             "selfref.fork.gather_all",
@@ -1202,7 +1200,7 @@ class TestPyReplRuntimePrimitives:
             "fork_contains = runtime.list_primitives(contains='selfref.fork.')\n"
             "print('runtime.list_primitives' in names)\n"
             "print('runtime.list_backends' in names)\n"
-            "print('selfref.history.keys' in names)\n"
+            "print('selfref.context.inspect' in names)\n"
             "print(all(item.startswith('runtime.list_') for item in filtered))\n"
             "print('runtime.list_primitives' in filtered)\n"
             "print(all('selfref.fork.' in item for item in fork_contains))\n"
@@ -1413,69 +1411,74 @@ class TestPyReplRuntimePrimitives:
         ]
 
     @pytest.mark.asyncio
-    async def test_execute_can_mutate_memory_via_runtime_primitive_calls(self):
-        """runtime.selfref.history.* should proxy host self-reference operations."""
+    async def test_execute_can_mutate_context_via_runtime_primitive_calls(self):
+        """runtime.selfref.context.* should proxy host self-reference operations."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
         self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
         result = await repl.execute(
-            "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
-            "print(runtime.selfref.history.count())\n"
-            "print(runtime.selfref.history.get(1)['content'])\n"
-            "print(runtime.selfref.history.active_key())\n"
+            "exp = runtime.selfref.context.remember('ok')\n"
+            "snapshot = runtime.selfref.context.inspect()\n"
+            "print(snapshot['active_key'])\n"
+            "print(snapshot['experiences'][0]['text'])\n"
+            "print(exp['id'].startswith('exp_'))\n"
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == ["2", "ok", "agent_main"]
-        assert self_reference.snapshot_history("agent_main") == [
-            {"role": "user", "content": "seed"},
-            {"role": "assistant", "content": "ok"},
-        ]
+        assert result["stdout"].splitlines() == ["agent_main", "ok", "True"]
+        assert "ok" in str(self_reference.snapshot_history("agent_main")[0]["content"])
 
     @pytest.mark.asyncio
-    async def test_execute_runtime_history_clear_preserves_system_prompt(self):
-        """runtime.selfref.history.clear should keep current system prompt."""
+    async def test_execute_runtime_context_compact_replaces_working_messages(self):
+        """runtime.selfref.context.compact should replace working messages with assistant summary."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
         self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
-        self_reference.memory["agent_main"].set_system_prompt("Rule A")
         result = await repl.execute(
-            "runtime.selfref.history.append({'role': 'assistant', 'content': 'ok'})\n"
-            "runtime.selfref.history.clear()\n"
-            "print(runtime.selfref.history.count())\n"
-            "print(runtime.selfref.history.get(0)['role'])\n"
-            "print(runtime.selfref.history.get_system_prompt())\n"
+            "payload = runtime.selfref.context.compact(\n"
+            "    goal='Goal A',\n"
+            "    instruction='Instruction A',\n"
+            "    discoveries=['Discovery A'],\n"
+            "    completed=['Completed A'],\n"
+            "    current_status='Status A',\n"
+            "    likely_next_work=['Next A'],\n"
+            "    relevant_files_directories=['src/a.py'],\n"
+            ")\n"
+            "print(payload['status'])\n"
+            "print('## Goal' in payload['assistant_message'])\n"
         )
 
         assert result["success"] is True
-        assert result["stdout"].splitlines() == ["1", "system", "Rule A"]
-        assert self_reference.snapshot_history("agent_main") == [
-            {"role": "system", "content": "Rule A"},
-        ]
+        assert result["stdout"].splitlines() == ["queued", "True"]
+
+        committed = self_reference.commit_pending_compaction("agent_main")
+        assert committed is not None
+        assert committed[0]["role"] == "assistant"
+        assert "Goal A" in committed[0]["content"]
 
     @pytest.mark.asyncio
-    async def test_execute_append_system_prompt_accepts_keyword_text(self):
-        """runtime.selfref.history.append_system_prompt should accept model-natural keyword usage."""
+    async def test_execute_context_remember_accepts_keyword_text(self):
+        """runtime.selfref.context.remember should accept model-natural keyword usage."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
         self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
-        self_reference.memory["agent_main"].set_system_prompt("Rule A")
 
         result = await repl.execute(
-            "runtime.selfref.history.append_system_prompt(text='Rule B')\n"
-            "print(runtime.selfref.history.get_system_prompt())\n"
+            "runtime.selfref.context.remember(text='Rule B')\n"
+            "snapshot = runtime.selfref.context.inspect()\n"
+            "print(snapshot['experiences'][0]['text'])\n"
         )
 
         assert result["success"] is True
-        assert result["stdout"].strip() == "Rule A\nRule B"
-        assert (
-            self_reference.memory["agent_main"].get_system_prompt() == "Rule A\nRule B"
+        assert result["stdout"].strip() == "Rule B"
+        assert "Rule B" in str(
+            self_reference.snapshot_history("agent_main")[0]["content"]
         )
 
     @pytest.mark.asyncio
@@ -1487,7 +1490,7 @@ class TestPyReplRuntimePrimitives:
         self_reference = _builtin_self_reference(repl)
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
 
-        result = await repl.execute("runtime.selfref.history.append_system_prompt()")
+        result = await repl.execute("runtime.selfref.context.remember()")
 
         assert result["success"] is False
         assert "Parameter requirements:" in str(result["error"])

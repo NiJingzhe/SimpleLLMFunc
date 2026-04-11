@@ -16,7 +16,7 @@ from openai.types.chat.chat_completion_chunk import (
 )
 from openai.types.completion_usage import CompletionUsage
 
-from SimpleLLMFunc.base.ReAct import execute_llm
+from SimpleLLMFunc.base.ReAct import execute_llm, execute_single_llm_call
 from SimpleLLMFunc.hooks.abort import AbortSignal
 from SimpleLLMFunc.hooks.events import (
     LLMCallEndEvent,
@@ -795,3 +795,108 @@ class TestExecuteLLM:
             {"role": "system", "content": "compacted"},
             {"role": "assistant", "content": "summary"},
         ]
+
+
+class TestExecuteSingleLLMCall:
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_non_streaming_returns_final_llm_call_end_event(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+        mock_chat_completion: Any,
+    ) -> None:
+        mock_get_context.return_value = "test_func"
+        mock_llm_interface.chat = AsyncMock(return_value=mock_chat_completion)
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        events = []
+        async for event in execute_single_llm_call(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=None,
+            stream=False,
+        ):
+            events.append(event)
+
+        assert events
+        assert isinstance(events[-1], LLMCallEndEvent)
+        assert events[-1].content == "Test response"
+        assert events[-1].tool_calls == []
+
+    @pytest.mark.asyncio
+    @patch("SimpleLLMFunc.base.ReAct.langfuse_client")
+    @patch("SimpleLLMFunc.base.ReAct.get_current_context_attribute")
+    async def test_streaming_accumulates_content_and_tool_calls(
+        self,
+        mock_get_context: MagicMock,
+        mock_langfuse: MagicMock,
+        mock_llm_interface: Any,
+        sample_messages: list,
+    ) -> None:
+        mock_get_context.return_value = "test_func"
+
+        def _chunk(
+            arguments_delta: str,
+            *,
+            include_id: bool,
+            include_name: bool,
+            content: str | None = None,
+        ):
+            tool_call = ChoiceDeltaToolCall(
+                index=0,
+                id="call_123" if include_id else None,
+                type="function" if include_id else None,
+                function=ChoiceDeltaToolCallFunction(
+                    name="execute_code" if include_name else None,
+                    arguments=arguments_delta,
+                ),
+            )
+            delta = ChoiceDelta(
+                content=content,
+                role="assistant",
+                tool_calls=[tool_call],
+            )
+            choice = ChunkChoice(delta=delta, finish_reason=None, index=0)
+            return ChatCompletionChunk(
+                id="chunk-id",
+                choices=[choice],
+                created=123,
+                model="test-model",
+                object="chat.completion.chunk",
+            )
+
+        async def stream_generator(**kwargs):
+            _ = kwargs
+            yield _chunk(
+                '{{"code":"print(', include_id=True, include_name=True, content="hel"
+            )
+            yield _chunk('1)"}', include_id=False, include_name=False, content="lo")
+
+        mock_llm_interface.chat_stream = stream_generator
+        mock_observation = MagicMock()
+        mock_observation.__enter__ = MagicMock(return_value=mock_observation)
+        mock_observation.__exit__ = MagicMock(return_value=None)
+        mock_langfuse.start_as_current_observation.return_value = mock_observation
+
+        events = []
+        async for event in execute_single_llm_call(
+            llm_interface=mock_llm_interface,
+            messages=sample_messages,
+            tools=[{"type": "function", "function": {"name": "execute_code"}}],
+            stream=True,
+        ):
+            events.append(event)
+
+        assert events
+        assert isinstance(events[-1], LLMCallEndEvent)
+        assert events[-1].content == "hello"
+        assert len(events[-1].tool_calls) == 1
+        assert events[-1].tool_calls[0].id == "call_123"
+        assert events[-1].tool_calls[0].function.name == "execute_code"

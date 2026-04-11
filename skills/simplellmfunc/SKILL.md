@@ -53,7 +53,7 @@ Write `llm_chat` docstrings as stable assistant policy and long-lived behavior. 
 - For `llm_function`, think: function contract + execution strategy.
 - For `llm_chat`, think: assistant identity + durable rules.
 - Put tool-usage advice in tool `best_practices` when possible, not only in the main docstring.
-- If you need to durably change a chat agent's policy mid-run, use the latest history `system` message or self-reference system-prompt helpers instead of trying to mutate old docstrings.
+- If you need to durably change a chat agent's context mid-run, use the latest history `system` message or self-reference context helpers such as `runtime.selfref.context.remember(...)` / `runtime.selfref.context.compact(...)` instead of trying to mutate old docstrings.
 
 ## Fast start modes
 - Project mode: load models from `provider.json` with `OpenAICompatible.load_from_json_file(...)` when you have shared config or multiple models.
@@ -379,8 +379,9 @@ async def main() -> None:
     )
 
     result = await repl.execute(
-        "runtime.selfref.history.append({'role': 'user', 'content': 'remember this'})\n"
-        "print(runtime.selfref.history.count())"
+        "runtime.selfref.context.remember('remember this')\n"
+        "snapshot = runtime.selfref.context.inspect()\n"
+        "print(len(snapshot['experiences']))"
     )
     print(result["stdout"])
 

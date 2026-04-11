@@ -716,7 +716,7 @@ def llm_chat(
                                     )
 
                                 history_snapshot = (
-                                    effective_self_reference.snapshot_history(
+                                    effective_self_reference.snapshot_context_messages(
                                         resolved_self_reference_key
                                     )
                                 )
@@ -801,12 +801,22 @@ def llm_chat(
                                         )
 
                                     async def before_finalize(self, state: Any) -> None:
-                                        effective_self_reference.replace_history(
+                                        committed_messages = effective_self_reference.commit_pending_compaction(
+                                            resolved_self_reference_key,
+                                            cast(
+                                                List[Dict[str, Any]],
+                                                state.messages,
+                                            ),
+                                        )
+                                        if committed_messages is not None:
+                                            state.messages = committed_messages
+                                            return
+
+                                        effective_self_reference.set_context_messages(
                                             key=resolved_self_reference_key,
                                             messages=cast(
                                                 List[Dict[str, Any]], state.messages
                                             ),
-                                            strict=False,
                                         )
 
                                     async def before_tool_batch(
@@ -867,7 +877,7 @@ def llm_chat(
                                             effective_self_reference._get_active_react_state()
                                             is not None
                                         ):
-                                            active_history = effective_self_reference.snapshot_history(
+                                            active_history = effective_self_reference.snapshot_context_messages(
                                                 resolved_self_reference_key
                                             )
                                         else:
@@ -880,6 +890,12 @@ def llm_chat(
                                                 ),
                                                 commit=True,
                                             )
+                                            compacted_history = effective_self_reference.commit_pending_compaction(
+                                                resolved_self_reference_key,
+                                                active_history,
+                                            )
+                                            if compacted_history is not None:
+                                                active_history[:] = compacted_history
                                         output.event.final_messages = active_history
                                         if raw_history_reference is not None:
                                             raw_history_reference[:] = active_history
@@ -893,6 +909,9 @@ def llm_chat(
                                     response_stream,
                                 )
                                 latest_merged_history: Optional[HistoryList] = None
+                                last_emitted_pair: Optional[Tuple[Any, MessageList]] = (
+                                    None
+                                )
                                 async for (
                                     content,
                                     history,
@@ -930,6 +949,7 @@ def llm_chat(
 
                                     collected_responses.append(content)
                                     final_history = history_to_yield
+                                    last_emitted_pair = (content, history_to_yield)
                                     yield content, history_to_yield
 
                                 if (
@@ -937,16 +957,23 @@ def llm_chat(
                                     and resolved_self_reference_key is not None
                                     and latest_merged_history is not None
                                 ):
-                                    effective_self_reference.replace_history(
-                                        key=resolved_self_reference_key,
-                                        messages=cast(
-                                            List[Dict[str, Any]],
-                                            latest_merged_history,
-                                        ),
-                                        strict=False,
+                                    compacted_history = effective_self_reference.commit_pending_compaction(
+                                        resolved_self_reference_key,
+                                        latest_merged_history,
                                     )
+                                    if compacted_history is not None:
+                                        latest_merged_history[:] = compacted_history
+                                    else:
+                                        effective_self_reference.set_context_messages(
+                                            key=resolved_self_reference_key,
+                                            messages=cast(
+                                                List[Dict[str, Any]],
+                                                latest_merged_history,
+                                            ),
+                                        )
                                     if raw_history_reference is not None:
                                         raw_history_reference[:] = latest_merged_history
+                                    final_history = latest_merged_history
 
                             # 更新 Langfuse span（仅在非事件模式或收集到响应时）
                             if not enable_event or collected_responses:

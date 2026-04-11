@@ -759,8 +759,8 @@ class PyRepl:
         primitive_names = self.list_primitives()
         with self._lock:
             installed_packs = list(self._installed_packs.values())
-        has_history_primitives = any(
-            name.startswith("selfref.history.") for name in primitive_names
+        has_context_primitives = any(
+            name.startswith("selfref.context.") for name in primitive_names
         )
         has_fork_primitives = any(
             name.startswith("selfref.fork.") for name in primitive_names
@@ -827,10 +827,11 @@ class PyRepl:
             ]
         )
 
-        if has_history_primitives:
+        if has_context_primitives:
             lines.extend(
                 [
-                    "Use runtime.selfref.history.delete/replace/clear for memory cleanup; clear preserves the current system prompt.",
+                    "Use runtime.selfref.context.inspect() to read the full current context snapshot.",
+                    "Use runtime.selfref.context.remember(...) for durable experience, runtime.selfref.context.forget(...) to remove wrong experience, and runtime.selfref.context.compact(...) after a milestone to replace stale working transcript with one structured assistant summary.",
                 ]
             )
 
@@ -1273,15 +1274,14 @@ class PyRepl:
           lookups return XML by default; use ``format='dict'`` when code
           needs direct field access.
         - Self-reference primitives are grouped under
-          ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
+          ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
         - ``input()`` is supported. In event mode, callers can reply via
           ``PyRepl.submit_input(request_id, value)``.
         - Use ``reset_repl`` for REPL variable cleanup. Use self-reference
-          history methods for runtime-backed memory management (for example
-          ``runtime.selfref.history.delete`` /
-          ``runtime.selfref.history.replace`` /
-          ``runtime.selfref.history.clear``; clear preserves the current
-          system prompt).
+          context methods for runtime-backed context management (for example
+          ``runtime.selfref.context.inspect`` /
+          ``runtime.selfref.context.remember`` /
+          ``runtime.selfref.context.compact``).
 
         Args:
             code: Python code to execute.

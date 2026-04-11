@@ -13,7 +13,7 @@ LLM -> execute_code -> runtime.<pack>.<primitive>(...)
 Primitive 就是这段代码里可直接调用的“运行时 API”，例如：
 
 ```python
-runtime.selfref.history.count()
+runtime.selfref.context.inspect()
 runtime.github_repo.list_open_issues("owner/repo")
 ```
 
@@ -140,7 +140,7 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
 
 - `PyRepl.execute_code`：运行时环境里提供 `runtime.*` 命名空间
 - `llm_chat(toolkit=repl.toolset)`：模型调用 `execute_code` 后，才能访问 primitives
-- 内置 selfref pack：`runtime.selfref.history.*` / `runtime.selfref.fork.*`，同样通过包级 `guidance` 向模型提供命名空间心智模型
+- 内置 selfref pack：`runtime.selfref.context.*` / `runtime.selfref.fork.*`，同样通过包级 `guidance` 向模型提供命名空间心智模型
 
 ## Primitive 上下文注入
 

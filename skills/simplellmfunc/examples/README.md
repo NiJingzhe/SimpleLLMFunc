@@ -31,7 +31,7 @@ PY
 
 - `runtime_primitives_basic_example.py`
   - Run: `poetry run python skills/simplellmfunc/examples/runtime_primitives_basic_example.py`
-  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.history.*` usage.
+  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.context.*` usage.
 
 ## Mirrored Repo Examples
 

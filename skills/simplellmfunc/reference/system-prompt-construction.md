@@ -185,7 +185,7 @@ This means durable prompt memory is intended to hold the human-authored base pol
 - Put dynamic user/task data in call arguments.
 - Put tool-specific usage rules on the tool when possible.
 - If you need a different system prompt for one chat session, pass a latest `system` message in history.
-- If you need durable prompt mutation in runtime memory, use self-reference system-prompt helpers.
+- If you need durable runtime context mutation, use self-reference context helpers such as `runtime.selfref.context.remember(...)` or `runtime.selfref.context.compact(...)`.
 
 ## Source-of-truth pointers
 
