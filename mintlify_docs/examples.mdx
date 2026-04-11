@@ -86,15 +86,15 @@ title: 示例代码
     进一步阅读：[`终端 TUI`](/tui)
   </Accordion>
 
-  <Accordion title="Runtime memory primitives（本地，无需模型）">
+  <Accordion title="Runtime context primitives（本地，无需模型）">
     文件：[`examples/runtime_primitives_basic_example.py`](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/runtime_primitives_basic_example.py)
 
     适合理解 `PyRepl` 和 `runtime.selfref.*` 的基础能力：
 
     - 启动内置 `selfref` backend
     - 声明自定义 `PrimitivePack`
-    - 通过 `runtime.selfref.history.*` 做 CRUD
-    - 把偏好持久化到 system prompt memory
+    - 通过 `runtime.selfref.context.inspect/remember/compact` 管理上下文
+    - 把 durable experience 持久化到 system context，并在 milestone 后生成 assistant summary
   </Accordion>
 
   <Accordion title="General TUI Agent（selfref + file tools）">
@@ -102,7 +102,7 @@ title: 示例代码
 
     这是 TUI-first Agent 工作流的推荐入口，展示：
 
-    - `runtime.selfref.history.*` 和 `runtime.selfref.fork.*`
+    - `runtime.selfref.context.*` 和 `runtime.selfref.fork.*`
     - `FileToolset` 的工作区文件能力
     - fork 生命周期事件在 TUI 中的渲染
     - `./sandbox` 范围内的安全工作目录

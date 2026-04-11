@@ -125,8 +125,8 @@ History parameters should be named `history` or `chat_history`. If the framework
   <Card title="Tool-Augmented Chat" href="#examples">
     Start here if you want the model to call APIs, file tools, or business logic.
   </Card>
-  <Card title="Runtime Memory" href="#advanced-features">
-    Start here if you need Agent-style runtime memory and self-reference behavior.
+  <Card title="Runtime Context" href="#advanced-features">
+    Start here if you need Agent-style runtime context and self-reference behavior.
   </Card>
   <Card title="Troubleshooting" href="#best-practices">
     Start here if you are dealing with history growth, timeouts, or logging.
@@ -287,7 +287,7 @@ Use `llm_chat` when:
 
 - you need multi-turn state through message history
 - you want streaming conversational UX
-- you want Agent-style tool calling and runtime memory
+- you want Agent-style tool calling and runtime context
 - you need event-driven observation of a conversation loop
 
 Use [`llm_function`](/en/detailed_guide/llm_function) instead when the task maps naturally to a stateless function call with typed inputs and outputs.
