@@ -92,6 +92,13 @@ from SimpleLLMFunc.observability.langfuse_client import (
 )
 
 
+async def _yield_pending_event_bus_events(
+    event_bus: EventBus,
+) -> AsyncGenerator[EventYield, None]:
+    while not event_bus.empty():
+        yield await event_bus.get()
+
+
 _ALLOWED_MESSAGE_ROLES = {"system", "user", "assistant", "tool", "function"}
 
 
@@ -1123,6 +1130,34 @@ async def execute_llm(
             origin_overrides=origin_overrides,
         )
 
+    def _self_reference_has_pending_forks() -> bool:
+        self_reference = getattr(hooks, "self_reference", None)
+        if self_reference is None:
+            return False
+
+        instance = getattr(self_reference, "instance", None)
+        has_pending = getattr(instance, "has_pending_fork_tasks", None)
+        if not callable(has_pending):
+            return False
+
+        try:
+            return bool(has_pending(event_bus))
+        except Exception:
+            return False
+
+    async def _flush_event_bus_until_idle() -> AsyncGenerator[EventYield, None]:
+        while True:
+            emitted = False
+            async for queued_output in _yield_pending_event_bus_events(event_bus):
+                emitted = True
+                yield queued_output
+
+            if not _self_reference_has_pending_forks():
+                break
+
+            if not emitted:
+                await asyncio.sleep(0.01)
+
     async def _emit_tool_argument_delta_events(
         tool_call_chunks_batch: List[Dict[str, Any]],
         stream_states: Dict[int, _StreamingToolCallState],
@@ -1454,6 +1489,8 @@ async def execute_llm(
                     )
                     _set_abort_metadata(react_end)
                     yield await _emit_event(react_end)
+                    async for queued_output in _flush_event_bus_until_idle():
+                        yield queued_output
                 except Exception:
                     pass
 
@@ -1494,6 +1531,8 @@ async def execute_llm(
                             total_token_usage=usage_info,
                         )
                     )
+                    async for queued_output in _flush_event_bus_until_idle():
+                        yield queued_output
                 except Exception:
                     pass
 
@@ -1610,6 +1649,8 @@ async def execute_llm(
                 )
                 _set_abort_metadata(react_end)
                 yield await _emit_event(react_end)
+                async for queued_output in _flush_event_bus_until_idle():
+                    yield queued_output
             except Exception:
                 pass
         return
@@ -1805,6 +1846,8 @@ async def execute_llm(
                     )
                     _set_abort_metadata(react_end)
                     yield await _emit_event(react_end)
+                    async for queued_output in _flush_event_bus_until_idle():
+                        yield queued_output
                 except Exception:
                     pass
             return
@@ -1875,6 +1918,8 @@ async def execute_llm(
                             total_token_usage=usage_info,
                         )
                     )
+                    async for queued_output in _flush_event_bus_until_idle():
+                        yield queued_output
                 except Exception:
                     pass
 
@@ -1985,6 +2030,8 @@ async def execute_llm(
                     )
                     _set_abort_metadata(react_end)
                     yield await _emit_event(react_end)
+                    async for queued_output in _flush_event_bus_until_idle():
+                        yield queued_output
                 except Exception:
                     pass
             return
@@ -2193,6 +2240,8 @@ async def execute_llm(
                         total_token_usage=usage_info,
                     )
                 )
+                async for queued_output in _flush_event_bus_until_idle():
+                    yield queued_output
             except Exception:
                 pass
 

@@ -1385,3 +1385,109 @@ async def test_consume_react_stream_ignores_fork_react_end_for_turn_completion()
     assert adapter.tool_status["call-parent"] == "success"
     assert "call-parent" in adapter.tool_stats
     assert "fork::fork_1" in adapter.model_start_order
+
+
+@pytest.mark.asyncio
+async def test_consume_react_stream_keeps_rendering_fork_after_parent_react_end() -> (
+    None
+):
+    """Parent ReactEndEvent should not cut off later fork-origin streaming events."""
+
+    adapter = FakeAdapter()
+    ts = datetime.now(timezone.utc)
+    parent_final_messages = [
+        {"role": "user", "content": "run"},
+        {"role": "assistant", "content": "parent done"},
+    ]
+
+    async def _stream() -> AsyncGenerator[ReactOutput, None]:
+        yield EventYield(
+            event=ReactEndEvent(
+                event_type=ReActEventType.REACT_END,
+                timestamp=ts,
+                trace_id="trace-main",
+                func_name="agent",
+                iteration=1,
+                final_response="parent done",
+                final_messages=parent_final_messages,
+                total_iterations=1,
+                total_execution_time=0.2,
+                total_tool_calls=1,
+                total_llm_calls=1,
+                total_token_usage=None,
+            )
+        )
+        yield EventYield(
+            event=LLMCallStartEvent(
+                event_type=ReActEventType.LLM_CALL_START,
+                timestamp=ts,
+                trace_id="trace-child",
+                func_name="agent",
+                iteration=0,
+                messages=[],
+                tools=None,
+                llm_kwargs={},
+                stream=True,
+            ),
+            origin=EventOrigin(
+                session_id="trace-main",
+                agent_call_id="agent-root",
+                event_seq=2,
+                fork_id="fork_1",
+                fork_depth=1,
+                memory_key="agent_main::fork::1",
+                source_memory_key="agent_main",
+            ),
+        )
+        yield EventYield(
+            event=LLMChunkArriveEvent(
+                event_type=ReActEventType.LLM_CHUNK_ARRIVE,
+                timestamp=ts,
+                trace_id="trace-child",
+                func_name="agent",
+                iteration=0,
+                chunk=_make_chunk("child-stream"),
+                accumulated_content="child-stream",
+                chunk_index=0,
+            ),
+            origin=EventOrigin(
+                session_id="trace-main",
+                agent_call_id="agent-root",
+                event_seq=3,
+                fork_id="fork_1",
+                fork_depth=1,
+                memory_key="agent_main::fork::1",
+                source_memory_key="agent_main",
+            ),
+        )
+        yield EventYield(
+            event=LLMCallEndEvent(
+                event_type=ReActEventType.LLM_CALL_END,
+                timestamp=ts,
+                trace_id="trace-child",
+                func_name="agent",
+                iteration=0,
+                response=_make_response("child final"),
+                messages=[],
+                tool_calls=[],
+                execution_time=0.1,
+                content="child final",
+                reasoning_details=[],
+                usage=None,
+            ),
+            origin=EventOrigin(
+                session_id="trace-main",
+                agent_call_id="agent-root",
+                event_seq=4,
+                fork_id="fork_1",
+                fork_depth=1,
+                memory_key="agent_main::fork::1",
+                source_memory_key="agent_main",
+            ),
+        )
+
+    history = await consume_react_stream(_stream(), adapter=adapter)
+
+    assert history == parent_final_messages
+    assert "fork::fork_1" in adapter.model_start_order
+    assert adapter.model_content["fork::fork_1"] == "child-stream"

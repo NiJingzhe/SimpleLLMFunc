@@ -107,6 +107,7 @@ class _StreamConsumeState:
     running_tool_call_ids: list[str] = field(default_factory=list)
     fork_sessions: dict[str, "_ForkSessionState"] = field(default_factory=dict)
     final_history: MessageList = field(default_factory=list)
+    top_level_react_end_seen: bool = False
 
 
 @dataclass
@@ -803,6 +804,9 @@ async def _handle_event(
         return
 
     if isinstance(event, ReactEndEvent):
+        fork_id, _, _, _ = _resolve_fork_origin_context(event=event, origin=origin)
+        if fork_id is None:
+            state.top_level_react_end_seen = True
         state.final_history = event.final_messages
 
 
@@ -892,16 +896,17 @@ async def consume_react_stream(
             custom_hooks=hooks,
         )
 
-        # ReactEndEvent already carries the final history for this turn.
-        # Stop waiting for stream exhaustion once the top-level agent ends.
-        # Fork-scoped ReactEndEvent must not terminate parent stream handling.
-        fork_id, _, _, _ = _resolve_fork_origin_context(
-            event=output.event,
-            origin=output.origin,
-        )
-        if isinstance(output.event, ReactEndEvent) and fork_id is None:
-            await _close_stream(stream)
-            break
+        if state.top_level_react_end_seen and not state.running_tool_call_ids:
+            has_pending_fork_tools = any(
+                bool(session.running_tool_call_ids)
+                for session in state.fork_sessions.values()
+            )
+            if (
+                not has_pending_fork_tools
+                and stream_task.done()
+                and stream_queue.empty()
+            ):
+                break
 
     if not stream_task.done():
         stream_task.cancel()

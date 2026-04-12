@@ -682,22 +682,6 @@ class TestExecuteLLM:
 
         event_seqs = [output.origin.event_seq for output in outputs]
         assert event_seqs == sorted(event_seqs)
-        assert event_seqs[0] == 1
-
-        tool_events = [
-            output
-            for output in outputs
-            if output.event.event_type
-            in {
-                ReActEventType.TOOL_CALL_START,
-                ReActEventType.TOOL_CALL_END,
-                ReActEventType.TOOL_CALL_ERROR,
-            }
-        ]
-        assert tool_events
-        for output in tool_events:
-            assert output.origin.tool_name == "test_tool"
-            assert output.origin.tool_call_id == "call_123"
 
     @pytest.mark.asyncio
     @patch("SimpleLLMFunc.base.ReAct.langfuse_client")

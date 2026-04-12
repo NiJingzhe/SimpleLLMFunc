@@ -1015,6 +1015,9 @@ class SelfReferenceInstanceHandle:
             include_history=include_history,
         )
 
+    def has_pending_fork_tasks(self, event_emitter: Any = None) -> bool:
+        return self._owner.has_pending_fork_tasks(event_emitter=event_emitter)
+
 
 class SelfReference(RuntimePrimitiveBackend):
     """Shared self-reference state object for agent memory operations."""
@@ -1030,6 +1033,7 @@ class SelfReference(RuntimePrimitiveBackend):
         self._fork_id_counter = 0
         self._fork_tasks: Dict[str, asyncio.Task[Dict[str, Any]]] = {}
         self._fork_results: Dict[str, Dict[str, Any]] = {}
+        self._fork_emitters: Dict[str, Any] = {}
         self._active_react_states_by_key: Dict[str, ReActState] = {}
         self._active_destructive_mutation_keys: set[str] = set()
         self._pending_compactions: Dict[str, Dict[str, Any]] = {}
@@ -1094,6 +1098,7 @@ class SelfReference(RuntimePrimitiveBackend):
             pending_tasks = list(self._fork_tasks.values())
             self._fork_tasks.clear()
             self._fork_results.clear()
+            self._fork_emitters.clear()
             self._active_react_states_by_key.clear()
             self._active_destructive_mutation_keys.clear()
             self._pending_compactions.clear()
@@ -2013,12 +2018,14 @@ class SelfReference(RuntimePrimitiveBackend):
             with self._lock:
                 self._fork_results[fork_id] = compact_result
                 self._fork_tasks.pop(fork_id, None)
+                self._fork_emitters.pop(fork_id, None)
 
         fork_task.add_done_callback(on_fork_task_done)
 
         with self._lock:
             self._fork_tasks[fork_id] = fork_task
             self._fork_results.pop(fork_id, None)
+            self._fork_emitters[fork_id] = _event_emitter
 
         await _emit_fork_custom_event(
             _event_emitter,
@@ -2132,6 +2139,18 @@ class SelfReference(RuntimePrimitiveBackend):
             )
 
         return collected
+
+    def has_pending_fork_tasks(self, event_emitter: Any = None) -> bool:
+        with self._lock:
+            if event_emitter is None:
+                return any(not task.done() for task in self._fork_tasks.values())
+
+            for fork_id, task in self._fork_tasks.items():
+                if task.done():
+                    continue
+                if self._fork_emitters.get(fork_id) is event_emitter:
+                    return True
+        return False
 
     def _mutate_messages(
         self,
