@@ -9,7 +9,7 @@ What this example demonstrates:
 2. One agent can use both ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
 3. ``FileToolset`` mounted for workspace-safe file operations.
 4. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
-5. Forked context inherits memory snapshot from current selfref key.
+5. Forked context inherits the current selfref context snapshot.
 
 Workspace:
 - File tools and the persistent REPL are scoped to the configured workspace.
@@ -18,7 +18,7 @@ Workspace:
 Try prompts:
 - "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.gather_all')"
 - "Append a durable preference with runtime.selfref.context.remember"
-- "Remember a note in memory, then read it back"
+- "Inspect your current context, then dump the retained messages to a file"
 - "Split this task into two forks and merge their results"
 - "Use grep to search for 'selfref' in README.md, then read the file"
 """
@@ -55,11 +55,13 @@ DEFAULT_WORKSPACE_DIR = PROJECT_ROOT / "sandbox"
 DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "tui_general_agent_debug.log"
 CONTEXT_WINDOW_COMPACTION_THRESHOLD = 0.2
 CONTEXT_WINDOW_COMPACTION_INSTRUCTION = (
-    "After you finish the current task, use the selfref primitive to compact "
-    "your context. Reflect on what you did, then summarize everything under "
-    "the sections Goal, Instruction, Discoveries, Completed, Current Status, "
-    "Likely next work, and Relevant files/directories. Delete the chat "
-    "history afterward and print this summary to stdout."
+    "After you finish the current task, use runtime.selfref.context.compact(...) "
+    "to checkpoint your context. Reflect on what you did, then fill the "
+    "required sections Goal, Instruction, Discoveries, Completed, Current "
+    "Status, Likely next work, and Relevant files/directories. Print the "
+    "returned assistant_message to stdout. Do not manually rewrite or delete "
+    "raw chat history; the framework will commit the compaction and clear "
+    "stale working transcript at the end of the turn."
 )
 
 
@@ -300,11 +302,13 @@ async def core_agent(message: str, history: HistoryList):
     - Ask before destructive, externally visible, or hard-to-reverse actions.
     - Do not use destructive shortcuts when a safer fix is available.
 
-    ## Memory Compaction
-    - When a milestone is complete, or when the user asks for context compaction, finish the active task first and then use the `selfref` primitive.
+    ## Context Compaction
+    - When a milestone is complete, or when the user asks for context compaction, finish the active task first and then call `runtime.selfref.context.compact(...)`.
+    - Provide all required fields exactly: `goal`, `instruction`, `discoveries`, `completed`, `current_status`, `likely_next_work`, and `relevant_files_directories`.
     - Compact aggressively: remove stale chat history, transient reasoning, verbose execution logs, and implementation details that are no longer needed.
-    - Keep only durable state that will help the next turn. Structure the retained summary under Goal, Instruction, Discoveries, Completed, Current Status, Likely next work, and Relevant files/directories.
-    - After compacting, print the retained summary to stdout so the operator can inspect what remains in memory.
+    - Keep only durable state that will help the next turn. Use `remember=[...]` only for short durable lessons that belong in system context; otherwise keep information in the compact summary.
+    - After queueing compaction, print `payload["assistant_message"]` to stdout so the operator can inspect the retained summary.
+    - Do not try to manually delete or rewrite raw chat history. The framework commits compaction at turn finalize and clears stale working transcript automatically.
 
     ## Workspace and file workflow:
     - You have one persistent Python REPL and workspace-scoped file tools rooted at the configured workspace.
@@ -319,10 +323,10 @@ async def core_agent(message: str, history: HistoryList):
     - Print only necessary fields and brief summaries such as counts, statuses, and short excerpts.
 
     ## Runtime safety constraints:
-    - Your memory key is "agent_main"; do not read or write any other memory key.
+    - Your selfref key is "agent_main"; do not read or write any other selfref key.
     - Never reassign the ``runtime`` variable.
     - REPL state is persistent across calls.
-    - ``reset_repl`` only clears REPL variables; it does not erase self-reference memory.
+    - ``reset_repl`` only clears REPL variables; it does not erase self-reference context.
 
     ## Response style:
     - Clear, concise, action-oriented.
