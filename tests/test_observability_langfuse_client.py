@@ -13,6 +13,7 @@ from SimpleLLMFunc.observability.langfuse_client import (
     get_langfuse_trace_context,
     reset_langfuse_trace_context,
     set_langfuse_trace_context,
+    update_langfuse_trace_name,
 )
 
 
@@ -30,9 +31,16 @@ class _FakeSpan:
             span_id=span_id,
             is_valid=is_valid,
         )
+        self.attributes: dict[str, str] = {}
 
     def get_span_context(self) -> _FakeSpanContext:
         return self._span_context
+
+    def set_attribute(self, key: str, value: str) -> None:
+        self.attributes[key] = value
+
+    def is_recording(self) -> bool:
+        return True
 
 
 def test_get_langfuse_trace_context_prefers_contextvar(monkeypatch) -> None:
@@ -79,3 +87,16 @@ def test_get_langfuse_trace_context_reads_active_otel_span(monkeypatch) -> None:
         "trace_id": "00000000000000000000000000001234",
         "parent_span_id": "0000000000005678",
     }
+
+
+def test_update_langfuse_trace_name_sets_trace_name_attribute(monkeypatch) -> None:
+    span = _FakeSpan(trace_id=0x1234, span_id=0x5678)
+    monkeypatch.setattr(
+        langfuse_client_module.otel_trace_api,
+        "get_current_span",
+        lambda: span,
+    )
+
+    update_langfuse_trace_name("agent")
+
+    assert span.attributes["langfuse.trace.name"] == "agent"

@@ -96,6 +96,12 @@ class _TrackingObservation:
     def update(self, **kwargs: Any) -> None:
         self._record.setdefault("updates", []).append(kwargs)
 
+    def set_attribute(self, key: str, value: Any) -> None:
+        self._record.setdefault("attributes", {})[key] = value
+
+    def is_recording(self) -> bool:
+        return True
+
 
 class _TrackingLangfuseClient:
     """Tiny contextvar-backed Langfuse stub for trace propagation tests."""
@@ -148,6 +154,17 @@ class _TrackingLangfuseClient:
 
     def get_current_observation_id(self) -> str:
         return self._observation_id_var.get() or ""
+
+    def _active_observation(self) -> Optional[_TrackingObservation]:
+        current_observation_id = self._observation_id_var.get()
+        if not current_observation_id:
+            return None
+
+        for record in reversed(self.records):
+            if record.get("span_id") == current_observation_id:
+                return _TrackingObservation(self, record)
+
+        return None
 
     def create_trace_id(self) -> str:
         self._counter += 1
@@ -1033,6 +1050,56 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
     if child_chat_span is not None:
         assert child_chat_span["trace_id"] == "trace-root"
         assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_sets_explicit_langfuse_trace_name() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    tracker = _TrackingLangfuseClient()
+
+    async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
+        _ = messages, tools, kwargs
+        return _make_chat_completion("ok")
+
+    mock_llm.chat.side_effect = fake_chat
+
+    with (
+        patch.object(
+            shared_langfuse_client,
+            "start_as_current_observation",
+            side_effect=tracker.start_as_current_observation,
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "get_current_observation_id",
+            side_effect=tracker.get_current_observation_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=tracker._active_observation,
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def core_agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            core_agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    parent_chat_span = next(
+        record
+        for record in tracker.records
+        if record.get("name") == "core_agent_chat_call"
+    )
+
+    assert parent_chat_span["attributes"]["langfuse.trace.name"] == "core_agent"
 
 
 @pytest.mark.asyncio

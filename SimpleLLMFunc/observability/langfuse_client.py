@@ -9,6 +9,9 @@ from opentelemetry import trace as otel_trace_api
 from SimpleLLMFunc.observability.langfuse_config import langfuse_config
 
 
+_LANGFUSE_TRACE_NAME_ATTRIBUTE = "langfuse.trace.name"
+
+
 def _export_all_spans(_: Any) -> bool:
     return True
 
@@ -95,6 +98,25 @@ def update_langfuse_parent_span(parent_span_id: Optional[str]) -> None:
         _langfuse_trace_context_var.set(updated)
 
 
+def update_langfuse_trace_name(trace_name: Optional[str]) -> None:
+    if not trace_name:
+        return
+
+    current_span = otel_trace_api.get_current_span()
+    if current_span is otel_trace_api.INVALID_SPAN:
+        return
+
+    set_attribute = getattr(current_span, "set_attribute", None)
+    if not callable(set_attribute):
+        return
+
+    is_recording = getattr(current_span, "is_recording", None)
+    if callable(is_recording) and not is_recording():
+        return
+
+    set_attribute(_LANGFUSE_TRACE_NAME_ATTRIBUTE, trace_name)
+
+
 def _format_trace_id(trace_id: Any) -> Optional[str]:
     if isinstance(trace_id, str):
         return trace_id or None
@@ -155,5 +177,6 @@ __all__ = [
     "set_langfuse_trace_context",
     "reset_langfuse_trace_context",
     "update_langfuse_parent_span",
+    "update_langfuse_trace_name",
     "flush_all_observations",
 ]

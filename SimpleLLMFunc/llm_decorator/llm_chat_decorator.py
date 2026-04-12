@@ -50,6 +50,7 @@ from SimpleLLMFunc.observability.langfuse_client import (
     get_langfuse_trace_context,
     langfuse_client,
     update_langfuse_parent_span,
+    update_langfuse_trace_name,
 )
 
 # Type aliases
@@ -661,6 +662,7 @@ def llm_chat(
                         ),
                         trace_context=trace_context,
                     ) as chat_span:
+                        update_langfuse_trace_name(function_signature.func_name)
                         update_langfuse_parent_span(
                             langfuse_client.get_current_observation_id()
                         )

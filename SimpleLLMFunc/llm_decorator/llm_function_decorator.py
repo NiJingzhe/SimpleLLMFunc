@@ -58,6 +58,7 @@ from SimpleLLMFunc.observability.langfuse_client import (
     get_langfuse_trace_context,
     langfuse_client,
     update_langfuse_parent_span,
+    update_langfuse_trace_name,
 )
 from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
@@ -192,6 +193,7 @@ def llm_function(
                     ),
                     trace_context=trace_context,
                 ) as function_span:
+                    update_langfuse_trace_name(sig.func_name)
                     update_langfuse_parent_span(
                         langfuse_client.get_current_observation_id()
                     )
