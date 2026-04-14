@@ -1553,6 +1553,19 @@ class PyRepl:
 
             execution_time_ms = (time.time() - start_time) * 1000
 
+            self_reference_backend = self.get_runtime_backend("selfref")
+            if isinstance(self_reference_backend, SelfReference):
+                try:
+                    active_key = self_reference_backend.resolve_history_key()
+                except (KeyError, ValueError):
+                    active_key = None
+
+                if (
+                    active_key is not None
+                    and self_reference_backend.has_pending_compaction(active_key)
+                ):
+                    self_reference_backend.commit_pending_compaction(active_key)
+
             result = {
                 "success": error_message is None,
                 "stdout": "".join(stdout_parts),

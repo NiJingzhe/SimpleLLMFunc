@@ -10,15 +10,27 @@ import asyncio
 import copy
 import contextvars
 import inspect
-import re
 import threading
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
 from SimpleLLMFunc.base.react_hooks import ReActState
 from SimpleLLMFunc.runtime.primitives import RuntimePrimitiveBackend
+from SimpleLLMFunc.runtime.selfref.context_ops import (
+    build_context_messages_from_state_data as _context_ops_build_context_messages_from_state_data,
+    canonicalize_context_messages as _context_ops_canonicalize_context_messages,
+    clone_messages as _context_ops_clone_messages,
+    extract_latest_system_prompt as _context_ops_extract_latest_system_prompt,
+    normalize_context_summary_payload as _context_ops_normalize_context_summary_payload,
+    normalize_experience_text as _context_ops_normalize_experience_text,
+    parse_context_compaction_summary,
+    parse_context_messages as _context_ops_parse_context_messages,
+    remove_framework_injected_prompt_blocks as _context_ops_remove_framework_injected_prompt_blocks,
+    render_context_compaction_summary,
+    render_system_prompt_with_experiences as _context_ops_render_system_prompt_with_experiences,
+    split_system_prompt_experiences as _context_ops_split_system_prompt_experiences,
+)
 
 _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
-_TRANSIENT_MESSAGE_FIELDS = {"reasoning_details"}
 MemoryHistory = List[Dict[str, Any]]
 HISTORY_PARAM_NAMES = ("history", "chat_history")
 SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM = "__self_reference_key_override"
@@ -26,340 +38,6 @@ SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM = "__self_reference_toolkit_overr
 SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM = "__self_reference_fork_task"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 _AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
-_EXPERIENCE_BLOCK_START = "<experience>"
-_EXPERIENCE_BLOCK_END = "</experience>"
-_CONTEXT_COMPACTION_SUMMARY_START = "<context_compaction_summary>"
-_CONTEXT_COMPACTION_SUMMARY_END = "</context_compaction_summary>"
-_TOOL_BEST_PRACTICES_START = "<tool_best_practices>"
-_TOOL_BEST_PRACTICES_END = "</tool_best_practices>"
-_RUNTIME_PRIMITIVE_CONTRACT_START = "<runtime_primitive_contract>"
-_RUNTIME_PRIMITIVE_CONTRACT_END = "</runtime_primitive_contract>"
-_LEGACY_SELFREF_CONTRACT_START = "[SelfReference Memory Contract]"
-_LEGACY_SELFREF_CONTRACT_END = "[/SelfReference Memory Contract]"
-_MUST_PRINCIPLES_START = "<must_principles>"
-_MUST_PRINCIPLES_END = "</must_principles>"
-_SUMMARY_SECTION_TITLES = {
-    "goal": "Goal",
-    "instruction": "Instruction",
-    "discoveries": "Discoveries",
-    "completed": "Completed",
-    "current_status": "Current Status",
-    "likely_next_work": "Likely next work",
-    "relevant_files_directories": "Relevant files/directories",
-}
-_LIST_SUMMARY_KEYS = {
-    "discoveries",
-    "completed",
-    "likely_next_work",
-    "relevant_files_directories",
-}
-
-
-def _remove_tagged_block(text: str, start_tag: str, end_tag: str) -> str:
-    cleaned = text
-    while True:
-        start_index = cleaned.find(start_tag)
-        if start_index < 0:
-            break
-
-        end_index = cleaned.find(end_tag, start_index)
-        if end_index < 0:
-            cleaned = cleaned[:start_index]
-            break
-
-        cleaned = cleaned[:start_index] + cleaned[end_index + len(end_tag) :]
-
-    return cleaned.strip()
-
-
-def _normalize_experience_text(text: str) -> str:
-    if not isinstance(text, str):
-        raise ValueError("experience text must be a string")
-
-    normalized = " ".join(text.split())
-    if not normalized:
-        raise ValueError("experience text must be a non-empty string")
-    return normalized
-
-
-def _remove_framework_injected_prompt_blocks(system_prompt: str) -> str:
-    cleaned = system_prompt
-    for start_tag, end_tag in (
-        (_TOOL_BEST_PRACTICES_START, _TOOL_BEST_PRACTICES_END),
-        (_RUNTIME_PRIMITIVE_CONTRACT_START, _RUNTIME_PRIMITIVE_CONTRACT_END),
-        (_LEGACY_SELFREF_CONTRACT_START, _LEGACY_SELFREF_CONTRACT_END),
-        (_MUST_PRINCIPLES_START, _MUST_PRINCIPLES_END),
-    ):
-        cleaned = _remove_tagged_block(cleaned, start_tag, end_tag)
-    return cleaned.strip()
-
-
-def _parse_experience_block(block_text: str) -> List[Dict[str, str]]:
-    experiences: List[Dict[str, str]] = []
-
-    for raw_line in block_text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        match = re.match(r"^-\s*\[(?P<id>[^\]]+)\]\s+(?P<text>.+)$", line)
-        if match is None:
-            continue
-        experience_id = match.group("id").strip()
-        experience_text = _normalize_experience_text(match.group("text"))
-        if not experience_id:
-            continue
-        experiences.append({"id": experience_id, "text": experience_text})
-
-    return experiences
-
-
-def _split_system_prompt_experiences(
-    system_prompt: str,
-) -> tuple[str, List[Dict[str, str]]]:
-    if not isinstance(system_prompt, str):
-        return "", []
-
-    start_index = system_prompt.find(_EXPERIENCE_BLOCK_START)
-    if start_index < 0:
-        return system_prompt.strip(), []
-
-    end_index = system_prompt.find(_EXPERIENCE_BLOCK_END, start_index)
-    if end_index < 0:
-        return _remove_tagged_block(
-            system_prompt,
-            _EXPERIENCE_BLOCK_START,
-            _EXPERIENCE_BLOCK_END,
-        ), []
-
-    before = system_prompt[:start_index].strip()
-    after = system_prompt[end_index + len(_EXPERIENCE_BLOCK_END) :].strip()
-    block_text = system_prompt[
-        start_index + len(_EXPERIENCE_BLOCK_START) : end_index
-    ].strip()
-
-    base_parts = [part for part in (before, after) if part]
-    base_prompt = "\n\n".join(base_parts).strip()
-    return base_prompt, _parse_experience_block(block_text)
-
-
-def _render_system_prompt_with_experiences(
-    base_prompt: str,
-    experiences: List[Dict[str, str]],
-) -> str:
-    base = base_prompt.strip()
-    if not experiences:
-        return base
-
-    experience_lines = [
-        _EXPERIENCE_BLOCK_START,
-        *[
-            f"- [{item['id']}] {_normalize_experience_text(item['text'])}"
-            for item in experiences
-        ],
-        _EXPERIENCE_BLOCK_END,
-    ]
-    experience_block = "\n".join(experience_lines)
-
-    if not base:
-        return experience_block
-    return f"{base}\n\n{experience_block}"
-
-
-def _normalize_summary_text_field(value: Any, field_name: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string")
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError(f"{field_name} must be a non-empty string")
-    return normalized
-
-
-def _normalize_summary_list_field(value: Any, field_name: str) -> List[str]:
-    if not isinstance(value, list):
-        raise ValueError(f"{field_name} must be a list[str]")
-
-    normalized_items: List[str] = []
-    for index, item in enumerate(value):
-        if not isinstance(item, str):
-            raise ValueError(f"{field_name}[{index}] must be a string")
-        normalized = item.strip()
-        if not normalized:
-            continue
-        normalized_items.append(normalized)
-
-    return normalized_items
-
-
-def _normalize_context_summary_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    normalized: Dict[str, Any] = {}
-
-    for key in (
-        "goal",
-        "instruction",
-        "current_status",
-    ):
-        normalized[key] = _normalize_summary_text_field(payload.get(key), key)
-
-    for key in (
-        "discoveries",
-        "completed",
-        "likely_next_work",
-        "relevant_files_directories",
-    ):
-        normalized[key] = _normalize_summary_list_field(payload.get(key), key)
-
-    return normalized
-
-
-def render_context_compaction_summary(summary: Dict[str, Any]) -> str:
-    normalized = _normalize_context_summary_payload(summary)
-    lines = [_CONTEXT_COMPACTION_SUMMARY_START]
-
-    for key in (
-        "goal",
-        "instruction",
-        "discoveries",
-        "completed",
-        "current_status",
-        "likely_next_work",
-        "relevant_files_directories",
-    ):
-        lines.append(f"## {_SUMMARY_SECTION_TITLES[key]}")
-        value = normalized[key]
-        if key in _LIST_SUMMARY_KEYS:
-            for item in cast(List[str], value):
-                lines.append(f"- {item}")
-        else:
-            lines.append(cast(str, value))
-        lines.append("")
-
-    while lines and not lines[-1]:
-        lines.pop()
-
-    lines.append(_CONTEXT_COMPACTION_SUMMARY_END)
-    return "\n".join(lines)
-
-
-def parse_context_compaction_summary(content: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(content, str):
-        return None
-
-    stripped = content.strip()
-    if not stripped.startswith(_CONTEXT_COMPACTION_SUMMARY_START):
-        return None
-    if not stripped.endswith(_CONTEXT_COMPACTION_SUMMARY_END):
-        return None
-
-    body = stripped[
-        len(_CONTEXT_COMPACTION_SUMMARY_START) : -len(_CONTEXT_COMPACTION_SUMMARY_END)
-    ].strip()
-    sections: Dict[str, List[str]] = {}
-    current_key: Optional[str] = None
-    title_to_key = {value: key for key, value in _SUMMARY_SECTION_TITLES.items()}
-
-    for raw_line in body.splitlines():
-        line = raw_line.rstrip()
-        stripped_line = line.strip()
-        if not stripped_line:
-            continue
-        if stripped_line.startswith("## "):
-            title = stripped_line[3:].strip()
-            current_key = title_to_key.get(title)
-            if current_key is not None:
-                sections[current_key] = []
-            continue
-        if current_key is None:
-            continue
-        sections[current_key].append(stripped_line)
-
-    required_keys = set(_SUMMARY_SECTION_TITLES.keys())
-    if not required_keys.issubset(sections.keys()):
-        return None
-
-    parsed: Dict[str, Any] = {}
-    for key, lines in sections.items():
-        if key in _LIST_SUMMARY_KEYS:
-            parsed[key] = [
-                line[2:].strip()
-                for line in lines
-                if line.startswith("- ") and line[2:].strip()
-            ]
-        else:
-            parsed[key] = "\n".join(lines).strip()
-
-    try:
-        return _normalize_context_summary_payload(parsed)
-    except ValueError:
-        return None
-
-
-def _parse_context_messages(messages: MemoryHistory) -> Dict[str, Any]:
-    system_prompt = _remove_framework_injected_prompt_blocks(
-        _extract_latest_system_prompt(messages) or ""
-    )
-    base_system_prompt, experiences = _split_system_prompt_experiences(system_prompt)
-
-    summary: Optional[Dict[str, Any]] = None
-    summary_message: Optional[Dict[str, Any]] = None
-    working_messages: MemoryHistory = []
-
-    for message in messages:
-        role = message.get("role")
-        if role == "system":
-            continue
-
-        if summary is None and role == "assistant":
-            parsed_summary = parse_context_compaction_summary(message.get("content"))
-            if parsed_summary is not None:
-                summary = parsed_summary
-                summary_message = copy.deepcopy(message)
-                continue
-
-        working_messages.append(copy.deepcopy(message))
-
-    return {
-        "base_system_prompt": base_system_prompt,
-        "experiences": experiences,
-        "summary": summary,
-        "summary_message": summary_message,
-        "working_messages": working_messages,
-    }
-
-
-def _build_context_messages_from_state_data(
-    context_state: Dict[str, Any],
-) -> MemoryHistory:
-    compiled: MemoryHistory = []
-    rendered_system_prompt = _render_system_prompt_with_experiences(
-        cast(str, context_state.get("base_system_prompt") or ""),
-        cast(List[Dict[str, str]], context_state.get("experiences") or []),
-    )
-    if rendered_system_prompt:
-        compiled.append({"role": "system", "content": rendered_system_prompt})
-
-    summary = context_state.get("summary")
-    if isinstance(summary, dict):
-        compiled.append(
-            {
-                "role": "assistant",
-                "content": render_context_compaction_summary(summary),
-            }
-        )
-    elif isinstance(context_state.get("summary_message"), dict):
-        compiled.append(
-            copy.deepcopy(cast(Dict[str, Any], context_state["summary_message"]))
-        )
-
-    compiled.extend(
-        _clone_messages(
-            cast(MemoryHistory, context_state.get("working_messages") or [])
-        )
-    )
-    return compiled
-
-
-def _canonicalize_context_messages(messages: MemoryHistory) -> MemoryHistory:
-    return _build_context_messages_from_state_data(_parse_context_messages(messages))
 
 
 def _normalize_key(key: str) -> str:
@@ -372,13 +50,49 @@ def _normalize_key(key: str) -> str:
 
 
 def _clone_messages(messages: MemoryHistory) -> MemoryHistory:
-    cloned: MemoryHistory = []
-    for message in messages:
-        sanitized = copy.deepcopy(message)
-        for field in _TRANSIENT_MESSAGE_FIELDS:
-            sanitized.pop(field, None)
-        cloned.append(sanitized)
-    return cloned
+    return _context_ops_clone_messages(messages)
+
+
+def _parse_context_messages(messages: MemoryHistory) -> Dict[str, Any]:
+    return _context_ops_parse_context_messages(messages)
+
+
+def _build_context_messages_from_state_data(
+    context_state: Dict[str, Any],
+) -> MemoryHistory:
+    return _context_ops_build_context_messages_from_state_data(context_state)
+
+
+def _canonicalize_context_messages(messages: MemoryHistory) -> MemoryHistory:
+    return _context_ops_canonicalize_context_messages(messages)
+
+
+def _render_system_prompt_with_experiences(
+    base_prompt: str,
+    experiences: List[Dict[str, str]],
+) -> str:
+    return _context_ops_render_system_prompt_with_experiences(
+        base_prompt,
+        experiences,
+    )
+
+
+def _normalize_experience_text(text: str) -> str:
+    return _context_ops_normalize_experience_text(text)
+
+
+def _normalize_context_summary_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return _context_ops_normalize_context_summary_payload(payload)
+
+
+def _remove_framework_injected_prompt_blocks(system_prompt: str) -> str:
+    return _context_ops_remove_framework_injected_prompt_blocks(system_prompt)
+
+
+def _split_system_prompt_experiences(
+    system_prompt: str,
+) -> tuple[str, List[Dict[str, str]]]:
+    return _context_ops_split_system_prompt_experiences(system_prompt)
 
 
 def _build_fork_clone_instruction(task_message: str) -> str:
@@ -569,13 +283,7 @@ def _filter_non_system_messages(messages: MemoryHistory) -> MemoryHistory:
 
 
 def _extract_latest_system_prompt(messages: MemoryHistory) -> Optional[str]:
-    for message in reversed(messages):
-        if message.get("role") != "system":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
-    return None
+    return _context_ops_extract_latest_system_prompt(messages)
 
 
 def _extract_history_from_any(value: Any) -> Optional[MemoryHistory]:

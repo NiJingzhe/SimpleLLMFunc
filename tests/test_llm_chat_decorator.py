@@ -7,6 +7,7 @@ import copy
 import inspect
 import threading
 import json
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -660,7 +661,8 @@ async def test_llm_chat_runtime_context_compact_rewrites_final_messages() -> Non
     assert "<context_compaction_summary>" in react_end.final_messages[1]["content"]
     assert "## Goal" in react_end.final_messages[1]["content"]
     assert "Goal A" in react_end.final_messages[1]["content"]
-    assert len(react_end.final_messages) == 2
+    assert react_end.final_messages[2] == {"role": "assistant", "content": "done"}
+    assert len(react_end.final_messages) == 3
 
 
 @pytest.mark.asyncio
@@ -742,7 +744,145 @@ async def test_llm_chat_runtime_context_compact_can_remember_experience() -> Non
     assert "<experience>" in str(react_end.final_messages[0]["content"])
     assert react_end.final_messages[1]["role"] == "assistant"
     assert "Goal B" in str(react_end.final_messages[1]["content"])
-    assert len(react_end.final_messages) == 2
+    assert react_end.final_messages[2] == {"role": "assistant", "content": "done"}
+    assert len(react_end.final_messages) == 3
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_runtime_context_compact_applies_before_next_llm_call() -> None:
+    """runtime.selfref.context.compact should affect the next same-turn LLM call."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    captured_messages: list[list[dict[str, Any]]] = []
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "runtime.selfref.context.compact(\n"
+                "    goal='Goal C',\n"
+                "    instruction='Instruction C',\n"
+                "    discoveries=['Discovery C'],\n"
+                "    completed=['Completed C'],\n"
+                "    current_status='Status C',\n"
+                "    likely_next_work=['Next C'],\n"
+                "    relevant_files_directories=['src/c.py'],\n"
+                ")"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        captured_messages.append(
+            copy.deepcopy(cast(list[dict[str, Any]], kwargs["messages"]))
+        )
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+            agent("hello", history=history),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    assert len(captured_messages) == 2
+    second_call_messages = captured_messages[1]
+    assert second_call_messages[0] == {"role": "system", "content": "test agent"}
+    assert second_call_messages[1]["role"] == "assistant"
+    assert "<context_compaction_summary>" in str(second_call_messages[1]["content"])
+    assert "Goal C" in str(second_call_messages[1]["content"])
+    assert len(second_call_messages) == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_selfref_clears_active_react_state_after_run() -> None:
+    """Self-reference sync should not leave active ReAct state bound after run completion."""
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    mock_llm.chat = AsyncMock(return_value=_make_chat_completion("done"))
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+    observed_state_during_run: list[Any] = []
+
+    async def fake_execute_react_loop_streaming(*args: Any, **kwargs: Any):
+        hooks = kwargs.get("hooks")
+        state = SimpleNamespace(
+            messages=copy.deepcopy(cast(list[dict[str, Any]], kwargs["messages"]))
+        )
+        if hooks is not None:
+            await hooks.on_run_start(state)
+            observed_state_during_run.append(self_reference._get_active_react_state())
+            await hooks.before_finalize(state)
+            hooks.close()
+        yield "done", state.messages
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.execute_react_loop_streaming",
+            new=fake_execute_react_loop_streaming,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+            agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    assert observed_state_during_run
+    assert observed_state_during_run[0] is not None
+    assert self_reference._get_active_react_state() is None
 
 
 @pytest.mark.asyncio

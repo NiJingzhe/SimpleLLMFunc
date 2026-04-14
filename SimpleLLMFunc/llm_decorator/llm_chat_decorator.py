@@ -26,6 +26,9 @@ from SimpleLLMFunc.llm_decorator.steps.chat import (
     execute_react_loop_streaming,
     process_chat_response_stream,
 )
+from SimpleLLMFunc.llm_decorator.selfref_sync import (
+    build_selfref_react_sync_hooks,
+)
 from SimpleLLMFunc.llm_decorator.steps.chat.message import HISTORY_PARAM_NAMES
 from SimpleLLMFunc.llm_decorator.utils import (
     append_tool_best_practices_prompt_to_messages,
@@ -790,54 +793,10 @@ def llm_chat(
                                 effective_self_reference is not None
                                 and resolved_self_reference_key is not None
                             ):
-
-                                class _SelfReferenceReActHooks:
-                                    def __init__(self) -> None:
-                                        self._state_token = None
-                                        self.self_reference = effective_self_reference
-                                        self.memory_key = resolved_self_reference_key
-
-                                    async def on_run_start(self, state: Any) -> None:
-                                        self._state_token = effective_self_reference._set_active_react_state(
-                                            state
-                                        )
-
-                                    async def before_finalize(self, state: Any) -> None:
-                                        committed_messages = effective_self_reference.commit_pending_compaction(
-                                            resolved_self_reference_key,
-                                            cast(
-                                                List[Dict[str, Any]],
-                                                state.messages,
-                                            ),
-                                        )
-                                        if committed_messages is not None:
-                                            state.messages = committed_messages
-                                            return
-
-                                        effective_self_reference.set_context_messages(
-                                            key=resolved_self_reference_key,
-                                            messages=cast(
-                                                List[Dict[str, Any]], state.messages
-                                            ),
-                                        )
-
-                                    async def before_tool_batch(
-                                        self, state: Any
-                                    ) -> None:
-                                        effective_self_reference.bind_history(
-                                            resolved_self_reference_key,
-                                            cast(List[Dict[str, Any]], state.messages),
-                                        )
-
-                                    def close(self) -> None:
-                                        if self._state_token is None:
-                                            return
-                                        effective_self_reference._reset_active_react_state(
-                                            self._state_token
-                                        )
-                                        self._state_token = None
-
-                                react_hooks = _SelfReferenceReActHooks()
+                                react_hooks = build_selfref_react_sync_hooks(
+                                    self_reference=effective_self_reference,
+                                    memory_key=resolved_self_reference_key,
+                                )
 
                             # Step 4: 执行 ReAct 循环（流式）
                             response_stream = execute_react_loop_streaming(

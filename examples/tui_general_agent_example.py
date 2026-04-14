@@ -60,8 +60,8 @@ CONTEXT_WINDOW_COMPACTION_INSTRUCTION = (
     "required sections Goal, Instruction, Discoveries, Completed, Current "
     "Status, Likely next work, and Relevant files/directories. Print the "
     "returned assistant_message to stdout. Do not manually rewrite or delete "
-    "raw chat history; the framework will commit the compaction and clear "
-    "stale working transcript at the end of the turn."
+    "raw chat history; the framework will apply the compaction after the "
+    "current tool batch and clear stale working transcript."
 )
 
 
@@ -308,7 +308,7 @@ async def core_agent(message: str, history: HistoryList):
     - Compact aggressively: remove stale chat history, transient reasoning, verbose execution logs, and implementation details that are no longer needed.
     - Keep only durable state that will help the next turn. Use `remember=[...]` only for short durable lessons that belong in system context; otherwise keep information in the compact summary.
     - After queueing compaction, print `payload["assistant_message"]` to stdout so the operator can inspect the retained summary.
-    - Do not try to manually delete or rewrite raw chat history. The framework commits compaction at turn finalize and clears stale working transcript automatically.
+    - Do not try to manually delete or rewrite raw chat history. The framework applies compaction after the current tool batch and also commits any leftover queued compaction at turn finalize.
 
     ## Workspace and file workflow:
     - You have one persistent Python REPL and workspace-scoped file tools rooted at the configured workspace.

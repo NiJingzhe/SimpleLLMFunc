@@ -138,6 +138,19 @@ def _usage_from_context_delta(
     )
 
 
+def _usage_details_from_usage(
+    usage_info: Optional[CompletionUsage],
+) -> Optional[Dict[str, int]]:
+    if usage_info is None:
+        return None
+
+    return {
+        "prompt_tokens": usage_info.prompt_tokens,
+        "completion_tokens": usage_info.completion_tokens,
+        "total_tokens": usage_info.total_tokens,
+    }
+
+
 def _message_to_dict(message: Any, index: int) -> Dict[str, Any]:
     if isinstance(message, dict):
         return copy.deepcopy(message)
@@ -1018,6 +1031,19 @@ async def _stream_single_llm_call_outputs(
         )
 
 
+@dataclass
+class _LLMPhaseResult:
+    messages: MessageList
+    content: str = ""
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    reasoning_details: List[Dict[str, Any]] = field(default_factory=list)
+    buffered_outputs: List[ResponseYield] = field(default_factory=list)
+    response: Any = None
+    usage: Optional[CompletionUsage] = None
+    execution_time: float = 0.0
+    aborted: bool = False
+
+
 async def execute_single_llm_call(
     llm_interface: LLM_Interface,
     messages: MessageList,
@@ -1108,16 +1134,26 @@ async def execute_llm(
     current_trace_id = (
         trace_id or get_current_trace_id() or f"trace_{int(time.time() * 1000)}"
     )
+    model_parameters = {k: v for k, v in llm_kwargs.items() if k != "retry_times"}
+    model_name = llm_interface.model_name
+    trace_context = get_langfuse_trace_context()
 
-    current_messages = messages.copy()  # 创建副本以避免修改原始列表
+    current_messages = messages.copy()
     call_count = 0
-    iteration = 0
     total_llm_calls = 0
     total_tool_calls = 0
     start_time = time.time()
     event_bus = EventBus(
         session_id=current_trace_id,
         agent_call_id=f"agent_{current_trace_id}",
+    )
+    state = ReActState(
+        trace_id=current_trace_id,
+        func_name=func_name,
+        user_task_prompt=user_task_prompt,
+        messages=current_messages,
+        llm_kwargs=dict(llm_kwargs),
+        stream=stream,
     )
 
     async def _emit_event(
@@ -1158,92 +1194,11 @@ async def execute_llm(
             if not emitted:
                 await asyncio.sleep(0.01)
 
-    async def _emit_tool_argument_delta_events(
-        tool_call_chunks_batch: List[Dict[str, Any]],
-        stream_states: Dict[int, _StreamingToolCallState],
-        *,
-        current_iteration: int,
-    ) -> List[EventYield]:
-        if not enable_event:
-            return []
-
-        payloads = _collect_tool_argument_delta_payloads(
-            tool_call_chunks_batch,
-            stream_states,
-        )
-        emitted: List[EventYield] = []
-
-        for tool_name, tool_call_id, argname, argcontent_delta in payloads:
-            try:
-                origin_overrides: Dict[str, Any] = {"tool_call_id": tool_call_id}
-                if tool_name:
-                    origin_overrides["tool_name"] = tool_name
-
-                emitted.append(
-                    await _emit_event(
-                        ToolCallArgumentsDeltaEvent(
-                            event_type=ReActEventType.TOOL_CALL_ARGUMENTS_DELTA,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=current_trace_id,
-                            func_name=func_name,
-                            iteration=current_iteration,
-                            tool_name=tool_name,
-                            tool_call_id=tool_call_id,
-                            argname=argname,
-                            argcontent_delta=argcontent_delta,
-                        ),
-                        origin_overrides=origin_overrides,
-                    )
-                )
-            except Exception:
-                continue
-
-        return emitted
-
     def _abort_requested() -> bool:
         return abort_signal is not None and abort_signal.is_aborted
 
-    state = ReActState(
-        trace_id=current_trace_id,
-        func_name=func_name,
-        user_task_prompt=user_task_prompt,
-        messages=current_messages,
-        llm_kwargs=dict(llm_kwargs),
-        stream=stream,
-    )
-
     def _abort_reason() -> str:
         return abort_signal.reason if abort_signal is not None else ""
-
-    async def _close_stream(stream_obj: Any) -> None:
-        close_method = getattr(stream_obj, "aclose", None)
-        if callable(close_method):
-            try:
-                result = close_method()
-                if inspect.isawaitable(result):
-                    await cast(Awaitable[Any], result)
-            except Exception:
-                pass
-
-    async def _next_stream_item(
-        stream_iter: Any,
-    ) -> Any:
-        if abort_signal is None:
-            return await stream_iter.__anext__()
-
-        abort_task = asyncio.create_task(abort_signal.wait())
-        next_task = asyncio.create_task(stream_iter.__anext__())
-        done, pending = await asyncio.wait(
-            {abort_task, next_task},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if abort_task in done:
-            next_task.cancel()
-            await asyncio.gather(next_task, return_exceptions=True)
-            abort_task.cancel()
-            raise asyncio.CancelledError
-        abort_task.cancel()
-        return next_task.result()
 
     def _set_abort_metadata(event: ReactEndEvent) -> None:
         event_extra = getattr(event, "extra", None)
@@ -1260,10 +1215,12 @@ async def execute_llm(
         final_response: str,
         *,
         current_iteration: int,
+        aborted: bool,
     ) -> tuple[MessageList, str]:
         state.iteration = current_iteration
         state.messages = final_messages
         state.final_response = final_response
+        state.aborted = aborted
         await run_react_hook(hooks, "before_finalize", state)
         return state.messages, state.final_response or ""
 
@@ -1306,676 +1263,48 @@ async def execute_llm(
         reconciled.extend(_clone_message_list(tail_messages))
         return reconciled
 
-    push_debug(
-        f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
-        location=get_location(),
-    )
+    async def _run_tool_batch_phase(
+        *,
+        tool_calls: List[Dict[str, Any]],
+        phase_messages: MessageList,
+        current_iteration: int,
+    ) -> AsyncGenerator[Union[EventYield, MessageList], None]:
+        tool_batch_base_messages = _clone_message_list(phase_messages)
 
-    await run_react_hook(hooks, "on_run_start", state)
-    current_messages = state.messages
-
-    # 发射 ReAct 开始事件
-    if enable_event:
-        try:
-            yield await _emit_event(
-                ReactStartEvent(
-                    event_type=ReActEventType.REACT_START,
-                    timestamp=datetime.now(timezone.utc),
-                    trace_id=current_trace_id,
-                    func_name=func_name,
-                    iteration=0,
-                    user_task_prompt=user_task_prompt,
-                    initial_messages=current_messages.copy(),
-                    available_tools=tools,
-                )
-            )
-        except Exception:
-            # 事件发射失败不应影响主流程
-            pass
-
-    # Phase 1: Initial LLM call
-    model_parameters = {k: v for k, v in llm_kwargs.items() if k not in ["retry_times"]}
-    model_name = llm_interface.model_name
-
-    content = ""
-    tool_calls: List[Dict[str, Any]] = []
-    reasoning_details: List[Dict[str, Any]] = []
-    last_response: Any = None
-    usage_info: Optional[CompletionUsage] = None
-    aborted = False
-
-    total_llm_calls += 1
-    state.total_llm_calls = total_llm_calls
-    state.iteration = iteration
-    state.messages = current_messages
-    await run_react_hook(hooks, "before_llm_call", state)
-    current_messages = state.messages
-
-    trace_context = get_langfuse_trace_context()
-
-    with langfuse_client.start_as_current_observation(
-        as_type="generation",
-        name=f"{func_name}_initial_llm_call",
-        input=current_messages,
-        model=model_name,
-        model_parameters=model_parameters,
-        metadata=coerce_langfuse_metadata(
-            {
-                "stream": stream,
-                "tools_available": len(tools) if tools else 0,
-            }
-        ),
-        completion_start_time=datetime.now(timezone.utc),
-        trace_context=trace_context,
-    ) as generation_span:
-        initial_end_event: Optional[LLMCallEndEvent] = None
-
-        async for output in _stream_single_llm_call_outputs(
-            llm_interface=llm_interface,
-            messages=current_messages,
-            tools=tools,
-            stream=stream,
-            llm_kwargs=dict(llm_kwargs),
-            func_name=func_name,
-            trace_id=current_trace_id,
-            iteration=iteration,
-            emit_event=_emit_event,
-            abort_signal=abort_signal,
-        ):
-            if isinstance(output, EventYield) and isinstance(
-                output.event, LLMCallEndEvent
-            ):
-                initial_end_event = output.event
-                continue
-
-            if enable_event:
-                yield output
-            elif isinstance(output, ResponseYield):
-                yield output.response, cast(MessageList, output.messages.copy())
-
-        aborted = _abort_requested()
-
-        if initial_end_event is not None:
-            content = initial_end_event.content
-            tool_calls = [
-                tool_call_to_dict(tool_call)
-                for tool_call in initial_end_event.tool_calls
-            ]
-            reasoning_details = list(initial_end_event.reasoning_details)
-            last_response = initial_end_event.response
-            usage_info = initial_end_event.usage
-
-        state.messages = current_messages
-        state.last_response = last_response
-        state.content = content
-        state.tool_calls = list(tool_calls)
-        state.reasoning_details = list(reasoning_details)
-        state.usage = usage_info
-        await run_react_hook(hooks, "after_llm_call", state)
-        current_messages = state.messages
-        last_response = state.last_response
-        content = state.content
-        tool_calls = list(state.tool_calls)
-        reasoning_details = list(state.reasoning_details)
-        usage_info = state.usage
-
-        if enable_event and initial_end_event is not None:
-            try:
-                tool_calls_typed_initial: List[ToolCall] = (
-                    [dict_to_tool_call(tc) for tc in tool_calls] if tool_calls else []
-                )
-                yield await _emit_event(
-                    LLMCallEndEvent(
-                        event_type=ReActEventType.LLM_CALL_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=iteration,
-                        response=last_response,
-                        messages=current_messages.copy(),
-                        tool_calls=tool_calls_typed_initial,
-                        execution_time=initial_end_event.execution_time,
-                        content=content,
-                        reasoning_details=reasoning_details,
-                        usage=usage_info,
-                    )
-                )
-            except Exception:
-                pass
-
-        usage_dict_initial: Optional[Dict[str, int]] = None
-        if usage_info:
-            usage_dict_initial = {
-                "prompt_tokens": usage_info.prompt_tokens,
-                "completion_tokens": usage_info.completion_tokens,
-                "total_tokens": usage_info.total_tokens,
-            }
-        generation_span.update(
-            output={"content": content, "tool_calls": tool_calls},
-            usage_details=usage_dict_initial,
-        )
-
-        push_debug(
-            f"LLM 函数 '{func_name}' 初始响应已获取，工具调用数: {len(tool_calls)}",
-            location=get_location(),
-        )
-
-        if content.strip() != "":
-            assistant_message = build_assistant_response_message(content)
-            current_messages.append(cast(Any, assistant_message))
-
-        if aborted:
-            total_execution_time = time.time() - start_time
-            if enable_event:
-                try:
-                    current_messages, final_content = await _apply_before_finalize(
-                        current_messages,
-                        content,
-                        current_iteration=0,
-                    )
-                    react_end = ReactEndEvent(
-                        event_type=ReActEventType.REACT_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=0,
-                        final_response=final_content,
-                        final_messages=current_messages.copy(),
-                        total_iterations=0,
-                        total_execution_time=total_execution_time,
-                        total_tool_calls=0,
-                        total_llm_calls=total_llm_calls,
-                        total_token_usage=usage_info,
-                    )
-                    _set_abort_metadata(react_end)
-                    yield await _emit_event(react_end)
-                    async for queued_output in _flush_event_bus_until_idle():
-                        yield queued_output
-                except Exception:
-                    pass
-
-            app_log(
-                f"LLM 函数 '{func_name}' aborted",
-                location=get_location(),
-            )
-            return
-
-        if len(tool_calls) != 0:
-            assistant_tool_call_message = build_assistant_tool_message(
-                tool_calls, reasoning_details if reasoning_details else None
-            )
-            current_messages.append(cast(Any, assistant_tool_call_message))
-            state.messages = current_messages
-        else:
-            total_execution_time = time.time() - start_time
-            if enable_event:
-                try:
-                    current_messages, final_content = await _apply_before_finalize(
-                        current_messages,
-                        content,
-                        current_iteration=0,
-                    )
-                    yield await _emit_event(
-                        ReactEndEvent(
-                            event_type=ReActEventType.REACT_END,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=current_trace_id,
-                            func_name=func_name,
-                            iteration=0,
-                            final_response=final_content,
-                            final_messages=current_messages.copy(),
-                            total_iterations=0,
-                            total_execution_time=total_execution_time,
-                            total_tool_calls=0,
-                            total_llm_calls=total_llm_calls,
-                            total_token_usage=usage_info,
-                        )
-                    )
-                    async for queued_output in _flush_event_bus_until_idle():
-                        yield queued_output
-                except Exception:
-                    pass
-
-            app_log(
-                f"LLM 函数 '{func_name}' 完成执行",
-                location=get_location(),
-            )
-            return
-
-    # Phase 2: Tool calling loop
-    push_debug(
-        f"LLM 函数 '{func_name}' 开始执行 {len(tool_calls)} 个工具调用",
-        location=get_location(),
-    )
-
-    call_count += 1
-    iteration = 1
-    total_tool_calls += len(tool_calls)
-    state.total_tool_calls = total_tool_calls
-    tool_batch_base_messages = _clone_message_list(current_messages)
-
-    # 使用支持事件的工具调用处理函数
-    state.messages = current_messages
-    await run_react_hook(hooks, "before_tool_batch", state)
-    current_messages = state.messages
-    if enable_event:
-        # 使用异步生成器实时发射事件
-        async for item in _process_tool_calls_with_events_gen(
-            tool_calls=tool_calls,
-            messages=current_messages,
-            tool_map=tool_map,
-            enable_event=enable_event,
-            event_bus=event_bus,
-            trace_id=current_trace_id,
-            func_name=func_name,
-            iteration=iteration,
-            abort_signal=abort_signal,
-        ):
-            if isinstance(item, EventYield):
-                yield item
-            else:
-                # 最后一个 yield 是 MessageList
-                current_messages = item
-    else:
-        if abort_signal is None:
-            result_messages_iteration = await process_tool_calls(
-                tool_calls=tool_calls,
-                messages=cast(List[Dict[str, Any]], current_messages),
-                tool_map=tool_map,
-                event_emitter=NoOpEventEmitter(),
-            )
-            current_messages = cast(MessageList, result_messages_iteration)
-        else:
-            tool_task = asyncio.create_task(
-                process_tool_calls(
-                    tool_calls=tool_calls,
-                    messages=cast(List[Dict[str, Any]], current_messages),
-                    tool_map=tool_map,
-                    event_emitter=NoOpEventEmitter(),
-                    abort_signal=abort_signal,
-                )
-            )
-            abort_task = asyncio.create_task(abort_signal.wait())
-            done, _ = await asyncio.wait(
-                {tool_task, abort_task},
-                return_when=asyncio.FIRST_COMPLETED,
-            )
-            if abort_task in done:
-                tool_task.cancel()
-                await asyncio.gather(tool_task, return_exceptions=True)
-            else:
-                abort_task.cancel()
-                result_messages_iteration = tool_task.result()
-                current_messages = cast(MessageList, result_messages_iteration)
-
-    current_messages = _reconcile_tool_batch_messages(
-        tool_batch_base_messages,
-        current_messages,
-    )
-
-    state.messages = current_messages
-    await run_react_hook(hooks, "after_tool_batch", state)
-    current_messages = state.messages
-
-    if _abort_requested():
-        total_execution_time = time.time() - start_time
-        if enable_event:
-            try:
-                usage_info = extract_usage_from_response(last_response)
-                if usage_info is None:
-                    usage_info = _usage_from_context_delta(
-                        llm_input_tokens_before,
-                        llm_output_tokens_before,
-                    )
-                final_content = content
-                current_messages, final_content = await _apply_before_finalize(
-                    current_messages,
-                    final_content,
-                    current_iteration=iteration,
-                )
-                react_end = ReactEndEvent(
-                    event_type=ReActEventType.REACT_END,
-                    timestamp=datetime.now(timezone.utc),
-                    trace_id=current_trace_id,
-                    func_name=func_name,
-                    iteration=iteration,
-                    final_response=final_content,
-                    final_messages=current_messages.copy(),
-                    total_iterations=iteration,
-                    total_execution_time=total_execution_time,
-                    total_tool_calls=total_tool_calls,
-                    total_llm_calls=total_llm_calls,
-                    total_token_usage=usage_info,
-                )
-                _set_abort_metadata(react_end)
-                yield await _emit_event(react_end)
-                async for queued_output in _flush_event_bus_until_idle():
-                    yield queued_output
-            except Exception:
-                pass
-        return
-
-    max_tool_calls_reached = False
-
-    while True:
-        if max_tool_calls is not None and call_count >= max_tool_calls:
-            max_tool_calls_reached = True
-            break
-
-        # Phase 3: Iterative LLM-tool interaction
-        iteration = call_count + 1
-
-        # 发射迭代开始事件
-        if enable_event:
-            try:
-                yield await _emit_event(
-                    ReactIterationStartEvent(
-                        event_type=ReActEventType.REACT_ITERATION_START,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=iteration,
-                        current_messages=current_messages.copy(),
-                    )
-                )
-            except Exception:
-                pass
-
-        push_debug(
-            f"LLM 函数 '{func_name}' 工具调用循环 (次数: {call_count})",
-            location=get_location(),
-        )
-
-        iteration_llm_start_time = time.time()
-        total_llm_calls += 1
-        state.total_llm_calls = total_llm_calls
-        aborted = False
-        state.iteration = iteration
-        state.messages = current_messages
-        await run_react_hook(hooks, "before_llm_call", state)
-        current_messages = state.messages
-
-        # 为迭代调用创建新的观测
-        with langfuse_client.start_as_current_observation(
-            as_type="generation",
-            name=f"{func_name}_iteration_{call_count}_llm_call",
-            input=current_messages,
-            model=model_name,
-            model_parameters=model_parameters,
-            metadata=coerce_langfuse_metadata(
-                {
-                    "stream": stream,
-                    "iteration": call_count,
-                    "tools_available": len(tools) if tools else 0,
-                }
-            ),
-            completion_start_time=datetime.now(timezone.utc),
-            trace_context=trace_context,
-        ) as iteration_generation_span:
-            iteration_end_event: Optional[LLMCallEndEvent] = None
-
-            async for output in _stream_single_llm_call_outputs(
-                llm_interface=llm_interface,
-                messages=current_messages,
-                tools=tools,
-                stream=stream,
-                llm_kwargs=dict(llm_kwargs),
-                func_name=func_name,
-                trace_id=current_trace_id,
-                iteration=iteration,
-                emit_event=_emit_event,
-                abort_signal=abort_signal,
-            ):
-                if isinstance(output, EventYield) and isinstance(
-                    output.event, LLMCallEndEvent
-                ):
-                    iteration_end_event = output.event
-                    continue
-
-                if enable_event:
-                    yield output
-                elif isinstance(output, ResponseYield):
-                    yield output.response, cast(MessageList, output.messages.copy())
-
-            aborted = _abort_requested()
-
-            if iteration_end_event is not None:
-                content = iteration_end_event.content
-                tool_calls = [
-                    tool_call_to_dict(tool_call)
-                    for tool_call in iteration_end_event.tool_calls
-                ]
-                reasoning_details = list(iteration_end_event.reasoning_details)
-                last_response = iteration_end_event.response
-                usage_info = iteration_end_event.usage
-            else:
-                content = ""
-                tool_calls = []
-                reasoning_details = []
-                last_response = None
-                usage_info = None
-
-            state.messages = current_messages
-            state.last_response = last_response
-            state.content = content
-            state.tool_calls = list(tool_calls)
-            state.reasoning_details = list(reasoning_details)
-            state.usage = usage_info
-            await run_react_hook(hooks, "after_llm_call", state)
-            current_messages = state.messages
-            last_response = state.last_response
-            content = state.content
-            tool_calls = list(state.tool_calls)
-            reasoning_details = list(state.reasoning_details)
-            usage_info = state.usage
-            if enable_event and iteration_end_event is not None:
-                try:
-                    tool_calls_typed_iteration: List[ToolCall] = (
-                        [dict_to_tool_call(tc) for tc in tool_calls]
-                        if tool_calls
-                        else []
-                    )
-                    yield await _emit_event(
-                        LLMCallEndEvent(
-                            event_type=ReActEventType.LLM_CALL_END,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=current_trace_id,
-                            func_name=func_name,
-                            iteration=iteration,
-                            response=last_response,
-                            messages=current_messages.copy(),
-                            tool_calls=tool_calls_typed_iteration,
-                            execution_time=iteration_end_event.execution_time,
-                            content=content,
-                            reasoning_details=reasoning_details,
-                            usage=usage_info,
-                        )
-                    )
-                except Exception:
-                    pass
-
-            # 更新迭代生成观测数据
-            usage_dict_iteration: Optional[Dict[str, int]] = None
-            if usage_info:
-                usage_dict_iteration = {
-                    "prompt_tokens": usage_info.prompt_tokens,
-                    "completion_tokens": usage_info.completion_tokens,
-                    "total_tokens": usage_info.total_tokens,
-                }
-            iteration_generation_span.update(
-                output={"content": content, "tool_calls": tool_calls},
-                usage_details=usage_dict_iteration,
-            )
-
-        # Append new assistant response to message history
-        if content.strip() != "":
-            assistant_message = build_assistant_response_message(content)
-            current_messages.append(cast(Any, assistant_message))
-
-        if aborted or _abort_requested():
-            total_execution_time = time.time() - start_time
-            if enable_event:
-                try:
-                    final_content = (
-                        content
-                        if stream
-                        else (
-                            extract_content_from_response(last_response, func_name)
-                            if last_response
-                            else content
-                        )
-                    )
-                    current_messages, final_content = await _apply_before_finalize(
-                        current_messages,
-                        final_content,
-                        current_iteration=iteration,
-                    )
-                    react_end = ReactEndEvent(
-                        event_type=ReActEventType.REACT_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=iteration,
-                        final_response=final_content,
-                        final_messages=current_messages.copy(),
-                        total_iterations=iteration,
-                        total_execution_time=total_execution_time,
-                        total_tool_calls=total_tool_calls,
-                        total_llm_calls=total_llm_calls,
-                        total_token_usage=usage_info,
-                    )
-                    _set_abort_metadata(react_end)
-                    yield await _emit_event(react_end)
-                    async for queued_output in _flush_event_bus_until_idle():
-                        yield queued_output
-                except Exception:
-                    pass
-            return
-
-        if len(tool_calls) != 0:
-            assistant_tool_call_message = build_assistant_tool_message(
-                tool_calls, reasoning_details if reasoning_details else None
-            )
-            current_messages.append(cast(Any, assistant_tool_call_message))
-            state.messages = current_messages
-
-        if len(tool_calls) == 0:
-            # No more tool calls, exit loop
-            push_debug(
-                f"LLM 函数 '{func_name}' 无更多工具调用，返回最终结果",
-                location=get_location(),
-            )
-
-            # 发射迭代结束事件
-            iteration_time = time.time() - iteration_llm_start_time
-            if enable_event:
-                try:
-                    yield await _emit_event(
-                        ReactIterationEndEvent(
-                            event_type=ReActEventType.REACT_ITERATION_END,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=current_trace_id,
-                            func_name=func_name,
-                            iteration=iteration,
-                            messages=current_messages.copy(),
-                            iteration_time=iteration_time,
-                            tool_calls_count=0,
-                        )
-                    )
-                except Exception:
-                    pass
-
-            # 发射 ReAct 结束事件
-            total_execution_time = time.time() - start_time
-            if enable_event:
-                try:
-                    if stream:
-                        final_content = content
-                    else:
-                        final_content = (
-                            extract_content_from_response(last_response, func_name)
-                            if last_response
-                            else ""
-                        )
-                    current_messages, final_content = await _apply_before_finalize(
-                        current_messages,
-                        final_content,
-                        current_iteration=iteration,
-                    )
-                    yield await _emit_event(
-                        ReactEndEvent(
-                            event_type=ReActEventType.REACT_END,
-                            timestamp=datetime.now(timezone.utc),
-                            trace_id=current_trace_id,
-                            func_name=func_name,
-                            iteration=iteration,
-                            final_response=final_content,
-                            final_messages=current_messages.copy(),
-                            total_iterations=iteration,
-                            total_execution_time=total_execution_time,
-                            total_tool_calls=total_tool_calls,
-                            total_llm_calls=total_llm_calls,
-                            total_token_usage=usage_info,
-                        )
-                    )
-                    async for queued_output in _flush_event_bus_until_idle():
-                        yield queued_output
-                except Exception:
-                    pass
-
-            app_log(
-                f"LLM 函数 '{func_name}' 完成执行",
-                location=get_location(),
-            )
-            # 注意：响应已经在上面 yield 过了，这里直接 return
-            return
-
-        # Continue with next iteration of tool calls
-        push_debug(
-            f"LLM 函数 '{func_name}' 发现 {len(tool_calls)} 个工具调用",
-            location=get_location(),
-        )
-
-        total_tool_calls += len(tool_calls)
-        state.total_tool_calls = total_tool_calls
-        tool_batch_base_messages = _clone_message_list(current_messages)
-
-        # 使用支持事件的工具调用处理函数
-        state.messages = current_messages
+        state.messages = phase_messages
         await run_react_hook(hooks, "before_tool_batch", state)
-        current_messages = state.messages
+        phase_messages = state.messages
+
         if enable_event:
-            # 使用异步生成器实时发射事件
             async for item in _process_tool_calls_with_events_gen(
                 tool_calls=tool_calls,
-                messages=current_messages,
+                messages=phase_messages,
                 tool_map=tool_map,
                 enable_event=enable_event,
                 event_bus=event_bus,
                 trace_id=current_trace_id,
                 func_name=func_name,
-                iteration=iteration,
+                iteration=current_iteration,
                 abort_signal=abort_signal,
             ):
                 if isinstance(item, EventYield):
                     yield item
                 else:
-                    # 最后一个 yield 是 MessageList
-                    current_messages = item
+                    phase_messages = item
         else:
             if abort_signal is None:
                 result_messages = await process_tool_calls(
                     tool_calls=tool_calls,
-                    messages=cast(List[Dict[str, Any]], current_messages),
+                    messages=cast(List[Dict[str, Any]], phase_messages),
                     tool_map=tool_map,
                     event_emitter=NoOpEventEmitter(),
                 )
-                current_messages = cast(MessageList, result_messages)
+                phase_messages = cast(MessageList, result_messages)
             else:
                 tool_task = asyncio.create_task(
                     process_tool_calls(
                         tool_calls=tool_calls,
-                        messages=cast(List[Dict[str, Any]], current_messages),
+                        messages=cast(List[Dict[str, Any]], phase_messages),
                         tool_map=tool_map,
                         event_emitter=NoOpEventEmitter(),
                         abort_signal=abort_signal,
@@ -1991,264 +1320,579 @@ async def execute_llm(
                     await asyncio.gather(tool_task, return_exceptions=True)
                 else:
                     abort_task.cancel()
-                    result_messages = tool_task.result()
-                    current_messages = cast(MessageList, result_messages)
+                    phase_messages = cast(MessageList, tool_task.result())
 
-        current_messages = _reconcile_tool_batch_messages(
+        phase_messages = _reconcile_tool_batch_messages(
             tool_batch_base_messages,
-            current_messages,
+            phase_messages,
         )
 
-        state.messages = current_messages
+        state.messages = phase_messages
         await run_react_hook(hooks, "after_tool_batch", state)
-        current_messages = state.messages
+        yield cast(MessageList, state.messages)
 
-        if _abort_requested():
-            total_execution_time = time.time() - start_time
-            if enable_event:
-                try:
-                    usage_info = extract_usage_from_response(last_response)
-                    if usage_info is None:
-                        usage_info = _usage_from_context_delta(
-                            iteration_input_tokens_before,
-                            iteration_output_tokens_before,
-                        )
-                    final_content = content
-                    react_end = ReactEndEvent(
-                        event_type=ReActEventType.REACT_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=iteration,
-                        final_response=final_content,
-                        final_messages=current_messages.copy(),
-                        total_iterations=iteration,
-                        total_execution_time=total_execution_time,
-                        total_tool_calls=total_tool_calls,
-                        total_llm_calls=total_llm_calls,
-                        total_token_usage=usage_info,
-                    )
-                    _set_abort_metadata(react_end)
-                    yield await _emit_event(react_end)
-                    async for queued_output in _flush_event_bus_until_idle():
-                        yield queued_output
-                except Exception:
-                    pass
+    async def _emit_iteration_start_event(
+        current_iteration: int,
+        phase_messages: MessageList,
+    ) -> Optional[EventYield]:
+        if not enable_event:
+            return None
+
+        try:
+            return await _emit_event(
+                ReactIterationStartEvent(
+                    event_type=ReActEventType.REACT_ITERATION_START,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id=current_trace_id,
+                    func_name=func_name,
+                    iteration=current_iteration,
+                    current_messages=phase_messages.copy(),
+                )
+            )
+        except Exception:
+            return None
+
+    async def _emit_iteration_end_event(
+        current_iteration: int,
+        phase_messages: MessageList,
+        *,
+        iteration_time: float,
+        tool_calls_count: int,
+    ) -> Optional[EventYield]:
+        if not enable_event:
+            return None
+
+        try:
+            return await _emit_event(
+                ReactIterationEndEvent(
+                    event_type=ReActEventType.REACT_ITERATION_END,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id=current_trace_id,
+                    func_name=func_name,
+                    iteration=current_iteration,
+                    messages=phase_messages.copy(),
+                    iteration_time=iteration_time,
+                    tool_calls_count=tool_calls_count,
+                )
+            )
+        except Exception:
+            return None
+
+    def _append_assistant_response_if_present(phase_result: _LLMPhaseResult) -> None:
+        if phase_result.content.strip() == "":
             return
 
-        # 发射迭代结束事件
-        iteration_time = time.time() - iteration_llm_start_time
-        if enable_event:
-            try:
-                yield await _emit_event(
-                    ReactIterationEndEvent(
-                        event_type=ReActEventType.REACT_ITERATION_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=iteration,
-                        messages=current_messages.copy(),
-                        iteration_time=iteration_time,
-                        tool_calls_count=len(tool_calls),
+        phase_result.messages.append(
+            cast(Any, build_assistant_response_message(phase_result.content))
+        )
+
+    def _append_assistant_tool_message(phase_result: _LLMPhaseResult) -> None:
+        phase_result.messages.append(
+            cast(
+                Any,
+                build_assistant_tool_message(
+                    phase_result.tool_calls,
+                    phase_result.reasoning_details or None,
+                ),
+            )
+        )
+
+    def _resolve_final_response_text(phase_result: _LLMPhaseResult) -> str:
+        if isinstance(phase_result.response, str):
+            return phase_result.response
+        if stream:
+            return phase_result.content
+        if phase_result.response is not None:
+            extracted = extract_content_from_response(phase_result.response, func_name)
+            if isinstance(extracted, str):
+                return extracted
+        return phase_result.content
+
+    async def _emit_buffered_non_event_outputs(
+        phase_result: _LLMPhaseResult,
+        phase_messages: MessageList,
+    ) -> AsyncGenerator[Tuple[Any, MessageList], None]:
+        if enable_event or stream or not phase_result.buffered_outputs:
+            return
+
+        for output in phase_result.buffered_outputs:
+            yield output.response, cast(MessageList, phase_messages.copy())
+
+    async def _run_llm_generation_phase(
+        phase_result: _LLMPhaseResult,
+        *,
+        observation_name: str,
+        observation_metadata: Dict[str, Any],
+        current_iteration: int,
+        phase_messages: MessageList,
+        available_tools: ToolDefinitionList,
+        phase_stream: bool,
+    ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
+        nonlocal total_llm_calls
+
+        total_llm_calls += 1
+        state.total_llm_calls = total_llm_calls
+        state.iteration = current_iteration
+        state.messages = phase_messages
+        await run_react_hook(hooks, "before_llm_call", state)
+        phase_result.messages = state.messages
+
+        with langfuse_client.start_as_current_observation(
+            as_type="generation",
+            name=observation_name,
+            input=phase_result.messages,
+            model=model_name,
+            model_parameters=model_parameters,
+            metadata=coerce_langfuse_metadata(observation_metadata),
+            completion_start_time=datetime.now(timezone.utc),
+            trace_context=trace_context,
+        ) as generation_span:
+            end_event: Optional[LLMCallEndEvent] = None
+
+            async for output in _stream_single_llm_call_outputs(
+                llm_interface=llm_interface,
+                messages=phase_result.messages,
+                tools=available_tools,
+                stream=phase_stream,
+                llm_kwargs=dict(llm_kwargs),
+                func_name=func_name,
+                trace_id=current_trace_id,
+                iteration=current_iteration,
+                emit_event=_emit_event,
+                abort_signal=abort_signal,
+            ):
+                if isinstance(output, EventYield) and isinstance(
+                    output.event, LLMCallEndEvent
+                ):
+                    end_event = output.event
+                    continue
+
+                if enable_event:
+                    yield output
+                elif isinstance(output, ResponseYield):
+                    if phase_stream:
+                        yield output.response, cast(MessageList, output.messages.copy())
+                    else:
+                        phase_result.buffered_outputs.append(output)
+
+            phase_result.aborted = _abort_requested()
+            if end_event is not None:
+                phase_result.content = end_event.content
+                phase_result.tool_calls = [
+                    tool_call_to_dict(tool_call) for tool_call in end_event.tool_calls
+                ]
+                phase_result.reasoning_details = list(end_event.reasoning_details)
+                phase_result.response = end_event.response
+                phase_result.usage = end_event.usage
+                phase_result.execution_time = end_event.execution_time
+            else:
+                phase_result.content = ""
+                phase_result.tool_calls = []
+                phase_result.reasoning_details = []
+                phase_result.response = None
+                phase_result.usage = None
+                phase_result.execution_time = 0.0
+
+            state.messages = phase_result.messages
+            state.last_response = phase_result.response
+            state.content = phase_result.content
+            state.tool_calls = list(phase_result.tool_calls)
+            state.reasoning_details = list(phase_result.reasoning_details)
+            state.usage = phase_result.usage
+            state.aborted = phase_result.aborted
+            await run_react_hook(hooks, "after_llm_call", state)
+
+            phase_result.messages = state.messages
+            phase_result.response = state.last_response
+            phase_result.content = state.content
+            phase_result.tool_calls = list(state.tool_calls)
+            phase_result.reasoning_details = list(state.reasoning_details)
+            phase_result.usage = state.usage
+
+            if enable_event and end_event is not None:
+                try:
+                    tool_calls_typed: List[ToolCall] = (
+                        [dict_to_tool_call(tc) for tc in phase_result.tool_calls]
+                        if phase_result.tool_calls
+                        else []
                     )
+                    yield await _emit_event(
+                        LLMCallEndEvent(
+                            event_type=ReActEventType.LLM_CALL_END,
+                            timestamp=datetime.now(timezone.utc),
+                            trace_id=current_trace_id,
+                            func_name=func_name,
+                            iteration=current_iteration,
+                            response=phase_result.response,
+                            messages=phase_result.messages.copy(),
+                            tool_calls=tool_calls_typed,
+                            execution_time=end_event.execution_time,
+                            content=phase_result.content,
+                            reasoning_details=phase_result.reasoning_details,
+                            usage=phase_result.usage,
+                        )
+                    )
+                except Exception:
+                    pass
+
+            generation_span.update(
+                output={
+                    "content": phase_result.content,
+                    "tool_calls": phase_result.tool_calls,
+                },
+                usage_details=_usage_details_from_usage(phase_result.usage),
+            )
+
+    async def _finalize_terminal_phase(
+        phase_result: _LLMPhaseResult,
+        *,
+        current_iteration: int,
+        total_iterations: int,
+        aborted: bool,
+    ) -> AsyncGenerator[Union[Tuple[Any, MessageList], ReactOutput], None]:
+        final_messages, final_response = await _apply_before_finalize(
+            phase_result.messages,
+            _resolve_final_response_text(phase_result),
+            current_iteration=current_iteration,
+            aborted=aborted,
+        )
+        phase_result.messages = final_messages
+        phase_result.content = final_response
+
+        async for item in _emit_buffered_non_event_outputs(
+            phase_result, final_messages
+        ):
+            yield item
+
+        if not enable_event:
+            return
+
+        react_end = ReactEndEvent(
+            event_type=ReActEventType.REACT_END,
+            timestamp=datetime.now(timezone.utc),
+            trace_id=current_trace_id,
+            func_name=func_name,
+            iteration=current_iteration,
+            final_response=final_response,
+            final_messages=final_messages.copy(),
+            total_iterations=total_iterations,
+            total_execution_time=time.time() - start_time,
+            total_tool_calls=total_tool_calls,
+            total_llm_calls=total_llm_calls,
+            total_token_usage=phase_result.usage,
+        )
+        if aborted:
+            _set_abort_metadata(react_end)
+
+        try:
+            yield await _emit_event(react_end)
+            async for queued_output in _flush_event_bus_until_idle():
+                yield queued_output
+        except Exception:
+            pass
+
+    def _make_terminal_phase_result(
+        *,
+        phase_messages: MessageList,
+        source_phase: Optional[_LLMPhaseResult] = None,
+    ) -> _LLMPhaseResult:
+        result = _LLMPhaseResult(messages=phase_messages)
+        if source_phase is not None:
+            result.content = source_phase.content
+            result.response = source_phase.response
+            result.usage = source_phase.usage
+        return result
+
+    push_debug(
+        f"LLM 函数 '{func_name}' 开始执行，消息数: {len(current_messages)}",
+        location=get_location(),
+    )
+
+    await run_react_hook(hooks, "on_run_start", state)
+    current_messages = state.messages
+
+    if enable_event:
+        try:
+            yield await _emit_event(
+                ReactStartEvent(
+                    event_type=ReActEventType.REACT_START,
+                    timestamp=datetime.now(timezone.utc),
+                    trace_id=current_trace_id,
+                    func_name=func_name,
+                    iteration=0,
+                    user_task_prompt=user_task_prompt,
+                    initial_messages=current_messages.copy(),
+                    available_tools=tools,
                 )
-            except Exception:
-                pass
+            )
+        except Exception:
+            pass
 
-        call_count += 1
+    initial_phase = _LLMPhaseResult(messages=current_messages)
+    async for output in _run_llm_generation_phase(
+        initial_phase,
+        observation_name=f"{func_name}_initial_llm_call",
+        observation_metadata={
+            "stream": stream,
+            "tools_available": len(tools) if tools else 0,
+        },
+        current_iteration=0,
+        phase_messages=current_messages,
+        available_tools=tools,
+        phase_stream=stream,
+    ):
+        yield output
 
-    if not max_tool_calls_reached:
+    current_messages = initial_phase.messages
+    push_debug(
+        f"LLM 函数 '{func_name}' 初始响应已获取，工具调用数: {len(initial_phase.tool_calls)}",
+        location=get_location(),
+    )
+    _append_assistant_response_if_present(initial_phase)
+    current_messages = initial_phase.messages
+
+    if initial_phase.aborted:
+        async for output in _finalize_terminal_phase(
+            initial_phase,
+            current_iteration=0,
+            total_iterations=0,
+            aborted=True,
+        ):
+            yield output
+        app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
         return
 
-    # Phase 4: Handle max_tool_calls limit reached
+    if not initial_phase.tool_calls:
+        async for output in _finalize_terminal_phase(
+            initial_phase,
+            current_iteration=0,
+            total_iterations=0,
+            aborted=False,
+        ):
+            yield output
+        app_log(f"LLM 函数 '{func_name}' 完成执行", location=get_location())
+        return
+
+    _append_assistant_tool_message(initial_phase)
+    current_messages = initial_phase.messages
+    async for output in _emit_buffered_non_event_outputs(
+        initial_phase, current_messages
+    ):
+        yield output
+
+    push_debug(
+        f"LLM 函数 '{func_name}' 开始执行 {len(initial_phase.tool_calls)} 个工具调用",
+        location=get_location(),
+    )
+    total_tool_calls += len(initial_phase.tool_calls)
+    state.total_tool_calls = total_tool_calls
+    call_count = 1
+    iteration = 1
+
+    async for item in _run_tool_batch_phase(
+        tool_calls=initial_phase.tool_calls,
+        phase_messages=current_messages,
+        current_iteration=iteration,
+    ):
+        if isinstance(item, EventYield):
+            yield item
+        else:
+            current_messages = item
+
+    last_phase_result: Optional[_LLMPhaseResult] = initial_phase
+    if _abort_requested():
+        async for output in _finalize_terminal_phase(
+            _make_terminal_phase_result(
+                phase_messages=current_messages,
+                source_phase=last_phase_result,
+            ),
+            current_iteration=iteration,
+            total_iterations=iteration,
+            aborted=True,
+        ):
+            yield output
+        app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
+        return
+
+    while True:
+        if max_tool_calls is not None and call_count >= max_tool_calls:
+            break
+
+        iteration = call_count + 1
+        iteration_start = await _emit_iteration_start_event(iteration, current_messages)
+        if iteration_start is not None:
+            yield iteration_start
+
+        push_debug(
+            f"LLM 函数 '{func_name}' 工具调用循环 (次数: {call_count})",
+            location=get_location(),
+        )
+        iteration_llm_start_time = time.time()
+
+        iteration_phase = _LLMPhaseResult(messages=current_messages)
+        async for output in _run_llm_generation_phase(
+            iteration_phase,
+            observation_name=f"{func_name}_iteration_{call_count}_llm_call",
+            observation_metadata={
+                "stream": stream,
+                "iteration": call_count,
+                "tools_available": len(tools) if tools else 0,
+            },
+            current_iteration=iteration,
+            phase_messages=current_messages,
+            available_tools=tools,
+            phase_stream=stream,
+        ):
+            yield output
+
+        current_messages = iteration_phase.messages
+        _append_assistant_response_if_present(iteration_phase)
+        current_messages = iteration_phase.messages
+
+        if iteration_phase.aborted:
+            async for output in _finalize_terminal_phase(
+                iteration_phase,
+                current_iteration=iteration,
+                total_iterations=iteration,
+                aborted=True,
+            ):
+                yield output
+            app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
+            return
+
+        if not iteration_phase.tool_calls:
+            push_debug(
+                f"LLM 函数 '{func_name}' 无更多工具调用，返回最终结果",
+                location=get_location(),
+            )
+            iteration_end = await _emit_iteration_end_event(
+                iteration,
+                current_messages,
+                iteration_time=time.time() - iteration_llm_start_time,
+                tool_calls_count=0,
+            )
+            if iteration_end is not None:
+                yield iteration_end
+
+            async for output in _finalize_terminal_phase(
+                iteration_phase,
+                current_iteration=iteration,
+                total_iterations=iteration,
+                aborted=False,
+            ):
+                yield output
+            app_log(f"LLM 函数 '{func_name}' 完成执行", location=get_location())
+            return
+
+        _append_assistant_tool_message(iteration_phase)
+        current_messages = iteration_phase.messages
+        async for output in _emit_buffered_non_event_outputs(
+            iteration_phase,
+            current_messages,
+        ):
+            yield output
+
+        push_debug(
+            f"LLM 函数 '{func_name}' 发现 {len(iteration_phase.tool_calls)} 个工具调用",
+            location=get_location(),
+        )
+        total_tool_calls += len(iteration_phase.tool_calls)
+        state.total_tool_calls = total_tool_calls
+
+        async for item in _run_tool_batch_phase(
+            tool_calls=iteration_phase.tool_calls,
+            phase_messages=current_messages,
+            current_iteration=iteration,
+        ):
+            if isinstance(item, EventYield):
+                yield item
+            else:
+                current_messages = item
+
+        if _abort_requested():
+            async for output in _finalize_terminal_phase(
+                _make_terminal_phase_result(
+                    phase_messages=current_messages,
+                    source_phase=iteration_phase,
+                ),
+                current_iteration=iteration,
+                total_iterations=iteration,
+                aborted=True,
+            ):
+                yield output
+            app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
+            return
+
+        iteration_end = await _emit_iteration_end_event(
+            iteration,
+            current_messages,
+            iteration_time=time.time() - iteration_llm_start_time,
+            tool_calls_count=len(iteration_phase.tool_calls),
+        )
+        if iteration_end is not None:
+            yield iteration_end
+
+        last_phase_result = iteration_phase
+        call_count += 1
+
     push_debug(
         f"LLM 函数 '{func_name}' 达到最大工具调用次数限制 ({max_tool_calls})",
         location=get_location(),
     )
 
     if _abort_requested():
-        total_execution_time = time.time() - start_time
-        if enable_event:
-            try:
-                usage_info = extract_usage_from_response(last_response)
-                if usage_info is None:
-                    usage_info = _usage_from_context_delta(
-                        llm_input_tokens_before,
-                        llm_output_tokens_before,
-                    )
-                current_messages, content = await _apply_before_finalize(
-                    current_messages,
-                    content,
-                    current_iteration=call_count,
-                )
-                react_end = ReactEndEvent(
-                    event_type=ReActEventType.REACT_END,
-                    timestamp=datetime.now(timezone.utc),
-                    trace_id=current_trace_id,
-                    func_name=func_name,
-                    iteration=call_count,
-                    final_response=content,
-                    final_messages=current_messages.copy(),
-                    total_iterations=call_count,
-                    total_execution_time=total_execution_time,
-                    total_tool_calls=total_tool_calls,
-                    total_llm_calls=total_llm_calls,
-                    total_token_usage=usage_info,
-                )
-                _set_abort_metadata(react_end)
-                yield await _emit_event(react_end)
-            except Exception:
-                pass
+        async for output in _finalize_terminal_phase(
+            _make_terminal_phase_result(
+                phase_messages=current_messages,
+                source_phase=last_phase_result,
+            ),
+            current_iteration=call_count,
+            total_iterations=call_count,
+            aborted=True,
+        ):
+            yield output
+        app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
         return
 
-    total_llm_calls += 1
-    state.total_llm_calls = total_llm_calls
-    state.iteration = call_count + 1
-    state.messages = current_messages
-    await run_react_hook(hooks, "before_llm_call", state)
-    current_messages = state.messages
+    final_phase = _LLMPhaseResult(messages=current_messages)
+    async for output in _run_llm_generation_phase(
+        final_phase,
+        observation_name=f"{func_name}_final_llm_call",
+        observation_metadata={
+            "stream": False,
+            "reason": "max_tool_calls_reached",
+            "call_count": call_count,
+        },
+        current_iteration=call_count + 1,
+        phase_messages=current_messages,
+        available_tools=None,
+        phase_stream=False,
+    ):
+        yield output
 
-    # 为最终调用创建观测
-    with langfuse_client.start_as_current_observation(
-        as_type="generation",
-        name=f"{func_name}_final_llm_call",
-        input=current_messages,
-        model=model_name,
-        model_parameters=model_parameters,
-        metadata=coerce_langfuse_metadata(
-            {
-                "stream": False,
-                "reason": "max_tool_calls_reached",
-                "call_count": call_count,
-            }
-        ),
-        completion_start_time=datetime.now(timezone.utc),
-        trace_context=trace_context,
-    ) as final_generation_span:
-        final_end_event: Optional[LLMCallEndEvent] = None
+    current_messages = final_phase.messages
+    _append_assistant_response_if_present(final_phase)
+    current_messages = final_phase.messages
 
-        async for output in _stream_single_llm_call_outputs(
-            llm_interface=llm_interface,
-            messages=current_messages,
-            tools=None,
-            stream=False,
-            llm_kwargs=dict(llm_kwargs),
-            func_name=func_name,
-            trace_id=current_trace_id,
-            iteration=call_count + 1,
-            emit_event=_emit_event,
-            abort_signal=abort_signal,
-        ):
-            if isinstance(output, EventYield) and isinstance(
-                output.event, LLMCallEndEvent
-            ):
-                final_end_event = output.event
-                continue
-
-            if enable_event:
-                yield output
-            elif isinstance(output, ResponseYield):
-                yield output.response, cast(MessageList, output.messages.copy())
-
-        final_response = (
-            final_end_event.response if final_end_event is not None else None
-        )
-        final_content = final_end_event.content if final_end_event is not None else ""
-        usage_info = final_end_event.usage if final_end_event is not None else None
-        state.iteration = call_count + 1
-        state.messages = current_messages
-        state.last_response = final_response
-        state.content = final_content
-        state.tool_calls = []
-        state.reasoning_details = []
-        state.usage = usage_info
-        await run_react_hook(hooks, "after_llm_call", state)
-        current_messages = state.messages
-        final_response = state.last_response
-        final_content = state.content
-        usage_info = state.usage
-
-        if enable_event and final_end_event is not None:
-            try:
-                yield await _emit_event(
-                    LLMCallEndEvent(
-                        event_type=ReActEventType.LLM_CALL_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=call_count + 1,
-                        response=final_response,
-                        messages=current_messages.copy(),
-                        tool_calls=[],
-                        execution_time=final_end_event.execution_time,
-                        content=final_content,
-                        reasoning_details=[],
-                        usage=usage_info,
-                    )
-                )
-            except Exception:
-                pass
-
-        # 更新最终观测数据
-        usage_dict_final: Optional[Dict[str, int]] = None
-        if usage_info:
-            usage_dict_final = {
-                "prompt_tokens": usage_info.prompt_tokens,
-                "completion_tokens": usage_info.completion_tokens,
-                "total_tokens": usage_info.total_tokens,
-            }
-        final_generation_span.update(
-            output={"content": final_content, "tool_calls": []},
-            usage_details=usage_dict_final,
-        )
-
-        # 发射响应
-        if enable_event:
-            try:
-                yield ResponseYield(
-                    type="response",
-                    response=final_response,
-                    messages=current_messages.copy(),
-                )
-            except Exception:
-                pass
-        else:
-            yield final_response, cast(MessageList, current_messages.copy())
-
-        # 发射 ReAct 结束事件
-        total_execution_time = time.time() - start_time
-        current_messages, final_content = await _apply_before_finalize(
-            current_messages,
-            final_content,
+    if final_phase.aborted:
+        async for output in _finalize_terminal_phase(
+            final_phase,
             current_iteration=call_count + 1,
-        )
-        if enable_event:
-            try:
-                yield await _emit_event(
-                    ReactEndEvent(
-                        event_type=ReActEventType.REACT_END,
-                        timestamp=datetime.now(timezone.utc),
-                        trace_id=current_trace_id,
-                        func_name=func_name,
-                        iteration=call_count + 1,
-                        final_response=final_content,
-                        final_messages=current_messages.copy(),
-                        total_iterations=call_count + 1,
-                        total_execution_time=total_execution_time,
-                        total_tool_calls=total_tool_calls,
-                        total_llm_calls=total_llm_calls,
-                        total_token_usage=usage_info,
-                    )
-                )
-                async for queued_output in _flush_event_bus_until_idle():
-                    yield queued_output
-            except Exception:
-                pass
+            total_iterations=call_count + 1,
+            aborted=True,
+        ):
+            yield output
+        app_log(f"LLM 函数 '{func_name}' aborted", location=get_location())
+        return
 
-        app_log(
-            f"LLM 函数 '{func_name}' 完成执行",
-            location=get_location(),
-        )
+    async for output in _finalize_terminal_phase(
+        final_phase,
+        current_iteration=call_count + 1,
+        total_iterations=call_count + 1,
+        aborted=False,
+    ):
+        yield output
+    app_log(f"LLM 函数 '{func_name}' 完成执行", location=get_location())
 
 
 __all__ = ["execute_llm", "execute_single_llm_call"]

@@ -1432,7 +1432,7 @@ class TestPyReplRuntimePrimitives:
 
     @pytest.mark.asyncio
     async def test_execute_runtime_context_compact_replaces_working_messages(self):
-        """runtime.selfref.context.compact should replace working messages with assistant summary."""
+        """runtime.selfref.context.compact should rewrite context immediately."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -1455,10 +1455,10 @@ class TestPyReplRuntimePrimitives:
         assert result["success"] is True
         assert result["stdout"].splitlines() == ["queued", "True"]
 
-        committed = self_reference.commit_pending_compaction("agent_main")
-        assert committed is not None
+        committed = self_reference.snapshot_history("agent_main")
         assert committed[0]["role"] == "assistant"
         assert "Goal A" in committed[0]["content"]
+        assert self_reference.commit_pending_compaction("agent_main") is None
 
     @pytest.mark.asyncio
     async def test_execute_context_remember_accepts_keyword_text(self):

@@ -195,10 +195,10 @@ def _build_self_reference_handlers(
         key: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Use: Queue a milestone compaction checkpoint. The framework will replace the current working transcript with the structured assistant summary at the end of this turn.
+        Use: Queue a milestone compaction checkpoint. The framework applies it after the current tool batch finishes so the next same-turn model step can continue from the compacted context.
         Input: Structured summary fields plus optional keyword-only `remember: list[str] | None` and `key: str | None`.
         Output: `dict[str, primitive]` with keys `status:'queued'`, `active_key:str`, `summary:dict[str, primitive]`, `assistant_message:str`, and `remember:list[str]`.
-        Parse: Print `assistant_message` if an operator should inspect the retained context. The actual context reset happens after the current turn finalizes.
+        Parse: Print `assistant_message` if an operator should inspect the retained context. If no further tool batch runs this turn, finalize still commits the queued compaction before the turn ends.
         Parameters:
         - goal: Summary Goal section.
         - instruction: Summary Instruction section.
@@ -322,8 +322,8 @@ def _build_self_reference_handlers(
         "Mental model: selfref = your agent context plus your forked child agents. Use selfref.context.* to inspect context, remember durable experience, forget stale experience, and queue milestone compaction.",
         "Use selfref.context.inspect() before context surgery. It returns a read-only full message snapshot plus parsed experiences and structured summary fields.",
         "Use selfref.context.remember(...) for durable lessons that belong in system context. Use selfref.context.forget(...) to remove wrong or obsolete experience entries by id.",
-        "Use selfref.context.compact(...) only after you finish a milestone. Provide the required structured sections exactly and keep the retained summary concise but sufficient for the next turn.",
-        "Compaction is queued during the current turn and committed at turn finalize. After commit, working transcript messages are cleared and only the assistant compaction summary remains outside the system prompt.",
+        "Use selfref.context.compact(...) when you want to replace stale working transcript with one structured summary before continuing. Provide the required structured sections exactly and keep the retained summary concise but sufficient for the next step.",
+        "Compaction is queued first, then applied after the current tool batch completes so the next same-turn model step sees the compacted context. Finalize still commits any leftover queued compaction before the turn ends.",
         "Each layer focuses on planning for its own scope; delegate concrete execution to child forks.",
         "When tasks are independent (no content dependency), spawn forks in parallel (selfref.fork.spawn) and then gather results (selfref.fork.gather_all).",
         "Before forking, review and trim context; summarize irrelevant context or dump selected original messages to files using selfref.context.inspect() plus file tools.",
