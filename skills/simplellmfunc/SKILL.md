@@ -54,6 +54,7 @@ Write `llm_chat` docstrings as stable assistant policy and long-lived behavior. 
 - For `llm_chat`, think: assistant identity + durable rules.
 - Put tool-usage advice in tool `best_practices` when possible, not only in the main docstring.
 - If you need to durably change a chat agent's context mid-run, use the latest history `system` message or self-reference context helpers such as `runtime.selfref.context.remember(...)` / `runtime.selfref.context.compact(...)` instead of trying to mutate old docstrings.
+- When `llm_chat` is bound to `SelfReference`, the framework syncs turn state automatically through ReAct lifecycle hooks. Treat `runtime.selfref.context.*` as the supported way to change durable context instead of editing old history messages in place.
 
 ## Fast start modes
 - Project mode: load models from `provider.json` with `OpenAICompatible.load_from_json_file(...)` when you have shared config or multiple models.
@@ -401,6 +402,7 @@ asyncio.run(main())
 - `llm_chat(enable_event=True)` yields `ReactOutput` events and responses, not `(chunk, history)` tuples.
 - `too_long_to_file=True` keeps roughly the first 20000 tokens in chat and writes the full tool result to a temp file.
 - `PyRepl.reset()` clears REPL variables but keeps runtime backends and self-reference memory.
+- `runtime.selfref.context.compact(...)` is queued first. When called from a tool run, the compacted context is applied before the next same-turn LLM step when possible, and finalize still commits any leftover queued compaction before the turn ends.
 - `FileToolset` is workspace-scoped and read-before-write guarded.
 
 ## Load more context only when needed

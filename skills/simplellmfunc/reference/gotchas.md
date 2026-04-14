@@ -14,5 +14,6 @@
 - `llm_function(enable_event=True)` yields parsed final values in `ResponseYield.response`.
 - `FileToolset` rejects hidden files, out-of-workspace paths, stale writes, and overly broad grep patterns.
 - `PyRepl.reset()` does not wipe self-reference memory.
+- `runtime.selfref.context.compact(...)` does not only apply at the very end of a turn. It queues a compaction that the framework tries to commit after the current tool batch so the next same-turn model step sees compacted context; finalize is the fallback commit point.
 - When a tool may emit huge text, prefer `too_long_to_file=True`; the framework keeps roughly the first 20000 tokens in chat and expects you to read the full temp file when needed.
 - Some mirrored docs or README snippets may still show older convenience constructors; trust `reference/docs-source/detailed_guide/llm_interface.md` and source code first.

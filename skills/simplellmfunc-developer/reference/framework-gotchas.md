@@ -13,6 +13,9 @@
 - `max_tool_calls=None` is intentionally the default for both `llm_function` and `llm_chat`.
 - `llm_chat` history behavior is opinionated: `history` and `chat_history` are special names, and the newest `system` message overrides the docstring prompt.
 - `PyRepl.reset()` only clears REPL variables; it does not wipe runtime backends or self-reference memory.
+- `runtime.selfref.context.compact(...)` is not a finalize-only effect anymore. The queue is committed after the current tool batch when possible so the next same-turn model step sees compacted context; finalize is the last-chance commit point.
+- `llm_chat` selfref integration is split across layers now: decorator wiring, lifecycle sync hooks, and selfref state/context code. Avoid pushing all of that behavior back into one file.
+- `before_finalize` is a shared terminal hook contract. If you add a new ReAct terminal path, route it through the common finalize helper or you will regress non-event / abort / max-tool-cap consistency.
 - Multimodal tool results may appear as assistant/user message pairs instead of plain tool messages because OpenAI tool messages cannot carry images.
 
 ## Runtime primitive contract rules

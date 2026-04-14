@@ -375,6 +375,8 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
 
 首次回合安全：若 memory key 为空，会在执行工具前把当前 system prompt 写入 `self_reference`，确保 runtime 读取不为空且包含 system 消息。
 
+当 `llm_chat` 绑定 `SelfReference` 时，框架还会在 ReAct 生命周期里自动同步 turn 状态：工具批次前绑定最新 history，工具批次后优先提交 pending compaction / context message 更新，finalize 阶段再兜底提交最终 context。
+
 在 `execute_code` 中通过 runtime 原语访问上下文：
 
 ```python
@@ -430,7 +432,7 @@ Runtime SelfReference 原语参考：
 - `runtime.selfref.context.inspect(key=None)`: 读取完整上下文快照，包含 `experiences`、结构化 `summary` 和只读 `messages`。
 - `runtime.selfref.context.remember(text, key=None)`: 向 system experience block 追加 durable experience。
 - `runtime.selfref.context.forget(experience_id, key=None)`: 删除一条错误或过时的 durable experience。
-- `runtime.selfref.context.compact(..., key=None)`: 排队 milestone compaction；当前 turn finalize 后会保留结构化 assistant summary 并清空 working transcript。
+- `runtime.selfref.context.compact(..., key=None)`: 排队 milestone compaction；当前工具批次结束后会优先提交，让下一次同 turn 的 LLM 调用看到结构化 assistant summary；如果当前 turn 不再继续调用 LLM，finalize 阶段会兜底提交。
 - `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 fork（chat 形态）。
 - `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()`/`.values()` 遍历）。
 
@@ -453,7 +455,7 @@ Fork 规划清单（`runtime.selfref.guide()` 会返回同样的 guidance）：
 - 需要删除错误经验时，使用 `runtime.selfref.context.forget(...)`。
 - 需要在 milestone 结束后清空 stale transcript 时，使用 `runtime.selfref.context.compact(...)`。
 
-所有操作都会写入 `SelfReference` 的内部存储，而不是直接暴露原始列表。单次对话中的记忆变更会在回合结束时合并进返回的 `updated_history`（事件模式下为 `ReactEndEvent.final_messages`）。
+所有操作都会写入 `SelfReference` 的内部存储，而不是直接暴露原始列表。单次对话中的记忆变更会在工具批次后尽早合并到同 turn 的后续上下文里，并且最迟会在回合结束时合并进返回的 `updated_history`（事件模式下为 `ReactEndEvent.final_messages`）。
 
 ### 单个 REPL 中多 agent 共享
 

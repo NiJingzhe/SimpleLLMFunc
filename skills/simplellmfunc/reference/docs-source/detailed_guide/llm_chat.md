@@ -304,6 +304,8 @@ asyncio.run(demo())
 
 `PyRepl()` 默认会安装 builtin `selfref` pack；`llm_chat` 会直接从 toolkit 的 runtime backend 解析并复用这份默认 backend。
 
+当 chat 绑定了 `SelfReference` 后，框架会在 ReAct 生命周期里自动同步当前 turn 状态：工具批次前绑定最新 history，工具批次后优先提交 pending compaction / context message 更新，并在 finalize 阶段兜底提交最终 context。
+
 示例：
 
 ```python
@@ -349,7 +351,7 @@ Runtime self-reference 原语参考：
 - `runtime.selfref.context.inspect(key=None)`: 返回当前上下文快照，包括 `experiences`、结构化 `summary`、以及完整只读 `messages`。
 - `runtime.selfref.context.remember(text, key=None)`: 向 system 内的经验块追加一条 durable experience。
 - `runtime.selfref.context.forget(experience_id, key=None)`: 通过 id 删除一条错误或过时的 durable experience。
-- `runtime.selfref.context.compact(..., key=None)`: 排队一次 milestone compaction，在当前 turn finalize 时把 working transcript 清空并替换成结构化 assistant summary。
+- `runtime.selfref.context.compact(..., key=None)`: 排队一次 milestone compaction。当前工具批次结束后会优先提交，让下一次同 turn 的 LLM 调用看到结构化 assistant summary；如果当前 turn 不再继续调用 LLM，finalize 阶段会兜底提交。
 - `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 self-fork（chat 形态）。
 - `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()` / `.values()` 遍历）。
 
@@ -375,7 +377,7 @@ async for output in agent("analyze and split"):
 - 使用 `reset_repl` 清理 Python runtime 变量。
 - 使用 `runtime.selfref.context.inspect()` 查看当前完整上下文。
 - 使用 `runtime.selfref.context.forget(...)` 删除错误的 durable experience。
-- 在 milestone 完成后使用 `runtime.selfref.context.compact(...)` 保留结构化 assistant summary 并清空 stale working transcript。
+- 在 milestone 完成后使用 `runtime.selfref.context.compact(...)` 保留结构化 assistant summary 并清空 stale working transcript；如果当前 turn 还有下一次模型调用，它会直接看到 compact 后的上下文。
 
 ### 返回模式
 

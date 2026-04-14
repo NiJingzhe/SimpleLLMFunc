@@ -132,9 +132,10 @@ SimpleLLMFunc/
 项目模块按职责分为以下几类：
 
 1. **装饰器层**: 提供 @llm_function, @llm_chat, @tool 装饰器
-2. **执行层**: ReAct 循环实现，工具调用编排
-3. **接口层**: LLM 接口抽象，支持多提供商
-4. **基础设施层**: 日志、事件流、可观测性
+2. **执行层**: phase-based ReAct 循环实现，工具调用编排与统一 finalize 收口
+3. **运行时状态层**: runtime primitive、selfref state、纯 context transform
+4. **接口层**: LLM 接口抽象，支持多提供商
+5. **基础设施层**: 日志、事件流、可观测性
 
 ## 核心模块 (SimpleLLMFunc/)
 
@@ -155,11 +156,13 @@ SimpleLLMFunc/
 - 使用装饰器模式包装普通函数为 LLM 调用
 - 支持单次调用（llm_function）和对话模式（llm_chat）
 - 内置 ReAct 执行逻辑，支持工具调用和多轮对话
+- 通过 `selfref_sync.py` 将 `llm_chat` 生命周期与 `SelfReference` 状态同步桥接
 
 **子模块**:
 
 - `llm_function_decorator.py`: @llm_function 装饰器实现
 - `llm_chat_decorator.py`: @llm_chat 装饰器实现
+- `selfref_sync.py`: `llm_chat` 与 `SelfReference` 的生命周期同步桥接
 - `steps/function/react.py`: LLM Function 的 ReAct 执行逻辑
 - `steps/chat/react.py`: LLM Chat 的 ReAct 执行逻辑
 - `steps/common/`: 通用步骤工具（signature, prompt, types 等）
@@ -176,6 +179,7 @@ SimpleLLMFunc/
 **架构特点**:
 
 - ReAct 循环核心实现，支持工具调用编排
+- `execute_llm()` 已按 phase 拆分，统一 LLM phase、tool batch phase 与 terminal finalize phase
 - 工具调用执行、验证、提取逻辑
 - 消息处理和类型解析
 
@@ -210,6 +214,24 @@ SimpleLLMFunc/
 - `event_emitter.py`: 自定义事件发射器（ToolEventEmitter）
 
 **Spec 位置**: `SimpleLLMFunc/SimpleLLMFunc/hooks/` 目录下
+
+### runtime 模块
+
+**路径**: `SimpleLLMFunc/SimpleLLMFunc/runtime/`
+
+**作用**: 提供 runtime primitive 系统、backend 生命周期管理，以及 selfref 状态与纯 context transform 能力
+
+**架构特点**:
+
+- `runtime/primitives.py` 负责 primitive registry 与契约
+- `runtime/selfref/context_ops.py` 负责纯函数：context parse/render/canonicalize
+- `runtime/selfref/state.py` 负责有状态存储、history 验证、compaction queue 与 fork 行为
+
+**子模块**:
+
+- `primitives.py`: runtime primitive registry 与 pack 相关能力
+- `selfref/context_ops.py`: selfref context 纯函数转换
+- `selfref/state.py`: selfref 状态、校验、记忆与 compaction
 
 ### interface 模块
 

@@ -34,6 +34,7 @@ Use this loop:
 - response-shape differences between normal mode and event mode
 - self-reference integration
 - history handling semantics
+- lifecycle hook timing, especially tool-batch sync and `before_finalize`
 
 ### Tool behavior
 - async enforcement
@@ -47,6 +48,7 @@ Use this loop:
 - docstring requirements, especially `Best Practices`
 - backend binding and lifecycle hooks
 - fork cloning behavior
+- pure context parse/render helpers separately from stateful backend mutation when selfref behavior changes
 
 ### File tools
 - workspace safety
@@ -63,6 +65,9 @@ Typical examples:
 ```bash
 pytest tests/test_llm_function_decorator.py
 pytest tests/test_llm_chat_decorator.py
+pytest tests/test_base/test_react.py
+pytest tests/test_selfref_context_ops.py
+pytest tests/test_self_reference.py
 pytest tests/test_runtime_primitives_docstring.py
 pytest tests/test_builtin/test_file_tools.py
 pytest

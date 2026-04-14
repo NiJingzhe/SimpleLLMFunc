@@ -36,6 +36,7 @@ Good pattern:
 - Keep a stable memory key such as `agent_main`.
 - Append durable experiences only when they should survive future turns.
 - Keep normal per-turn reasoning out of durable context; compact it into one structured assistant summary when a milestone ends.
+- `runtime.selfref.context.compact(...)` queues that summary first. If the current turn continues after the tool batch, the next same-turn LLM step sees the compacted context; if not, finalize still commits it into the returned history.
 
 ## Forking
 
@@ -59,3 +60,5 @@ Use forks only for concrete, isolated, verifiable subtasks. Do not fork tiny inl
 ## Important reset behavior
 
 `reset_repl` clears REPL variables, but it does not wipe installed runtime backends or self-reference context. If you need to forget durable experience or compact stale working transcript, use the `runtime.selfref.context.*` APIs directly.
+
+When `llm_chat` is using a bound `SelfReference`, the decorator keeps the active turn state and stored context synchronized for you. Prefer `runtime.selfref.context.inspect()/remember()/forget()/compact()` over manual history surgery.

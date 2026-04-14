@@ -18,6 +18,7 @@ metadata:
 - Preserve the framework's function-first design: `LLM as Function`, `Prompt as Code`, `Code as Doc`.
 - Keep public behavior explicit and typed.
 - Favor small, composable modules over hidden orchestration.
+- Prefer explicit boundaries between pure transforms, state mutation, and orchestration side effects. Recent selfref/ReAct work depends on keeping those lines sharp.
 - Follow repo-grounded conventions instead of generic framework habits.
 - When docs and code disagree, source and tests are the final authority.
 
@@ -39,7 +40,7 @@ metadata:
 ## Project map
 - `SimpleLLMFunc/llm_decorator/`: public decorator entrypoints and stepwise orchestration.
 - `SimpleLLMFunc/base/`: ReAct loop, message handling, structured parsing, tool-call execution.
-- `SimpleLLMFunc/runtime/`: primitive registry, backend lifecycle, runtime call context.
+- `SimpleLLMFunc/runtime/`: primitive registry, backend lifecycle, runtime call context, and selfref state/context transforms.
 - `SimpleLLMFunc/builtin/`: user-facing builtins such as `PyRepl`, `FileToolset`, and `SelfReference`.
 - `SimpleLLMFunc/hooks/`: events, event bus, stream wrappers, abort support.
 - `SimpleLLMFunc/interface/`: model interface abstractions and OpenAI-compatible transport.
@@ -64,6 +65,8 @@ metadata:
 - Runtime primitive docstrings must include `Best Practices`; registration fails without them.
 - Preserve history semantics in `llm_chat`: `history` and `chat_history` are special names.
 - Preserve structured output parsing behavior unless the task explicitly changes it.
+- For selfref work, keep pure context parsing/rendering in `runtime/selfref/context_ops.py`, stateful storage and mutation in `runtime/selfref/state.py`, and `llm_chat` lifecycle bridging in `llm_decorator/selfref_sync.py`.
+- For ReAct work, treat `base/ReAct.py` as phase-based orchestration. New terminal behavior should flow through the shared finalize path so `before_finalize` stays consistent across event, non-event, abort, and max-tool-cap exits.
 - Treat tests as executable API documentation for subtle cases like self-reference, event mode, and provider compatibility.
 
 ## Documentation and spec rules
