@@ -1,8 +1,10 @@
 from functools import lru_cache
 from typing import Any, Callable, Optional
+import contextlib
 import contextvars
 
 from langfuse import Langfuse
+from langfuse import propagate_attributes as langfuse_propagate_attributes
 from langfuse.types import TraceContext
 from opentelemetry import trace as otel_trace_api
 
@@ -68,6 +70,12 @@ def flush_all_observations() -> None:
 _langfuse_trace_context_var: contextvars.ContextVar[Optional[TraceContext]] = (
     contextvars.ContextVar("langfuse_trace_context", default=None)
 )
+_langfuse_trace_name_var: contextvars.ContextVar[Optional[str]] = (
+    contextvars.ContextVar(
+        "langfuse_trace_name",
+        default=None,
+    )
+)
 
 
 def set_langfuse_trace_context(
@@ -102,6 +110,8 @@ def update_langfuse_trace_name(trace_name: Optional[str]) -> None:
     if not trace_name:
         return
 
+    _langfuse_trace_name_var.set(trace_name)
+
     current_span = otel_trace_api.get_current_span()
     if current_span is otel_trace_api.INVALID_SPAN:
         return
@@ -115,6 +125,27 @@ def update_langfuse_trace_name(trace_name: Optional[str]) -> None:
         return
 
     set_attribute(_LANGFUSE_TRACE_NAME_ATTRIBUTE, trace_name)
+
+
+def get_langfuse_trace_name() -> Optional[str]:
+    trace_name = _langfuse_trace_name_var.get()
+    if not trace_name:
+        return None
+    return trace_name
+
+
+def propagate_langfuse_trace_name(trace_name: Optional[str]):
+    if not trace_name:
+        return contextlib.nullcontext()
+
+    current_span = otel_trace_api.get_current_span()
+    is_recording = getattr(current_span, "is_recording", None)
+    if current_span is otel_trace_api.INVALID_SPAN:
+        return contextlib.nullcontext()
+    if is_recording is not None and callable(is_recording) and not is_recording():
+        return contextlib.nullcontext()
+
+    return langfuse_propagate_attributes(trace_name=trace_name)
 
 
 def _format_trace_id(trace_id: Any) -> Optional[str]:
@@ -178,5 +209,7 @@ __all__ = [
     "reset_langfuse_trace_context",
     "update_langfuse_parent_span",
     "update_langfuse_trace_name",
+    "get_langfuse_trace_name",
+    "propagate_langfuse_trace_name",
     "flush_all_observations",
 ]

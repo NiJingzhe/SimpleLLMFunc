@@ -110,11 +110,15 @@ class _TrackingLangfuseClient:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
         self._counter = 0
+        self.trace_names_by_trace_id: dict[str, str] = {}
         self._trace_id_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar("test_langfuse_trace_id", default=None)
         )
         self._observation_id_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar("test_langfuse_observation_id", default=None)
+        )
+        self._trace_name_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar("test_langfuse_trace_name", default=None)
         )
 
     def start_as_current_observation(self, **kwargs: Any) -> _TrackingObservation:
@@ -146,9 +150,28 @@ class _TrackingLangfuseClient:
             "trace_id": trace_id,
             "parent_span_id": parent_span_id,
             "trace_context": trace_context,
+            "trace_name": self._trace_name_var.get(),
         }
         self.records.append(record)
         return _TrackingObservation(self, record)
+
+    def propagate_attributes(self, *, trace_name: Optional[str] = None, **kwargs: Any):
+        _ = kwargs
+        tracker = self
+
+        class _Context:
+            def __enter__(self_nonlocal):
+                self_nonlocal._token = tracker._trace_name_var.set(trace_name)
+                trace_id = tracker._trace_id_var.get()
+                if trace_id and trace_name:
+                    tracker.trace_names_by_trace_id[trace_id] = trace_name
+                return None
+
+            def __exit__(self_nonlocal, exc_type: Any, exc: Any, tb: Any) -> None:
+                tracker._trace_name_var.reset(self_nonlocal._token)
+                return None
+
+        return _Context()
 
     def get_current_trace_id(self) -> str:
         return self._trace_id_var.get() or ""
@@ -1104,6 +1127,12 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
         def get_span_context(self):
             return self._span_context
 
+        def is_recording(self) -> bool:
+            return True
+
+        def set_attribute(self, key: str, value: Any) -> None:
+            _ = (key, value)
+
     def _current_otel_span() -> Any:
         current_trace_id = tracker.get_current_trace_id()
         current_observation_id = tracker.get_current_observation_id()
@@ -1240,6 +1269,63 @@ async def test_llm_chat_sets_explicit_langfuse_trace_name() -> None:
     )
 
     assert parent_chat_span["attributes"]["langfuse.trace.name"] == "core_agent"
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_propagates_trace_name_to_child_observations() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    tracker = _TrackingLangfuseClient()
+
+    async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
+        _ = messages, tools, kwargs
+        with tracker.start_as_current_observation(
+            as_type="generation",
+            name="react_generation",
+        ):
+            return _make_chat_completion("ok")
+
+    mock_llm.chat.side_effect = fake_chat
+
+    with (
+        patch.object(
+            shared_langfuse_client,
+            "start_as_current_observation",
+            side_effect=tracker.start_as_current_observation,
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "get_current_observation_id",
+            side_effect=tracker.get_current_observation_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=tracker._active_observation,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.langfuse_propagate_attributes",
+            side_effect=tracker.propagate_attributes,
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def core_agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            core_agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    generation_span = next(
+        record for record in tracker.records if record.get("name") == "react_generation"
+    )
+
+    assert generation_span["trace_name"] == "core_agent"
+    assert tracker.trace_names_by_trace_id[generation_span["trace_id"]] == "core_agent"
 
 
 @pytest.mark.asyncio

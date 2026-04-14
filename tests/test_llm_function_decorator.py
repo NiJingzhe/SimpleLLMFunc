@@ -68,6 +68,7 @@ class _TrackingLangfuseClient:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
         self._counter = 0
+        self.trace_names_by_trace_id: dict[str, str] = {}
         self._trace_id_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar("test_langfuse_trace_id_function", default=None)
         )
@@ -75,6 +76,9 @@ class _TrackingLangfuseClient:
             contextvars.ContextVar(
                 "test_langfuse_observation_id_function", default=None
             )
+        )
+        self._trace_name_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar("test_langfuse_trace_name_function", default=None)
         )
 
     def start_as_current_observation(self, **kwargs: Any) -> _TrackingObservation:
@@ -106,9 +110,28 @@ class _TrackingLangfuseClient:
             "trace_id": trace_id,
             "parent_span_id": parent_span_id,
             "trace_context": trace_context,
+            "trace_name": self._trace_name_var.get(),
         }
         self.records.append(record)
         return _TrackingObservation(self, record)
+
+    def propagate_attributes(self, *, trace_name: Optional[str] = None, **kwargs: Any):
+        _ = kwargs
+        tracker = self
+
+        class _Context:
+            def __enter__(self_nonlocal):
+                self_nonlocal._token = tracker._trace_name_var.set(trace_name)
+                trace_id = tracker._trace_id_var.get()
+                if trace_id and trace_name:
+                    tracker.trace_names_by_trace_id[trace_id] = trace_name
+                return None
+
+            def __exit__(self_nonlocal, exc_type: Any, exc: Any, tb: Any) -> None:
+                tracker._trace_name_var.reset(self_nonlocal._token)
+                return None
+
+        return _Context()
 
     def get_current_observation_id(self) -> str:
         return self._observation_id_var.get() or ""
@@ -237,3 +260,72 @@ async def test_llm_function_sets_explicit_langfuse_trace_name() -> None:
 
     assert result == "parsed-result"
     assert function_span["attributes"]["langfuse.trace.name"] == "summarize"
+
+
+@pytest.mark.asyncio
+async def test_llm_function_propagates_trace_name_to_child_observations() -> None:
+    tracker = _TrackingLangfuseClient()
+    raw_response = object()
+
+    async def fake_execute_react_loop(*args: Any, **kwargs: Any):
+        _ = args, kwargs
+        with tracker.start_as_current_observation(
+            as_type="generation",
+            name="downstream_generation",
+        ):
+
+            async def _stream() -> AsyncGenerator[ReactOutput, None]:
+                yield ResponseYield(type="response", response=raw_response, messages=[])
+
+            return _stream()
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_function_decorator.execute_react_loop",
+            new=fake_execute_react_loop,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_function_decorator.parse_and_validate_response",
+            return_value="parsed-result",
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "start_as_current_observation",
+            side_effect=tracker.start_as_current_observation,
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "get_current_observation_id",
+            side_effect=tracker.get_current_observation_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=tracker._active_observation,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.langfuse_propagate_attributes",
+            side_effect=tracker.propagate_attributes,
+        ),
+    ):
+
+        @llm_function(llm_interface=mock_llm)
+        async def summarize(text: str) -> str:
+            """Summarize input text."""
+
+        result = await summarize("hello")
+
+    downstream_generation = next(
+        record
+        for record in tracker.records
+        if record.get("name") == "downstream_generation"
+    )
+
+    assert result == "parsed-result"
+    assert downstream_generation["trace_name"] == "summarize"
+    assert (
+        tracker.trace_names_by_trace_id[downstream_generation["trace_id"]]
+        == "summarize"
+    )
