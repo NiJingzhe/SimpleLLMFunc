@@ -114,6 +114,7 @@ class PyRepl:
     )
     EXECUTE_TOOL_BEST_PRACTICES = [
         "Primitive = host-registered callable; use runtime.namespace.name(...). Use contains='<namespace>.' for namespace discovery.",
+        "Runtime primitives are not standalone tool calls; call them inside execute_code as runtime.namespace.name(...).",
         "Spec lookups return XML by default; use format='dict' for direct field access in code.",
         "Inspect the contracts that support the current step and keep prompt context focused on the selected primitives.",
     ]
@@ -769,6 +770,8 @@ class PyRepl:
         lines: List[str] = [
             "<runtime_primitive_contract>",
             "Runtime primitive = host-registered callable; call it as runtime.namespace.name(...).",
+            "Runtime primitives are not standalone tool calls.",
+            'Call them inside execute_code as runtime.namespace.name(...). For example: execute_code(code="runtime.selfref.fork.spawn(...)").',
             "Use this block for orientation; use runtime APIs as the source of truth.",
             "Discover names with runtime.list_primitives() and use runtime.list_primitives(contains='<namespace>.') for namespace filtering.",
             "Inspect one primitive: runtime.get_primitive_spec(name). XML by default.",

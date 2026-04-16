@@ -278,6 +278,25 @@ class TestPyReplToolset:
         assert "selfref = your agent context" in prompt
         assert "parallel sub-agent decomposition" in prompt
 
+    def test_execute_tool_prompt_explains_primitive_vs_tool_boundary(self) -> None:
+        """Runtime guidance should say primitives run inside execute_code, not as standalone tools."""
+        from SimpleLLMFunc.builtin import PyRepl
+
+        repl = PyRepl()
+        execute_tool = next(
+            tool for tool in repl.toolset if tool.name == "execute_code"
+        )
+
+        prompt = execute_tool.build_system_prompt_injection()
+
+        assert isinstance(prompt, str)
+        assert "Runtime primitives are not standalone tool calls." in prompt
+        assert "Call them inside execute_code as runtime.namespace.name(...)." in prompt
+        assert (
+            'For example: execute_code(code="runtime.selfref.fork.spawn(...)")'
+            in prompt
+        )
+
     def test_execute_tool_prompt_includes_custom_pack_guidance(self) -> None:
         """Prompt injection should render generic pack guidance, not just selfref."""
         from SimpleLLMFunc.builtin import PyRepl
@@ -867,10 +886,10 @@ class TestPyReplPrimitivePacks:
         ]
 
     @pytest.mark.asyncio
-    async def test_execute_fork_spawn_closes_parent_tool_call_with_tool_result_instruction(
+    async def test_execute_fork_spawn_uses_pre_fork_history_for_child(
         self,
     ):
-        """Forking from an active assistant tool_call should add a matching tool result to child history."""
+        """Forking from an active assistant tool_call should hide the pending parent tool-call context from the child."""
         from SimpleLLMFunc.builtin import PyRepl
 
         repl = PyRepl()
@@ -890,7 +909,15 @@ class TestPyReplPrimitivePacks:
                                 "name": "execute_code",
                                 "arguments": "runtime.selfref.fork.spawn('sub-task')",
                             },
-                        }
+                        },
+                        {
+                            "id": "call_read_1",
+                            "type": "function",
+                            "function": {
+                                "name": "read_file",
+                                "arguments": '{"path": "README.md"}',
+                            },
+                        },
                     ],
                 },
             ],
@@ -919,24 +946,16 @@ class TestPyReplPrimitivePacks:
             "handle = runtime.selfref.fork.spawn('sub-task')\n"
             "results = runtime.selfref.fork.gather_all(handle, include_history=True)\n"
             "fork_result = results[handle['fork_id']]\n"
-            "tool_instruction = fork_result['history'][-3]\n"
-            "user_instruction = fork_result['history'][-2]\n"
-            "print(tool_instruction['role'])\n"
-            "print(tool_instruction.get('tool_call_id'))\n"
-            "print(tool_instruction['content'])\n"
-            "print(user_instruction['role'])\n"
-            "print(user_instruction['content'])\n"
+            "print(fork_result['history'])\n"
         )
 
         assert result["success"] is True, result["error"] or result["stderr"]
-        assert observed_calls[0]["message"] == ""
-        assert result["stdout"].splitlines() == [
-            "tool",
-            "call_fork_1",
-            "You are now a clone of parent agent, and Your task is: sub-task",
-            "user",
-            "You are now a clone of parent agent, and Your task is: sub-task",
-        ]
+        assert observed_calls[0]["message"] == "sub-task"
+        assert observed_calls[0]["history"] == [{"role": "user", "content": "seed"}]
+        assert (
+            result["stdout"].strip()
+            == "[{'role': 'user', 'content': 'seed'}, {'role': 'assistant', 'content': 'child done'}]"
+        )
 
     @pytest.mark.asyncio
     async def test_execute_can_spawn_and_gather_fork_from_code_act(self):
@@ -1350,7 +1369,7 @@ class TestPyReplRuntimePrimitives:
             "print('best_practices' in guide)\n"
             "print(len(guide.get('best_practices', [])) >= 5)\n"
             "guide_best_text = ' '.join(str(item) for item in guide.get('best_practices', []))\n"
-            "print('status/response/memory_key/history_count' in guide_best_text)\n"
+            "print('status/response/result/memory_key/history_count' in guide_best_text)\n"
             "print('error_type/error_message before retrying' in guide_best_text)\n"
             "print(isinstance(guide_spec.get('parameters'), list))\n"
             "print(isinstance(guide_spec.get('best_practices'), list))\n"
@@ -1391,7 +1410,7 @@ class TestPyReplRuntimePrimitives:
             "print('keyed by' in gather_output and 'fork_id' in gather_output)\n"
             "print('.items()' in gather_parse)\n"
             "print('read the fields you need from fork results' in best_text.lower())\n"
-            "print('status/response/memory_key' in best_text)\n"
+            "print('status/response/result/memory_key' in best_text)\n"
             "print('include_history=True' in best_text)\n"
         )
 
@@ -1525,6 +1544,7 @@ class TestPyReplRuntimePrimitives:
             "fork_result = results[handle['fork_id']]\n"
             "print(fork_result['source_memory_key'])\n"
             "print(fork_result['response'])\n"
+            "print(fork_result['result'])\n"
         )
 
         assert result["success"] is True

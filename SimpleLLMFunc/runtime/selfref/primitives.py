@@ -310,8 +310,8 @@ def _build_self_reference_handlers(
         """
         Use: Gather results for spawned self-reference children.
         Input: Optional `fork_ids: str | dict[str, primitive] | list[str] | list[dict[str, primitive]] | None` plus keyword-only `include_history: bool = False`. Omit `fork_ids` to gather all pending children. If passing dicts, each must contain `fork_id`.
-        Output: `dict[str, dict[str, primitive]]` keyed by `fork_id`. Each value includes `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, `status:'completed' | 'error'`, `response:primitive`, `error_type:str` when status is `error`, `error_message:str` when status is `error`, `history_count:int`, `history_included:bool`, and optional `history:list[dict[str, primitive]]` when `include_history=True`.
-        Parse: Iterate with `.items()`. For each value, check `status` first, then read `response` or `error_type` / `error_message`.
+        Output: `dict[str, dict[str, primitive]]` keyed by `fork_id`. Each value includes `fork_id:str`, `parent_fork_id:str | None`, `depth:int`, `source_memory_key:str`, `memory_key:str`, `status:'completed' | 'error'`, `response:primitive`, `result:primitive`, `error_type:str` when status is `error`, `error_message:str` when status is `error`, `history_count:int`, `history_included:bool`, and optional `history:list[dict[str, primitive]]` when `include_history=True`.
+        Parse: Iterate with `.items()`. For each value, check `status` first, then read `response` or `result`, or inspect `error_type` / `error_message`.
         Parameters:
         - fork_ids: Optional fork id or handle subset. You may pass fork handle dicts with `fork_id` instead of strings.
         - include_history: When `True`, include full child history in each result dict.
@@ -331,8 +331,8 @@ def _build_self_reference_handlers(
         "Pass child args/kwargs that match the current bound agent callable signature. For llm_chat agents, pass the main user input as the first positional arg or the declared input keyword (for example message=... or prompt=...). Use supported kwargs from the agent signature.",
         "In fork prompts, define completion boundaries and require explicit acceptance criteria; prefer file-based handoff plus parent-agent messaging over dumping everything in chat.",
         "Fork results are compact by default (history omitted). Use include_history=True when full child history is required; use the returned memory_key + selfref.context.inspect(key=...) for on-demand detail reads.",
-        "For fork results, read status/response/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying.",
-        "Read the fields you need from fork results (status/response/memory_key) and inspect child context explicitly when needed.",
+        "For fork results, read status/response/result/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying.",
+        "Read the fields you need from fork results (status/response/result/memory_key) and inspect child context explicitly when needed.",
         "After each milestone, compact aggressively: keep durable experience in system context, keep one structured assistant summary, and drop stale working transcript messages.",
     ]
 
