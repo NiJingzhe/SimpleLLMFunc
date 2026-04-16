@@ -8,7 +8,7 @@
 进入项目目录后，首先同步依赖环境。
 
 ### 2. 运行测试
-使用 pytest 运行相关测试文件。
+使用 `poetry run pytest` 运行相关测试文件。
 
 ### 3. 运行示例
 使用 python 直接运行示例文件。
@@ -33,7 +33,7 @@
 根据需求设计：
 - 新增/修改哪些文件
 - 新增哪些类型/函数
-- 保持向前向后兼容性
+- 保持必要的兼容性，不要为了猜测性的旧行为加入额外兼容层
 
 ### 步骤 3: 单元测试先行
 
@@ -53,6 +53,12 @@
 ### 步骤 5: 运行测试验证
 
 运行单元测试确保核心逻辑正确。
+
+如果改动涉及接口适配层或 selfref fork：
+
+- 优先补 adapter/selfref 相关的回归测试
+- Responses API 差异保持在 `interface/` 层，不要把 provider-specific 行为扩散进 `ReAct`
+- selfref child context 应基于 pre-fork 快照，不要把父 agent 当前未闭合的 tool-call message 带进 child history
 
 ### 步骤 6: 创建示例并运行
 
@@ -79,6 +85,10 @@
 ### 3. 使用 .env 控制日志级别
 
 设置 LOG_LEVEL=WARNING 减少无关日志干扰。
+
+### 4. 先确认测试入口
+
+本仓库实际可靠的命令通常是 `poetry run pytest ...`。
 
 ## 测试驱动开发 (TDD) 实践
 
@@ -108,6 +118,8 @@
 | 工具执行 | base/tool_call/execution.py |
 | Tool 装饰器 | tool/tool.py |
 | 工具注册 | llm_decorator/utils/tools.py |
+| Responses 适配层 | interface/openai_responses_compatible.py |
+| selfref fork 状态 | runtime/selfref/state.py |
 
 ## 常见问题排查
 

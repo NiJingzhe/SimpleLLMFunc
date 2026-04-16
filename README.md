@@ -70,6 +70,7 @@ If you've encountered these dilemmas in LLM development:
 - ✅ **Async Native** - Full async support, naturally adapts to high-concurrency scenarios, no additional configuration needed
 - ✅ **Complete Features** - Built-in tool system, multimodal support, API key management, traffic control, structured logging, observability integration
 - ✅ **Provider Agnostic** - OpenAI-compatible adaptation, easily switch between multiple model vendors
+- ✅ **Responses API Ready** - Includes `OpenAIResponsesCompatible` so the same decorator model can target OpenAI Responses API endpoints
 - ✅ **Easy to Extend** - Modular design, supports custom LLM interfaces and tools
 
 > ⚠️ **Important** - All LLM interaction decorators (`@llm_function`, `@llm_chat`, `@tool`, etc.) support decorating both sync and async functions, but all returned results are async functions. Please call them using `await` or `asyncio.run()`.
@@ -461,7 +462,7 @@ result = await my_function(
 
 SimpleLLMFunc provides flexible LLM interface support:
 
-**Supported Providers (via OpenAI Compatible adaptation):**
+**Supported Providers and Adapter Paths:**
 
 - ✅ OpenAI (GPT-4, GPT-3.5, etc.)
 - ✅ Deepseek
@@ -470,21 +471,30 @@ SimpleLLMFunc provides flexible LLM interface support:
 - ✅ Baidu Qianfan
 - ✅ Local LLM (Ollama, vLLM, etc.)
 - ✅ Any OpenAI API-compatible service
+- ✅ OpenAI Responses API endpoints via `OpenAIResponsesCompatible`
 
 #### Quick Integration Example
 
 ```python
-from SimpleLLMFunc import OpenAICompatible
+from SimpleLLMFunc import APIKeyPool, OpenAICompatible, OpenAIResponsesCompatible
 
 # Method 1: Load from JSON configuration file
 provider_config = OpenAICompatible.load_from_json_file("provider.json")
 llm = provider_config["deepseek"]["v3-turbo"]
+responses_config = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+responses_llm = responses_config["openrouter"]["gpt-5.4"]
 
 # Method 2: Direct creation
 llm = OpenAICompatible(
-    api_key="sk-xxx",
+    api_key_pool=APIKeyPool(["sk-xxx"], provider_id="deepseek-chat"),
     base_url="https://api.deepseek.com/v1",
-    model="deepseek-chat"
+    model_name="deepseek-chat",
+)
+
+responses_llm = OpenAIResponsesCompatible(
+    api_key_pool=APIKeyPool(["sk-xxx"], provider_id="openrouter-gpt-5.4-responses"),
+    base_url="https://openrouter.ai/api/v1",
+    model_name="gpt-5.4",
 )
 
 @llm_function(llm_interface=llm)
@@ -492,6 +502,8 @@ async def my_function(text: str) -> str:
     """Process text"""
     pass
 ```
+
+For Responses API usage, keep writing normal docstrings and chat history. The adapter is responsible for mapping the selected system prompt to Responses `instructions` and forwarding `reasoning={...}`.
 
 #### provider.json Configuration File
 
@@ -765,6 +777,7 @@ SimpleLLMFunc/
 │   ├── interface/             # LLM interface layer
 │   │   ├── llm_interface.py   # Abstract base class
 │   │   ├── openai_compatible.py    # OpenAI compatible implementation
+│   │   ├── openai_responses_compatible.py # OpenAI Responses API adapter
 │   │   ├── key_pool.py        # API key management
 │   │   └── token_bucket.py    # Traffic control
 │   ├── base/                  # Core execution engine
@@ -794,6 +807,7 @@ SimpleLLMFunc/
 │   ├── pyrepl_example.py            # Builtin PyRepl usage
 │   ├── runtime_primitives_basic_example.py # Local runtime memory primitives
 │   ├── tui_general_agent_example.py  # General TUI agent demo (selfref + file tools)
+│   ├── response_api_example.py      # Responses API TUI agent demo
 │   ├── custom_tool_event_example.py # Custom tool event examples
 │   ├── tui_chat_example.py          # Textual TUI example
 │   ├── provider.json          # Provider configuration examples
@@ -812,7 +826,7 @@ SimpleLLMFunc/
 | **tool** | Tool system, @tool decorator and Tool base class |
 | **builtin** | Builtin tools (e.g. persistent Python REPL) |
 | **hooks** | Event stream definitions, emitters, and stream wrappers |
-| **interface** | LLM interface abstraction and OpenAI compatible implementation |
+| **interface** | LLM interface abstraction plus `OpenAICompatible` and `OpenAIResponsesCompatible` adapters |
 | **base** | ReAct engine, message processing, type conversion |
 | **logger** | Structured logging, trace_id tracking |
 | **observability** | Langfuse integration, complete LLM observability |

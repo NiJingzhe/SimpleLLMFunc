@@ -225,13 +225,13 @@ SimpleLLMFunc/
 
 - `runtime/primitives.py` 负责 primitive registry 与契约
 - `runtime/selfref/context_ops.py` 负责纯函数：context parse/render/canonicalize
-- `runtime/selfref/state.py` 负责有状态存储、history 验证、compaction queue 与 fork 行为
+- `runtime/selfref/state.py` 负责有状态存储、history 验证、compaction queue 与 fork 行为，包括 child fork 的 pre-fork 上下文构建与 fork 结果物化
 
 **子模块**:
 
 - `primitives.py`: runtime primitive registry 与 pack 相关能力
 - `selfref/context_ops.py`: selfref context 纯函数转换
-- `selfref/state.py`: selfref 状态、校验、记忆与 compaction
+- `selfref/state.py`: selfref 状态、校验、记忆、compaction 与 fork 结果/child history 构建
 
 ### interface 模块
 
@@ -249,6 +249,7 @@ SimpleLLMFunc/
 
 - `llm_interface.py`: LLM 接口基类
 - `openai_compatible.py`: OpenAI 兼容接口实现
+- `openai_responses_compatible.py`: OpenAI Responses API 适配实现
 - `key_pool.py`: API Key 池管理
 - `token_bucket.py`: 令牌桶限流实现
 

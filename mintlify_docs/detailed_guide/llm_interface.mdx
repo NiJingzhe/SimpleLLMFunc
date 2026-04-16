@@ -2,7 +2,7 @@
 title: LLM 接口层
 ---
 
-本页说明 SimpleLLMFunc 的 LLM 接口层设计，包括统一接口抽象、OpenAI-compatible 实现、密钥池和流量控制。
+本页说明 SimpleLLMFunc 的 LLM 接口层设计，包括统一接口抽象、`OpenAICompatible` / `OpenAIResponsesCompatible` 两类适配器、密钥池和流量控制。
 
 ## 你会用到什么
 
@@ -13,6 +13,9 @@ title: LLM 接口层
   <Card title="OpenAICompatible">
     对接 OpenAI 兼容接口的默认实现，适合作为大多数项目的入口。
   </Card>
+  <Card title="OpenAIResponsesCompatible">
+    对接 OpenAI Responses API，同时保持与装饰器层相同的使用方式。
+  </Card>
   <Card title="APIKeyPool">
     负责多 API Key 的负载均衡和任务分配。
   </Card>
@@ -22,7 +25,11 @@ title: LLM 接口层
 </CardGroup>
 
 <Callout type="info">
-如果你只是想先接入模型，优先使用 `OpenAICompatible.load_from_json_file(...)`。只有在你需要程序化控制密钥池或限流参数时，再手动实例化接口对象。
+如果你只是想先接入模型，优先使用 `OpenAICompatible.load_from_json_file(...)` 或 `OpenAIResponsesCompatible.load_from_json_file(...)`。只有在你需要程序化控制密钥池或限流参数时，再手动实例化接口对象。
+</Callout>
+
+<Callout type="info">
+选择规则很简单：普通 chat/completions 兼容端点使用 `OpenAICompatible`；OpenAI Responses API 端点使用 `OpenAIResponsesCompatible`。两者共用同一种 `provider.json` 结构。
 </Callout>
 
 ## 快速开始
@@ -54,9 +61,10 @@ title: LLM 接口层
   </Step>
   <Step title="从配置文件加载模型">
     ```python
-    from SimpleLLMFunc import OpenAICompatible
+    from SimpleLLMFunc import OpenAICompatible, OpenAIResponsesCompatible
 
     llm = OpenAICompatible.load_from_json_file("provider.json")["openai"]["gpt-3.5-turbo"]
+    responses_llm = OpenAIResponsesCompatible.load_from_json_file("provider.json")["openrouter"]["gpt-5.4"]
     ```
   </Step>
   <Step title="交给装饰器使用">
@@ -75,7 +83,7 @@ title: LLM 接口层
 
 <AccordionGroup>
   <Accordion title="LLM_Interface 抽象基类">
-    `LLM_Interface` 是所有 LLM 实现的抽象基类，定义统一的接口规范。它的目标是把调用方式和返回形式收敛到一致的接口上。
+    `LLM_Interface` 是所有 LLM 实现的抽象基类，定义统一的接口规范。它的目标是把调用方式和返回形式收敛到一致的接口上。`OpenAICompatible` 与 `OpenAIResponsesCompatible` 都继承自它。
 
     核心特点：
 
@@ -137,6 +145,17 @@ title: LLM 接口层
     - 多 Key 轮换
   </Accordion>
 
+  <Accordion title="OpenAIResponsesCompatible 适配器">
+    `OpenAIResponsesCompatible` 用于对接 OpenAI Responses API，同时保持 `@llm_function` / `@llm_chat` 的装饰器使用方式不变。
+
+    关键点：
+
+    - 与 `OpenAICompatible` 共用同一种 `provider.json` 结构
+    - 构造函数同样使用 `APIKeyPool`、`model_name`、`base_url`
+    - 装饰器层仍然先构造正常的 system/user messages，再由 adapter 把 system prompt 映射为 Responses API 的 `instructions`
+    - `reasoning={...}` 等 Responses 能力由 adapter 透传，不需要把原生 Responses request schema 暴露给上层业务代码
+  </Accordion>
+
   <Accordion title="APIKeyPool 密钥管理">
     `APIKeyPool` 使用小根堆维护各个密钥当前负载，优先分配最空闲的 key。
 
@@ -165,10 +184,10 @@ title: LLM 接口层
   </Accordion>
 </AccordionGroup>
 
-## OpenAICompatible 如何创建
+## 接口如何创建
 
 <Tabs>
-  <Tab title="从配置文件加载（推荐）">
+  <Tab title="OpenAICompatible：从配置文件加载">
     ```python
     from SimpleLLMFunc import OpenAICompatible
 
@@ -179,7 +198,7 @@ title: LLM 接口层
     deepseek = all_models["deepseek"]["deepseek-chat"]
     ```
   </Tab>
-  <Tab title="手动创建实例">
+  <Tab title="OpenAICompatible：手动创建实例">
     ```python
     from SimpleLLMFunc import OpenAICompatible, APIKeyPool
 
@@ -192,6 +211,34 @@ title: LLM 接口层
         api_key_pool=key_pool,
         model_name="gpt-3.5-turbo",
         base_url="https://api.openai.com/v1",
+        max_retries=5,
+        retry_delay=1.0,
+        rate_limit_capacity=20,
+        rate_limit_refill_rate=3.0,
+    )
+    ```
+  </Tab>
+  <Tab title="OpenAIResponsesCompatible：从配置文件加载">
+    ```python
+    from SimpleLLMFunc import OpenAIResponsesCompatible
+
+    all_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+    responses_llm = all_models["openrouter"]["gpt-5.4"]
+    ```
+  </Tab>
+  <Tab title="OpenAIResponsesCompatible：手动创建实例">
+    ```python
+    from SimpleLLMFunc import APIKeyPool, OpenAIResponsesCompatible
+
+    key_pool = APIKeyPool(
+        api_keys=["sk-key1", "sk-key2"],
+        provider_id="openrouter-gpt-5.4-responses",
+    )
+
+    responses_llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-5.4",
+        base_url="https://openrouter.ai/api/v1",
         max_retries=5,
         retry_delay=1.0,
         rate_limit_capacity=20,

@@ -1,6 +1,6 @@
 ---
 name: simplellmfunc-developer
-description: "Develop and maintain the SimpleLLMFunc framework itself. Use when changing framework internals, tests, docs, specs, runtime primitives, decorator behavior, tool plumbing, event streams, PyRepl integration, or contributor-facing project structure and conventions."
+description: "Develop and maintain the SimpleLLMFunc framework itself. Use when changing framework internals, tests, docs, specs, runtime primitives, decorator behavior, tool plumbing, event streams, PyRepl integration, provider adapters such as OpenAICompatible/OpenAIResponsesCompatible, or contributor-facing project structure and conventions."
 license: MIT
 compatibility: "Python 3.12+ repo with pytest, Poetry, Mintlify docs, and SimpleLLMFunc source tree available."
 metadata:
@@ -12,7 +12,7 @@ metadata:
 
 ## When to use this skill
 - Use this skill when the task changes the framework itself, not just an app built on it.
-- Typical triggers: editing `SimpleLLMFunc/`, `tests/`, `docs/`, `spec/`, built-in tools, runtime primitives, decorator semantics, event-stream behavior, provider integration, TUI utilities, or contributor docs.
+- Typical triggers: editing `SimpleLLMFunc/`, `tests/`, `docs/`, `spec/`, built-in tools, runtime primitives, decorator semantics, event-stream behavior, provider adapters, TUI utilities, or contributor docs.
 
 ## Core development philosophy
 - Preserve the framework's function-first design: `LLM as Function`, `Prompt as Code`, `Code as Doc`.
@@ -43,7 +43,7 @@ metadata:
 - `SimpleLLMFunc/runtime/`: primitive registry, backend lifecycle, runtime call context, and selfref state/context transforms.
 - `SimpleLLMFunc/builtin/`: user-facing builtins such as `PyRepl`, `FileToolset`, and `SelfReference`.
 - `SimpleLLMFunc/hooks/`: events, event bus, stream wrappers, abort support.
-- `SimpleLLMFunc/interface/`: model interface abstractions and OpenAI-compatible transport.
+- `SimpleLLMFunc/interface/`: model interface abstractions and provider adapters such as `OpenAICompatible` and `OpenAIResponsesCompatible`.
 - `SimpleLLMFunc/logger/` and `SimpleLLMFunc/observability/`: logs, trace context, Langfuse.
 - `SimpleLLMFunc/utils/`: TUI and stdio helpers.
 - `tests/`: mirror of behavior and architecture; often the fastest place to infer conventions.
@@ -66,7 +66,10 @@ metadata:
 - Preserve history semantics in `llm_chat`: `history` and `chat_history` are special names.
 - Preserve structured output parsing behavior unless the task explicitly changes it.
 - For selfref work, keep pure context parsing/rendering in `runtime/selfref/context_ops.py`, stateful storage and mutation in `runtime/selfref/state.py`, and `llm_chat` lifecycle bridging in `llm_decorator/selfref_sync.py`.
+- For provider work, keep wire-format differences in the adapter layer under `SimpleLLMFunc/interface/`; do not leak Responses-specific request/stream contracts into `ReAct` or decorator code unless the public framework contract is intentionally changing.
+- `OpenAIResponsesCompatible` should remain a first-class adapter, not a special case hidden inside `ReAct`. System prompts map to Responses `instructions`, and Responses-specific reasoning/tool-stream handling belongs in the adapter.
 - For ReAct work, treat `base/ReAct.py` as phase-based orchestration. New terminal behavior should flow through the shared finalize path so `before_finalize` stays consistent across event, non-event, abort, and max-tool-cap exits.
+- For selfref fork work, child context should be built from the pre-fork snapshot. Do not reintroduce the parent's pending assistant tool-call message into child-visible history.
 - Treat tests as executable API documentation for subtle cases like self-reference, event mode, and provider compatibility.
 
 ## Documentation and spec rules
@@ -76,6 +79,7 @@ metadata:
 - Use progressive disclosure in skills and docs: concise guidance in the main file, details in reference docs.
 - Keep `provider.json` format docs and `.env` / environment-variable docs aligned with actual loader and observability behavior.
 - Keep the packaged `skills/` directory and the `simplellmfunc-skill` export CLI aligned so installed users can export the current skill contents correctly.
+- When Responses adapter behavior or selfref fork behavior changes, update packaged `skills/` docs in the same change, not only `mintlify_docs/`.
 - Treat `AGENTS.md` as a feedback-loop artifact: when recurring agent mistakes reveal missing environmental guidance, update the file so the fix lives in the system instead of only in maintainer memory.
 
 ## Read these reference docs as needed

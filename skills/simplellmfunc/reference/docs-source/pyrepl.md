@@ -434,9 +434,11 @@ Runtime SelfReference 原语参考：
 - `runtime.selfref.context.forget(experience_id, key=None)`: 删除一条错误或过时的 durable experience。
 - `runtime.selfref.context.compact(..., key=None)`: 排队 milestone compaction；当前工具批次结束后会优先提交，让下一次同 turn 的 LLM 调用看到结构化 assistant summary；如果当前 turn 不再继续调用 LLM，finalize 阶段会兜底提交。
 - `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 fork（chat 形态）。
+- 子 fork 继承的是 fork 前的上下文快照，不会把父 agent 当前尚未闭合的 fork tool-call 场景当成自己的当前动作。
 - `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()`/`.values()` 遍历）。
 
-默认情况下 fork 结果为紧凑模式，仅返回 `fork_id`、`memory_key`、`response`、`history_count`、`history_included=False` 等元数据。
+默认情况下 fork 结果为紧凑模式，返回 `fork_id`、`memory_key`、`status`、`response`、`result`、`history_count`、`history_included=False` 等元数据。
+读取结果时先看 `status`，成功后读 `response` 或 `result`，失败时检查 `error_type` / `error_message`。
 只有确实需要子历史时才设置 `include_history=True`。
 
 Fork 规划清单（`runtime.selfref.guide()` 会返回同样的 guidance）：

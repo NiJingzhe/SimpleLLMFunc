@@ -43,7 +43,11 @@ LOG_DIR=logs
 
 ## `provider.json` 文件
 
-`provider.json` 用于配置模型提供商、API 密钥和限流参数。`OpenAICompatible.load_from_json_file(...)` 读取此文件后，会返回一个二维字典：`providers[provider_id][model_name]`。
+`provider.json` 用于配置模型提供商、API 密钥和限流参数。`OpenAICompatible.load_from_json_file(...)` 与 `OpenAIResponsesCompatible.load_from_json_file(...)` 都会读取此文件，并返回二维字典：`providers[provider_id][model_name]`。
+
+<Callout type="info">
+`provider.json` 只描述 provider/model/key/base_url/retry/rate-limit 这些运行时接入信息，不决定你使用哪个装饰器。选择 `OpenAICompatible` 还是 `OpenAIResponsesCompatible`，取决于上游实际暴露的是 chat/completions 兼容端点还是 Responses API 端点。
+</Callout>
 
 ### 配置文件结构
 
@@ -100,10 +104,12 @@ LOG_DIR=logs
 ### 加载和使用
 
 ```python
-from SimpleLLMFunc import OpenAICompatible, llm_function
+from SimpleLLMFunc import OpenAICompatible, OpenAIResponsesCompatible, llm_function
 
 models = OpenAICompatible.load_from_json_file("provider.json")
 gpt35 = models["openai"]["gpt-3.5-turbo"]
+responses_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+gpt54 = responses_models["openrouter"]["gpt-5.4"]
 
 @llm_function(llm_interface=gpt35)
 async def my_task(text: str) -> str:

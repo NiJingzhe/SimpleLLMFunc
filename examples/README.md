@@ -14,6 +14,10 @@ This directory is for runnable user-facing examples.
   - Run: `poetry run python examples/tui_general_agent_example.py`
   - General TUI agent demo with runtime selfref primitives + FileToolset.
   - Workspace: `./sandbox` (FileToolset is scoped here).
+- `response_api_example.py`
+  - Run: `poetry run python examples/response_api_example.py`
+  - Responses API TUI agent demo using `OpenAIResponsesCompatible`, `reasoning={...}`, runtime selfref, and file tools.
+  - Shows how to read `runtime.selfref.fork.gather_all(...)` results via `status`, `response`, and `result`.
 - `tui_chat_example.py`
   - Run: `poetry run python examples/tui_chat_example.py`
   - Basic TUI chat + persistent `PyRepl`.
