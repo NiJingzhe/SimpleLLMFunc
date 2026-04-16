@@ -77,7 +77,7 @@ class EventBus:
         origin: Optional[EventOrigin] = None,
         origin_overrides: Optional[Dict[str, Any]] = None,
     ) -> EventYield:
-        """Publish one event and return that queued output."""
+        """Build one enriched event and return it without queueing."""
         return self._build_event_yield(
             event,
             origin=origin,

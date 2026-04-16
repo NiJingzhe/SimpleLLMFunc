@@ -2,18 +2,45 @@
 
 from __future__ import annotations
 
+import json
 import importlib.util
 from collections.abc import AsyncGenerator
 from pathlib import Path
+import shutil
 from types import ModuleType, SimpleNamespace
 
 import pytest
 
 
-def _load_example_module() -> ModuleType:
-    module_path = (
+def _write_example_provider_json(example_dir: Path) -> None:
+    (example_dir / "provider.json").write_text(
+        json.dumps(
+            {
+                "openrouter": [
+                    {
+                        "model_name": "gpt-5.4",
+                        "api_keys": ["sk-test-key"],
+                        "base_url": "https://openrouter.ai/api/v1",
+                        "max_retries": 1,
+                        "retry_delay": 0.0,
+                        "rate_limit_capacity": 10,
+                        "rate_limit_refill_rate": 1.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _load_example_module(tmp_path: Path) -> ModuleType:
+    source_path = (
         Path(__file__).resolve().parent.parent / "examples" / "response_api_example.py"
     )
+    module_path = tmp_path / "response_api_example.py"
+    shutil.copy2(source_path, module_path)
+    _write_example_provider_json(tmp_path)
+
     spec = importlib.util.spec_from_file_location(
         "test_response_api_example_module",
         module_path,
@@ -27,8 +54,9 @@ def _load_example_module() -> ModuleType:
 
 
 @pytest.fixture(scope="module")
-def example_module() -> ModuleType:
-    return _load_example_module()
+def example_module(tmp_path_factory: pytest.TempPathFactory) -> ModuleType:
+    tmp_path = tmp_path_factory.mktemp("response_api_example")
+    return _load_example_module(tmp_path)
 
 
 def test_response_api_example_uses_responses_interface(

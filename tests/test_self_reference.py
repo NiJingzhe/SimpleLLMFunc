@@ -45,6 +45,12 @@ class _CollectingEmitter:
 class TestSelfReferenceMemoryProxy:
     """Validate memory-handle CRUD and helper operations."""
 
+    def test_legacy_self_reference_module_reexports_selfreference(self) -> None:
+        from SimpleLLMFunc.runtime.selfref import SelfReference as RuntimeSelfReference
+        from SimpleLLMFunc.self_reference import SelfReference as LegacySelfReference
+
+        assert LegacySelfReference is RuntimeSelfReference
+
     def test_memory_handle_requires_bound_key(self) -> None:
         self_reference = SelfReference()
 
