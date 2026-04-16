@@ -199,6 +199,8 @@ SimpleLLMFunc 遵循以下核心设计理念：
 - selfref 相关纯 context transform 优先放在 `runtime/selfref/context_ops.py`
 - `runtime/selfref/state.py` 负责有状态存储与 mutation，不要把纯 parse/render 逻辑重新塞回去
 - `llm_decorator/selfref_sync.py` 负责 `llm_chat` 与 `SelfReference` 的生命周期桥接，不要把这层同步散落回多个调用点
+- Provider-specific API 差异优先留在 `interface/` 适配层；例如 Responses API 的 `instructions`、reasoning、stream chunk 适配，不要直接塞进 `ReAct`
+- selfref fork child 的可见上下文应来自 pre-fork 快照，不要把父 agent 当前 pending `tool_calls` message 重新带回 child history
 
 ### 测试验证
 

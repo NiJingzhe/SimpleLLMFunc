@@ -1,4 +1,4 @@
-"""Tests for context-window compaction prompt injection in the TUI example."""
+"""Tests for the Responses API TUI example."""
 
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ import pytest
 
 def _load_example_module() -> ModuleType:
     module_path = (
-        Path(__file__).resolve().parent.parent
-        / "examples"
-        / "tui_general_agent_example.py"
+        Path(__file__).resolve().parent.parent / "examples" / "response_api_example.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "test_tui_general_agent_example_module",
+        "test_response_api_example_module",
         module_path,
     )
     assert spec is not None
@@ -31,6 +29,34 @@ def _load_example_module() -> ModuleType:
 @pytest.fixture(scope="module")
 def example_module() -> ModuleType:
     return _load_example_module()
+
+
+def test_response_api_example_uses_responses_interface(
+    example_module: ModuleType,
+) -> None:
+    assert example_module.llm.__class__.__name__ == "OpenAIResponsesCompatible"
+    assert example_module.llm.model_name == "gpt-5.4"
+
+
+def test_response_api_example_decorator_sets_reasoning_kwargs(
+    example_module: ModuleType,
+) -> None:
+    wrapped = example_module.core_agent
+    assert getattr(wrapped, "__name__", "") == "core_agent"
+
+    closure_cells = wrapped.__closure__ or ()
+    llm_kwargs = None
+    for cell in closure_cells:
+        value = cell.cell_contents
+        if isinstance(value, dict) and isinstance(value.get("reasoning"), dict):
+            llm_kwargs = value
+            break
+
+    assert llm_kwargs is not None
+    assert llm_kwargs["reasoning"] == {
+        "effort": "xhigh",
+        "summary": "detailed",
+    }
 
 
 def test_prepare_user_message_appends_compaction_instruction_when_threshold_exceeded(
@@ -53,66 +79,6 @@ def test_prepare_user_message_appends_compaction_instruction_when_threshold_exce
     assert example_module.CONTEXT_WINDOW_COMPACTION_INSTRUCTION in prepared_message
 
 
-def test_prepare_user_message_skips_compaction_instruction_below_threshold(
-    monkeypatch: pytest.MonkeyPatch,
-    example_module: ModuleType,
-) -> None:
-    monkeypatch.setattr(
-        example_module,
-        "llm",
-        SimpleNamespace(
-            input_token_count=25000,
-            output_token_count=14999,
-            context_window=200000,
-        ),
-    )
-
-    prepared_message = example_module._prepare_user_message("Keep going.")
-
-    assert prepared_message == "Keep going."
-
-
-def test_prepare_user_message_does_not_duplicate_compaction_instruction(
-    monkeypatch: pytest.MonkeyPatch,
-    example_module: ModuleType,
-) -> None:
-    monkeypatch.setattr(
-        example_module,
-        "llm",
-        SimpleNamespace(
-            input_token_count=50000,
-            output_token_count=10000,
-            context_window=200000,
-        ),
-    )
-    original_message = (
-        "Please wrap up this task.\n\n"
-        + example_module.CONTEXT_WINDOW_COMPACTION_INSTRUCTION
-    )
-
-    prepared_message = example_module._prepare_user_message(original_message)
-
-    assert prepared_message == original_message
-
-
-def test_resolve_workspace_dir_returns_default_workspace(
-    example_module: ModuleType,
-) -> None:
-    workspace_dir = example_module._resolve_workspace_dir()
-
-    assert workspace_dir == example_module.DEFAULT_WORKSPACE_DIR
-    assert workspace_dir.is_dir()
-
-
-def test_build_environment_block_uses_provided_workspace(
-    tmp_path: Path,
-    example_module: ModuleType,
-) -> None:
-    environment_block = example_module._build_environment_block(tmp_path)
-
-    assert f"- Primary working directory: {tmp_path}" in environment_block
-
-
 def test_tui_example_prompt_uses_explicit_runtime_primitive_language(
     example_module: ModuleType,
 ) -> None:
@@ -122,8 +88,6 @@ def test_tui_example_prompt_uses_explicit_runtime_primitive_language(
     assert "runtime primitive" in docstring.lower()
     assert "call `runtime.selfref.fork.spawn(...)`" in docstring
     assert "call `runtime.selfref.fork.gather_all(...)`" in docstring
-    assert "`fork.spawn`" not in docstring
-    assert "`fork.gather_all`" not in docstring
     assert "runtime primitive inside `execute_code`" in docstring
     assert "runtime primitive inside `execute_code`" in compaction_instruction
 

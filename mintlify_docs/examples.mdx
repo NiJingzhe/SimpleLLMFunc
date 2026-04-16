@@ -108,6 +108,17 @@ title: 示例代码
     - `./sandbox` 范围内的安全工作目录
   </Accordion>
 
+  <Accordion title="Responses API TUI Agent（Responses + selfref + file tools）">
+    文件：[`examples/response_api_example.py`](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/response_api_example.py)
+
+    适合学习最近的 Responses API 与 selfref 工作流，重点展示：
+
+    - `OpenAIResponsesCompatible` 与 `reasoning={...}`
+    - system prompt 到 Responses `instructions` 的适配
+    - `runtime.selfref.fork.gather_all(...)` 的 `status` / `response` / `result` 读取方式
+    - 带 workspace 的 TUI agent 运行方式
+  </Accordion>
+
   <Accordion title="Agent as a Tool（装饰器叠加）">
     文件：[`examples/agent_as_tool_example.py`](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/examples/agent_as_tool_example.py)
 

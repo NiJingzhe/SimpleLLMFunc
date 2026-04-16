@@ -37,11 +37,9 @@ from SimpleLLMFunc.llm_decorator.utils import (
 )
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.runtime.selfref.state import (
-    SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM,
     SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
     SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
     SelfReference,
-    _append_fork_tool_result_message,
 )
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList, MessageList
@@ -727,23 +725,6 @@ def llm_chat(
                                     history_snapshot = effective_self_reference.snapshot_context_messages(
                                         resolved_self_reference_key
                                     )
-                                    if template_params is not None:
-                                        fork_task_message = template_params.get(
-                                            SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM
-                                        )
-                                        if (
-                                            isinstance(fork_task_message, str)
-                                            and fork_task_message
-                                        ):
-                                            history_snapshot, _ = (
-                                                _append_fork_tool_result_message(
-                                                    cast(
-                                                        List[Dict[str, Any]],
-                                                        history_snapshot,
-                                                    ),
-                                                    task_message=fork_task_message,
-                                                )
-                                            )
                                     _set_history_argument(
                                         function_signature.bound_args.arguments,
                                         history_snapshot,

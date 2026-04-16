@@ -267,6 +267,22 @@ async def agent(message: str, history=None):
 
 For custom runtime primitive design, see [Runtime Primitives](/en/detailed_guide/primitive).
 
+Useful selfref primitives:
+
+- `runtime.selfref.context.inspect()`
+- `runtime.selfref.context.remember(...)`
+- `runtime.selfref.context.forget(...)`
+- `runtime.selfref.context.compact(...)`
+- `runtime.selfref.fork.spawn(...)`
+- `runtime.selfref.fork.gather_all(...)`
+
+Key fork rules:
+
+- Child forks inherit the pre-fork context snapshot, not the parent's pending fork tool-call scene.
+- `runtime.selfref.fork.gather_all(...)` returns `dict[fork_id -> ForkResult]`.
+- Compact results expose `status`, `response`, `result`, `memory_key`, `history_count`, and `history_included`.
+- Check `status` first, then read `response` or `result`. Use `include_history=True` only when full child history is actually needed.
+
 ## Best Practices
 
 - Use different PyRepl instances for different task scopes

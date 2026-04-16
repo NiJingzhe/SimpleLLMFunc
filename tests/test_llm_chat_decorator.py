@@ -20,8 +20,18 @@ from openai.types.chat.chat_completion_message_function_tool_call import (
     ChatCompletionMessageFunctionToolCall as ChatCompletionMessageToolCall,
     Function,
 )
+from openai.types.responses import (
+    Response,
+    ResponseOutputMessage,
+    ResponseOutputText,
+    ResponseUsage,
+)
 
 from SimpleLLMFunc.builtin import PyRepl
+from SimpleLLMFunc.interface.openai_responses_compatible import (
+    OpenAIResponsesCompatible,
+)
+from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.runtime.selfref import (
     SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM,
     SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
@@ -205,6 +215,47 @@ def _make_chat_completion(content: Optional[str]) -> ChatCompletion:
         model="test-model",
         object="chat.completion",
     )
+
+
+def _make_responses_text_response(content: str) -> Response:
+    return Response(
+        id="resp_test",
+        created_at=123,
+        model="gpt-test",
+        object="response",
+        output=[
+            ResponseOutputMessage(
+                id="msg_1",
+                role="assistant",
+                status="completed",
+                type="message",
+                content=[
+                    ResponseOutputText(
+                        type="output_text",
+                        text=content,
+                        annotations=[],
+                    )
+                ],
+            )
+        ],
+        parallel_tool_calls=True,
+        status="completed",
+        text={"format": {"type": "text"}},
+        tool_choice="auto",
+        tools=[],
+        truncation="disabled",
+        usage=ResponseUsage(
+            input_tokens=3,
+            input_tokens_details={"cached_tokens": 0},
+            output_tokens=2,
+            output_tokens_details={"reasoning_tokens": 0},
+            total_tokens=5,
+        ),
+    )
+
+
+def _make_text_response(content: str) -> Response:
+    return _make_responses_text_response(content)
 
 
 def _make_tool_call_completion(
@@ -412,7 +463,7 @@ async def test_llm_chat_auto_resolves_builtin_self_reference_from_pyrepl() -> No
         not in captured_system_prompt
     )
     assert (
-        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying."
+        "For fork results, read status/response/result/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying."
         not in captured_system_prompt
     )
     assert "Mounted primitive summary:" not in captured_system_prompt
@@ -514,7 +565,7 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
         not in captured_system_prompt
     )
     assert (
-        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying."
+        "For fork results, read status/response/result/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying."
         not in captured_system_prompt
     )
     assert "Mounted primitive summary:" not in captured_system_prompt
@@ -1220,6 +1271,33 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
         assert child_chat_span["trace_id"] == "trace-root"
         assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
 
+    assert child_messages_seen
+    assert any(
+        len(candidate) >= 4
+        and candidate[0].get("role") == "system"
+        and "test agent" in str(candidate[0].get("content", ""))
+        and candidate[1] == {"role": "user", "content": "seed"}
+        and candidate[2] == {"role": "user", "content": "message: root task"}
+        and candidate[3].get("role") == "user"
+        and "You are now already a forked subagent."
+        in str(candidate[3].get("content", ""))
+        and "you have no need to care about whether the previous fork was correct or not"
+        in str(candidate[3].get("content", ""))
+        and "because it has already succeeded." in str(candidate[3].get("content", ""))
+        and "the only thing you are required to do is:"
+        in str(candidate[3].get("content", ""))
+        and "child task" in str(candidate[3].get("content", ""))
+        and str(candidate[3].get("content", "")).endswith(
+            "Follow the instructions above to finish this task."
+        )
+        and not any(
+            message.get("role") == "assistant" and message.get("tool_calls")
+            for message in candidate[:4]
+            if isinstance(message, dict)
+        )
+        for candidate in child_messages_seen
+    )
+
 
 @pytest.mark.asyncio
 async def test_llm_chat_sets_explicit_langfuse_trace_name() -> None:
@@ -1326,6 +1404,82 @@ async def test_llm_chat_propagates_trace_name_to_child_observations() -> None:
 
     assert generation_span["trace_name"] == "core_agent"
     assert tracker.trace_names_by_trace_id[generation_span["trace_id"]] == "core_agent"
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_forwards_reasoning_kwargs_to_openai_responses_interface() -> (
+    None
+):
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-responses-llm-chat-reasoning",
+    )
+    llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-test",
+        base_url="https://example.com/v1",
+        max_retries=1,
+        retry_delay=0.0,
+    )
+    llm.token_bucket.acquire = AsyncMock(return_value=True)
+
+    create_mock = AsyncMock(return_value=_make_text_response("ok"))
+    fake_client = SimpleNamespace(responses=SimpleNamespace(create=create_mock))
+    llm._get_or_create_client = AsyncMock(return_value=fake_client)
+
+    @llm_chat(llm_interface=llm, reasoning={"effort": "xhigh"})
+    async def core_agent(message: str, history=None):
+        """test agent"""
+
+    stream = cast(
+        AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+        core_agent("hello", history=[]),
+    )
+
+    async for _content, _updated_history in stream:
+        pass
+
+    request_kwargs = create_mock.await_args.kwargs
+    assert request_kwargs["reasoning"] == {"effort": "xhigh"}
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_maps_docstring_system_prompt_to_responses_instructions() -> (
+    None
+):
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-responses-llm-chat-instructions",
+    )
+    llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-test",
+        base_url="https://example.com/v1",
+        max_retries=1,
+        retry_delay=0.0,
+    )
+    llm.token_bucket.acquire = AsyncMock(return_value=True)
+
+    create_mock = AsyncMock(return_value=_make_text_response("ok"))
+    fake_client = SimpleNamespace(responses=SimpleNamespace(create=create_mock))
+    llm._get_or_create_client = AsyncMock(return_value=fake_client)
+
+    @llm_chat(llm_interface=llm)
+    async def core_agent(message: str, history=None):
+        """You are helpful."""
+
+    stream = cast(
+        AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+        core_agent("hello", history=[]),
+    )
+
+    async for _content, _updated_history in stream:
+        pass
+
+    request_kwargs = create_mock.await_args.kwargs
+    assert "You are helpful." in request_kwargs["instructions"]
+    assert "<must_principles>" in request_kwargs["instructions"]
+    assert all(item.get("role") != "system" for item in request_kwargs["input"])
 
 
 @pytest.mark.asyncio

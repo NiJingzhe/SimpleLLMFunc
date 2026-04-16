@@ -50,6 +50,14 @@ Typical pattern:
 
 Use forks only for concrete, isolated, verifiable subtasks. Do not fork tiny inline work.
 
+Important fork context rules:
+
+- A child fork inherits the pre-fork context snapshot, not the parent's pending fork tool-call scene.
+- Write the child task as execution guidance for a sub-agent that already exists; the child does not need to re-decide whether the fork step was correct.
+- `runtime.selfref.fork.gather_all()` returns `dict[fork_id -> ForkResult]`.
+- Compact fork results include `status`, `response`, `result`, `memory_key`, `history_count`, and `history_included`.
+- Check `status` first, then read `response` or `result`. Use `include_history=True` only when the full child history is actually needed.
+
 ## Safety rules
 
 - Execute small code blocks, not giant scripts.

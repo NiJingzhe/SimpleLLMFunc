@@ -10,9 +10,11 @@ SimpleLLMFunc is not only for large agent projects. It is also good at tiny shel
 - decorate one function or one agent
 - call it immediately inside `python - <<'PY'`
 
-The important implementation detail is: the current source-of-truth constructor needs `APIKeyPool` plus `OpenAICompatible`.
+The important implementation detail is: the current source-of-truth constructor needs `APIKeyPool` plus the transport adapter you actually want, typically `OpenAICompatible` or `OpenAIResponsesCompatible`.
 
 ## Minimal direct-construction pattern
+
+### Chat/completions-compatible adapter
 
 ```python
 from SimpleLLMFunc import APIKeyPool, OpenAICompatible
@@ -31,6 +33,31 @@ llm = OpenAICompatible(
 ```
 
 After that, you can use `llm` with either `@llm_function` or `@llm_chat`.
+
+### Responses API adapter
+
+```python
+from SimpleLLMFunc import APIKeyPool, OpenAIResponsesCompatible
+
+
+key_pool = APIKeyPool(
+    api_keys=["sk-your-key"],
+    provider_id="openrouter-gpt-5.4-responses",
+)
+
+llm = OpenAIResponsesCompatible(
+    api_key_pool=key_pool,
+    model_name="gpt-5.4",
+    base_url="https://openrouter.ai/api/v1",
+)
+```
+
+Important notes for the Responses adapter:
+
+- The constructor shape is still `APIKeyPool` + `model_name` + `base_url`.
+- The same `provider.json` structure works with `OpenAIResponsesCompatible.load_from_json_file(...)`.
+- Keep writing normal SimpleLLMFunc docstrings and `history`; the adapter maps the chosen system prompt to Responses `instructions` for you.
+- Pass `reasoning={...}` on `@llm_function` or `@llm_chat` when the provider supports Responses reasoning controls.
 
 ## Instant `llm_function` from the shell
 
@@ -148,4 +175,5 @@ Both are intentionally written as minimal top-level snippets without a `__main__
 - For one-shot heredocs, top-level `print(asyncio.run(...))` or `asyncio.run(run())` is the simplest shape.
 - For chat agents, `FileToolset` plus `PyRepl` is the smallest useful local-agent toolkit.
 - Keep stable policy in the docstring and put the current task in function arguments.
+- Choose `OpenAIResponsesCompatible` when you specifically want OpenAI Responses API behavior such as `reasoning={...}` support while keeping the same decorator-level authoring model.
 - If docs conflict on constructor shape, trust source code and `reference/docs-source/detailed_guide/llm_interface.md`.

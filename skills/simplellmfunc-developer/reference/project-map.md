@@ -81,6 +81,7 @@ Provider-facing integration:
 
 - `llm_interface.py`
 - `openai_compatible.py`
+- `openai_responses_compatible.py`
 - `key_pool.py`
 - `token_bucket.py`
 
@@ -104,5 +105,6 @@ Support layers such as:
 - Selfref context parse/render issue: start in `runtime/selfref/context_ops.py` before changing stateful code.
 - Event-stream issue: start in `hooks/`, then inspect decorator step modules.
 - ReAct termination / hook-order issue: start in `base/ReAct.py` and follow the phase helpers plus `before_finalize` call sites.
-- Provider transport issue: start in `interface/openai_compatible.py` plus related tests.
+- Provider transport issue: start in the relevant adapter under `interface/` (`openai_compatible.py` or `openai_responses_compatible.py`) plus related tests.
+- Selfref fork context-construction issue: start in `runtime/selfref/state.py`; check how pre-fork history is stripped/materialized before touching decorator wrappers.
 - User-facing docs mismatch: source code and tests win; then patch `mintlify_docs/` and maybe `README.md`.

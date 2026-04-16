@@ -1,8 +1,8 @@
 ---
 name: simplellmfunc
-description: "Use SimpleLLMFunc to build typed async LLM functions, chat agents, tools, event-stream consumers, and PyRepl/selfref workflows. Use when writing or editing app code that imports SimpleLLMFunc, configures provider.json, adds @llm_function/@llm_chat/@tool, or mounts PyRepl/FileToolset."
+description: "Use SimpleLLMFunc to build typed async LLM functions, chat agents, tools, event-stream consumers, and PyRepl/selfref workflows. Use when writing or editing app code that imports SimpleLLMFunc, configures provider.json, adds @llm_function/@llm_chat/@tool, chooses OpenAICompatible or OpenAIResponsesCompatible, or mounts PyRepl/FileToolset."
 license: MIT
-compatibility: "Python 3.12+ repo with async execution and OpenAI-compatible providers configured through provider.json."
+compatibility: "Python 3.12+ repo with async execution and OpenAI-compatible chat endpoints or OpenAI Responses API endpoints configured through provider.json."
 metadata:
   project: SimpleLLMFunc
   version: "0.7.7"
@@ -12,7 +12,7 @@ metadata:
 
 ## When to use this skill
 - Use this skill for application-level work built on top of SimpleLLMFunc.
-- Use it when the task mentions `llm_function`, `llm_chat`, `tool`, `OpenAICompatible`, `provider.json`, `enable_event`, `PyRepl`, `SelfReference`, `FileToolset`, or the built-in TUI.
+- Use it when the task mentions `llm_function`, `llm_chat`, `tool`, `OpenAICompatible`, `OpenAIResponsesCompatible`, `provider.json`, `reasoning`, `enable_event`, `PyRepl`, `SelfReference`, `FileToolset`, or the built-in TUI.
 - Do not use this skill for framework-internal refactors; use `simplellmfunc-developer` for that.
 
 ## Core philosophy
@@ -57,9 +57,16 @@ Write `llm_chat` docstrings as stable assistant policy and long-lived behavior. 
 - When `llm_chat` is bound to `SelfReference`, the framework syncs turn state automatically through ReAct lifecycle hooks. Treat `runtime.selfref.context.*` as the supported way to change durable context instead of editing old history messages in place.
 
 ## Fast start modes
-- Project mode: load models from `provider.json` with `OpenAICompatible.load_from_json_file(...)` when you have shared config or multiple models.
-- Instant mode: write a tiny `python - <<'PY'` snippet, construct `APIKeyPool` + `OpenAICompatible` directly, decorate one function, and call it immediately.
+- Project mode: load models from `provider.json` with `OpenAICompatible.load_from_json_file(...)` or `OpenAIResponsesCompatible.load_from_json_file(...)` when you have shared config or multiple models.
+- Instant mode: write a tiny `python - <<'PY'` snippet, construct `APIKeyPool` plus the right adapter (`OpenAICompatible` or `OpenAIResponsesCompatible`) directly, decorate one function, and call it immediately.
 - Prefer instant mode for quick shell usage, generated scripts, demos, and one-off local agents.
+
+## Interface choice
+- Use `OpenAICompatible` for normal OpenAI-style chat/completions endpoints.
+- Use `OpenAIResponsesCompatible` for OpenAI Responses API endpoints when you want the Responses transport while keeping the same decorator surface.
+- `OpenAIResponsesCompatible` uses the same `provider.json` shape and direct-construction shape as `OpenAICompatible`.
+- When you use `OpenAIResponsesCompatible`, the framework still builds normal chat/system messages first; the adapter maps the chosen system prompt to Responses `instructions` and forwards `reasoning={...}` kwargs.
+- Keep prompt authoring the same across both adapters. Do not rewrite docstrings around raw Responses wire format.
 
 ## Export the packaged skill
 
@@ -149,7 +156,7 @@ LANGFUSE_ENABLED=true
 2. Define everything as `async def`.
 3. Write a precise docstring prompt and leave the body as `pass`.
 4. Use explicit parameter types and a typed return value; prefer Pydantic for structured outputs.
-5. Build the model either from `provider.json` or directly with `APIKeyPool` + `OpenAICompatible`.
+5. Build the model either from `provider.json` or directly with `APIKeyPool` + `OpenAICompatible` / `OpenAIResponsesCompatible`.
 6. Add `toolkit=[...]` only when the task truly needs tools.
 7. Validate with a focused example or event consumer.
 
@@ -403,6 +410,9 @@ asyncio.run(main())
 - `too_long_to_file=True` keeps roughly the first 20000 tokens in chat and writes the full tool result to a temp file.
 - `PyRepl.reset()` clears REPL variables but keeps runtime backends and self-reference memory.
 - `runtime.selfref.context.compact(...)` is queued first. When called from a tool run, the compacted context is applied before the next same-turn LLM step when possible, and finalize still commits any leftover queued compaction before the turn ends.
+- `OpenAIResponsesCompatible` is a first-class adapter. It maps the selected system prompt to Responses `instructions`, supports `reasoning={...}`, and keeps Responses-specific request/stream behavior out of your decorator code.
+- `runtime.selfref.fork.spawn(...)` children inherit the pre-fork context snapshot, not the parent's in-flight fork tool-call scene.
+- `runtime.selfref.fork.gather_all(...)` returns `dict[fork_id -> ForkResult]`. Check `status` first, then read `response` or `result`; compact results omit child history unless you request `include_history=True`.
 - `FileToolset` is workspace-scoped and read-before-write guarded.
 
 ## Load more context only when needed

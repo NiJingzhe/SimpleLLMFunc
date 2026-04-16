@@ -2,13 +2,16 @@
 
 ## Provider loading
 
-The canonical loading path is:
+The canonical loading path is one of these two adapters, depending on the upstream API surface:
 
 ```python
-from SimpleLLMFunc import OpenAICompatible
+from SimpleLLMFunc import OpenAICompatible, OpenAIResponsesCompatible
 
-models = OpenAICompatible.load_from_json_file("provider.json")
-llm = models["openrouter"]["z-ai/glm-5"]
+chat_models = OpenAICompatible.load_from_json_file("provider.json")
+responses_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+
+chat_llm = chat_models["openrouter"]["z-ai/glm-5"]
+responses_llm = responses_models["openrouter"]["gpt-5.4"]
 ```
 
 `load_from_json_file(...)` returns a nested mapping:
@@ -17,12 +20,20 @@ llm = models["openrouter"]["z-ai/glm-5"]
 providers[provider_id][model_name]
 ```
 
+## Choosing the adapter
+
+- Use `OpenAICompatible` for normal chat/completions-style OpenAI-compatible endpoints.
+- Use `OpenAIResponsesCompatible` for OpenAI Responses API endpoints.
+- Both adapters use the same `provider.json` structure and the same lookup shape.
+- With `OpenAIResponsesCompatible`, you still write normal SimpleLLMFunc docstrings and `history`; the adapter maps the selected system prompt to Responses `instructions`.
+- `reasoning={...}` is especially relevant with `OpenAIResponsesCompatible`, because it forwards Responses reasoning configuration without changing decorator usage.
+
 ## Direct construction for instant use
 
 When you want a shell-first or one-file workflow, build the interface directly instead of creating `provider.json` first.
 
 ```python
-from SimpleLLMFunc import APIKeyPool, OpenAICompatible
+from SimpleLLMFunc import APIKeyPool, OpenAICompatible, OpenAIResponsesCompatible
 
 
 key_pool = APIKeyPool(
@@ -35,13 +46,20 @@ llm = OpenAICompatible(
     model_name="z-ai/glm-5",
     base_url="https://openrouter.ai/api/v1",
 )
+
+responses_llm = OpenAIResponsesCompatible(
+    api_key_pool=key_pool,
+    model_name="gpt-5.4",
+    base_url="https://openrouter.ai/api/v1",
+)
 ```
 
 Important notes:
 
-- This constructor shape is the current source-of-truth implementation.
+- Both constructor shapes are current source-of-truth implementations.
 - `APIKeyPool` is singleton-like per `provider_id`, so reuse the same `provider_id` only for the same key set.
 - Replace the literal placeholders with your real key/model/base URL and paste the snippet into `python - <<'PY'` if you want truly instant shell usage.
+- Choose one adapter per actual upstream API surface. Do not swap adapters casually if the working project already expects one transport path.
 - For ready-to-copy minimal patterns, see `reference/instant-use.md` and `examples/instant_llm_function.py`.
 
 ## `provider.json` shape
@@ -88,6 +106,7 @@ llm = models["openrouter"]["z-ai/glm-5"]
 - Within one provider, keep `model_name` values unique.
 - Prefer multiple API keys per hot model to reduce single-key throttling.
 - Tune rate limits per model instead of reusing one configuration everywhere.
+- Keep the adapter choice explicit in app code so it is obvious whether one path is using chat/completions transport or Responses transport.
 
 ## `.env` usage
 
@@ -130,4 +149,4 @@ Langfuse is optional. If your task needs observability, configure the correspond
 
 ## Selection strategy
 
-Choose the model key that already exists in the working project's `provider.json`. Do not hard-code a different provider unless the task explicitly asks for one.
+Choose the model key and adapter that already exist in the working project's setup. Do not hard-code a different provider or transport unless the task explicitly asks for one.

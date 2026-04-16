@@ -35,6 +35,12 @@ So the final system prompt is conceptually:
 
 The current user input values go to the user message, not the system prompt.
 
+Responses adapter note:
+
+- If `llm_interface` is `OpenAIResponsesCompatible`, the framework still builds normal system/user messages first.
+- The adapter then extracts the chosen system prompt and sends it as Responses `instructions`.
+- Keep authoring docstrings and history the normal SimpleLLMFunc way; do not rewrite prompts around raw Responses request schema.
+
 ### What to write in an `llm_function` docstring
 
 Good content:
@@ -186,6 +192,7 @@ This means durable prompt memory is intended to hold the human-authored base pol
 - Put tool-specific usage rules on the tool when possible.
 - If you need a different system prompt for one chat session, pass a latest `system` message in history.
 - If you need durable runtime context mutation, use self-reference context helpers such as `runtime.selfref.context.remember(...)` or `runtime.selfref.context.compact(...)`.
+- If you use `OpenAIResponsesCompatible`, keep the same prompt-writing model and let the adapter translate the selected system prompt to `instructions`.
 
 ## Source-of-truth pointers
 

@@ -95,64 +95,46 @@ def _split_system_prompt_experiences(
     return _context_ops_split_system_prompt_experiences(system_prompt)
 
 
-def _build_fork_clone_instruction(task_message: str) -> str:
-    return f"You are now a clone of parent agent, and Your task is: {task_message}"
-
-
-def _append_fork_tool_result_message(
+def _strip_terminal_pending_tool_calls_message(
     history: MemoryHistory,
-    *,
-    task_message: str,
 ) -> tuple[MemoryHistory, bool]:
     if not history:
         return history, False
 
-    matched_tool_call_id: Optional[str] = None
-
-    def _get_field(value: Any, key: str) -> Any:
-        if isinstance(value, dict):
-            return value.get(key)
-        return getattr(value, key, None)
-
-    for message in reversed(history):
-        if not isinstance(message, dict):
-            continue
-        if message.get("role") != "assistant":
-            continue
-        tool_calls = message.get("tool_calls")
-        if not isinstance(tool_calls, list) or not tool_calls:
-            continue
-
-        for tool_call in reversed(tool_calls):
-            function_payload = _get_field(tool_call, "function")
-            if _get_field(function_payload, "name") != "execute_code":
-                continue
-            tool_call_id = _get_field(tool_call, "id")
-            if isinstance(tool_call_id, str) and tool_call_id:
-                matched_tool_call_id = tool_call_id
-                break
-
-        if matched_tool_call_id is not None:
-            break
-
-    if matched_tool_call_id is None:
+    last_message = history[-1]
+    if not isinstance(last_message, dict):
+        return history, False
+    if last_message.get("role") != "assistant":
         return history, False
 
+    tool_calls = last_message.get("tool_calls")
+    if not isinstance(tool_calls, list) or not tool_calls:
+        return history, False
+
+    return _clone_messages(history[:-1]), True
+
+
+def _append_fork_task_user_message(
+    history: MemoryHistory,
+    *,
+    task_message: str,
+) -> MemoryHistory:
+    child_task_instruction = (
+        "You are now already a forked subagent. "
+        "So you have no need to care about whether the previous fork was "
+        "correct or not, because it has already succeeded. "
+        "And now, the only thing you are required to do is:\n\n"
+        f"{task_message}\n\n"
+        "Follow the instructions above to finish this task."
+    )
     updated_history = _clone_messages(history)
     updated_history.append(
         {
-            "role": "tool",
-            "tool_call_id": matched_tool_call_id,
-            "content": _build_fork_clone_instruction(task_message),
-        }
-    )
-    updated_history.append(
-        {
             "role": "user",
-            "content": _build_fork_clone_instruction(task_message),
+            "content": child_task_instruction,
         }
     )
-    return updated_history, True
+    return updated_history
 
 
 def _is_valid_content_for_role(role: str, content: Any) -> bool:
@@ -504,6 +486,7 @@ def _build_fork_error_result(
         "error_type": type(error).__name__,
         "error_message": str(error),
         "response": None,
+        "result": None,
         "history": [],
         "history_count": 0,
         "history_included": True,
@@ -1469,6 +1452,11 @@ class SelfReference(RuntimePrimitiveBackend):
             compact_result = dict(result)
         compact_result.pop("history", None)
 
+        if "response" not in compact_result and "result" in compact_result:
+            compact_result["response"] = compact_result.get("result")
+        if "result" not in compact_result and "response" in compact_result:
+            compact_result["result"] = compact_result.get("response")
+
         history_count = compact_result.get("history_count")
         if not isinstance(history_count, int):
             memory_key = compact_result.get("memory_key")
@@ -1528,29 +1516,26 @@ class SelfReference(RuntimePrimitiveBackend):
         source_key = self._resolve_source_memory_key_for_fork(source_memory_key)
         inherited_history = self.snapshot_history(source_key)
         task_message: Optional[str] = None
-        close_parent_tool_call = False
         if agent_args and isinstance(agent_args[0], str):
             task_message = agent_args[0]
         elif isinstance(agent_kwargs.get("message"), str):
             task_message = cast(str, agent_kwargs.get("message"))
 
-        if task_message:
-            inherited_history, close_parent_tool_call = (
-                _append_fork_tool_result_message(
-                    inherited_history,
-                    task_message=task_message,
-                )
+        inherited_history, _ = _strip_terminal_pending_tool_calls_message(
+            inherited_history
+        )
+
+        history_param_name = _extract_history_param_name(agent_instance)
+        pass_task_via_history = bool(
+            task_message
+            and history_param_name is not None
+            and _agent_supports_template_params(agent_instance)
+        )
+        if pass_task_via_history and task_message is not None:
+            inherited_history = _append_fork_task_user_message(
+                inherited_history,
+                task_message=task_message,
             )
-            if (
-                not close_parent_tool_call
-                and self._get_active_react_state() is not None
-                and self._get_active_memory_key() == source_key
-            ):
-                raise ValueError(
-                    "selfref fork requires an active parent assistant tool_call "
-                    "context so the child history can be closed with a matching "
-                    "tool result"
-                )
 
         if fork_memory_key is None:
             target_key = self._build_fork_memory_key(source_key)
@@ -1586,11 +1571,10 @@ class SelfReference(RuntimePrimitiveBackend):
 
         call_kwargs = dict(agent_kwargs)
         call_args = list(agent_args)
-        if close_parent_tool_call and call_args and isinstance(call_args[0], str):
+        if pass_task_via_history and call_args and isinstance(call_args[0], str):
             call_args[0] = ""
-        if close_parent_tool_call and isinstance(call_kwargs.get("message"), str):
+        if pass_task_via_history and isinstance(call_kwargs.get("message"), str):
             call_kwargs["message"] = ""
-        history_param_name = _extract_history_param_name(agent_instance)
         if history_param_name is not None and history_param_name not in call_kwargs:
             call_kwargs[history_param_name] = _clone_messages(inherited_history)
 
@@ -1601,7 +1585,7 @@ class SelfReference(RuntimePrimitiveBackend):
                 call_kwargs.get("_template_params"),
                 target_key,
                 child_toolkit_override,
-                task_message if close_parent_tool_call else None,
+                task_message,
             )
 
         active_key_token = self._set_active_memory_key(target_key)
@@ -1609,6 +1593,7 @@ class SelfReference(RuntimePrimitiveBackend):
             fork_id=fork_id,
             depth=fork_depth,
         )
+        active_react_state_token = self._active_react_state_var.set(None)
         active_toolkit_token = self._set_active_runtime_toolkit(child_toolkit_override)
         try:
             call_output = agent_instance(*call_args, **call_kwargs)
@@ -1640,6 +1625,7 @@ class SelfReference(RuntimePrimitiveBackend):
         finally:
             self._reset_active_memory_key(active_key_token)
             self._reset_active_fork_context(active_fork_tokens)
+            self._active_react_state_var.reset(active_react_state_token)
             self._reset_active_runtime_toolkit(active_toolkit_token)
 
         if final_history is not None:
@@ -1654,6 +1640,7 @@ class SelfReference(RuntimePrimitiveBackend):
                 "memory_key": target_key,
                 "status": "completed",
                 "response": response,
+                "result": response,
             },
             include_history=include_history,
         )
@@ -1801,6 +1788,7 @@ class SelfReference(RuntimePrimitiveBackend):
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
                     "response": None,
+                    "result": None,
                     "history": [],
                     "history_count": 0,
                     "history_included": True,

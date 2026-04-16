@@ -43,7 +43,11 @@ Environment variable priority, from highest to lowest: runtime environment varia
 
 ## `provider.json` file
 
-`provider.json` is used to configure model providers, API keys, and rate limiting parameters. After `OpenAICompatible.load_from_json_file(...)` reads this file, it returns a two-dimensional dictionary: `providers[provider_id][model_name]`.
+`provider.json` is used to configure model providers, API keys, and rate limiting parameters. Both `OpenAICompatible.load_from_json_file(...)` and `OpenAIResponsesCompatible.load_from_json_file(...)` read this file and return a two-dimensional dictionary: `providers[provider_id][model_name]`.
+
+<Callout type="info">
+`provider.json` only describes runtime access concerns such as provider/model/key/base_url/retry/rate-limiting. Choosing `OpenAICompatible` vs `OpenAIResponsesCompatible` depends on whether your upstream endpoint is chat/completions-compatible or a Responses API endpoint.
+</Callout>
 
 ### Configuration file structure
 
@@ -100,10 +104,12 @@ Environment variable priority, from highest to lowest: runtime environment varia
 ### Loading and Usage
 
 ```python
-from SimpleLLMFunc import OpenAICompatible, llm_function
+from SimpleLLMFunc import OpenAICompatible, OpenAIResponsesCompatible, llm_function
 
 models = OpenAICompatible.load_from_json_file("provider.json")
 gpt35 = models["openai"]["gpt-3.5-turbo"]
+responses_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+gpt54 = responses_models["openrouter"]["gpt-5.4"]
 
 @llm_function(llm_interface=gpt35)
 async def my_task(text: str) -> str:

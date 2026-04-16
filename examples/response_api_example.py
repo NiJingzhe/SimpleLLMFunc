@@ -1,15 +1,16 @@
-"""General TUI agent demo with runtime selfref + file tools.
+"""General TUI agent demo using OpenAI Responses API with runtime selfref + file tools.
 
 Run:
-    poetry run python examples/tui_general_agent_example.py
-    poetry run python examples/tui_general_agent_example.py --workspace /path/to/workspace
+    poetry run python examples/response_api_example.py
+    poetry run python examples/response_api_example.py --workspace /path/to/workspace
 
 What this example demonstrates:
-1. ``SelfReference`` mounted as a ``PyRepl`` runtime backend via ``selfref`` pack.
-2. One agent can use both ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
-3. ``FileToolset`` mounted for workspace-safe file operations.
-4. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
-5. Forked context inherits the current selfref context snapshot.
+1. ``OpenAIResponsesCompatible`` driving ``llm_chat`` through the Responses API.
+2. ``SelfReference`` mounted as a ``PyRepl`` runtime backend via ``selfref`` pack.
+3. One agent can use both ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
+4. ``FileToolset`` mounted for workspace-safe file operations.
+5. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
+6. Forked context inherits the current selfref context snapshot.
 
 Workspace:
 - File tools and the persistent REPL are scoped to the configured workspace.
@@ -35,7 +36,7 @@ import sys
 from pathlib import Path
 from typing import Any, AsyncGenerator
 
-from SimpleLLMFunc import OpenAICompatible, llm_chat
+from SimpleLLMFunc import OpenAIResponsesCompatible, llm_chat
 from SimpleLLMFunc.runtime.selfref import (
     SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
 )
@@ -52,7 +53,7 @@ MEMORY_KEY = "agent_main"
 CURRENT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = CURRENT_DIR.parent
 DEFAULT_WORKSPACE_DIR = PROJECT_ROOT / "sandbox"
-DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "tui_general_agent_debug.log"
+DEBUG_LOG_PATH = PROJECT_ROOT / "logs" / "response_api_example_debug.log"
 CONTEXT_WINDOW_COMPACTION_THRESHOLD = 0.2
 CONTEXT_WINDOW_COMPACTION_INSTRUCTION = (
     "After you finish the current task, call the runtime primitive inside `execute_code`: "
@@ -67,7 +68,7 @@ CONTEXT_WINDOW_COMPACTION_INSTRUCTION = (
 
 
 def _build_local_debug_logger() -> logging.Logger:
-    logger = logging.getLogger("simplellmfunc.examples.tui_general_agent")
+    logger = logging.getLogger("simplellmfunc.examples.response_api_example")
     if logger.handlers:
         return logger
 
@@ -80,7 +81,7 @@ def _build_local_debug_logger() -> logging.Logger:
         logging.Formatter("%(asctime)s | %(levelname)s | %(message)s")
     )
     logger.addHandler(file_handler)
-    logger.info("=== general TUI agent session started ===")
+    logger.info("=== response api example session started ===")
     return logger
 
 
@@ -121,7 +122,7 @@ def local_debug_event_hook(
 def load_llm():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     provider_json_path = os.path.join(current_dir, "provider.json")
-    models = OpenAICompatible.load_from_json_file(provider_json_path)
+    models = OpenAIResponsesCompatible.load_from_json_file(provider_json_path)
     return models["openrouter"]["gpt-5.4"]
 
 
@@ -253,7 +254,9 @@ def _build_runtime_toolkit() -> list[Any]:
 
 
 def _parse_cli_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Launch the general TUI agent demo.")
+    parser = argparse.ArgumentParser(
+        description="Launch the Responses API TUI agent demo."
+    )
     parser.add_argument(
         "--workspace",
         help="Workspace path for the persistent REPL and file tools.",
@@ -268,7 +271,7 @@ def _parse_cli_args() -> argparse.Namespace:
     enable_event=True,
     self_reference_key=MEMORY_KEY,
     temperature=1.0,
-    reasoning_effort="xhigh"
+    reasoning={"effort": "xhigh", "summary": "detailed"},
 )
 async def core_agent(message: str, history: HistoryList):
     """

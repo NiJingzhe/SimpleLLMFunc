@@ -2,7 +2,7 @@
 title: LLM Interface Layer
 ---
 
-This page describes SimpleLLMFunc's LLM interface layer design, including unified interface abstraction, OpenAI-compatible implementation, key pool, and flow control.
+This page describes SimpleLLMFunc's LLM interface layer design, including unified interface abstraction, the `OpenAICompatible` and `OpenAIResponsesCompatible` adapters, key pools, and flow control.
 
 ## What will you use?
 
@@ -13,6 +13,9 @@ This page describes SimpleLLMFunc's LLM interface layer design, including unifie
   <Card title="OpenAICompatible">
     The default implementation for integrating with OpenAI-compatible interfaces, suitable as the entry point for most projects.
   </Card>
+  <Card title="OpenAIResponsesCompatible">
+    An adapter for OpenAI Responses API endpoints while keeping the same decorator-facing usage model.
+  </Card>
   <Card title="APIKeyPool">
     Responsible for load balancing and task allocation of multiple API Keys.
   </Card>
@@ -22,7 +25,11 @@ This page describes SimpleLLMFunc's LLM interface layer design, including unifie
 </CardGroup>
 
 <Callout type="info">
-If you only want to quickly integrate the model, prefer using `OpenAICompatible.load_from_json_file(...)`. Only when you need programmatic control over the key pool or rate limiting parameters should you manually instantiate the interface object.
+If you only want to quickly integrate the model, prefer using `OpenAICompatible.load_from_json_file(...)` or `OpenAIResponsesCompatible.load_from_json_file(...)`. Only when you need programmatic control over the key pool or rate limiting parameters should you manually instantiate the interface object.
+</Callout>
+
+<Callout type="info">
+Simple rule: use `OpenAICompatible` for normal chat/completions-compatible endpoints, and `OpenAIResponsesCompatible` for OpenAI Responses API endpoints. Both use the same `provider.json` structure.
 </Callout>
 
 ## Quick Start
@@ -54,9 +61,10 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
   </Step>
   <Step title="Load model from configuration file">
     ```python
-    from SimpleLLMFunc import OpenAICompatible
+    from SimpleLLMFunc import OpenAICompatible, OpenAIResponsesCompatible
 
     llm = OpenAICompatible.load_from_json_file("provider.json")["openai"]["gpt-3.5-turbo"]
+    responses_llm = OpenAIResponsesCompatible.load_from_json_file("provider.json")["openrouter"]["gpt-5.4"]
     ```
   </Step>
   <Step title="for use by the decorator">
@@ -75,7 +83,7 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
 
 <AccordionGroup>
   <Accordion title="LLM_Interface abstract base class">
-    LLM_Interface is the abstract base class for all LLM implementations, defining a unified interface specification. Its goal is to converge the calling method and return format to a consistent interface.
+    LLM_Interface is the abstract base class for all LLM implementations, defining a unified interface specification. Its goal is to converge the calling method and return format to a consistent interface. Both `OpenAICompatible` and `OpenAIResponsesCompatible` inherit from it.
 
     Core Features:
 
@@ -137,6 +145,17 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
     - Multi-Key Rotation
   </Accordion>
 
+  <Accordion title="OpenAIResponsesCompatible Adapter">
+    `OpenAIResponsesCompatible` integrates with OpenAI Responses API endpoints while keeping the same `@llm_function` / `@llm_chat` surface for application code.
+
+    Key points:
+
+    - It uses the same `provider.json` structure as `OpenAICompatible`
+    - Its constructor still takes `APIKeyPool`, `model_name`, and `base_url`
+    - Decorator code still builds normal system/user messages first, then the adapter maps the selected system prompt to Responses `instructions`
+    - Responses-specific features such as `reasoning={...}` are forwarded by the adapter without forcing app code to speak raw Responses schema
+  </Accordion>
+
   <Accordion title="APIKeyPool Key Management">
     `APIKeyPool` uses a min heap to maintain the current load of each key, preferentially assigning the most idle key.
 
@@ -165,10 +184,10 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
   </Accordion>
 </AccordionGroup>
 
-## How to Create OpenAICompatible
+## How to Create Interface Instances
 
 <Tabs>
-  <Tab title="Load from configuration file (recommended)">
+  <Tab title="OpenAICompatible: load from config">
     ```python
     from SimpleLLMFunc import OpenAICompatible
 
@@ -179,7 +198,7 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
     deepseek = all_models["deepseek"]["deepseek-chat"]
     ```
   </Tab>
-  <Tab title="Create Instance Manually">
+  <Tab title="OpenAICompatible: create manually">
     ```python
     from SimpleLLMFunc import OpenAICompatible, APIKeyPool
 
@@ -192,6 +211,34 @@ If you only want to quickly integrate the model, prefer using `OpenAICompatible.
         api_key_pool=key_pool,
         model_name="gpt-3.5-turbo",
         base_url="https://api.openai.com/v1",
+        max_retries=5,
+        retry_delay=1.0,
+        rate_limit_capacity=20,
+        rate_limit_refill_rate=3.0,
+    )
+    ```
+  </Tab>
+  <Tab title="OpenAIResponsesCompatible: load from config">
+    ```python
+    from SimpleLLMFunc import OpenAIResponsesCompatible
+
+    all_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+    responses_llm = all_models["openrouter"]["gpt-5.4"]
+    ```
+  </Tab>
+  <Tab title="OpenAIResponsesCompatible: create manually">
+    ```python
+    from SimpleLLMFunc import APIKeyPool, OpenAIResponsesCompatible
+
+    key_pool = APIKeyPool(
+        api_keys=["sk-key1", "sk-key2"],
+        provider_id="openrouter-gpt-5.4-responses",
+    )
+
+    responses_llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-5.4",
+        base_url="https://openrouter.ai/api/v1",
         max_retries=5,
         retry_delay=1.0,
         rate_limit_capacity=20,
