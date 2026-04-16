@@ -5,7 +5,7 @@ Run:
 
 What this example demonstrates:
 1. ``SelfReference`` mounted as a ``PyRepl`` runtime backend via ``selfref`` pack.
-2. One agent can use both ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
+2. One agent can use both ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
 3. ``FileToolset`` mounted for workspace-safe file operations.
 4. ``llm_chat`` auto-appends runtime primitive guidance into system prompt.
 5. Forked context inherits memory snapshot from current selfref key.
@@ -15,7 +15,7 @@ Workspace:
 
 Try prompts:
 - "Use execute_code to inspect runtime.get_primitive_spec('selfref.fork.gather_all')"
-- "Append a durable preference with runtime.selfref.history.append_system_prompt"
+- "Append a durable preference with runtime.selfref.context.remember"
 - "Remember a note in memory, then read it back"
 - "Split this task into two forks and merge their results"
 - "Use grep to search for 'selfref' in README.md, then read the file"

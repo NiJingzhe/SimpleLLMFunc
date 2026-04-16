@@ -14,6 +14,13 @@ from SimpleLLMFunc.hooks.input_stream import AgentInputRouter
 from SimpleLLMFunc.hooks.stream import ReactOutput
 from SimpleLLMFunc.utils.tui import app as app_module
 from SimpleLLMFunc.utils.tui.app import AgentTUIApp
+from SimpleLLMFunc.utils.tui.tool_cards.base import ToolCallCard
+from SimpleLLMFunc.utils.tui.tool_cards.default import DefaultToolCallCard
+from SimpleLLMFunc.utils.tui.tool_cards.execute_code import ExecuteCodeToolCallCard
+from SimpleLLMFunc.utils.tui.tool_cards.file_tools import (
+    ReadFileToolCallCard,
+    SedToolCallCard,
+)
 
 
 async def _unused_agent(_message: str) -> AsyncGenerator[ReactOutput, None]:
@@ -61,6 +68,209 @@ async def test_model_and_tool_blocks_mount_children_after_parent() -> None:
         app.query_one(".model-bubble")
         tool_block = app.query_one(".tool-call")
         tool_block.query_one(".tool-status", Static)
+
+
+@pytest.mark.asyncio
+async def test_assistant_bubble_shows_loading_indicator_while_running() -> None:
+    """Assistant bubble should show loading indicator before model finishes."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+
+        bubble = app.query_one(".model-bubble")
+        loading = bubble.query_one(".assistant-loading", Static)
+        label = bubble.query_one(".assistant-loading-label", Static)
+        assert str(loading.content) in {".", "..", "..."}
+        assert str(label.content) == "typing"
+
+
+@pytest.mark.asyncio
+async def test_assistant_bubble_hides_loading_indicator_when_finished() -> None:
+    """Assistant bubble loading indicator should disappear after completion."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.finish_model_response("llm_call_1", "model | 0.01s")
+
+        bubble = app.query_one(".model-bubble")
+        with pytest.raises(NoMatches):
+            bubble.query_one(".assistant-loading", Static)
+
+
+@pytest.mark.asyncio
+async def test_assistant_streaming_content_remains_visible_while_loading() -> None:
+    """Streaming content should stay visible while the loading indicator is active."""
+    app = _make_app()
+
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "streaming text")
+        await pilot.pause(0.05)
+
+        bubble = app.query_one(".model-bubble")
+        loading = bubble.query_one(".assistant-loading", Static)
+        content = app._models["llm_call_1"].content_widget
+
+        assert app._models["llm_call_1"].content == "streaming text"
+        assert content.region.height > 0
+        assert content.region.y < loading.region.y
+
+
+@pytest.mark.asyncio
+async def test_assistant_loading_indicator_is_compact_bottom_status() -> None:
+    """Loading indicator should render as a compact bottom status, not a full overlay."""
+    app = _make_app()
+
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "hello")
+        await pilot.pause(0.05)
+
+        bubble = app.query_one(".model-bubble")
+        loading = bubble.query_one(".assistant-loading", Static)
+
+        assert loading.region.height == 1
+        assert loading.region.width <= 3
+
+
+@pytest.mark.asyncio
+async def test_assistant_typing_label_hides_on_first_content_delta() -> None:
+    """typing label should disappear immediately when first content arrives."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "h")
+
+        label = app._models["llm_call_1"].loading_label_widget
+        assert label.display is False
+
+
+@pytest.mark.asyncio
+async def test_assistant_loading_label_hides_after_content_starts_streaming() -> None:
+    """Once content starts streaming, only the spinner should remain visible."""
+    app = _make_app()
+
+    async with app.run_test(size=(80, 24)) as pilot:
+        await app.start_model_response("llm_call_1")
+        await app.append_model_content("llm_call_1", "hello")
+        await pilot.pause(0.05)
+
+        bubble = app.query_one(".model-bubble")
+        loading = bubble.query_one(".assistant-loading", Static)
+        label = bubble.query_one(".assistant-loading-label", Static)
+
+        assert loading.region.width > 0
+        assert label.region.width == 0
+
+
+@pytest.mark.asyncio
+async def test_fork_bubble_uses_running_fork_loading_label() -> None:
+    """Fork model bubbles should use a fork-specific loading label."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("fork::fork_1")
+
+        bubble = app.query_one(".model-bubble")
+        label = bubble.query_one(".assistant-loading-label", Static)
+
+        assert str(label.content) == "running fork"
+
+
+@pytest.mark.asyncio
+async def test_default_tool_card_factory_uses_base_tool_card_subclass() -> None:
+    """Unknown tools should use the default ToolCallCard implementation."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-default",
+            tool_name="lookup",
+            arguments={"query": "hello"},
+        )
+
+        tool = app._tools["call-default"]
+        assert isinstance(tool, ToolCallCard)
+        assert isinstance(tool, DefaultToolCallCard)
+        assert "- `query`: `hello`" in tool.arguments_markdown
+
+
+@pytest.mark.asyncio
+async def test_execute_code_uses_specialized_tool_card() -> None:
+    """execute_code should render with its dedicated card implementation."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-exec",
+            tool_name="execute_code",
+            arguments={"code": "print(1)", "timeout_seconds": 30},
+        )
+
+        tool = app._tools["call-exec"]
+        assert isinstance(tool, ExecuteCodeToolCallCard)
+        assert "## Code" in tool.arguments_markdown
+        assert "```python" in tool.arguments_markdown
+        assert "## Runtime Controls" in tool.arguments_markdown
+        assert "timeout_seconds" in tool.arguments_markdown
+
+
+@pytest.mark.asyncio
+async def test_read_file_uses_specialized_file_tool_card() -> None:
+    """read_file should render path and line range with file-focused layout."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-read",
+            tool_name="read_file",
+            arguments={"path": "src/app.py", "start_line": 10, "end_line": 25},
+        )
+
+        tool = app._tools["call-read"]
+        assert isinstance(tool, ReadFileToolCallCard)
+        assert "## File" in tool.arguments_markdown
+        assert "`src/app.py`" in tool.arguments_markdown
+        assert "## Line Range" in tool.arguments_markdown
+        assert "10-25" in tool.arguments_markdown
+
+
+@pytest.mark.asyncio
+async def test_sed_uses_specialized_file_tool_card() -> None:
+    """sed should render a diff-like regex replacement preview."""
+    app = _make_app()
+
+    async with app.run_test():
+        await app.start_model_response("llm_call_1")
+        await app.start_tool_call(
+            model_call_id="llm_call_1",
+            tool_call_id="call-sed",
+            tool_name="sed",
+            arguments={
+                "path": "src/app.py",
+                "start_line": 10,
+                "end_line": 25,
+                "pattern_to_be_replaced": "foo.+bar",
+                "new_string": "baz",
+            },
+        )
+
+        tool = app._tools["call-sed"]
+        assert isinstance(tool, SedToolCallCard)
+        assert "## Edit Preview" in tool.arguments_markdown
+        assert "```diff" in tool.arguments_markdown
+        assert "- /foo.+bar/" in tool.arguments_markdown
+        assert "+ baz" in tool.arguments_markdown
+        assert "foo.+bar" in tool.arguments_markdown
 
 
 @pytest.mark.asyncio

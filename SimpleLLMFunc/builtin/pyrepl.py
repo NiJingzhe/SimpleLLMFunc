@@ -31,13 +31,13 @@ from SimpleLLMFunc.runtime import (
     RuntimePrimitiveBackend,
 )
 from SimpleLLMFunc.runtime.primitives import primitive
-from SimpleLLMFunc.runtime.builtin_self_reference import (
+from SimpleLLMFunc.runtime.selfref.primitives import (
     DEFAULT_SELF_REFERENCE_BACKEND_NAME as RUNTIME_DEFAULT_SELF_REFERENCE_BACKEND_NAME,
     build_self_reference_pack,
 )
 from SimpleLLMFunc.tool import TOO_LONG_TO_FILE_MAX_TOKENS, Tool
 
-from .primitive import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 
 from .pyrepl_worker import (
     COMMAND_EXECUTE,
@@ -114,6 +114,7 @@ class PyRepl:
     )
     EXECUTE_TOOL_BEST_PRACTICES = [
         "Primitive = host-registered callable; use runtime.namespace.name(...). Use contains='<namespace>.' for namespace discovery.",
+        "Runtime primitives are not standalone tool calls; call them inside execute_code as runtime.namespace.name(...).",
         "Spec lookups return XML by default; use format='dict' for direct field access in code.",
         "Inspect the contracts that support the current step and keep prompt context focused on the selected primitives.",
     ]
@@ -759,8 +760,8 @@ class PyRepl:
         primitive_names = self.list_primitives()
         with self._lock:
             installed_packs = list(self._installed_packs.values())
-        has_history_primitives = any(
-            name.startswith("selfref.history.") for name in primitive_names
+        has_context_primitives = any(
+            name.startswith("selfref.context.") for name in primitive_names
         )
         has_fork_primitives = any(
             name.startswith("selfref.fork.") for name in primitive_names
@@ -769,6 +770,8 @@ class PyRepl:
         lines: List[str] = [
             "<runtime_primitive_contract>",
             "Runtime primitive = host-registered callable; call it as runtime.namespace.name(...).",
+            "Runtime primitives are not standalone tool calls.",
+            'Call them inside execute_code as runtime.namespace.name(...). For example: execute_code(code="runtime.selfref.fork.spawn(...)").',
             "Use this block for orientation; use runtime APIs as the source of truth.",
             "Discover names with runtime.list_primitives() and use runtime.list_primitives(contains='<namespace>.') for namespace filtering.",
             "Inspect one primitive: runtime.get_primitive_spec(name). XML by default.",
@@ -827,10 +830,11 @@ class PyRepl:
             ]
         )
 
-        if has_history_primitives:
+        if has_context_primitives:
             lines.extend(
                 [
-                    "Use runtime.selfref.history.delete/replace/clear for memory cleanup; clear preserves the current system prompt.",
+                    "Use runtime.selfref.context.inspect() to read the full current context snapshot.",
+                    "Use runtime.selfref.context.remember(...) for durable experience, runtime.selfref.context.forget(...) to remove wrong experience, and runtime.selfref.context.compact(...) after a milestone to replace stale working transcript with one structured assistant summary.",
                 ]
             )
 
@@ -1150,6 +1154,13 @@ class PyRepl:
                 process.terminate()
                 process.join(timeout=1.0)
 
+            close_process = getattr(process, "close", None)
+            if callable(close_process):
+                try:
+                    close_process()
+                except Exception:
+                    pass
+
         self._process = None
         self._command_queue = None
         self._event_queue = None
@@ -1266,15 +1277,14 @@ class PyRepl:
           lookups return XML by default; use ``format='dict'`` when code
           needs direct field access.
         - Self-reference primitives are grouped under
-          ``runtime.selfref.history.*`` and ``runtime.selfref.fork.*``.
+          ``runtime.selfref.context.*`` and ``runtime.selfref.fork.*``.
         - ``input()`` is supported. In event mode, callers can reply via
           ``PyRepl.submit_input(request_id, value)``.
         - Use ``reset_repl`` for REPL variable cleanup. Use self-reference
-          history methods for runtime-backed memory management (for example
-          ``runtime.selfref.history.delete`` /
-          ``runtime.selfref.history.replace`` /
-          ``runtime.selfref.history.clear``; clear preserves the current
-          system prompt).
+          context methods for runtime-backed context management (for example
+          ``runtime.selfref.context.inspect`` /
+          ``runtime.selfref.context.remember`` /
+          ``runtime.selfref.context.compact``).
 
         Args:
             code: Python code to execute.
@@ -1545,6 +1555,19 @@ class PyRepl:
                     )
 
             execution_time_ms = (time.time() - start_time) * 1000
+
+            self_reference_backend = self.get_runtime_backend("selfref")
+            if isinstance(self_reference_backend, SelfReference):
+                try:
+                    active_key = self_reference_backend.resolve_history_key()
+                except (KeyError, ValueError):
+                    active_key = None
+
+                if (
+                    active_key is not None
+                    and self_reference_backend.has_pending_compaction(active_key)
+                ):
+                    self_reference_backend.commit_pending_compaction(active_key)
 
             result = {
                 "success": error_message is None,

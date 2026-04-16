@@ -57,7 +57,9 @@ from SimpleLLMFunc.observability.langfuse_client import (
     coerce_langfuse_metadata,
     get_langfuse_trace_context,
     langfuse_client,
+    propagate_langfuse_trace_name,
     update_langfuse_parent_span,
+    update_langfuse_trace_name,
 )
 from SimpleLLMFunc.hooks.abort import AbortSignal, ABORT_SIGNAL_PARAM
 from SimpleLLMFunc.hooks.stream import ReactOutput, is_response_yield
@@ -192,90 +194,92 @@ def llm_function(
                     ),
                     trace_context=trace_context,
                 ) as function_span:
-                    update_langfuse_parent_span(
-                        langfuse_client.get_current_observation_id()
-                    )
-                    try:
-                        # Step 3: 构建初始提示
-                        messages = build_initial_prompts(
-                            signature=sig,
-                            system_prompt_template=system_prompt_template,
-                            user_prompt_template=user_prompt_template,
-                            template_params=template_params,
-                            toolkit=toolkit,
+                    update_langfuse_trace_name(sig.func_name)
+                    with propagate_langfuse_trace_name(sig.func_name):
+                        update_langfuse_parent_span(
+                            langfuse_client.get_current_observation_id()
                         )
+                        try:
+                            # Step 3: 构建初始提示
+                            messages = build_initial_prompts(
+                                signature=sig,
+                                system_prompt_template=system_prompt_template,
+                                user_prompt_template=user_prompt_template,
+                                template_params=template_params,
+                                toolkit=toolkit,
+                            )
 
-                        # Step 4: 执行 ReAct 循环（返回事件流）
-                        user_task_prompt = json.dumps(
-                            sig.bound_args.arguments,
-                            default=str,
-                            ensure_ascii=False,
-                        )
+                            # Step 4: 执行 ReAct 循环（返回事件流）
+                            user_task_prompt = json.dumps(
+                                sig.bound_args.arguments,
+                                default=str,
+                                ensure_ascii=False,
+                            )
 
-                        event_stream = await execute_react_loop(
-                            llm_interface=llm_interface,
-                            messages=messages,
-                            toolkit=toolkit,
-                            max_tool_calls=max_tool_calls,
-                            llm_kwargs=llm_kwargs,
-                            func_name=sig.func_name,
-                            enable_event=True,
-                            trace_id=sig.trace_id,
-                            user_task_prompt=user_task_prompt,
-                            abort_signal=abort_signal,
-                        )
-
-                        # Step 5: 处理事件流，解析响应后再 yield
-                        last_response = None
-                        last_messages = None
-                        async for output in event_stream:
-                            if is_response_yield(output):
-                                # 收集原始响应和消息历史
-                                last_response = output.response
-                                last_messages = output.messages
-                                # 不立即 yield ResponseYield，等解析完成后再 yield
-                            else:
-                                # EventYield 直接透传
-                                yield output
-
-                        result: Optional[T] = None
-
-                        # 解析和验证最终响应
-                        if last_response:
-                            result = parse_and_validate_response(
-                                response=last_response,
-                                return_type=sig.return_type,
+                            event_stream = await execute_react_loop(
+                                llm_interface=llm_interface,
+                                messages=messages,
+                                toolkit=toolkit,
+                                max_tool_calls=max_tool_calls,
+                                llm_kwargs=llm_kwargs,
                                 func_name=sig.func_name,
+                                enable_event=True,
+                                trace_id=sig.trace_id,
+                                user_task_prompt=user_task_prompt,
+                                abort_signal=abort_signal,
                             )
 
-                            # 存储结果到闭包变量，供外层使用
-                            parsed_result[0] = result
+                            # Step 5: 处理事件流，解析响应后再 yield
+                            last_response = None
+                            last_messages = None
+                            async for output in event_stream:
+                                if is_response_yield(output):
+                                    # 收集原始响应和消息历史
+                                    last_response = output.response
+                                    last_messages = output.messages
+                                    # 不立即 yield ResponseYield，等解析完成后再 yield
+                                else:
+                                    # EventYield 直接透传
+                                    yield output
 
-                            # Yield 解析后的响应（而不是原始的 LLM 响应）
-                            from SimpleLLMFunc.hooks.stream import ResponseYield
+                            result: Optional[T] = None
 
-                            yield ResponseYield(
-                                type="response",
-                                response=result,  # 解析后的结果（str, Pydantic 对象等）
-                                messages=last_messages if last_messages else [],
+                            # 解析和验证最终响应
+                            if last_response:
+                                result = parse_and_validate_response(
+                                    response=last_response,
+                                    return_type=sig.return_type,
+                                    func_name=sig.func_name,
+                                )
+
+                                # 存储结果到闭包变量，供外层使用
+                                parsed_result[0] = result
+
+                                # Yield 解析后的响应（而不是原始的 LLM 响应）
+                                from SimpleLLMFunc.hooks.stream import ResponseYield
+
+                                yield ResponseYield(
+                                    type="response",
+                                    response=result,  # 解析后的结果（str, Pydantic 对象等）
+                                    messages=last_messages if last_messages else [],
+                                )
+
+                            # 更新 Langfuse span
+                            output_payload: Dict[str, Any] = {
+                                "return_type": str(sig.return_type),
+                                "result": result,
+                            }
+                            function_span.update(output=output_payload)
+                        except Exception as exc:
+                            # 更新 span 错误信息
+                            function_span.update(
+                                output={"error": str(exc)},
                             )
-
-                        # 更新 Langfuse span
-                        output_payload: Dict[str, Any] = {
-                            "return_type": str(sig.return_type),
-                            "result": result,
-                        }
-                        function_span.update(output=output_payload)
-                    except Exception as exc:
-                        # 更新 span 错误信息
-                        function_span.update(
-                            output={"error": str(exc)},
-                        )
-                        push_error(
-                            f"Async LLM function '{sig.func_name}' execution failed: {str(exc)}",
-                            location=get_location(),
-                        )
-                        raise
+                            push_error(
+                                f"Async LLM function '{sig.func_name}' execution failed: {str(exc)}",
+                                location=get_location(),
+                            )
+                            raise
 
         if enable_event:
             # 事件模式：直接返回生成器

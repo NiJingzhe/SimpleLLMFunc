@@ -20,12 +20,13 @@ Primary user entrypoints:
 
 - `llm_function_decorator.py`
 - `llm_chat_decorator.py`
+- `selfref_sync.py`
 - `steps/common/`
 - `steps/function/`
 - `steps/chat/`
 - `utils/tools.py`
 
-This layer turns typed Python call signatures into prompt-building, ReAct execution, and response parsing.
+This layer turns typed Python call signatures into prompt-building, ReAct execution, response parsing, and lifecycle-aware integrations such as `llm_chat` <-> `SelfReference` synchronization.
 
 ### `SimpleLLMFunc/base/`
 
@@ -46,8 +47,14 @@ Runtime primitive system:
 - primitive registry
 - primitive contracts and docstring parsing
 - backend lifecycle and fork behavior
+- selfref context state and pure context transforms
 
 This layer powers the `runtime.*` namespace used inside `PyRepl`.
+
+Key current selfref split:
+
+- `runtime/selfref/context_ops.py`: pure parse/render/canonicalize helpers for context messages
+- `runtime/selfref/state.py`: persistent memory state, mutation, validation, compaction queueing, and fork-aware behavior
 
 ### `SimpleLLMFunc/builtin/`
 
@@ -74,6 +81,7 @@ Provider-facing integration:
 
 - `llm_interface.py`
 - `openai_compatible.py`
+- `openai_responses_compatible.py`
 - `key_pool.py`
 - `token_bucket.py`
 
@@ -91,8 +99,12 @@ Support layers such as:
 ## How to navigate changes
 
 - Decorator behavior bug: start in `llm_decorator/`, then trace into `base/`.
+- `llm_chat` + selfref sync issue: start in `llm_decorator/selfref_sync.py`, then inspect `runtime/selfref/state.py` and the relevant decorator entrypoint.
 - Tool schema or prompt-injection issue: start in `tool/tool.py` and `llm_decorator/utils/tools.py`.
 - Runtime primitive issue: start in `runtime/primitives.py`, then inspect `builtin/pyrepl.py` or the relevant builtin backend.
+- Selfref context parse/render issue: start in `runtime/selfref/context_ops.py` before changing stateful code.
 - Event-stream issue: start in `hooks/`, then inspect decorator step modules.
-- Provider transport issue: start in `interface/openai_compatible.py` plus related tests.
+- ReAct termination / hook-order issue: start in `base/ReAct.py` and follow the phase helpers plus `before_finalize` call sites.
+- Provider transport issue: start in the relevant adapter under `interface/` (`openai_compatible.py` or `openai_responses_compatible.py`) plus related tests.
+- Selfref fork context-construction issue: start in `runtime/selfref/state.py`; check how pre-fork history is stripped/materialized before touching decorator wrappers.
 - User-facing docs mismatch: source code and tests win; then patch `mintlify_docs/` and maybe `README.md`.

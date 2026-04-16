@@ -13,14 +13,29 @@ import inspect
 import threading
 from typing import Any, Awaitable, Callable, Dict, List, Optional, cast
 
+from SimpleLLMFunc.base.react_hooks import ReActState
 from SimpleLLMFunc.runtime.primitives import RuntimePrimitiveBackend
+from SimpleLLMFunc.runtime.selfref.context_ops import (
+    build_context_messages_from_state_data as _context_ops_build_context_messages_from_state_data,
+    canonicalize_context_messages as _context_ops_canonicalize_context_messages,
+    clone_messages as _context_ops_clone_messages,
+    extract_latest_system_prompt as _context_ops_extract_latest_system_prompt,
+    normalize_context_summary_payload as _context_ops_normalize_context_summary_payload,
+    normalize_experience_text as _context_ops_normalize_experience_text,
+    parse_context_compaction_summary,
+    parse_context_messages as _context_ops_parse_context_messages,
+    remove_framework_injected_prompt_blocks as _context_ops_remove_framework_injected_prompt_blocks,
+    render_context_compaction_summary,
+    render_system_prompt_with_experiences as _context_ops_render_system_prompt_with_experiences,
+    split_system_prompt_experiences as _context_ops_split_system_prompt_experiences,
+)
 
 _ALLOWED_ROLES = {"system", "user", "assistant", "tool", "function"}
-_TRANSIENT_MESSAGE_FIELDS = {"reasoning_details"}
 MemoryHistory = List[Dict[str, Any]]
 HISTORY_PARAM_NAMES = ("history", "chat_history")
 SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM = "__self_reference_key_override"
 SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM = "__self_reference_toolkit_override"
+SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM = "__self_reference_fork_task"
 _AGENT_TEMPLATE_PARAMS_SUPPORT_ATTR = "__simplellmfunc_accepts_template_params__"
 _AGENT_FORK_TOOLKIT_FACTORY_ATTR = "__simplellmfunc_fork_toolkit_factory__"
 
@@ -35,13 +50,91 @@ def _normalize_key(key: str) -> str:
 
 
 def _clone_messages(messages: MemoryHistory) -> MemoryHistory:
-    cloned: MemoryHistory = []
-    for message in messages:
-        sanitized = copy.deepcopy(message)
-        for field in _TRANSIENT_MESSAGE_FIELDS:
-            sanitized.pop(field, None)
-        cloned.append(sanitized)
-    return cloned
+    return _context_ops_clone_messages(messages)
+
+
+def _parse_context_messages(messages: MemoryHistory) -> Dict[str, Any]:
+    return _context_ops_parse_context_messages(messages)
+
+
+def _build_context_messages_from_state_data(
+    context_state: Dict[str, Any],
+) -> MemoryHistory:
+    return _context_ops_build_context_messages_from_state_data(context_state)
+
+
+def _canonicalize_context_messages(messages: MemoryHistory) -> MemoryHistory:
+    return _context_ops_canonicalize_context_messages(messages)
+
+
+def _render_system_prompt_with_experiences(
+    base_prompt: str,
+    experiences: List[Dict[str, str]],
+) -> str:
+    return _context_ops_render_system_prompt_with_experiences(
+        base_prompt,
+        experiences,
+    )
+
+
+def _normalize_experience_text(text: str) -> str:
+    return _context_ops_normalize_experience_text(text)
+
+
+def _normalize_context_summary_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return _context_ops_normalize_context_summary_payload(payload)
+
+
+def _remove_framework_injected_prompt_blocks(system_prompt: str) -> str:
+    return _context_ops_remove_framework_injected_prompt_blocks(system_prompt)
+
+
+def _split_system_prompt_experiences(
+    system_prompt: str,
+) -> tuple[str, List[Dict[str, str]]]:
+    return _context_ops_split_system_prompt_experiences(system_prompt)
+
+
+def _strip_terminal_pending_tool_calls_message(
+    history: MemoryHistory,
+) -> tuple[MemoryHistory, bool]:
+    if not history:
+        return history, False
+
+    last_message = history[-1]
+    if not isinstance(last_message, dict):
+        return history, False
+    if last_message.get("role") != "assistant":
+        return history, False
+
+    tool_calls = last_message.get("tool_calls")
+    if not isinstance(tool_calls, list) or not tool_calls:
+        return history, False
+
+    return _clone_messages(history[:-1]), True
+
+
+def _append_fork_task_user_message(
+    history: MemoryHistory,
+    *,
+    task_message: str,
+) -> MemoryHistory:
+    child_task_instruction = (
+        "You are now already a forked subagent. "
+        "So you have no need to care about whether the previous fork was "
+        "correct or not, because it has already succeeded. "
+        "And now, the only thing you are required to do is:\n\n"
+        f"{task_message}\n\n"
+        "Follow the instructions above to finish this task."
+    )
+    updated_history = _clone_messages(history)
+    updated_history.append(
+        {
+            "role": "user",
+            "content": child_task_instruction,
+        }
+    )
+    return updated_history
 
 
 def _is_valid_content_for_role(role: str, content: Any) -> bool:
@@ -172,13 +265,7 @@ def _filter_non_system_messages(messages: MemoryHistory) -> MemoryHistory:
 
 
 def _extract_latest_system_prompt(messages: MemoryHistory) -> Optional[str]:
-    for message in reversed(messages):
-        if message.get("role") != "system":
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
-    return None
+    return _context_ops_extract_latest_system_prompt(messages)
 
 
 def _extract_history_from_any(value: Any) -> Optional[MemoryHistory]:
@@ -399,6 +486,7 @@ def _build_fork_error_result(
         "error_type": type(error).__name__,
         "error_message": str(error),
         "response": None,
+        "result": None,
         "history": [],
         "history_count": 0,
         "history_included": True,
@@ -618,6 +706,9 @@ class SelfReferenceInstanceHandle:
             include_history=include_history,
         )
 
+    def has_pending_fork_tasks(self, event_emitter: Any = None) -> bool:
+        return self._owner.has_pending_fork_tasks(event_emitter=event_emitter)
+
 
 class SelfReference(RuntimePrimitiveBackend):
     """Shared self-reference state object for agent memory operations."""
@@ -633,6 +724,11 @@ class SelfReference(RuntimePrimitiveBackend):
         self._fork_id_counter = 0
         self._fork_tasks: Dict[str, asyncio.Task[Dict[str, Any]]] = {}
         self._fork_results: Dict[str, Dict[str, Any]] = {}
+        self._fork_emitters: Dict[str, Any] = {}
+        self._active_react_states_by_key: Dict[str, ReActState] = {}
+        self._active_destructive_mutation_keys: set[str] = set()
+        self._pending_compactions: Dict[str, Dict[str, Any]] = {}
+        self._experience_id_counter = 0
         self._install_ref_count = 0
         self._active_memory_key_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar(
@@ -655,6 +751,18 @@ class SelfReference(RuntimePrimitiveBackend):
         self._active_runtime_toolkit_var: contextvars.ContextVar[Any] = (
             contextvars.ContextVar(
                 f"simplellmfunc_self_reference_active_toolkit_{id(self)}",
+                default=None,
+            )
+        )
+        self._active_template_params_var: contextvars.ContextVar[
+            Optional[Dict[str, Any]]
+        ] = contextvars.ContextVar(
+            f"simplellmfunc_self_reference_active_template_params_{id(self)}",
+            default=None,
+        )
+        self._active_react_state_var: contextvars.ContextVar[Optional[ReActState]] = (
+            contextvars.ContextVar(
+                f"simplellmfunc_self_reference_active_react_state_{id(self)}",
                 default=None,
             )
         )
@@ -681,11 +789,16 @@ class SelfReference(RuntimePrimitiveBackend):
             pending_tasks = list(self._fork_tasks.values())
             self._fork_tasks.clear()
             self._fork_results.clear()
+            self._fork_emitters.clear()
+            self._active_react_states_by_key.clear()
+            self._active_destructive_mutation_keys.clear()
+            self._pending_compactions.clear()
             self._history_store.clear()
             self._agent_instance = None
             self._agent_default_memory_key = None
             self._fork_counter = 0
             self._fork_id_counter = 0
+            self._experience_id_counter = 0
 
         for task in pending_tasks:
             if not task.done():
@@ -766,9 +879,287 @@ class SelfReference(RuntimePrimitiveBackend):
     def _get_active_runtime_toolkit(self) -> Any:
         return self._active_runtime_toolkit_var.get()
 
+    def _set_active_template_params(
+        self, template_params: Optional[Dict[str, Any]]
+    ) -> contextvars.Token[Optional[Dict[str, Any]]]:
+        copied = dict(template_params) if template_params is not None else None
+        return self._active_template_params_var.set(copied)
+
+    def _reset_active_template_params(
+        self, token: contextvars.Token[Optional[Dict[str, Any]]]
+    ) -> None:
+        self._active_template_params_var.reset(token)
+
+    def _get_active_template_params(self) -> Optional[Dict[str, Any]]:
+        value = self._active_template_params_var.get()
+        return dict(value) if value is not None else None
+
+    def _set_active_react_state(
+        self, state: ReActState
+    ) -> tuple[contextvars.Token[Optional[ReActState]], Optional[str]]:
+        token = self._active_react_state_var.set(state)
+        active_key = self._get_active_memory_key()
+        if active_key is not None:
+            with self._lock:
+                self._active_react_states_by_key[active_key] = state
+        return token, active_key
+
+    def _reset_active_react_state(
+        self,
+        token_and_key: tuple[contextvars.Token[Optional[ReActState]], Optional[str]],
+    ) -> None:
+        token, active_key = token_and_key
+        self._active_react_state_var.reset(token)
+        if active_key is not None:
+            with self._lock:
+                self._active_react_states_by_key.pop(active_key, None)
+
+    def _get_active_react_state(self) -> Optional[ReActState]:
+        return self._active_react_state_var.get()
+
+    def _get_active_history_target(self, key: str) -> Optional[MemoryHistory]:
+        normalized_key = _normalize_key(key)
+        active_state = self._get_active_react_state()
+        if active_state is not None and self._get_active_memory_key() == normalized_key:
+            return active_state.messages
+
+        with self._lock:
+            mapped_state = self._active_react_states_by_key.get(normalized_key)
+        if mapped_state is None:
+            return None
+
+        return mapped_state.messages
+
+    def mark_destructive_history_mutation(self, key: str) -> None:
+        normalized_key = _normalize_key(key)
+        with self._lock:
+            self._active_destructive_mutation_keys.add(normalized_key)
+
+    def consume_destructive_history_mutation(self, key: str) -> bool:
+        normalized_key = _normalize_key(key)
+        with self._lock:
+            if normalized_key in self._active_destructive_mutation_keys:
+                self._active_destructive_mutation_keys.remove(normalized_key)
+                return True
+        return False
+
+    def _next_experience_id(self) -> str:
+        with self._lock:
+            self._experience_id_counter += 1
+            return f"exp_{self._experience_id_counter}"
+
+    def parse_context_state(self, key: str) -> Dict[str, Any]:
+        normalized_key = _normalize_key(key)
+        messages = self.snapshot_history(normalized_key)
+        context_state = _parse_context_messages(messages)
+        context_state["messages"] = messages
+        return context_state
+
+    def compile_context_messages(
+        self,
+        key: str,
+        *,
+        include_summary: bool = True,
+    ) -> MemoryHistory:
+        normalized_key = _normalize_key(key)
+        context_state = self.parse_context_state(normalized_key)
+        compiled: MemoryHistory = []
+
+        rendered_system_prompt = _render_system_prompt_with_experiences(
+            cast(str, context_state["base_system_prompt"]),
+            cast(List[Dict[str, str]], context_state["experiences"]),
+        )
+        if rendered_system_prompt:
+            compiled.append({"role": "system", "content": rendered_system_prompt})
+
+        if include_summary:
+            summary = context_state.get("summary")
+            summary_message = context_state.get("summary_message")
+            if isinstance(summary, dict):
+                compiled.append(
+                    {
+                        "role": "assistant",
+                        "content": render_context_compaction_summary(summary),
+                    }
+                )
+            elif isinstance(summary_message, dict):
+                compiled.append(copy.deepcopy(summary_message))
+
+        compiled.extend(
+            _clone_messages(cast(MemoryHistory, context_state["working_messages"]))
+        )
+        return compiled
+
+    def set_context_messages(self, key: str, messages: List[Dict[str, Any]]) -> None:
+        normalized_key = _normalize_key(key)
+        compiled = self._coerce_compiled_context_messages(messages)
+
+        active_messages = self._get_active_history_target(normalized_key)
+        if active_messages is not None:
+            active_messages.clear()
+            active_messages.extend(_clone_messages(compiled))
+            with self._lock:
+                if normalized_key not in self._history_store:
+                    raise KeyError(f"Memory key '{normalized_key}' is not bound")
+                self._history_store[normalized_key] = _clone_messages(active_messages)
+            return
+
+        with self._lock:
+            if normalized_key not in self._history_store:
+                raise KeyError(f"Memory key '{normalized_key}' is not bound")
+            self._history_store[normalized_key] = compiled
+
+    def _coerce_compiled_context_messages(
+        self,
+        messages: List[Dict[str, Any]],
+        *,
+        validate_working_linkage: bool = True,
+    ) -> MemoryHistory:
+        normalized_messages = _coerce_history_list(messages)
+        for index, message in enumerate(normalized_messages):
+            if not isinstance(message, dict):
+                raise ValueError(f"context message at index {index} must be a dict")
+            _validate_message_shape(message, index)
+
+        working_messages = cast(
+            MemoryHistory,
+            _parse_context_messages(normalized_messages)["working_messages"],
+        )
+        if validate_working_linkage:
+            _validate_tool_linkage(working_messages)
+        return _canonicalize_context_messages(normalized_messages)
+
+    def snapshot_context_messages(self, key: str) -> MemoryHistory:
+        return self.compile_context_messages(key)
+
+    def list_context_experiences(self, key: str) -> List[Dict[str, str]]:
+        context_state = self.parse_context_state(key)
+        return copy.deepcopy(cast(List[Dict[str, str]], context_state["experiences"]))
+
+    def remember_experience(self, key: str, text: str) -> Dict[str, str]:
+        normalized_key = _normalize_key(key)
+        normalized_text = _normalize_experience_text(text)
+        context_state = self.parse_context_state(normalized_key)
+        experiences = cast(List[Dict[str, str]], context_state["experiences"])
+
+        for item in experiences:
+            if _normalize_experience_text(item["text"]) == normalized_text:
+                return copy.deepcopy(item)
+
+        new_item = {"id": self._next_experience_id(), "text": normalized_text}
+        experiences.append(new_item)
+        self.set_context_messages(
+            normalized_key,
+            self._build_context_messages_from_state(context_state),
+        )
+        return copy.deepcopy(new_item)
+
+    def forget_experience(self, key: str, experience_id: str) -> bool:
+        normalized_key = _normalize_key(key)
+        if not isinstance(experience_id, str) or not experience_id.strip():
+            raise ValueError("experience_id must be a non-empty string")
+
+        context_state = self.parse_context_state(normalized_key)
+        experiences = cast(List[Dict[str, str]], context_state["experiences"])
+        retained = [
+            item for item in experiences if item.get("id") != experience_id.strip()
+        ]
+        if len(retained) == len(experiences):
+            return False
+
+        context_state["experiences"] = retained
+        self.set_context_messages(
+            normalized_key,
+            self._build_context_messages_from_state(context_state),
+        )
+        return True
+
+    def queue_context_compaction(
+        self,
+        key: str,
+        summary: Dict[str, Any],
+        *,
+        remember: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        normalized_key = _normalize_key(key)
+        normalized_summary = _normalize_context_summary_payload(summary)
+        normalized_remember = [
+            _normalize_experience_text(item)
+            for item in (remember or [])
+            if str(item).strip()
+        ]
+        payload = {
+            "summary": normalized_summary,
+            "remember": normalized_remember,
+            "rendered_summary": render_context_compaction_summary(normalized_summary),
+        }
+        with self._lock:
+            self._pending_compactions[normalized_key] = payload
+        return copy.deepcopy(payload)
+
+    def consume_pending_compaction(self, key: str) -> Optional[Dict[str, Any]]:
+        normalized_key = _normalize_key(key)
+        with self._lock:
+            payload = self._pending_compactions.pop(normalized_key, None)
+        return copy.deepcopy(payload) if payload is not None else None
+
+    def has_pending_compaction(self, key: str) -> bool:
+        normalized_key = _normalize_key(key)
+        with self._lock:
+            return normalized_key in self._pending_compactions
+
+    def commit_pending_compaction(
+        self,
+        key: str,
+        messages: Optional[List[Dict[str, Any]]] = None,
+    ) -> Optional[MemoryHistory]:
+        normalized_key = _normalize_key(key)
+        pending = self.consume_pending_compaction(normalized_key)
+        if pending is None:
+            return None
+
+        base_messages = (
+            self._coerce_compiled_context_messages(messages)
+            if messages is not None
+            else self.snapshot_context_messages(normalized_key)
+        )
+        context_state = _parse_context_messages(base_messages)
+        for item in cast(List[str], pending["remember"]):
+            existing_texts = {
+                _normalize_experience_text(experience["text"])
+                for experience in cast(
+                    List[Dict[str, str]], context_state["experiences"]
+                )
+            }
+            normalized_text = _normalize_experience_text(item)
+            if normalized_text in existing_texts:
+                continue
+            cast(List[Dict[str, str]], context_state["experiences"]).append(
+                {"id": self._next_experience_id(), "text": normalized_text}
+            )
+
+        context_state["summary"] = copy.deepcopy(pending["summary"])
+        context_state["summary_message"] = {
+            "role": "assistant",
+            "content": cast(str, pending["rendered_summary"]),
+        }
+        context_state["working_messages"] = []
+
+        compiled = self._build_context_messages_from_state(context_state)
+        self.set_context_messages(normalized_key, compiled)
+        return compiled
+
+    def _build_context_messages_from_state(
+        self, context_state: Dict[str, Any]
+    ) -> MemoryHistory:
+        return _build_context_messages_from_state_data(context_state)
+
     def bind_history(self, key: str, history: List[Dict[str, Any]]) -> None:
         normalized_key = _normalize_key(key)
-        normalized_history = _coerce_history_list(history)
+        normalized_history = self._coerce_compiled_context_messages(
+            history,
+            validate_working_linkage=False,
+        )
         with self._lock:
             self._history_store[normalized_key] = normalized_history
 
@@ -790,6 +1181,10 @@ class SelfReference(RuntimePrimitiveBackend):
 
     def snapshot_history(self, key: str) -> MemoryHistory:
         normalized_key = _normalize_key(key)
+        active_messages = self._get_active_history_target(normalized_key)
+        if active_messages is not None:
+            return _clone_messages(active_messages)
+
         with self._lock:
             if normalized_key not in self._history_store:
                 raise KeyError(f"Memory key '{normalized_key}' is not bound")
@@ -843,7 +1238,9 @@ class SelfReference(RuntimePrimitiveBackend):
 
         if commit:
             with self._lock:
-                self._history_store[normalized_key] = _clone_messages(merged)
+                self._history_store[normalized_key] = _coerce_history_list(
+                    _canonicalize_context_messages(merged)
+                )
 
         return merged
 
@@ -857,6 +1254,20 @@ class SelfReference(RuntimePrimitiveBackend):
         normalized_messages = _coerce_history_list(messages)
         if strict:
             _validate_history_for_memory_methods(normalized_messages)
+        normalized_messages = self._coerce_compiled_context_messages(
+            normalized_messages
+        )
+
+        active_messages = self._get_active_history_target(normalized_key)
+        if active_messages is not None:
+            self.mark_destructive_history_mutation(normalized_key)
+            active_messages.clear()
+            active_messages.extend(_clone_messages(normalized_messages))
+            with self._lock:
+                if normalized_key not in self._history_store:
+                    raise KeyError(f"Memory key '{normalized_key}' is not bound")
+                self._history_store[normalized_key] = _clone_messages(active_messages)
+            return
 
         with self._lock:
             if normalized_key not in self._history_store:
@@ -879,6 +1290,8 @@ class SelfReference(RuntimePrimitiveBackend):
         self._mutate_messages(key, mutate)
 
     def delete_message(self, key: str, index: int) -> None:
+        self.mark_destructive_history_mutation(key)
+
         def mutate(messages: MemoryHistory) -> None:
             messages.pop(index)
 
@@ -891,6 +1304,8 @@ class SelfReference(RuntimePrimitiveBackend):
     def set_system_prompt(self, key: str, text: str) -> None:
         if not isinstance(text, str):
             raise ValueError("system prompt text must be a string")
+
+        self.mark_destructive_history_mutation(key)
 
         def mutate(messages: MemoryHistory) -> None:
             non_system = [msg for msg in messages if msg.get("role") != "system"]
@@ -994,11 +1409,19 @@ class SelfReference(RuntimePrimitiveBackend):
         existing_template_params: Any,
         fork_memory_key: str,
         toolkit_override: Any,
+        fork_task_message: Optional[str] = None,
     ) -> Dict[str, Any]:
+        active_template_params = self._get_active_template_params()
+
         if existing_template_params is None:
-            merged_template_params: Dict[str, Any] = {}
+            merged_template_params = active_template_params or {}
         elif isinstance(existing_template_params, dict):
-            merged_template_params = copy.deepcopy(existing_template_params)
+            merged_template_params = dict(existing_template_params)
+            if active_template_params is not None:
+                merged_template_params = {
+                    **active_template_params,
+                    **merged_template_params,
+                }
         else:
             raise ValueError("_template_params must be a dict when provided")
 
@@ -1008,6 +1431,10 @@ class SelfReference(RuntimePrimitiveBackend):
         if toolkit_override is not None:
             merged_template_params[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM] = (
                 toolkit_override
+            )
+        if isinstance(fork_task_message, str) and fork_task_message:
+            merged_template_params[SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM] = (
+                fork_task_message
             )
         return merged_template_params
 
@@ -1024,6 +1451,11 @@ class SelfReference(RuntimePrimitiveBackend):
         except Exception:
             compact_result = dict(result)
         compact_result.pop("history", None)
+
+        if "response" not in compact_result and "result" in compact_result:
+            compact_result["response"] = compact_result.get("result")
+        if "result" not in compact_result and "response" in compact_result:
+            compact_result["result"] = compact_result.get("response")
 
         history_count = compact_result.get("history_count")
         if not isinstance(history_count, int):
@@ -1083,6 +1515,27 @@ class SelfReference(RuntimePrimitiveBackend):
 
         source_key = self._resolve_source_memory_key_for_fork(source_memory_key)
         inherited_history = self.snapshot_history(source_key)
+        task_message: Optional[str] = None
+        if agent_args and isinstance(agent_args[0], str):
+            task_message = agent_args[0]
+        elif isinstance(agent_kwargs.get("message"), str):
+            task_message = cast(str, agent_kwargs.get("message"))
+
+        inherited_history, _ = _strip_terminal_pending_tool_calls_message(
+            inherited_history
+        )
+
+        history_param_name = _extract_history_param_name(agent_instance)
+        pass_task_via_history = bool(
+            task_message
+            and history_param_name is not None
+            and _agent_supports_template_params(agent_instance)
+        )
+        if pass_task_via_history and task_message is not None:
+            inherited_history = _append_fork_task_user_message(
+                inherited_history,
+                task_message=task_message,
+            )
 
         if fork_memory_key is None:
             target_key = self._build_fork_memory_key(source_key)
@@ -1117,9 +1570,13 @@ class SelfReference(RuntimePrimitiveBackend):
         self.bind_history(target_key, inherited_history)
 
         call_kwargs = dict(agent_kwargs)
-        history_param_name = _extract_history_param_name(agent_instance)
+        call_args = list(agent_args)
+        if pass_task_via_history and call_args and isinstance(call_args[0], str):
+            call_args[0] = ""
+        if pass_task_via_history and isinstance(call_kwargs.get("message"), str):
+            call_kwargs["message"] = ""
         if history_param_name is not None and history_param_name not in call_kwargs:
-            call_kwargs[history_param_name] = self.snapshot_history(target_key)
+            call_kwargs[history_param_name] = _clone_messages(inherited_history)
 
         child_toolkit_override = self._resolve_child_toolkit_override(agent_instance)
 
@@ -1128,6 +1585,7 @@ class SelfReference(RuntimePrimitiveBackend):
                 call_kwargs.get("_template_params"),
                 target_key,
                 child_toolkit_override,
+                task_message,
             )
 
         active_key_token = self._set_active_memory_key(target_key)
@@ -1135,9 +1593,10 @@ class SelfReference(RuntimePrimitiveBackend):
             fork_id=fork_id,
             depth=fork_depth,
         )
+        active_react_state_token = self._active_react_state_var.set(None)
         active_toolkit_token = self._set_active_runtime_toolkit(child_toolkit_override)
         try:
-            call_output = agent_instance(*agent_args, **call_kwargs)
+            call_output = agent_instance(*call_args, **call_kwargs)
             response, final_history = await _consume_agent_call_output(
                 call_output,
                 event_emitter=_event_emitter,
@@ -1166,6 +1625,7 @@ class SelfReference(RuntimePrimitiveBackend):
         finally:
             self._reset_active_memory_key(active_key_token)
             self._reset_active_fork_context(active_fork_tokens)
+            self._active_react_state_var.reset(active_react_state_token)
             self._reset_active_runtime_toolkit(active_toolkit_token)
 
         if final_history is not None:
@@ -1180,6 +1640,7 @@ class SelfReference(RuntimePrimitiveBackend):
                 "memory_key": target_key,
                 "status": "completed",
                 "response": response,
+                "result": response,
             },
             include_history=include_history,
         )
@@ -1252,12 +1713,14 @@ class SelfReference(RuntimePrimitiveBackend):
             with self._lock:
                 self._fork_results[fork_id] = compact_result
                 self._fork_tasks.pop(fork_id, None)
+                self._fork_emitters.pop(fork_id, None)
 
         fork_task.add_done_callback(on_fork_task_done)
 
         with self._lock:
             self._fork_tasks[fork_id] = fork_task
             self._fork_results.pop(fork_id, None)
+            self._fork_emitters[fork_id] = _event_emitter
 
         await _emit_fork_custom_event(
             _event_emitter,
@@ -1325,6 +1788,7 @@ class SelfReference(RuntimePrimitiveBackend):
                     "error_type": type(exc).__name__,
                     "error_message": str(exc),
                     "response": None,
+                    "result": None,
                     "history": [],
                     "history_count": 0,
                     "history_included": True,
@@ -1372,12 +1836,38 @@ class SelfReference(RuntimePrimitiveBackend):
 
         return collected
 
+    def has_pending_fork_tasks(self, event_emitter: Any = None) -> bool:
+        with self._lock:
+            if event_emitter is None:
+                return any(not task.done() for task in self._fork_tasks.values())
+
+            for fork_id, task in self._fork_tasks.items():
+                if task.done():
+                    continue
+                if self._fork_emitters.get(fork_id) is event_emitter:
+                    return True
+        return False
+
     def _mutate_messages(
         self,
         key: str,
         mutator: Callable[[MemoryHistory], None],
     ) -> None:
         normalized_key = _normalize_key(key)
+
+        active_messages = self._get_active_history_target(normalized_key)
+        if active_messages is not None:
+            working_messages = _clone_messages(active_messages)
+            mutator(working_messages)
+            working_messages = _clone_messages(working_messages)
+            _validate_history_for_memory_methods(working_messages)
+            active_messages.clear()
+            active_messages.extend(working_messages)
+            with self._lock:
+                if normalized_key not in self._history_store:
+                    raise KeyError(f"Memory key '{normalized_key}' is not bound")
+                self._history_store[normalized_key] = _clone_messages(active_messages)
+            return
 
         with self._lock:
             if normalized_key not in self._history_store:
@@ -1397,6 +1887,7 @@ __all__ = [
     "SelfReferenceMemoryHandle",
     "SelfReferenceMemoryProxy",
     "SelfReferenceInstanceHandle",
+    "SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM",
     "SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM",
     "SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM",
 ]

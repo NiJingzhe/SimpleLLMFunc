@@ -35,20 +35,20 @@ __all__ = [
 
 
 def register_self_reference_primitives(*args: Any, **kwargs: Any) -> Any:
-    from .builtin_self_reference import register_self_reference_primitives as _impl
+    from .selfref import register_self_reference_primitives as _impl
 
     return _impl(*args, **kwargs)
 
 
 def build_self_reference_pack(*args: Any, **kwargs: Any) -> Any:
-    from .builtin_self_reference import build_self_reference_pack as _impl
+    from .selfref import build_self_reference_pack as _impl
 
     return _impl(*args, **kwargs)
 
 
 def __getattr__(name: str) -> Any:
     if name == "DEFAULT_SELF_REFERENCE_BACKEND_NAME":
-        from .builtin_self_reference import DEFAULT_SELF_REFERENCE_BACKEND_NAME
+        from .selfref import DEFAULT_SELF_REFERENCE_BACKEND_NAME
 
         return DEFAULT_SELF_REFERENCE_BACKEND_NAME
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

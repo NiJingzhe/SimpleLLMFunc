@@ -36,7 +36,7 @@ SimpleLLMFunc 旨在解决这些问题，使得开发者可以：
 - Prompt 即逻辑：Prompt 就是代码，是这个函数的逻辑实现。
 - 类型安全：支持 Python 类型注解和 Pydantic 模型，确保数据结构正确。
 - 多模态支持：支持文本、图片 URL 和本地图片路径的混合输入，创新性地支持工具的多模态返回。
-- 通用模型接口：兼容任何符合 OpenAI API 格式的模型服务，易于扩展。
+- 通用模型接口：同时支持 OpenAI-compatible chat/completions 接口与 OpenAI Responses API 适配，易于扩展。
 - API 密钥管理：智能负载均衡多个 API 密钥。
 - 流量控制：集成令牌桶算法，实现智能流量平滑。
 - 工具系统：支持 LLM 工具使用，具有简单易用的工具定义和调用机制，支持多模态工具返回。
@@ -113,6 +113,8 @@ async def main():
 
 asyncio.run(main())
 ```
+
+如果你要接 OpenAI Responses API 端点，也可以直接改用 `OpenAIResponsesCompatible`；装饰器层的写法保持不变，adapter 会把 system prompt 映射到 Responses `instructions`。
 
 ### 异步支持示例
 
@@ -257,7 +259,7 @@ asyncio.run(main())
 - **SelfReference + PyRepl 运行时**: 提供内置 PyRepl 与 selfref primitives，支持持久记忆、fork/spawn/wait 等自分叉能力。
 - **步骤化装饰器流水线**: `llm_decorator/steps` 将 Prompt 构建、签名解析、ReAct 和响应解析拆分为可组合步骤。
 - **基础引擎模块化**: `base/messages`、`base/tool_call`、`base/type_resolve` 独立演进，类型解析与多模态处理更稳健。
-- **通用模型接口**: 兼容任何符合 OpenAI API 格式的模型服务，便于扩展。
+- **通用模型接口**: 同时支持 OpenAI-compatible chat/completions 接口与 OpenAI Responses API 适配，便于扩展。
 - **API 密钥管理**: 智能负载均衡多个 API 密钥。
 - **流量控制**: 集成令牌桶算法，实现智能流量平滑。
 - **工具系统**: 支持工具调用、参数校验、最佳实践注入与多模态返回。
@@ -325,7 +327,7 @@ SimpleLLMFunc/
 
 #### LLM 接口模块
 
-`interface` 模块提供与 LLM 服务通信的标准接口，支持任何兼容 OpenAI API 的服务。`OpenAICompatible` 可通过 `provider.json`（提供商 -> 模型配置列表）加载多个模型实例；`token_bucket.py` 负责流量控制，`key_pool.py` 负责密钥负载均衡。
+`interface` 模块提供与 LLM 服务通信的标准接口，支持 OpenAI-compatible 服务，并提供 OpenAI Responses API 适配。`OpenAICompatible` 与 `OpenAIResponsesCompatible` 都可通过 `provider.json`（提供商 -> 模型配置列表）加载多个模型实例；`token_bucket.py` 负责流量控制，`key_pool.py` 负责密钥负载均衡。
 
 #### LLM 装饰器模块
 

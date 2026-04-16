@@ -62,6 +62,35 @@ class EventBus:
         origin_overrides: Optional[Dict[str, Any]] = None,
     ) -> EventYield:
         """Publish one event to the bus and enrich metadata."""
+        output = self._build_event_yield(
+            event,
+            origin=origin,
+            origin_overrides=origin_overrides,
+        )
+        await self._queue.put(output)
+        return output
+
+    async def emit_and_get(
+        self,
+        event: ReActEvent,
+        *,
+        origin: Optional[EventOrigin] = None,
+        origin_overrides: Optional[Dict[str, Any]] = None,
+    ) -> EventYield:
+        """Build one enriched event and return it without queueing."""
+        return self._build_event_yield(
+            event,
+            origin=origin,
+            origin_overrides=origin_overrides,
+        )
+
+    def _build_event_yield(
+        self,
+        event: ReActEvent,
+        *,
+        origin: Optional[EventOrigin] = None,
+        origin_overrides: Optional[Dict[str, Any]] = None,
+    ) -> EventYield:
         resolved_origin = origin
         if resolved_origin is None:
             resolved_origin = self.next_origin(**(origin_overrides or {}))
@@ -76,24 +105,7 @@ class EventBus:
             if event.tool_call_id is None and resolved_origin.tool_call_id:
                 event.tool_call_id = resolved_origin.tool_call_id
 
-        output = EventYield(event=event, origin=resolved_origin)
-        await self._queue.put(output)
-        return output
-
-    async def emit_and_get(
-        self,
-        event: ReActEvent,
-        *,
-        origin: Optional[EventOrigin] = None,
-        origin_overrides: Optional[Dict[str, Any]] = None,
-    ) -> EventYield:
-        """Publish one event and return that queued output."""
-        await self.emit_event(
-            event,
-            origin=origin,
-            origin_overrides=origin_overrides,
-        )
-        return self._queue.get_nowait()
+        return EventYield(event=event, origin=resolved_origin)
 
     async def get(self) -> EventYield:
         return await self._queue.get()

@@ -13,7 +13,7 @@ LLM -> execute_code -> runtime.<pack>.<primitive>(...)
 In CodeAct mode, the model writes Python code and executes it through `execute_code`. Runtime primitives are the runtime APIs available from that code, for example:
 
 ```python
-runtime.selfref.history.count()
+runtime.selfref.context.inspect()
 runtime.github_repo.list_open_issues("owner/repo")
 ```
 
@@ -128,7 +128,7 @@ For lightweight cases, you can also use `@repl.primitive(...)` directly.
     The model reaches primitives only after deciding to call `execute_code`.
   </Accordion>
   <Accordion title="Built-in selfref pack">
-    `runtime.selfref.history.*` and `runtime.selfref.fork.*` are built-in examples of the same mechanism.
+    `runtime.selfref.context.*` and `runtime.selfref.fork.*` are built-in examples of the same mechanism.
   </Accordion>
 </AccordionGroup>
 

@@ -1,5 +1,5 @@
 """Builtin primitive-facing exports."""
 
-from .self_reference import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 
 __all__ = ["SelfReference"]

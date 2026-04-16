@@ -6,7 +6,7 @@ Use `PyRepl` when the model needs:
 
 - persistent Python execution across turns
 - runtime primitive discovery through `runtime.*`
-- durable self-reference memory
+- durable self-reference context
 - a forkable execution environment for sub-agents or parallel work
 
 `PyRepl` is not just a one-shot shell command wrapper. It keeps state in a dedicated Python subprocess.
@@ -18,7 +18,7 @@ Use this sequence whenever the model needs runtime help:
 1. Discover capabilities with `runtime.list_primitives()`.
 2. Inspect one contract with `runtime.get_primitive_spec(name)`.
 3. Execute small, focused code snippets with `execute_code`.
-4. Persist memory through `runtime.selfref.history.*` only when you truly need durable context.
+4. Manage durable context through `runtime.selfref.context.*` only when you truly need context cleanup or durable experience.
 
 ## Self-reference basics
 
@@ -26,18 +26,17 @@ Use this sequence whenever the model needs runtime help:
 
 Useful calls:
 
-- `runtime.selfref.history.keys()`
-- `runtime.selfref.history.active_key()`
-- `runtime.selfref.history.all()`
-- `runtime.selfref.history.append(message)`
-- `runtime.selfref.history.set_system_prompt(text)`
-- `runtime.selfref.history.append_system_prompt(text)`
+- `runtime.selfref.context.inspect()`
+- `runtime.selfref.context.remember(text)`
+- `runtime.selfref.context.forget(experience_id)`
+- `runtime.selfref.context.compact(...)`
 
 Good pattern:
 
 - Keep a stable memory key such as `agent_main`.
-- Append durable preferences only when they should survive future turns.
-- Keep normal per-turn reasoning out of durable memory.
+- Append durable experiences only when they should survive future turns.
+- Keep normal per-turn reasoning out of durable context; compact it into one structured assistant summary when a milestone ends.
+- `runtime.selfref.context.compact(...)` queues that summary first. If the current turn continues after the tool batch, the next same-turn LLM step sees the compacted context; if not, finalize still commits it into the returned history.
 
 ## Forking
 
@@ -51,6 +50,14 @@ Typical pattern:
 
 Use forks only for concrete, isolated, verifiable subtasks. Do not fork tiny inline work.
 
+Important fork context rules:
+
+- A child fork inherits the pre-fork context snapshot, not the parent's pending fork tool-call scene.
+- Write the child task as execution guidance for a sub-agent that already exists; the child does not need to re-decide whether the fork step was correct.
+- `runtime.selfref.fork.gather_all()` returns `dict[fork_id -> ForkResult]`.
+- Compact fork results include `status`, `response`, `result`, `memory_key`, `history_count`, and `history_included`.
+- Check `status` first, then read `response` or `result`. Use `include_history=True` only when the full child history is actually needed.
+
 ## Safety rules
 
 - Execute small code blocks, not giant scripts.
@@ -60,4 +67,6 @@ Use forks only for concrete, isolated, verifiable subtasks. Do not fork tiny inl
 
 ## Important reset behavior
 
-`reset_repl` clears REPL variables, but it does not wipe installed runtime backends or self-reference memory. If you need to forget durable memory, use the `runtime.selfref.history.*` APIs directly.
+`reset_repl` clears REPL variables, but it does not wipe installed runtime backends or self-reference context. If you need to forget durable experience or compact stale working transcript, use the `runtime.selfref.context.*` APIs directly.
+
+When `llm_chat` is using a bound `SelfReference`, the decorator keeps the active turn state and stored context synchronized for you. Prefer `runtime.selfref.context.inspect()/remember()/forget()/compact()` over manual history surgery.

@@ -35,7 +35,7 @@ SimpleLLMFunc is built to address those problems. It gives you:
 - Prompt-as-logic design through docstrings
 - Type-safe outputs via Python type hints and Pydantic models
 - Multimodal support for text, image URLs, and local images
-- OpenAI-compatible provider abstraction
+- OpenAI-compatible provider abstraction plus OpenAI Responses API adaptation
 - API key pooling and rate limiting
 - Tool integration with structured and multimodal returns
 - Logging, trace IDs, and event streaming for debugging and observability
@@ -109,6 +109,8 @@ async def main():
 asyncio.run(main())
 ```
 
+If you need an OpenAI Responses API endpoint instead of a chat/completions-compatible endpoint, switch to `OpenAIResponsesCompatible`; the decorator-level authoring model stays the same, and the adapter maps the selected system prompt to Responses `instructions`.
+
 ## Core Features
 
 - Decorator-driven development with `@llm_function` and `@llm_chat`
@@ -120,7 +122,7 @@ asyncio.run(main())
 - Event streaming with `enable_event=True`
 - Built-in PyRepl and self-reference runtime primitives
 - A step-based internal pipeline for prompt building, ReAct execution, and parsing
-- OpenAI-compatible provider abstraction
+- OpenAI-compatible provider abstraction plus OpenAI Responses API adaptation
 
 ## Architecture Overview
 

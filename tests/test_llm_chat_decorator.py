@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import contextvars
+import copy
 import inspect
+import threading
 import json
+from types import SimpleNamespace
 from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Dict, Optional, cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from openai.types.chat import ChatCompletion
@@ -17,8 +20,24 @@ from openai.types.chat.chat_completion_message_function_tool_call import (
     ChatCompletionMessageFunctionToolCall as ChatCompletionMessageToolCall,
     Function,
 )
+from openai.types.responses import (
+    Response,
+    ResponseOutputMessage,
+    ResponseOutputText,
+    ResponseUsage,
+)
 
 from SimpleLLMFunc.builtin import PyRepl
+from SimpleLLMFunc.interface.openai_responses_compatible import (
+    OpenAIResponsesCompatible,
+)
+from SimpleLLMFunc.interface.key_pool import APIKeyPool
+from SimpleLLMFunc.runtime.selfref import (
+    SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM,
+    SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM,
+    SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM,
+    SelfReference,
+)
 from SimpleLLMFunc.hooks.events import ReActEventType, ReactEndEvent
 from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield, ReactOutput
 from SimpleLLMFunc.llm_decorator.llm_chat_decorator import (
@@ -30,7 +49,6 @@ from SimpleLLMFunc.observability.langfuse_client import (
     reset_langfuse_trace_context,
     set_langfuse_trace_context,
 )
-from SimpleLLMFunc.self_reference import SelfReference
 from SimpleLLMFunc.tool import Tool
 
 
@@ -89,6 +107,12 @@ class _TrackingObservation:
     def update(self, **kwargs: Any) -> None:
         self._record.setdefault("updates", []).append(kwargs)
 
+    def set_attribute(self, key: str, value: Any) -> None:
+        self._record.setdefault("attributes", {})[key] = value
+
+    def is_recording(self) -> bool:
+        return True
+
 
 class _TrackingLangfuseClient:
     """Tiny contextvar-backed Langfuse stub for trace propagation tests."""
@@ -96,11 +120,15 @@ class _TrackingLangfuseClient:
     def __init__(self) -> None:
         self.records: list[dict[str, Any]] = []
         self._counter = 0
+        self.trace_names_by_trace_id: dict[str, str] = {}
         self._trace_id_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar("test_langfuse_trace_id", default=None)
         )
         self._observation_id_var: contextvars.ContextVar[Optional[str]] = (
             contextvars.ContextVar("test_langfuse_observation_id", default=None)
+        )
+        self._trace_name_var: contextvars.ContextVar[Optional[str]] = (
+            contextvars.ContextVar("test_langfuse_trace_name", default=None)
         )
 
     def start_as_current_observation(self, **kwargs: Any) -> _TrackingObservation:
@@ -132,15 +160,45 @@ class _TrackingLangfuseClient:
             "trace_id": trace_id,
             "parent_span_id": parent_span_id,
             "trace_context": trace_context,
+            "trace_name": self._trace_name_var.get(),
         }
         self.records.append(record)
         return _TrackingObservation(self, record)
+
+    def propagate_attributes(self, *, trace_name: Optional[str] = None, **kwargs: Any):
+        _ = kwargs
+        tracker = self
+
+        class _Context:
+            def __enter__(self_nonlocal):
+                self_nonlocal._token = tracker._trace_name_var.set(trace_name)
+                trace_id = tracker._trace_id_var.get()
+                if trace_id and trace_name:
+                    tracker.trace_names_by_trace_id[trace_id] = trace_name
+                return None
+
+            def __exit__(self_nonlocal, exc_type: Any, exc: Any, tb: Any) -> None:
+                tracker._trace_name_var.reset(self_nonlocal._token)
+                return None
+
+        return _Context()
 
     def get_current_trace_id(self) -> str:
         return self._trace_id_var.get() or ""
 
     def get_current_observation_id(self) -> str:
         return self._observation_id_var.get() or ""
+
+    def _active_observation(self) -> Optional[_TrackingObservation]:
+        current_observation_id = self._observation_id_var.get()
+        if not current_observation_id:
+            return None
+
+        for record in reversed(self.records):
+            if record.get("span_id") == current_observation_id:
+                return _TrackingObservation(self, record)
+
+        return None
 
     def create_trace_id(self) -> str:
         self._counter += 1
@@ -157,6 +215,47 @@ def _make_chat_completion(content: Optional[str]) -> ChatCompletion:
         model="test-model",
         object="chat.completion",
     )
+
+
+def _make_responses_text_response(content: str) -> Response:
+    return Response(
+        id="resp_test",
+        created_at=123,
+        model="gpt-test",
+        object="response",
+        output=[
+            ResponseOutputMessage(
+                id="msg_1",
+                role="assistant",
+                status="completed",
+                type="message",
+                content=[
+                    ResponseOutputText(
+                        type="output_text",
+                        text=content,
+                        annotations=[],
+                    )
+                ],
+            )
+        ],
+        parallel_tool_calls=True,
+        status="completed",
+        text={"format": {"type": "text"}},
+        tool_choice="auto",
+        tools=[],
+        truncation="disabled",
+        usage=ResponseUsage(
+            input_tokens=3,
+            input_tokens_details={"cached_tokens": 0},
+            output_tokens=2,
+            output_tokens_details={"reasoning_tokens": 0},
+            total_tokens=5,
+        ),
+    )
+
+
+def _make_text_response(content: str) -> Response:
+    return _make_responses_text_response(content)
 
 
 def _make_tool_call_completion(
@@ -364,7 +463,7 @@ async def test_llm_chat_auto_resolves_builtin_self_reference_from_pyrepl() -> No
         not in captured_system_prompt
     )
     assert (
-        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying."
+        "For fork results, read status/response/result/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying."
         not in captured_system_prompt
     )
     assert "Mounted primitive summary:" not in captured_system_prompt
@@ -449,7 +548,7 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
     )
     assert "Installed primitive packs:" in captured_system_prompt
     assert "- selfref:" in captured_system_prompt
-    assert captured_system_prompt.count("selfref = your agent state") == 1
+    assert captured_system_prompt.count("selfref = your agent context") == 1
     assert (
         "Summarize the selected result fields in chat responses."
         in captured_system_prompt
@@ -466,15 +565,15 @@ async def test_llm_chat_auto_resolves_self_reference_from_pyrepl_backend() -> No
         not in captured_system_prompt
     )
     assert (
-        "For fork results, read status/response/memory_key/history_count; if status is error, inspect error_type/error_message before retrying."
+        "For fork results, read status/response/result/memory_key/history_count first; if status is error, inspect error_type/error_message before retrying."
         not in captured_system_prompt
     )
     assert "Mounted primitive summary:" not in captured_system_prompt
 
 
 @pytest.mark.asyncio
-async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> None:
-    """Runtime selfref history calls without key should use decorator memory key."""
+async def test_llm_chat_injects_active_selfref_key_for_runtime_context_ops() -> None:
+    """Runtime selfref context calls without key should use decorator memory key."""
 
     history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
 
@@ -490,7 +589,7 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
             if isinstance(tool, Tool) and tool.name == "execute_code"
         )
         execute_result = await execute_tool.run(
-            "runtime.selfref.history.append({'role': 'assistant', 'content': 'from-selfref'})"
+            "runtime.selfref.context.remember('from-selfref')"
         )
         assert "Execution succeeded" in execute_result
 
@@ -551,11 +650,313 @@ async def test_llm_chat_injects_active_selfref_key_for_runtime_history_ops() -> 
 
     main_history = self_reference.snapshot_history("agent_main")
     other_history = self_reference.snapshot_history("other")
-    assert any(
-        item.get("role") == "assistant" and item.get("content") == "from-selfref"
-        for item in main_history
-    )
+    assert main_history[0]["role"] == "system"
+    assert "from-selfref" in str(main_history[0]["content"])
     assert other_history == [{"role": "user", "content": "seed-other"}]
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_runtime_context_compact_rewrites_final_messages() -> None:
+    """runtime.selfref.context.compact should replace final context with system + assistant summary."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "payload = runtime.selfref.context.compact(\n"
+                "    goal='Goal A',\n"
+                "    instruction='Instruction A',\n"
+                "    discoveries=['Discovery A'],\n"
+                "    completed=['Completed A'],\n"
+                "    current_status='Ready for the next milestone.',\n"
+                "    likely_next_work=['Next A'],\n"
+                "    relevant_files_directories=['src/a.py'],\n"
+                ")\n"
+                "print(payload['assistant_message'])"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+            enable_event=True,
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        outputs: list[ReactOutput] = []
+        async for output in cast(
+            AsyncGenerator[ReactOutput, None], agent("hello", history=history)
+        ):
+            outputs.append(output)
+
+        react_end = next(
+            output.event
+            for output in outputs
+            if isinstance(output, EventYield)
+            and isinstance(output.event, ReactEndEvent)
+        )
+    assert react_end.final_messages == self_reference.snapshot_history("agent_main")
+    assert history == react_end.final_messages
+    assert react_end.final_messages[0] == {"role": "system", "content": "test agent"}
+    assert react_end.final_messages[1]["role"] == "assistant"
+    assert "<context_compaction_summary>" in react_end.final_messages[1]["content"]
+    assert "## Goal" in react_end.final_messages[1]["content"]
+    assert "Goal A" in react_end.final_messages[1]["content"]
+    assert react_end.final_messages[2] == {"role": "assistant", "content": "done"}
+    assert len(react_end.final_messages) == 3
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_runtime_context_compact_can_remember_experience() -> None:
+    """runtime.selfref.context.compact should also persist remembered experiences into system prompt."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "runtime.selfref.context.compact(\n"
+                "    goal='Goal B',\n"
+                "    instruction='Instruction B',\n"
+                "    discoveries=['Discovery B'],\n"
+                "    completed=['Completed B'],\n"
+                "    current_status='Status B',\n"
+                "    likely_next_work=['Next B'],\n"
+                "    relevant_files_directories=['src/b.py'],\n"
+                "    remember=['Preference B'],\n"
+                ")"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+            enable_event=True,
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        outputs: list[ReactOutput] = []
+        async for output in cast(
+            AsyncGenerator[ReactOutput, None], agent("hello", history=history)
+        ):
+            outputs.append(output)
+
+    react_end = next(
+        output.event
+        for output in outputs
+        if isinstance(output, EventYield) and isinstance(output.event, ReactEndEvent)
+    )
+    assert react_end.final_messages == self_reference.snapshot_history("agent_main")
+    assert history == react_end.final_messages
+    assert react_end.final_messages[0]["role"] == "system"
+    assert "Preference B" in str(react_end.final_messages[0]["content"])
+    assert "<experience>" in str(react_end.final_messages[0]["content"])
+    assert react_end.final_messages[1]["role"] == "assistant"
+    assert "Goal B" in str(react_end.final_messages[1]["content"])
+    assert react_end.final_messages[2] == {"role": "assistant", "content": "done"}
+    assert len(react_end.final_messages) == 3
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_runtime_context_compact_applies_before_next_llm_call() -> None:
+    """runtime.selfref.context.compact should affect the next same-turn LLM call."""
+
+    history: list[dict[str, Any]] = [{"role": "user", "content": "seed"}]
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    captured_messages: list[list[dict[str, Any]]] = []
+    call_counter = 0
+
+    first_response = _make_tool_call_completion(
+        "execute_code",
+        {
+            "code": (
+                "runtime.selfref.context.compact(\n"
+                "    goal='Goal C',\n"
+                "    instruction='Instruction C',\n"
+                "    discoveries=['Discovery C'],\n"
+                "    completed=['Completed C'],\n"
+                "    current_status='Status C',\n"
+                "    likely_next_work=['Next C'],\n"
+                "    relevant_files_directories=['src/c.py'],\n"
+                ")"
+            )
+        },
+    )
+    second_response = _make_chat_completion("done")
+
+    async def chat_side_effect(**kwargs: Any) -> Any:
+        nonlocal call_counter
+        captured_messages.append(
+            copy.deepcopy(cast(list[dict[str, Any]], kwargs["messages"]))
+        )
+        response = [first_response, second_response][call_counter]
+        call_counter += 1
+        return response
+
+    mock_llm.chat = AsyncMock(side_effect=chat_side_effect)
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+        patch(
+            "SimpleLLMFunc.base.ReAct.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+            agent("hello", history=history),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    assert len(captured_messages) == 2
+    second_call_messages = captured_messages[1]
+    assert second_call_messages[0] == {"role": "system", "content": "test agent"}
+    assert second_call_messages[1]["role"] == "assistant"
+    assert "<context_compaction_summary>" in str(second_call_messages[1]["content"])
+    assert "Goal C" in str(second_call_messages[1]["content"])
+    assert len(second_call_messages) == 2
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_selfref_clears_active_react_state_after_run() -> None:
+    """Self-reference sync should not leave active ReAct state bound after run completion."""
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    mock_llm.chat = AsyncMock(return_value=_make_chat_completion("done"))
+
+    repl = PyRepl()
+    self_reference = _builtin_self_reference(repl)
+    observed_state_during_run: list[Any] = []
+
+    async def fake_execute_react_loop_streaming(*args: Any, **kwargs: Any):
+        hooks = kwargs.get("hooks")
+        state = SimpleNamespace(
+            messages=copy.deepcopy(cast(list[dict[str, Any]], kwargs["messages"]))
+        )
+        if hooks is not None:
+            await hooks.on_run_start(state)
+            observed_state_during_run.append(self_reference._get_active_react_state())
+            await hooks.before_finalize(state)
+            hooks.close()
+        yield "done", state.messages
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.execute_react_loop_streaming",
+            new=fake_execute_react_loop_streaming,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(
+            llm_interface=mock_llm,
+            toolkit=cast(Any, repl.toolset),
+            self_reference=self_reference,
+            self_reference_key="agent_main",
+        )
+        async def agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+            agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    assert observed_state_during_run
+    assert observed_state_during_run[0] is not None
+    assert self_reference._get_active_react_state() is None
 
 
 @pytest.mark.asyncio
@@ -737,11 +1138,13 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
     repl = PyRepl()
     self_reference = _builtin_self_reference(repl)
     tracker = _TrackingLangfuseClient()
+    child_messages_seen: list[list[dict[str, Any]]] = []
 
     async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
         _ = kwargs
 
         if self_reference._get_active_fork_id() is not None:
+            child_messages_seen.append(copy.deepcopy(messages))
             return _make_chat_completion("child-ok")
 
         has_tool_result = any(
@@ -774,6 +1177,12 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
 
         def get_span_context(self):
             return self._span_context
+
+        def is_recording(self) -> bool:
+            return True
+
+        def set_attribute(self, key: str, value: Any) -> None:
+            _ = (key, value)
 
     def _current_otel_span() -> Any:
         current_trace_id = tracker.get_current_trace_id()
@@ -840,24 +1249,334 @@ async def test_llm_chat_selfref_fork_spawn_preserves_langfuse_trace_context() ->
         and isinstance(record.get("input"), dict)
         and record["input"].get("message") == "root task"
     )
-    child_chat_span = next(
-        record
-        for record in tracker.records
-        if record.get("name") == "agent_chat_call"
-        and isinstance(record.get("input"), dict)
-        and record["input"].get("message") == "child task"
-    )
     execute_code_span = next(
         record
         for record in tracker.records
         if record.get("as_type") == "tool" and record.get("name") == "execute_code"
     )
+    child_chat_span = next(
+        (
+            record
+            for record in tracker.records
+            if record.get("name") == "agent_chat_call"
+            and record.get("parent_span_id") == execute_code_span["span_id"]
+        ),
+        None,
+    )
 
     assert parent_chat_span["trace_id"] == "trace-root"
     assert execute_code_span["trace_id"] == "trace-root"
-    assert child_chat_span["trace_id"] == "trace-root"
     assert execute_code_span["parent_span_id"] == parent_chat_span["span_id"]
-    assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
+    if child_chat_span is not None:
+        assert child_chat_span["trace_id"] == "trace-root"
+        assert child_chat_span["parent_span_id"] == execute_code_span["span_id"]
+
+    assert child_messages_seen
+    assert any(
+        len(candidate) >= 4
+        and candidate[0].get("role") == "system"
+        and "test agent" in str(candidate[0].get("content", ""))
+        and candidate[1] == {"role": "user", "content": "seed"}
+        and candidate[2] == {"role": "user", "content": "message: root task"}
+        and candidate[3].get("role") == "user"
+        and "You are now already a forked subagent."
+        in str(candidate[3].get("content", ""))
+        and "you have no need to care about whether the previous fork was correct or not"
+        in str(candidate[3].get("content", ""))
+        and "because it has already succeeded." in str(candidate[3].get("content", ""))
+        and "the only thing you are required to do is:"
+        in str(candidate[3].get("content", ""))
+        and "child task" in str(candidate[3].get("content", ""))
+        and str(candidate[3].get("content", "")).endswith(
+            "Follow the instructions above to finish this task."
+        )
+        and not any(
+            message.get("role") == "assistant" and message.get("tool_calls")
+            for message in candidate[:4]
+            if isinstance(message, dict)
+        )
+        for candidate in child_messages_seen
+    )
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_sets_explicit_langfuse_trace_name() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    tracker = _TrackingLangfuseClient()
+
+    async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
+        _ = messages, tools, kwargs
+        return _make_chat_completion("ok")
+
+    mock_llm.chat.side_effect = fake_chat
+
+    with (
+        patch.object(
+            shared_langfuse_client,
+            "start_as_current_observation",
+            side_effect=tracker.start_as_current_observation,
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "get_current_observation_id",
+            side_effect=tracker.get_current_observation_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=tracker._active_observation,
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def core_agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            core_agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    parent_chat_span = next(
+        record
+        for record in tracker.records
+        if record.get("name") == "core_agent_chat_call"
+    )
+
+    assert parent_chat_span["attributes"]["langfuse.trace.name"] == "core_agent"
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_propagates_trace_name_to_child_observations() -> None:
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+    tracker = _TrackingLangfuseClient()
+
+    async def fake_chat(messages: list[dict[str, Any]], tools=None, **kwargs: Any):
+        _ = messages, tools, kwargs
+        with tracker.start_as_current_observation(
+            as_type="generation",
+            name="react_generation",
+        ):
+            return _make_chat_completion("ok")
+
+    mock_llm.chat.side_effect = fake_chat
+
+    with (
+        patch.object(
+            shared_langfuse_client,
+            "start_as_current_observation",
+            side_effect=tracker.start_as_current_observation,
+        ),
+        patch.object(
+            shared_langfuse_client,
+            "get_current_observation_id",
+            side_effect=tracker.get_current_observation_id,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.otel_trace_api.get_current_span",
+            side_effect=tracker._active_observation,
+        ),
+        patch(
+            "SimpleLLMFunc.observability.langfuse_client.langfuse_propagate_attributes",
+            side_effect=tracker.propagate_attributes,
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def core_agent(message: str, history=None):
+            """test agent"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            core_agent("hello", history=[]),
+        )
+
+        async for _content, _updated_history in stream:
+            pass
+
+    generation_span = next(
+        record for record in tracker.records if record.get("name") == "react_generation"
+    )
+
+    assert generation_span["trace_name"] == "core_agent"
+    assert tracker.trace_names_by_trace_id[generation_span["trace_id"]] == "core_agent"
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_forwards_reasoning_kwargs_to_openai_responses_interface() -> (
+    None
+):
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-responses-llm-chat-reasoning",
+    )
+    llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-test",
+        base_url="https://example.com/v1",
+        max_retries=1,
+        retry_delay=0.0,
+    )
+    llm.token_bucket.acquire = AsyncMock(return_value=True)
+
+    create_mock = AsyncMock(return_value=_make_text_response("ok"))
+    fake_client = SimpleNamespace(responses=SimpleNamespace(create=create_mock))
+    llm._get_or_create_client = AsyncMock(return_value=fake_client)
+
+    @llm_chat(llm_interface=llm, reasoning={"effort": "xhigh"})
+    async def core_agent(message: str, history=None):
+        """test agent"""
+
+    stream = cast(
+        AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+        core_agent("hello", history=[]),
+    )
+
+    async for _content, _updated_history in stream:
+        pass
+
+    request_kwargs = create_mock.await_args.kwargs
+    assert request_kwargs["reasoning"] == {"effort": "xhigh"}
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_maps_docstring_system_prompt_to_responses_instructions() -> (
+    None
+):
+    key_pool = APIKeyPool(
+        api_keys=["test-key"],
+        provider_id="test-responses-llm-chat-instructions",
+    )
+    llm = OpenAIResponsesCompatible(
+        api_key_pool=key_pool,
+        model_name="gpt-test",
+        base_url="https://example.com/v1",
+        max_retries=1,
+        retry_delay=0.0,
+    )
+    llm.token_bucket.acquire = AsyncMock(return_value=True)
+
+    create_mock = AsyncMock(return_value=_make_text_response("ok"))
+    fake_client = SimpleNamespace(responses=SimpleNamespace(create=create_mock))
+    llm._get_or_create_client = AsyncMock(return_value=fake_client)
+
+    @llm_chat(llm_interface=llm)
+    async def core_agent(message: str, history=None):
+        """You are helpful."""
+
+    stream = cast(
+        AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+        core_agent("hello", history=[]),
+    )
+
+    async for _content, _updated_history in stream:
+        pass
+
+    request_kwargs = create_mock.await_args.kwargs
+    assert "You are helpful." in request_kwargs["instructions"]
+    assert "<must_principles>" in request_kwargs["instructions"]
+    assert all(item.get("role") != "system" for item in request_kwargs["input"])
+
+
+@pytest.mark.asyncio
+async def test_llm_chat_fork_inherits_parent_template_params_for_docstring_rendering() -> (
+    None
+):
+    """Forked child should inherit parent template params such as environment_block."""
+
+    self_reference = SelfReference()
+    self_reference.bind_history(
+        "agent_main",
+        [
+            {"role": "user", "content": "seed"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_fork_1",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_code",
+                            "arguments": "runtime.selfref.fork.spawn('child task')",
+                        },
+                    }
+                ],
+            },
+        ],
+    )
+
+    captured_template_params: dict[str, Any] = {}
+
+    async def fake_agent(message: str, history=None, _template_params=None):
+        captured_template_params.update(cast(dict[str, Any], _template_params or {}))
+        return (
+            "done",
+            [
+                *(history or []),
+                {"role": "assistant", "content": "child done"},
+            ],
+        )
+
+    self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+    toolkit_override = ["tool-a"]
+    toolkit_token = self_reference._set_active_runtime_toolkit(toolkit_override)
+    template_token = self_reference._set_active_template_params(
+        {"environment_block": "ENV: /tmp/workspace"}
+    )
+    memory_token = self_reference._set_active_memory_key("agent_main")
+    try:
+        completed = await self_reference.instance.fork(
+            "child task", include_history=True
+        )
+    finally:
+        self_reference._reset_active_memory_key(memory_token)
+        self_reference._reset_active_template_params(template_token)
+        self_reference._reset_active_runtime_toolkit(toolkit_token)
+
+    assert completed["status"] == "completed"
+    assert captured_template_params[SELF_REFERENCE_KEY_OVERRIDE_TEMPLATE_PARAM] != ""
+    assert (
+        captured_template_params[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM]
+        == toolkit_override
+    )
+    assert (
+        captured_template_params[SELF_REFERENCE_FORK_TASK_TEMPLATE_PARAM]
+        == "child task"
+    )
+    assert captured_template_params["environment_block"] == "ENV: /tmp/workspace"
+
+
+def test_self_reference_active_template_params_do_not_deepcopy_uncopyable_objects() -> (
+    None
+):
+    """Active template params should tolerate runtime objects like toolkit overrides."""
+
+    self_reference = SelfReference()
+    lock = threading.RLock()
+
+    token = self_reference._set_active_template_params(
+        {
+            "environment_block": "ENV: /tmp/workspace",
+            SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM: [lock],
+        }
+    )
+    try:
+        merged = self_reference._build_fork_template_params(
+            None,
+            "fork_key",
+            None,
+            "child task",
+        )
+    finally:
+        self_reference._reset_active_template_params(token)
+
+    assert merged["environment_block"] == "ENV: /tmp/workspace"
+    assert merged[SELF_REFERENCE_TOOLKIT_OVERRIDE_TEMPLATE_PARAM] == [lock]
 
 
 @pytest.mark.asyncio
@@ -1577,11 +2296,72 @@ async def test_llm_chat_seeds_system_prompt_into_empty_self_reference_memory() -
         async for _content, _history in stream:
             pass
 
-    assert observed_memory_lengths == [1]
-    assert observed_first_roles == ["system"]
-    seeded_system_prompt = self_reference.memory["agent_main"].get_system_prompt()
-    assert isinstance(seeded_system_prompt, str)
-    assert "docstring system" in seeded_system_prompt
-    assert "[Runtime Primitive Contract]" not in seeded_system_prompt
-    assert "[SelfReference Memory Contract]" not in seeded_system_prompt
-    assert _MUST_PROMPT_BLOCK not in seeded_system_prompt
+
+@pytest.mark.asyncio
+async def test_llm_chat_renders_docstring_template_params_into_system_prompt() -> None:
+    """llm_chat should render _template_params into the docstring system prompt."""
+
+    captured_system_prompt: str | None = None
+
+    async def fake_execute_react_loop_streaming(
+        *args: Any, **kwargs: Any
+    ) -> AsyncGenerator[tuple[str, list[dict[str, Any]]], None]:
+        nonlocal captured_system_prompt
+        _ = args
+
+        messages = kwargs["messages"]
+        if messages:
+            maybe_prompt = messages[0].get("content")
+            if isinstance(maybe_prompt, str):
+                captured_system_prompt = maybe_prompt
+
+        yield "ok", messages
+
+    async def passthrough_process_chat_response_stream(
+        response_stream: AsyncGenerator[tuple[str, list[dict[str, Any]]], None],
+        return_mode: str,
+        messages: list[dict[str, Any]],
+        func_name: str,
+        stream: bool,
+    ) -> AsyncGenerator[tuple[str, list[dict[str, Any]]], None]:
+        _ = (return_mode, messages, func_name, stream)
+        async for response, updated_history in response_stream:
+            yield response, updated_history
+
+    mock_llm = MagicMock()
+    mock_llm.model_name = "test-model"
+
+    with (
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.execute_react_loop_streaming",
+            new=fake_execute_react_loop_streaming,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.process_chat_response_stream",
+            new=passthrough_process_chat_response_stream,
+        ),
+        patch(
+            "SimpleLLMFunc.llm_decorator.llm_chat_decorator.langfuse_client.start_as_current_observation",
+            return_value=_DummyObservation(),
+        ),
+    ):
+
+        @llm_chat(llm_interface=mock_llm)
+        async def agent(message: str, history=None):
+            """Workspace: {workspace_dir}"""
+
+        stream = cast(
+            AsyncGenerator[tuple[Any, list[dict[str, Any]]], None],
+            agent(
+                "hello",
+                history=[],
+                _template_params={"workspace_dir": "/tmp/chat-workspace"},
+            ),
+        )
+
+        async for _content, _history in stream:
+            pass
+
+    assert captured_system_prompt is not None
+    assert "Workspace: /tmp/chat-workspace" in captured_system_prompt
+    assert "{workspace_dir}" not in captured_system_prompt

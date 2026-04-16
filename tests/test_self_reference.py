@@ -11,7 +11,7 @@ import pytest
 
 from SimpleLLMFunc.hooks.events import CustomEvent, ReActEventType
 from SimpleLLMFunc.hooks.stream import EventOrigin, EventYield
-from SimpleLLMFunc.self_reference import SelfReference
+from SimpleLLMFunc.runtime.selfref import SelfReference
 
 
 class _CollectingEmitter:
@@ -44,6 +44,12 @@ class _CollectingEmitter:
 
 class TestSelfReferenceMemoryProxy:
     """Validate memory-handle CRUD and helper operations."""
+
+    def test_legacy_self_reference_module_reexports_selfreference(self) -> None:
+        from SimpleLLMFunc.runtime.selfref import SelfReference as RuntimeSelfReference
+        from SimpleLLMFunc.self_reference import SelfReference as LegacySelfReference
+
+        assert LegacySelfReference is RuntimeSelfReference
 
     def test_memory_handle_requires_bound_key(self) -> None:
         self_reference = SelfReference()
@@ -342,6 +348,68 @@ class TestSelfReferenceInstanceProxy:
         }
 
     @pytest.mark.asyncio
+    async def test_instance_fork_from_tool_call_context_uses_pre_fork_history(
+        self,
+    ) -> None:
+        self_reference = SelfReference()
+        parent_history = [
+            {"role": "user", "content": "seed"},
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_fork_1",
+                        "type": "function",
+                        "function": {
+                            "name": "execute_code",
+                            "arguments": "runtime.selfref.fork.spawn('task-a')",
+                        },
+                    },
+                    {
+                        "id": "call_read_1",
+                        "type": "function",
+                        "function": {
+                            "name": "read_file",
+                            "arguments": '{"path": "README.md"}',
+                        },
+                    },
+                ],
+            },
+        ]
+        self_reference.bind_history("agent_main", parent_history)
+
+        observed_calls: list[dict[str, Any]] = []
+
+        async def fake_agent(message: str, history=None):
+            observed_calls.append(
+                {
+                    "message": message,
+                    "history": list(history or []),
+                }
+            )
+            return (
+                "done",
+                [
+                    *(history or []),
+                    {"role": "assistant", "content": "child done"},
+                ],
+            )
+
+        self_reference.bind_agent_instance(fake_agent, default_memory_key="agent_main")
+
+        completed = await self_reference.instance.fork("task-a", include_history=True)
+
+        assert completed["status"] == "completed"
+        assert observed_calls[0]["message"] == "task-a"
+        child_history = observed_calls[0]["history"]
+        assert child_history == [{"role": "user", "content": "seed"}]
+        assert completed["history"] == [
+            {"role": "user", "content": "seed"},
+            {"role": "assistant", "content": "child done"},
+        ]
+
+    @pytest.mark.asyncio
     async def test_instance_fork_include_history_can_be_enabled(self) -> None:
         self_reference = SelfReference()
         self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
@@ -399,6 +467,8 @@ class TestSelfReferenceInstanceProxy:
         assert compact["history_included"] is False
         assert "history" not in compact
         assert compact["history_count"] == 2
+        assert compact["response"] == "done:task-a"
+        assert compact["result"] == "done:task-a"
 
         hydrated_results = await self_reference.instance.fork_gather_all(
             spawned["fork_id"],
@@ -468,6 +538,33 @@ class TestSelfReferenceInstanceProxy:
         )
         assert set(all_results.keys()) == {first["fork_id"], second["fork_id"]}
         assert all(result["status"] == "completed" for result in all_results.values())
+        assert all(
+            result["result"] == result["response"] for result in all_results.values()
+        )
+
+    @pytest.mark.asyncio
+    async def test_instance_fork_gather_all_error_payload_exposes_result_alias(
+        self,
+    ) -> None:
+        self_reference = SelfReference()
+        self_reference.bind_history("agent_main", [{"role": "user", "content": "seed"}])
+
+        async def failing_agent(message: str, history=None):
+            _ = history
+            raise RuntimeError(f"boom:{message}")
+
+        self_reference.bind_agent_instance(
+            failing_agent, default_memory_key="agent_main"
+        )
+
+        spawned = await self_reference.instance.fork_spawn("task-a")
+        gathered = await self_reference.instance.fork_gather_all(spawned["fork_id"])
+        result = gathered[spawned["fork_id"]]
+
+        assert result["status"] == "error"
+        assert result["response"] is None
+        assert result["result"] is None
+        assert result["error_type"] == "RuntimeError"
 
     @pytest.mark.asyncio
     async def test_instance_fork_emits_lifecycle_events_only(self) -> None:

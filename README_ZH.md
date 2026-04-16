@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.7)
+### 更新说明 (0.7.8)
 
-📚 **Mintlify 文档迁移完成**：文档站现已全部迁移到 Mintlify，中文为默认语言，英文页面位于 `/en`。
+🧠 **Responses API 支持**：新增 `OpenAIResponsesCompatible` 一等适配器，用于对接 OpenAI Responses API 端点，支持 `provider.json` 加载、直接构造、reasoning 透传，以及 system prompt 到 `instructions` 的映射。
 
-🧰 **Skills 与 Quickstart 收口**：快速开始现在会在安装后第一时间提示导出 Agent Skill；内置 skills 也强化了 `provider.json` 组织、强类型 + Pydantic 以及 Harness Engineering 的指导。
+🧩 **Selfref Fork 上下文修正**：child fork 现在继承 fork 前的上下文快照，而不是父 agent 的 pending tool-call 场景；`gather_all()` 结果也同时暴露 `response` 和 `result`，更方便模型自动生成读取代码。
 
-🧹 **移除旧文档链路**：Read the Docs / Sphinx 旧文档树、旧翻译脚本和相关发布残留已删除。
+🧪 **回归测试与示例补全**：补充了 Responses adapter 与 selfref fork 行为的定向测试，并新增 `response_api_example.py` TUI 示例，演示 runtime selfref 与文件工具的组合用法。
 
-📘 **发布收口**：README、Mintlify 文档、skills、spec 与发布元数据已围绕新文档流程统一。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **文档与 Skills 同步**：README、Mintlify 文档、打包 skills 与 examples 已统一更新到新的 Responses 支持、selfref fork 语义和 runtime primitive 使用说明。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -73,6 +73,7 @@
 - ✅ **异步原生** - 全异步支持，天然适配高并发场景，无需额外配置
 - ✅ **功能完整** - 内置工具系统、多模态支持、API 密钥管理、流量控制、结构化日志、可观测性集成
 - ✅ **提供商无关** - OpenAI-compatible 适配，轻松切换多个模型供应商
+- ✅ **支持 Responses API** - 内置 `OpenAIResponsesCompatible`，同一套装饰器写法可以直接对接 OpenAI Responses API 端点
 - ✅ **易于扩展** - 模块化设计，支持自定义 LLM 接口和工具
 
 > ⚠️ **重要** - 所有与 LLM 交互的装饰器（`@llm_function`、`@llm_chat`、`@tool` 等）支持装饰sync和async函数，但是返回的结果全部都是async函数，使用时请通过 `await` 或 `asyncio.run()` 调用。
@@ -465,7 +466,7 @@ result = await my_function(
 
 SimpleLLMFunc 提供了灵活的 LLM 接口支持：
 
-**支持的供应商（通过 OpenAI Compatible 适配）：**
+**支持的供应商与适配路径：**
 
 - ✅ OpenAI (GPT-4, GPT-3.5 等)
 - ✅ Deepseek
@@ -474,21 +475,30 @@ SimpleLLMFunc 提供了灵活的 LLM 接口支持：
 - ✅ 百度千帆
 - ✅ 本地 LLM (Ollama, vLLM 等)
 - ✅ 任何兼容 OpenAI API 的服务
+- ✅ 通过 `OpenAIResponsesCompatible` 对接 OpenAI Responses API 端点
 
 #### 快速接入示例
 
 ```python
-from SimpleLLMFunc import OpenAICompatible
+from SimpleLLMFunc import APIKeyPool, OpenAICompatible, OpenAIResponsesCompatible
 
 # 方式 1：从 JSON 配置文件加载
 provider_config = OpenAICompatible.load_from_json_file("provider.json")
 llm = provider_config["deepseek"]["v3-turbo"]
+responses_config = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+responses_llm = responses_config["openrouter"]["gpt-5.4"]
 
 # 方式 2：直接创建
 llm = OpenAICompatible(
-    api_key="sk-xxx",
+    api_key_pool=APIKeyPool(["sk-xxx"], provider_id="deepseek-chat"),
     base_url="https://api.deepseek.com/v1",
-    model="deepseek-chat"
+    model_name="deepseek-chat",
+)
+
+responses_llm = OpenAIResponsesCompatible(
+    api_key_pool=APIKeyPool(["sk-xxx"], provider_id="openrouter-gpt-5.4-responses"),
+    base_url="https://openrouter.ai/api/v1",
+    model_name="gpt-5.4",
 )
 
 @llm_function(llm_interface=llm)
@@ -496,6 +506,8 @@ async def my_function(text: str) -> str:
     """处理文本"""
     pass
 ```
+
+对于 Responses API 路径，仍然按普通 SimpleLLMFunc 的 docstring 和 history 来写。system prompt 到 Responses `instructions` 的映射，以及 `reasoning={...}` 的透传，都由 adapter 负责。
 
 #### provider.json 配置文件
 
@@ -769,6 +781,7 @@ SimpleLLMFunc/
 │   ├── interface/             # LLM 接口层
 │   │   ├── llm_interface.py   # 抽象基类
 │   │   ├── openai_compatible.py    # OpenAI 兼容实现
+│   │   ├── openai_responses_compatible.py # OpenAI Responses API 适配器
 │   │   ├── key_pool.py        # API 密钥管理
 │   │   └── token_bucket.py    # 流量控制
 │   ├── base/                  # 核心执行引擎
@@ -798,6 +811,7 @@ SimpleLLMFunc/
 │   ├── pyrepl_example.py            # 内置 PyRepl 示例
 │   ├── runtime_primitives_basic_example.py # 本地 runtime memory primitive 示例
 │   ├── tui_general_agent_example.py  # 通用 TUI agent 示例（selfref + 文件工具）
+│   ├── response_api_example.py      # Responses API TUI agent 示例
 │   ├── custom_tool_event_example.py # 自定义工具事件示例
 │   ├── tui_chat_example.py          # Textual TUI 示例
 │   ├── provider.json          # 供应商配置示例
@@ -816,7 +830,7 @@ SimpleLLMFunc/
 | **tool** | 工具系统，@tool 装饰器和 Tool 基类 |
 | **builtin** | 内置工具（如持久化 Python REPL） |
 | **hooks** | 事件流定义、事件发射器与流封装 |
-| **interface** | LLM 接口抽象和 OpenAI 兼容实现 |
+| **interface** | LLM 接口抽象，以及 `OpenAICompatible` / `OpenAIResponsesCompatible` 适配器 |
 | **base** | ReAct 引擎、消息处理、类型转换 |
 | **logger** | 结构化日志、trace_id 追踪 |
 | **observability** | Langfuse 集成，完整 LLM 可观测性 |
@@ -958,7 +972,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.7},
+  version = {0.7.8},
   year = {2026}
 }
 ```

@@ -102,6 +102,18 @@ class TestBuildChatUserMessageContent:
         assert isinstance(result, str)
         assert "Hello" in result
 
+    def test_build_text_content_skips_empty_string_arguments(self) -> None:
+        """Empty-string chat arguments should not produce placeholder user lines."""
+        arguments = {"message": "", "param": "value", "optional": None}
+        type_hints = {"message": str, "param": str, "optional": str | None}
+        result = build_chat_user_message_content(
+            arguments,
+            type_hints,
+            False,
+            ["history"],
+        )
+        assert result == "param: value"
+
     @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.build_multimodal_content")
     def test_build_multimodal_content(self, mock_build_multimodal: Any) -> None:
         """Test building multimodal user message content."""
@@ -206,3 +218,42 @@ class TestBuildChatMessages:
         first_message = cast(dict[str, Any], result[0])
         assert first_message["role"] == "system"
         assert first_message["content"] == "Runtime system prompt"
+
+    @patch("SimpleLLMFunc.llm_decorator.steps.chat.message.has_multimodal_content")
+    def test_build_messages_renders_docstring_template_params(
+        self, mock_has_multimodal: Any
+    ) -> None:
+        """Docstring template params should render into llm_chat system prompt."""
+        mock_has_multimodal.return_value = False
+
+        from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+        import inspect
+
+        def test_func(message: str) -> str:
+            """System prompt for {workspace}."""
+            return "result"
+
+        sig = inspect.signature(test_func)
+        bound = sig.bind("Hello")
+        bound.apply_defaults()
+
+        signature = FunctionSignature(
+            func_name="test_func",
+            trace_id="trace_123",
+            bound_args=bound,
+            signature=sig,
+            type_hints={"message": str, "return": str},
+            return_type=str,
+            docstring="System prompt for {workspace}.",
+        )
+
+        result = build_chat_messages(
+            signature,
+            None,
+            ["history"],
+            template_params={"workspace": "/tmp/demo"},
+        )
+        first_message = cast(dict[str, Any], result[0])
+
+        assert first_message["role"] == "system"
+        assert first_message["content"] == "System prompt for /tmp/demo."

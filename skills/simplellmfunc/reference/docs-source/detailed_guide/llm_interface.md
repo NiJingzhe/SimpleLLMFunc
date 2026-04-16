@@ -65,7 +65,7 @@ async def my_task(text: str) -> str:
 
 ### 设计理念
 
-`LLM_Interface` 是所有 LLM 实现的抽象基类，定义了统一的接口规范。所有具体实现（如 `OpenAICompatible`）都继承自这个类。
+`LLM_Interface` 是所有 LLM 实现的抽象基类，定义了统一的接口规范。所有具体实现（如 `OpenAICompatible`、`OpenAIResponsesCompatible`）都继承自这个类。
 
 ### 核心特性
 
@@ -172,6 +172,29 @@ llm = OpenAICompatible(
 - **令牌统计**: 自动统计 input 和 output token 数量
 - **流量控制**: 使用令牌桶算法防止速率限制
 - **密钥轮换**: 自动在多个密钥间负载均衡
+
+## OpenAIResponsesCompatible 实现
+
+### 什么是 OpenAIResponsesCompatible
+
+`OpenAIResponsesCompatible` 是另一个 `LLM_Interface` 实现，用于对接 OpenAI Responses API，同时保持与 `@llm_function` / `@llm_chat` 相同的装饰器使用方式。
+
+### 关键特点
+
+- 与 `OpenAICompatible` 共用同一种 `provider.json` 结构
+- 构造函数同样使用 `APIKeyPool`、`model_name`、`base_url`
+- 装饰器层的 prompt 写法不变；adapter 会把选中的 system prompt 映射为 Responses API 的 `instructions`
+- 可通过 `reasoning={...}` 把 Responses reasoning 配置传到接口层
+- Responses API 的 tool schema、流式 chunk、reasoning 细节适配都在接口层完成，不需要上层改写成原生 Responses schema
+
+### 创建接口
+
+```python
+from SimpleLLMFunc import OpenAIResponsesCompatible
+
+all_models = OpenAIResponsesCompatible.load_from_json_file("provider.json")
+responses_llm = all_models["openrouter"]["gpt-5.4"]
+```
 
 ## APIKeyPool - 密钥管理
 

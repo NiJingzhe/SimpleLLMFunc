@@ -17,7 +17,7 @@ title: 使用指南
     配置 `.env`、`provider.json`、日志目录与基础运行参数。
   </Card>
   <Card title="LLM 接口层" href="/detailed_guide/llm_interface">
-    了解 `OpenAICompatible`、密钥池和令牌桶的工作方式。
+    了解 `OpenAICompatible`、`OpenAIResponsesCompatible`、密钥池和令牌桶的工作方式。
   </Card>
 </CardGroup>
 
@@ -92,7 +92,7 @@ title: 使用指南
     阅读 [llm_function 装饰器](/detailed_guide/llm_function)，学习签名、返回类型、模板参数和工具调用。
   </Accordion>
   <Accordion title="我想要构建聊天应用或 Agent">
-    阅读 [llm_chat 装饰器](/detailed_guide/llm_chat)，了解历史管理、流式响应和 runtime memory。
+    阅读 [llm_chat 装饰器](/detailed_guide/llm_chat)，了解历史管理、流式响应和 runtime context。
   </Accordion>
   <Accordion title="我想要观察执行过程">
     阅读 [事件流系统](/detailed_guide/event_stream)，消费 `EventYield` 和 `ResponseYield` 构建可观测 UI。
@@ -164,7 +164,7 @@ title: 使用指南
     阅读 [工具系统](/detailed_guide/tool)，学习 `@tool`、返回类型和工具最佳实践注入。
   </Accordion>
   <Accordion title="支持哪些 LLM 提供商？">
-    阅读 [LLM 接口层](/detailed_guide/llm_interface)。框架面向 OpenAI Compatible 接口设计，可接入多种兼容服务。
+    阅读 [LLM 接口层](/detailed_guide/llm_interface)。框架同时支持 OpenAI-compatible chat/completions 适配和 OpenAI Responses API 适配，可接入多种兼容服务。
   </Accordion>
   <Accordion title="如何处理错误和重试？">
     先看 [LLM 接口层](/detailed_guide/llm_interface) 的故障排除，再结合日志和事件流排查。

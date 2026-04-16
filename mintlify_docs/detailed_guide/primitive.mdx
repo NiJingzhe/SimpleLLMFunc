@@ -14,7 +14,7 @@ LLM -> execute_code -> runtime.<pack>.<primitive>(...)
 在 CodeAct 模式下，模型会使用 `execute_code` 执行一段 Python 代码。Primitive 就是这段代码里可直接调用的运行时 API，例如：
 
 ```python
-runtime.selfref.history.count()
+runtime.selfref.context.inspect()
 runtime.github_repo.list_open_issues("owner/repo")
 ```
 
@@ -153,7 +153,7 @@ def list_open_issues(ctx, repo: str) -> list[dict[str, str]]:
     模型需要先调用 `execute_code`，才能真正访问 primitives。
   </Accordion>
   <Accordion title="内置 selfref pack">
-    `runtime.selfref.history.*` 和 `runtime.selfref.fork.*` 也是同一套机制的内置示例。
+    `runtime.selfref.context.*` 和 `runtime.selfref.fork.*` 也是同一套机制的内置示例。
   </Accordion>
 </AccordionGroup>
 

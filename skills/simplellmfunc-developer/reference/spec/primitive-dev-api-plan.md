@@ -358,7 +358,7 @@ Keep these existing surfaces working:
 - `runtime.list_primitives(...)`
 - `runtime.get_primitive_spec(...)`
 - `runtime.list_primitive_specs(...)`
-- all existing dotted runtime names such as `runtime.selfref.history.keys()`
+- all existing dotted runtime names such as `runtime.selfref.context.inspect()`
 
 Compatibility strategy:
 

@@ -125,8 +125,8 @@ History parameters should be named `history` or `chat_history`. If the framework
   <Card title="Tool-Augmented Chat" href="#examples">
     Start here if you want the model to call APIs, file tools, or business logic.
   </Card>
-  <Card title="Runtime Memory" href="#advanced-features">
-    Start here if you need Agent-style runtime memory and self-reference behavior.
+  <Card title="Runtime Context" href="#advanced-features">
+    Start here if you need Agent-style runtime context and self-reference behavior.
   </Card>
   <Card title="Troubleshooting" href="#best-practices">
     Start here if you are dealing with history growth, timeouts, or logging.
@@ -239,6 +239,18 @@ Typical use cases:
 - runtime inspection inside code execution
 - context management beyond plain chat history
 
+Useful self-reference primitives:
+
+- `runtime.selfref.guide()`: overview plus fork/context best practices
+- `runtime.selfref.context.inspect(key=None)`: full snapshot with `experiences`, structured `summary`, and read-only `messages`
+- `runtime.selfref.context.remember(text, key=None)`: append durable experience
+- `runtime.selfref.context.forget(experience_id, key=None)`: remove wrong or stale durable experience
+- `runtime.selfref.context.compact(..., key=None)`: queue milestone compaction; the framework tries to commit it after the current tool batch so the next same-turn LLM call sees the compacted context, with finalize as fallback
+- `runtime.selfref.fork.spawn(message, ...)`: spawn a child fork; the child inherits the pre-fork context snapshot rather than the parent's pending fork tool-call scene
+- `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: gather fork results as `dict[fork_id -> ForkResult]`
+
+Fork results are compact by default. Read `status` first, then `response` or `result`; inspect `error_type` / `error_message` when status is `error`. Use `include_history=True` only when you actually need full child history.
+
 ### Return modes
 
 Use `return_mode` to control the non-event-stream response shape:
@@ -287,7 +299,7 @@ Use `llm_chat` when:
 
 - you need multi-turn state through message history
 - you want streaming conversational UX
-- you want Agent-style tool calling and runtime memory
+- you want Agent-style tool calling and runtime context
 - you need event-driven observation of a conversation loop
 
 Use [`llm_function`](/en/detailed_guide/llm_function) instead when the task maps naturally to a stateless function call with typed inputs and outputs.

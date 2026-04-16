@@ -31,13 +31,14 @@ PY
 
 - `runtime_primitives_basic_example.py`
   - Run: `poetry run python skills/simplellmfunc/examples/runtime_primitives_basic_example.py`
-  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.history.*` usage.
+  - Shows `PrimitivePack` authoring, backend-aware runtime primitives, and `runtime.selfref.context.*` usage.
 
 ## Mirrored Repo Examples
 
 These are copied from the repo's main `examples/` directory to ground the skill in real project usage.
 
 - `tui_general_agent_example.py`
+- `response_api_example.py`
 - `tui_chat_example.py`
 - `pyrepl_example.py`
 - `event_stream_chatbot.py`
@@ -55,3 +56,4 @@ These are copied from the repo's main `examples/` directory to ground the skill 
 - `provider_template.json` is included as the safe starter config.
 - `provider.json` is intentionally not bundled here because checked-in example copies may contain secrets.
 - Many mirrored repo examples expect a local `provider.json` next to the script, because they preserve the original repo behavior.
+- `response_api_example.py` is the main packaged example for `OpenAIResponsesCompatible`, `reasoning={...}`, and `runtime.selfref.fork.gather_all(...)` result handling.

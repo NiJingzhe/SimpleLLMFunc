@@ -203,6 +203,8 @@ class TestLLMCallEndEvent:
             response=response,
             messages=messages,
             tool_calls=[tool_call],
+            content="Hello",
+            reasoning_details=[{"type": "reasoning.text", "data": "step"}],
             usage=usage,
             execution_time=1.5,
         )
@@ -210,6 +212,8 @@ class TestLLMCallEndEvent:
         assert len(event.messages) == 1
         assert len(event.tool_calls) == 1
         assert event.tool_calls[0].id == "call_123"
+        assert event.content == "Hello"
+        assert event.reasoning_details == [{"type": "reasoning.text", "data": "step"}]
         assert event.usage is not None
         assert event.usage.total_tokens == 30
         assert event.execution_time == 1.5

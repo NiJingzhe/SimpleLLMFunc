@@ -139,8 +139,8 @@ Shows how to use runtime primitives without any LLM provider:
 
 - Start `PyRepl` with its builtin `selfref` backend and access it through `repl.get_runtime_backend("selfref")`
 - Declare one custom `PrimitivePack` (`constants.get`) as extension example
-- Perform CRUD operations through `runtime.selfref.history.*`
-- Persist durable preferences into system prompt via `runtime.selfref.history.append_system_prompt(...)`
+- Inspect context and queue compaction through `runtime.selfref.context.*`
+- Persist durable experiences into system context via `runtime.selfref.context.remember(...)`
 
 Run:
 
@@ -154,7 +154,7 @@ poetry run python examples/runtime_primitives_basic_example.py
 
 Recommended single entry for a TUI-first agent workflow:
 
-- One agent uses both `runtime.selfref.history.*` and `runtime.selfref.fork.*`
+- One agent uses both `runtime.selfref.context.*` and `runtime.selfref.fork.*`
 - `FileToolset` provides read/grep/sed/echo tools scoped to the workspace
 - `llm_chat` injects runtime primitive guidance through tool-owned best practices (when `PyRepl` is mounted)
 - Forked contexts inherit parent memory snapshot from the same selfref key

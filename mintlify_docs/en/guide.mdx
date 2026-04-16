@@ -17,7 +17,7 @@ If you are new to SimpleLLMFunc, start with [Quick Start](/en/quickstart) and th
     Learn how `.env`, `provider.json`, logging, and runtime configuration work.
   </Card>
   <Card title="LLM Interface Layer" href="/en/detailed_guide/llm_interface">
-    Understand `OpenAICompatible`, API key pools, and token bucket rate limiting.
+    Understand `OpenAICompatible`, `OpenAIResponsesCompatible`, API key pools, and token bucket rate limiting.
   </Card>
 </CardGroup>
 
@@ -92,7 +92,7 @@ If you are new to SimpleLLMFunc, start with [Quick Start](/en/quickstart) and th
     Read [llm_function Decorator](/en/detailed_guide/llm_function) to learn about signatures, output types, templates, and tools.
   </Accordion>
   <Accordion title="I want to build a chat app or Agent">
-    Read [llm_chat Decorator](/en/detailed_guide/llm_chat) to learn about history handling, streaming output, and runtime memory.
+    Read [llm_chat Decorator](/en/detailed_guide/llm_chat) to learn about history handling, streaming output, and runtime context.
   </Accordion>
   <Accordion title="I want to inspect execution in real time">
     Read [Event Stream System](/en/detailed_guide/event_stream) to consume `EventYield` and `ResponseYield` in custom UI or telemetry code.
@@ -164,7 +164,7 @@ If you are new to SimpleLLMFunc, start with [Quick Start](/en/quickstart) and th
     Read [Tool System](/en/detailed_guide/tool) to learn `@tool`, return types, and tool guidance injection.
   </Accordion>
   <Accordion title="Which LLM providers are supported?">
-    Read [LLM Interface Layer](/en/detailed_guide/llm_interface). The framework is built around OpenAI-compatible interfaces and can connect to many compatible services.
+    Read [LLM Interface Layer](/en/detailed_guide/llm_interface). The framework supports both OpenAI-compatible chat/completions adapters and OpenAI Responses API adapters, and can connect to many compatible services.
   </Accordion>
   <Accordion title="How should I debug failures or retry issues?">
     Start with the troubleshooting section in [LLM Interface Layer](/en/detailed_guide/llm_interface), then use logs and the event stream for deeper inspection.

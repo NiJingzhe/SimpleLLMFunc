@@ -172,6 +172,8 @@ class LLMCallEndEvent(ReActEvent):
     messages: MessageList  # 更新后的消息列表（包含 assistant 消息）
     tool_calls: List[ToolCall]  # 提取的工具调用列表
     execution_time: float  # 执行耗时（秒）
+    content: str = ""  # 聚合后的 assistant 文本内容
+    reasoning_details: List[Dict[str, Any]] = field(default_factory=list)
     usage: Optional[LLMUsage] = None  # Token 使用统计（如果可用，放在最后）
 
 

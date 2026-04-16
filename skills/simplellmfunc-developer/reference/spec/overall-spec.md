@@ -91,7 +91,8 @@ SimpleLLMFunc 遵循以下核心设计理念：
 框架采用分层架构：
 
 - **装饰器层**: @llm_function, @llm_chat, @tool 装饰器
-- **执行层**: ReAct 循环实现，工具调用编排
+- **执行层**: phase-based ReAct 循环实现，工具调用编排与统一 finalize 收口
+- **运行时状态层**: runtime primitive、selfref state、纯 context transform
 - **接口层**: LLM 接口抽象，支持多提供商
 - **基础设施层**: 日志、事件流、可观测性
 
@@ -104,6 +105,7 @@ SimpleLLMFunc 遵循以下核心设计理念：
 - 按功能职责划分模块
 - 相关功能集中在同一目录下
 - 使用 __init__.py 导出公共接口
+- 优先明确区分纯函数转换、本地状态变更、以及外部副作用/编排逻辑
 
 ### 命名规范
 
@@ -190,6 +192,15 @@ SimpleLLMFunc 遵循以下核心设计理念：
 2. 实现核心逻辑
 3. 更新导出接口
 4. 编写单元测试
+
+### ReAct / selfref 维护约束
+
+- `base/ReAct.py` 中的新终态分支应复用统一 finalize 路径，避免绕过 `before_finalize`
+- selfref 相关纯 context transform 优先放在 `runtime/selfref/context_ops.py`
+- `runtime/selfref/state.py` 负责有状态存储与 mutation，不要把纯 parse/render 逻辑重新塞回去
+- `llm_decorator/selfref_sync.py` 负责 `llm_chat` 与 `SelfReference` 的生命周期桥接，不要把这层同步散落回多个调用点
+- Provider-specific API 差异优先留在 `interface/` 适配层；例如 Responses API 的 `instructions`、reasoning、stream chunk 适配，不要直接塞进 `ReAct`
+- selfref fork child 的可见上下文应来自 pre-fork 快照，不要把父 agent 当前 pending `tool_calls` message 重新带回 child history
 
 ### 测试验证
 

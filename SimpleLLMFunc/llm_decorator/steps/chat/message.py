@@ -11,6 +11,7 @@ from SimpleLLMFunc.logger.logger import get_location
 from SimpleLLMFunc.tool import Tool
 from SimpleLLMFunc.type import HistoryList
 from SimpleLLMFunc.llm_decorator.steps.common.types import FunctionSignature
+from SimpleLLMFunc.llm_decorator.steps.common.prompt import process_docstring_template
 
 # Constants
 HISTORY_PARAM_NAMES: List[str] = ["history", "chat_history"]
@@ -77,6 +78,8 @@ def build_chat_user_message_content(
             f"{param_name}: {param_value}"
             for param_name, param_value in arguments.items()
             if param_name not in exclude_params
+            and param_value is not None
+            and not (isinstance(param_value, str) and param_value == "")
         ]
         return "\n\t".join(message_parts)
 
@@ -135,9 +138,14 @@ def build_chat_messages(
     signature: FunctionSignature,
     toolkit: Optional[List[Union[Tool, Any]]],
     exclude_params: List[str],
+    template_params: Optional[Dict[str, Any]] = None,
 ) -> HistoryList:
     """构建聊天消息列表的完整流程"""
     messages: HistoryList = []
+    processed_docstring = process_docstring_template(
+        signature.docstring,
+        template_params,
+    )
 
     # 2. 提取对话历史
     custom_history = extract_conversation_history(
@@ -147,7 +155,7 @@ def build_chat_messages(
 
     # 3. 构建系统提示（history 中的 system prompt 优先）
     system_content = build_chat_system_prompt(
-        signature.docstring,
+        processed_docstring,
         history_system_prompt=extract_history_system_prompt(custom_history),
     )
     if system_content:

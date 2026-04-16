@@ -328,7 +328,7 @@ asyncio.run(demo())
 
 当挂载了带 runtime 的工具（例如 `PyRepl`）时，框架会在 system prompt 顶部注入一段去重后的工具最佳实践块；runtime primitive 的指引会包含在这些工具自己的 best practices 中。
 
-这段 guidance 会在每个回合按当前 runtime 状态重新构建，因此不会把临时运行时说明写进持久化 system-prompt memory；需要持久修改提示词时，仍然使用 `set_system_prompt(...)` / `append_system_prompt(...)`。
+这段 guidance 会在每个回合按当前 runtime 状态重新构建，因此不会把临时运行时说明写进持久化 context；需要持久修改上下文时，优先使用 `runtime.selfref.context.remember(...)` 或在里程碑后调用 `runtime.selfref.context.compact(...)`。
 
 这段 guidance 会告诉 agent：
 
@@ -336,7 +336,7 @@ asyncio.run(demo())
 - 如何查看单个契约（`runtime.get_primitive_spec(name)`）或按条件筛选契约（`runtime.list_primitive_specs(names=[...], contains="...")`）
 - 如何查看 selfref 命名空间 guidance（`runtime.selfref.guide()`）
 - `reset_repl` 会清理 REPL 变量，并继续保留当前 runtime backend 状态
-- 当绑定了 `SelfReference` 记忆时，本 chat 函数对应的 memory key 作用域
+- 当绑定了 `SelfReference` 上下文时，本 chat 函数对应的 memory key 作用域
 
 `PyRepl()` 默认会安装 builtin `selfref` pack；`llm_chat` 会直接从 toolkit 的 runtime backend 解析并复用这份默认 backend。
 
@@ -371,35 +371,26 @@ await agent(
 )
 ```
 
-在 `execute_code` 中，优先通过 runtime primitives 处理记忆：
+在 `execute_code` 中，优先通过 runtime primitives 处理上下文：
 
 ```python
-runtime.selfref.history.append_system_prompt(
+runtime.selfref.context.remember(
     "User preference: answer in concise bullet points.",
 )
 ```
 
 Runtime self-reference 原语参考：
 
-- `runtime.selfref.guide()`: 返回命名空间概览与 fork / 记忆最佳实践清单。
-- `runtime.selfref.history.keys()`: 列出所有已绑定的 memory key。
-- `runtime.selfref.history.active_key()`: 获取当前上下文解析出的 active key。
-- `runtime.selfref.history.count(key=None)`: 返回解析后 key 的消息数量。
-- `runtime.selfref.history.all(key=None)`: 返回完整消息列表的深拷贝。
-- `runtime.selfref.history.get(index, key=None)`: 读取指定索引的消息。
-- `runtime.selfref.history.append(message, key=None)`: 追加一条消息。
-- `runtime.selfref.history.insert(index, message, key=None)`: 在指定索引插入一条消息。
-- `runtime.selfref.history.update(index, message, key=None)`: 替换指定索引消息。
-- `runtime.selfref.history.delete(index, key=None)`: 删除指定索引消息。
-- `runtime.selfref.history.replace(messages, key=None)`: 用校验后的消息列表替换整段历史。
-- `runtime.selfref.history.clear(key=None)`: 清理非 system 消息并保留当前 system prompt。
-- `runtime.selfref.history.get_system_prompt(key=None)`: 读取最新 system prompt。
-- `runtime.selfref.history.set_system_prompt(text, key=None)`: 覆盖当前 system prompt。
-- `runtime.selfref.history.append_system_prompt(text, key=None)`: 向现有 system prompt memory 追加文本。
-- `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 self-fork（chat 形态）。
+- `runtime.selfref.guide()`: 返回命名空间概览与 fork / context 最佳实践清单。
+- `runtime.selfref.context.inspect(key=None)`: 返回当前上下文快照，包括 `experiences`、结构化 `summary` 和完整只读 `messages`。
+- `runtime.selfref.context.remember(text, key=None)`: 向 system 内的 experience block 追加 durable experience。
+- `runtime.selfref.context.forget(experience_id, key=None)`: 通过 id 删除错误或过时的 durable experience。
+- `runtime.selfref.context.compact(..., key=None)`: 排队一次 milestone compaction。当前工具批次结束后会优先提交，让下一次同 turn 的 LLM 调用看到结构化 assistant summary；如果当前 turn 不再继续调用 LLM，finalize 阶段会兜底提交。
+- `runtime.selfref.fork.spawn(message, ...)`: 异步创建子 self-fork（chat 形态）。子 fork 继承的是 fork 前的上下文快照，不会把父 agent 当前尚未闭合的 fork tool-call 场景当成自己的当前动作。
 - `runtime.selfref.fork.gather_all(fork_id_or_list=None, include_history=False)`: 聚合 fork 结果，返回 `dict[fork_id -> ForkResult]`（用 `.items()` / `.values()` 遍历）。
 
-默认情况下 fork 结果是紧凑模式（`history_included=False`，并提供 `history_count` 元数据），这样主上下文可以保持简洁。
+默认情况下 fork 结果是紧凑模式（`history_included=False`，并提供 `status`、`response`、`result`、`memory_key`、`history_count` 等元数据），这样主上下文可以保持简洁。
+读取结果时先检查 `status`，成功后读取 `response` 或 `result`，失败时检查 `error_type` / `error_message`。
 确实需要完整子历史时，再显式使用 `include_history=True`。
 
 当 `enable_event=True` 时，你可以通过 origin 元数据区分主链路事件与 fork 事件：
@@ -416,11 +407,12 @@ async for output in agent("analyze and split"):
         print(f"main type={output.event.event_type}")
 ```
 
-清理记忆：
+清理上下文：
 
 - 使用 `reset_repl` 清理 Python runtime 变量。
-- 使用 selfref history primitives 清理记忆记录，例如 `runtime.selfref.history.delete`、`runtime.selfref.history.replace`。
-- 需要保留当前 system prompt 时，使用 `runtime.selfref.history.clear`。
+- 使用 `runtime.selfref.context.inspect()` 查看完整上下文与原始 messages。
+- 使用 `runtime.selfref.context.forget(...)` 删除错误的 durable experience。
+- 在 milestone 完成后使用 `runtime.selfref.context.compact(...)` 生成 retained summary 并清空 stale working transcript。
 
 ### 返回模式
 

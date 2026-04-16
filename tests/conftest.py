@@ -17,6 +17,7 @@ from openai.types.chat.chat_completion_message_function_tool_call import (
 )
 from pydantic import BaseModel
 
+from SimpleLLMFunc.interface.llm_interface import DEFAULT_CONTEXT_WINDOW
 from SimpleLLMFunc.interface.llm_interface import LLM_Interface
 from SimpleLLMFunc.interface.key_pool import APIKeyPool
 from SimpleLLMFunc.type.multimodal import ImgPath, ImgUrl, Text
@@ -28,6 +29,7 @@ def mock_llm_interface() -> LLM_Interface:
     """Mock LLM interface for testing."""
     mock = MagicMock(spec=LLM_Interface)
     mock.model_name = "test-model"
+    mock.context_window = DEFAULT_CONTEXT_WINDOW
     mock.input_token_count = 0
     mock.output_token_count = 0
     return mock

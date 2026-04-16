@@ -1,5 +1,47 @@
 # Change log for SimpleLLMFunc
 
+## 0.7.8 (2026-04-16) - Responses Adapter and Selfref Fork Context Refinement
+
+### ✨ New Features
+
+1. **OpenAI Responses API adapter**:
+   - Added `OpenAIResponsesCompatible` as a first-class interface adapter.
+   - Supports `provider.json` loading, direct construction with `APIKeyPool`, Responses tool schema translation, and reasoning passthrough.
+   - Keeps decorator-facing authoring unchanged while mapping system prompts to Responses `instructions`.
+
+2. **Responses API runnable example**:
+   - Added `examples/response_api_example.py` as a TUI-first demo using `OpenAIResponsesCompatible`, runtime selfref, and file tools.
+
+### 🔧 Improvements
+
+1. **SelfReference fork context construction**:
+   - Child forks now inherit the pre-fork context snapshot instead of the parent's in-flight fork tool-call scene.
+   - Removed the old fake tool-result closure path from child history construction.
+   - Isolated child fork execution from the parent's active ReAct state to prevent context contamination.
+
+2. **Fork result ergonomics**:
+   - `runtime.selfref.fork.gather_all(...)` now exposes both `response` and `result` for successful results.
+   - Error payloads now consistently include `response: None` and `result: None`.
+   - Updated selfref primitive guidance to tell models to read `status` first, then `response` or `result`.
+
+3. **PyRepl runtime guidance**:
+   - Strengthened `execute_code` prompt injection to explicitly explain that runtime primitives are not standalone tool calls and must be invoked as `runtime.namespace.name(...)` inside `execute_code`.
+
+4. **Examples and prompts**:
+   - Updated TUI agent prompts and tests to use explicit runtime-primitive wording for selfref fork/compaction actions.
+
+### 📚 Documentation & Skills
+
+1. **Docs sync for Responses + selfref**:
+   - Updated README, README_ZH, Mintlify docs, packaged skills, and mirrored skill references to document `OpenAIResponsesCompatible`, Responses `instructions`, and the refined selfref fork semantics.
+   - Added explicit guidance for parsing `gather_all()` results through `status`, `response`, and `result`.
+
+### 🧪 Testing
+
+- Added targeted adapter regression coverage for `OpenAIResponsesCompatible`.
+- Added selfref fork history and fork-result alias tests across runtime, decorator, PyRepl, and example suites.
+- Verified broader ReAct regressions with targeted lower-level test runs.
+
 ## 0.7.7 (2026-04-03) - Mintlify Docs, i18n, and Skills Workflow
 
 ### ✨ New Features
