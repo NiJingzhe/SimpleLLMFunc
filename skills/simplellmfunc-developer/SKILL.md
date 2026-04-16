@@ -5,7 +5,7 @@ license: MIT
 compatibility: "Python 3.12+ repo with pytest, Poetry, Mintlify docs, and SimpleLLMFunc source tree available."
 metadata:
   project: SimpleLLMFunc
-  version: "0.7.7"
+  version: "0.7.8"
 ---
 
 # SimpleLLMFunc Framework Development

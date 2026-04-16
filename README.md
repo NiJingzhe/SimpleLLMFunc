@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### Update Notes (0.7.7)
+### Update Notes (0.7.8)
 
-📚 **Mintlify Documentation Migration**: the docs site is now fully migrated to Mintlify with Chinese as the default language and English pages under `/en`.
+🧠 **Responses API Support**: added `OpenAIResponsesCompatible` as a first-class adapter for OpenAI Responses API endpoints, including `provider.json` loading, direct construction, reasoning passthrough, and system-prompt to `instructions` mapping.
 
-🧰 **Skills + Quickstart Workflow**: quickstart now surfaces packaged Agent Skills immediately after installation, and the bundled skills now include stronger guidance on provider organization, strong typing, Pydantic, and Harness Engineering.
+🧩 **Selfref Fork Context Fixes**: child forks now inherit the pre-fork context snapshot instead of the parent's pending tool-call scene, and `gather_all()` results now expose both `response` and `result` for easier model-generated parsing.
 
-🧹 **Legacy Docs Cleanup**: the old Read the Docs / Sphinx documentation tree, translation scripts, and related release baggage have been removed.
+🧪 **Regression Coverage + Examples**: added focused tests for the Responses adapter and selfref fork behavior, plus a new `response_api_example.py` TUI demo using runtime selfref and file tools.
 
-📘 **Release Refresh**: README, Mintlify docs, skills, specs, and release metadata have been aligned around the Mintlify workflow. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
+📘 **Docs + Skills Sync**: README, Mintlify docs, packaged skills, and examples have been updated to reflect Responses support, refined selfref fork semantics, and current runtime-primitive guidance. See **[CHANGELOG](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)** for details.
 
 ### 📚 Complete Documentation
 
@@ -967,7 +967,7 @@ If you have used SimpleLLMFunc in your research or projects, please cite the fol
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.7},
+  version = {0.7.8},
   year = {2026}
 }
 ```

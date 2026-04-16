@@ -21,15 +21,15 @@
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/graphs/commit-activity)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/NiJingzhe/SimpleLLMFunc/pulls)
 
-### 更新说明 (0.7.7)
+### 更新说明 (0.7.8)
 
-📚 **Mintlify 文档迁移完成**：文档站现已全部迁移到 Mintlify，中文为默认语言，英文页面位于 `/en`。
+🧠 **Responses API 支持**：新增 `OpenAIResponsesCompatible` 一等适配器，用于对接 OpenAI Responses API 端点，支持 `provider.json` 加载、直接构造、reasoning 透传，以及 system prompt 到 `instructions` 的映射。
 
-🧰 **Skills 与 Quickstart 收口**：快速开始现在会在安装后第一时间提示导出 Agent Skill；内置 skills 也强化了 `provider.json` 组织、强类型 + Pydantic 以及 Harness Engineering 的指导。
+🧩 **Selfref Fork 上下文修正**：child fork 现在继承 fork 前的上下文快照，而不是父 agent 的 pending tool-call 场景；`gather_all()` 结果也同时暴露 `response` 和 `result`，更方便模型自动生成读取代码。
 
-🧹 **移除旧文档链路**：Read the Docs / Sphinx 旧文档树、旧翻译脚本和相关发布残留已删除。
+🧪 **回归测试与示例补全**：补充了 Responses adapter 与 selfref fork 行为的定向测试，并新增 `response_api_example.py` TUI 示例，演示 runtime selfref 与文件工具的组合用法。
 
-📘 **发布收口**：README、Mintlify 文档、skills、spec 与发布元数据已围绕新文档流程统一。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
+📘 **文档与 Skills 同步**：README、Mintlify 文档、打包 skills 与 examples 已统一更新到新的 Responses 支持、selfref fork 语义和 runtime primitive 使用说明。详情见 **[更新日志](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/CHANGELOG.md)**。
 
 ### 📚 完整文档
 
@@ -972,7 +972,7 @@ python examples/tui_general_agent_example.py
   month = {February},
   title = {{SimpleLLMFunc: A New Approach to Build LLM Applications}},
   url = {https://github.com/NiJingzhe/SimpleLLMFunc},
-  version = {0.7.7},
+  version = {0.7.8},
   year = {2026}
 }
 ```
