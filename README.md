@@ -1,4 +1,4 @@
-![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_new.png?raw=true)
+![SimpleLLMFunc](https://github.com/NiJingzhe/SimpleLLMFunc/blob/master/img/repocover_1_1.png?raw=true)
 
 <center>
 <h2 style="font-size:2em;">LLM as Function, Prompt as Code</h2>
